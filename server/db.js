@@ -114,12 +114,17 @@ CREATE INDEX IF NOT EXISTS idx_auditoria_quando ON auditoria(quando);
 CREATE INDEX IF NOT EXISTS idx_auditoria_usuario ON auditoria(usuario_id, acao);
 `;
 
+/* Supabase publica o schema "public" pela API dele (PostgREST). Com RLS ligado e sem
+   políticas, ninguém lê nem grava por lá; o portal conecta como dono das tabelas e não é afetado. */
+const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 'permissoes', 'armazenamento', 'colecoes', 'registros', 'auditoria'];
+const RLS = TABELAS.map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`).join(';\n');
+
 async function abrir(cfg) {
   const db = await conectar(cfg);
   await db.tx(async (t) => {
     // evita que duas instâncias subindo juntas criem o esquema ao mesmo tempo
     await t.q('SELECT pg_advisory_xact_lock(7240513)');
-    for (const cmd of SCHEMA.split(';').map((s) => s.trim()).filter(Boolean)) await t.q(cmd);
+    for (const cmd of (SCHEMA + ';' + RLS).split(';').map((s) => s.trim()).filter(Boolean)) await t.q(cmd);
     await semear(t);
   });
   return db;
@@ -140,4 +145,4 @@ async function semear(t) {
   await t.q("INSERT INTO auditoria (acao, detalhe) VALUES ('catalogo_semeado', $1::jsonb)", [JSON.stringify({ modulos: MODULOS.map((m) => m.slug) })]);
 }
 
-module.exports = { abrir };
+module.exports = { abrir, SCHEMA, RLS };

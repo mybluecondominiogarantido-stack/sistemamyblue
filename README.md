@@ -122,7 +122,7 @@ O repositório já vem pronto para o Railway (`railway.json` + `Dockerfile`). O 
 5. **Endereço.** *Settings* → *Networking* → *Generate Domain* (porta **8080**) ou um domínio próprio.
 6. **Primeiro acesso.** Entre com o administrador e envie os HTMLs em *Módulos e dados* → *Enviar vários HTMLs*.
 
-As tabelas são criadas sozinhas na primeira vez. As variáveis `ADMIN_*` só valem quando o banco ainda não tem usuários; depois, troque e-mail e senha pelo próprio portal.
+As tabelas são criadas sozinhas na primeira vez, já com RLS ligado: a API pública do Supabase (chave anon) não enxerga nada, só o portal, que conecta como dono do banco. As variáveis `ADMIN_*` só valem quando o banco ainda não tem usuários; depois, troque e-mail e senha pelo próprio portal.
 
 Para conferir: o endereço `/saude` responde `"banco":"postgres"` quando o `DATABASE_URL` está ativo. Sem `DATABASE_URL`, o portal usa um Postgres embutido e avisa no log que os dados se perdem a cada deploy.
 
