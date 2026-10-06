@@ -325,6 +325,14 @@ test('planilha posicional (Controle de Pedidos): incluir, alterar pela linha e m
   assert.equal((await post({ action: 'setStatus', row: 2, num: '999', venc: '20/11/2026', status: 'Pago' })).status, 409);
   const csv = await c('GET', '/api/admin/modulos/suprimentos/dados/pedidos.csv');
   assert.match(csv.texto, /Nº do Pedido;Descrição;Valor/);
+
+  // HTML sem planilha Google (já aponta para o portal): o módulo passa sozinho para o banco interno
+  await c('PATCH', '/api/admin/modulos/suprimentos', { fonte_dados: 'google' });
+  const semPlanilha = HTML_PED.replace('https://script.google.com/macros/s/CCC/exec', '/api/gas/suprimentos');
+  const up = await c('PUT', '/api/admin/modulos/suprimentos/arquivo', semPlanilha, { headers: { 'content-type': 'text/html' } });
+  assert.equal(up.json.fonte_dados, 'interno');
+  assert.equal(up.json.aviso_banco, null);
+  assert.equal((await c('GET', '/api/admin/modulos')).json.modulos.find((m) => m.slug === 'suprimentos').fonte_dados, 'interno');
 });
 
 test('importação da planilha Google e exportação', async () => {

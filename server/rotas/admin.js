@@ -220,12 +220,21 @@ function rotasAdmin({ db, seg, modulos, registros, cfg }) {
     // aviso se o arquivo parece ser de outra ferramenta
     const aviso = reconhecido && reconhecido !== m.slug ? `Atenção: este arquivo parece ser da ferramenta "${(await modulos.obter(reconhecido)).nome}".` : null;
     let avisoPatch = null;
-    if (m.adaptador) {
+    let fonteAutomatica = null;
+    if (m.adaptador && /SHEET_URL_BUILTIN\s*=\s*\\?["']\/api\/gas\//.test(buf.toString('utf8'))) {
+      // HTML já ligado ao banco do portal (sem planilha Google): o módulo passa a usar a planilha interna
+      if (m.fonte_dados !== 'interno') {
+        await db.q("UPDATE modulos SET fonte_dados = 'interno', atualizado_em = now() WHERE slug = $1", [m.slug]);
+        await seg.auditar(req, 'modulo_editado', m.slug, { fonte_dados: 'interno', fonte_anterior: m.fonte_dados, motivo: 'HTML sem planilha Google' });
+      }
+      fonteAutomatica = 'interno';
+    }
+    if (m.adaptador && !fonteAutomatica) {
       const html = buf.toString('utf8');
       const faltando = (m.config.patches_interno || []).filter((p) => (p.tipo === 'regex' ? !new RegExp(p.busca).test(html) : !html.includes(p.busca)));
       if (faltando.length) avisoPatch = 'Este HTML não tem os pontos de ligação esperados: o banco interno não poderá ser usado com esta versão.';
     }
-    res.json({ ok: true, versao: id, aviso, aviso_banco: avisoPatch });
+    res.json({ ok: true, versao: id, aviso, aviso_banco: avisoPatch, fonte_dados: fonteAutomatica });
   });
 
   /* envio em lote: reconhece cada HTML pelo título */
