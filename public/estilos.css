@@ -50,16 +50,10 @@ textarea.campo{min-height:80px;resize:vertical}
 .espaco{flex:1}
 
 /* ---------- login ---------- */
-.tela-login{min-height:100vh;display:grid;grid-template-columns:1.1fr 1fr}
-.login-arte{background:linear-gradient(150deg,#147f90 0%,#199cb1 45%,#0b76ba 100%);color:#fff;padding:56px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
-.login-arte::after{content:"";position:absolute;width:520px;height:520px;border-radius:50%;background:rgba(255,255,255,.07);right:-160px;bottom:-180px}
-.login-arte::before{content:"";position:absolute;width:300px;height:300px;border-radius:50%;background:rgba(255,255,255,.06);left:-90px;top:-110px}
-.login-arte .logo-branco{height:54px;filter:brightness(0) invert(1)}
-.login-arte h1{font-family:var(--display);font-size:34px;line-height:1.15;margin:0 0 14px;max-width:440px}
-.login-arte p{font-size:16px;opacity:.9;max-width:420px;margin:0}
-.login-arte ul{list-style:none;padding:0;margin:26px 0 0;display:grid;gap:10px;font-weight:700;position:relative;z-index:1}
-.login-arte li{display:flex;gap:10px;align-items:center}
-.login-arte li svg{width:20px;height:20px}
+.tela-login{min-height:100vh;display:grid;grid-template-columns:1.35fr 1fr}
+/* imagem da identidade visual (pág. 33 do manual): cores de fundo iguais às bordas da imagem */
+.login-arte{background:linear-gradient(180deg,#0c77be 0 50%,#d5ebf6 50% 100%);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.login-arte img{display:block;width:100%;height:auto;max-height:100vh;object-fit:contain}
 .login-form{display:flex;align-items:center;justify-content:center;padding:32px 20px}
 .login-card{width:100%;max-width:380px}
 .login-card .logo{height:44px;margin-bottom:26px}
@@ -69,7 +63,7 @@ textarea.campo{min-height:80px;resize:vertical}
 .msg.erro{background:var(--red-bg);color:#a3352c;border:1px solid #f3c6c2}
 .msg.ok{background:var(--green-bg);color:#17734f;border:1px solid #bfe7d6}
 .msg.aviso{background:var(--amber-bg);color:#7a5a1c;border:1px solid #ecd8a8}
-@media (max-width:860px){.tela-login{grid-template-columns:1fr}.login-arte{display:none}.login-card .logo{display:block}}
+@media (max-width:960px){.tela-login{grid-template-columns:1fr}.login-arte{display:none}}
 
 /* ---------- casca do portal ---------- */
 .casca{display:flex;height:100vh;overflow:hidden}
