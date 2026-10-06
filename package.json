@@ -15,7 +15,8 @@
     "node": ">=20"
   },
   "dependencies": {
-    "better-sqlite3": "^12.4.1",
-    "express": "^5.1.0"
+    "@electric-sql/pglite": "^0.5.8",
+    "express": "^5.1.0",
+    "pg": "^8.23.1"
   }
 }

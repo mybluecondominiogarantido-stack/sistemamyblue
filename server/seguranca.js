@@ -69,29 +69,23 @@ function hostsDoPortal(req) {
 }
 
 function criarSeguranca(db, cfg) {
-  const st = {
-    criarSessao: db.prepare('INSERT INTO sessoes (token_hash, usuario_id, expira_em, ip, user_agent) VALUES (?, ?, ?, ?, ?)'),
-    buscarSessao: db.prepare(`SELECT s.token_hash, s.expira_em, u.id, u.nome, u.email, u.papel, u.ativo, u.trocar_senha
-      FROM sessoes s JOIN usuarios u ON u.id = s.usuario_id WHERE s.token_hash = ?`),
-    renovar: db.prepare('UPDATE sessoes SET expira_em = ? WHERE token_hash = ?'),
-    apagar: db.prepare('DELETE FROM sessoes WHERE token_hash = ?'),
-    apagarExpiradas: db.prepare("DELETE FROM sessoes WHERE expira_em < datetime('now')"),
-    permissoes: db.prepare('SELECT modulo_slug FROM permissoes WHERE usuario_id = ?'),
-    auditar: db.prepare('INSERT INTO auditoria (usuario_id, usuario_email, acao, modulo_slug, detalhe, ip) VALUES (?, ?, ?, ?, ?, ?)'),
-  };
   const duracaoMs = cfg.sessaoHoras * 3600 * 1000;
-  const sqlData = (d) => d.toISOString().replace('T', ' ').slice(0, 19);
 
-  function auditar(req, acao, modulo, detalhe, usuario) {
+  /* Grava no histórico. Nunca derruba a requisição se o histórico falhar. */
+  async function auditar(req, acao, modulo, detalhe, usuario) {
     const u = usuario || (req && req.usuario) || null;
-    st.auditar.run(u ? u.id : null, u ? u.email : null, acao, modulo || null,
-      detalhe == null ? null : JSON.stringify(detalhe), req ? req.ip : null);
+    try {
+      await db.q('INSERT INTO auditoria (usuario_id, usuario_email, acao, modulo_slug, detalhe, ip) VALUES ($1, $2, $3, $4, $5::jsonb, $6)',
+        [u ? u.id : null, u ? u.email : null, acao, modulo || null, detalhe == null ? null : JSON.stringify(detalhe), req ? req.ip : null]);
+    } catch (e) {
+      console.error('[auditoria]', e.message);
+    }
   }
 
-  function iniciarSessao(req, res, usuario) {
+  async function iniciarSessao(req, res, usuario) {
     const token = crypto.randomBytes(32).toString('base64url');
-    st.criarSessao.run(sha256(token), usuario.id, sqlData(new Date(Date.now() + duracaoMs)), req.ip,
-      String(req.headers['user-agent'] || '').slice(0, 300));
+    await db.q('INSERT INTO sessoes (token_hash, usuario_id, expira_em, ip, user_agent) VALUES ($1, $2, $3, $4, $5)',
+      [sha256(token), usuario.id, new Date(Date.now() + duracaoMs), req.ip, String(req.headers['user-agent'] || '').slice(0, 300)]);
     res.setHeader('Set-Cookie', montarCookie(req, token, duracaoMs));
   }
 
@@ -100,40 +94,45 @@ function criarSeguranca(db, cfg) {
     return `${COOKIE}=${encodeURIComponent(valor)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${Math.floor(maxAgeMs / 1000)}${seguro ? '; Secure' : ''}`;
   }
 
-  function encerrarSessao(req, res) {
+  async function encerrarSessao(req, res) {
     const token = lerCookies(req)[COOKIE];
-    if (token) st.apagar.run(sha256(token));
+    if (token) await db.q('DELETE FROM sessoes WHERE token_hash = $1', [sha256(token)]);
     res.setHeader('Set-Cookie', montarCookie(req, '', 0));
   }
 
   /* Identifica o usuário (se houver sessão válida). Renova a sessão quando passou da metade. */
-  function identificar(req, res, next) {
-    const token = lerCookies(req)[COOKIE];
-    if (token) {
-      const th = sha256(token);
-      const s = st.buscarSessao.get(th);
-      if (s && s.ativo && new Date(s.expira_em.replace(' ', 'T') + 'Z') > new Date()) {
-        const restante = new Date(s.expira_em.replace(' ', 'T') + 'Z') - Date.now();
-        if (restante < duracaoMs / 2) {
-          st.renovar.run(sqlData(new Date(Date.now() + duracaoMs)), th);
-          res.setHeader('Set-Cookie', montarCookie(req, token, duracaoMs));
+  async function identificar(req, res, next) {
+    try {
+      const token = lerCookies(req)[COOKIE];
+      if (token) {
+        const th = sha256(token);
+        const s = await db.um(`SELECT s.expira_em, u.id, u.nome, u.email, u.papel, u.ativo, u.trocar_senha
+          FROM sessoes s JOIN usuarios u ON u.id = s.usuario_id WHERE s.token_hash = $1`, [th]);
+        if (s && s.ativo && new Date(s.expira_em) > new Date()) {
+          if (new Date(s.expira_em) - Date.now() < duracaoMs / 2) {
+            await db.q('UPDATE sessoes SET expira_em = $1 WHERE token_hash = $2', [new Date(Date.now() + duracaoMs), th]);
+            res.setHeader('Set-Cookie', montarCookie(req, token, duracaoMs));
+          }
+          req.usuario = { id: s.id, nome: s.nome, email: s.email, papel: s.papel, trocar_senha: !!s.trocar_senha };
+        } else if (s) {
+          await db.q('DELETE FROM sessoes WHERE token_hash = $1', [th]);
         }
-        req.usuario = { id: s.id, nome: s.nome, email: s.email, papel: s.papel, trocar_senha: !!s.trocar_senha };
-      } else if (s) {
-        st.apagar.run(th);
       }
+      next();
+    } catch (e) {
+      next(e);
     }
-    next();
   }
 
-  function modulosDoUsuario(usuario) {
-    return new Set(st.permissoes.all(usuario.id).map((r) => r.modulo_slug));
+  async function modulosDoUsuario(usuario) {
+    const { rows } = await db.q('SELECT modulo_slug FROM permissoes WHERE usuario_id = $1', [usuario.id]);
+    return new Set(rows.map((r) => r.modulo_slug));
   }
 
-  function podeAcessar(usuario, slug) {
+  async function podeAcessar(usuario, slug) {
     if (!usuario) return false;
     if (usuario.papel === 'admin') return true;
-    return modulosDoUsuario(usuario).has(slug);
+    return !!(await db.um('SELECT 1 FROM permissoes WHERE usuario_id = $1 AND modulo_slug = $2', [usuario.id, slug]));
   }
 
   const exigirLogin = (req, res, next) => {
@@ -180,7 +179,7 @@ function criarSeguranca(db, cfg) {
   }
   const limparFalhas = (chave) => tentativas.delete(chave);
 
-  setInterval(() => st.apagarExpiradas.run(), 3600 * 1000).unref();
+  setInterval(() => db.q('DELETE FROM sessoes WHERE expira_em < now()').catch(() => {}), 3600 * 1000).unref();
 
   return {
     auditar, iniciarSessao, encerrarSessao, identificar, exigirLogin, exigirAdmin, mesmaOrigem,

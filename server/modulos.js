@@ -10,87 +10,62 @@ const BRIDGE_JS = fs.readFileSync(path.join(__dirname, 'bridge.js'), 'utf8');
 const jsonEmScript = (v) => JSON.stringify(v).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
 
 function criarServicoModulos(db, cfg) {
-  const pastaModulos = path.join(cfg.dataDir, 'modulos');
-  fs.mkdirSync(pastaModulos, { recursive: true });
+  const COLUNAS = `m.*, s.nome AS setor_nome, s.ordem AS setor_ordem, v.enviado_em AS versao_em, v.tamanho, v.nome_original
+    FROM modulos m LEFT JOIN setores s ON s.id = m.setor_id LEFT JOIN modulo_versoes v ON v.id = m.versao_id`;
 
-  const st = {
-    um: db.prepare(`SELECT m.*, s.nome AS setor_nome, s.ordem AS setor_ordem, v.arquivo, v.enviado_em AS versao_em, v.tamanho, v.nome_original
-      FROM modulos m LEFT JOIN setores s ON s.id = m.setor_id LEFT JOIN modulo_versoes v ON v.id = m.versao_id WHERE m.slug = ?`),
-    todos: db.prepare(`SELECT m.*, s.nome AS setor_nome, s.ordem AS setor_ordem, v.arquivo, v.enviado_em AS versao_em, v.tamanho, v.nome_original
-      FROM modulos m LEFT JOIN setores s ON s.id = m.setor_id LEFT JOIN modulo_versoes v ON v.id = m.versao_id
-      ORDER BY COALESCE(s.ordem, 999), s.nome, m.ordem, m.nome`),
-    novaVersao: db.prepare('INSERT INTO modulo_versoes (modulo_slug, arquivo, nome_original, tamanho, sha256, enviado_por) VALUES (?, ?, ?, ?, ?, ?)'),
-    usarVersao: db.prepare("UPDATE modulos SET versao_id = ?, atualizado_em = datetime('now') WHERE slug = ?"),
-    versoes: db.prepare(`SELECT v.id, v.nome_original, v.tamanho, v.sha256, v.enviado_em, u.nome AS enviado_por
-      FROM modulo_versoes v LEFT JOIN usuarios u ON u.id = v.enviado_por WHERE v.modulo_slug = ? ORDER BY v.id DESC`),
-    versao: db.prepare('SELECT * FROM modulo_versoes WHERE id = ? AND modulo_slug = ?'),
-    lerArmazenamento: db.prepare('SELECT chave, valor FROM armazenamento WHERE modulo_slug = ? AND escopo = ?'),
-  };
+  const parse = (m) => (m ? { ...m, config: m.config || {}, ativo: !!m.ativo, tem_arquivo: !!m.versao_id } : null);
 
-  const parse = (m) => {
-    if (!m) return null;
-    let config = {};
-    try { config = JSON.parse(m.config || '{}'); } catch { config = {}; }
-    return { ...m, config, ativo: !!m.ativo, tem_arquivo: !!m.versao_id };
-  };
-
-  const obter = (slug) => parse(st.um.get(slug));
-  const listar = () => st.todos.all().map(parse);
+  const obter = async (slug) => parse(await db.um(`SELECT ${COLUNAS} WHERE m.slug = $1`, [slug]));
+  const listar = async () => (await db.q(`SELECT ${COLUNAS} ORDER BY COALESCE(s.ordem, 999), s.nome, m.ordem, m.nome`)).rows.map(parse);
 
   function validarHtml(buf) {
     if (!buf || !buf.length) return 'Arquivo vazio.';
     if (buf.length > cfg.limiteHtmlMb * 1024 * 1024) return `Arquivo maior que ${cfg.limiteHtmlMb} MB.`;
-    const inicio = buf.subarray(0, 2048).toString('utf8').replace(/^﻿/, '').trimStart().toLowerCase();
+    const inicio = buf.subarray(0, 2048).toString('utf8').replace(/^\uFEFF/, '').trimStart().toLowerCase();
     if (!inicio.startsWith('<!doctype html') && !inicio.startsWith('<html') && !inicio.startsWith('<!--')) {
       return 'O arquivo não parece ser um HTML (precisa começar com <!DOCTYPE html> ou <html>).';
     }
     return null;
   }
 
-  /* Grava um novo HTML como versão do módulo e passa a usá-lo. */
-  function salvarVersao(slug, buf, nomeOriginal, usuarioId) {
+  /* Grava um novo HTML como versão do módulo (no banco) e passa a usá-lo. */
+  async function salvarVersao(slug, buf, nomeOriginal, usuarioId) {
     const sha = crypto.createHash('sha256').update(buf).digest('hex');
-    const pasta = path.join(pastaModulos, slug);
-    fs.mkdirSync(pasta, { recursive: true });
-    const nome = `${Date.now()}-${sha.slice(0, 10)}.html`;
-    fs.writeFileSync(path.join(pasta, nome), buf);
-    const info = st.novaVersao.run(slug, path.join(slug, nome), nomeOriginal ? String(nomeOriginal).slice(0, 200) : null, buf.length, sha, usuarioId || null);
-    st.usarVersao.run(info.lastInsertRowid, slug);
-    cacheHtml.delete(slug);
-    return info.lastInsertRowid;
+    return db.tx(async (t) => {
+      const v = await t.um(`INSERT INTO modulo_versoes (modulo_slug, conteudo, nome_original, tamanho, sha256, enviado_por)
+        VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`, [slug, buf, nomeOriginal ? String(nomeOriginal).slice(0, 200) : null, buf.length, sha, usuarioId || null]);
+      await t.q('UPDATE modulos SET versao_id = $1, atualizado_em = now() WHERE slug = $2', [v.id, slug]);
+      return v.id;
+    });
   }
 
-  function restaurarVersao(slug, versaoId) {
-    const v = st.versao.get(versaoId, slug);
+  async function restaurarVersao(slug, versaoId) {
+    const v = await db.um('SELECT id FROM modulo_versoes WHERE id = $1 AND modulo_slug = $2', [versaoId, slug]);
     if (!v) return false;
-    st.usarVersao.run(v.id, slug);
-    cacheHtml.delete(slug);
+    await db.q('UPDATE modulos SET versao_id = $1, atualizado_em = now() WHERE slug = $2', [v.id, slug]);
     return true;
   }
 
-  const listarVersoes = (slug) => st.versoes.all(slug);
+  const listarVersoes = async (slug) => (await db.q(`SELECT v.id, v.nome_original, v.tamanho, v.sha256, v.enviado_em, u.nome AS enviado_por
+    FROM modulo_versoes v LEFT JOIN usuarios u ON u.id = v.enviado_por WHERE v.modulo_slug = $1 ORDER BY v.id DESC`, [slug])).rows;
 
-  function removerArquivos(slug) {
-    if (!SLUG_RE.test(slug)) return;
-    fs.rmSync(path.join(pastaModulos, slug), { recursive: true, force: true });
-    cacheHtml.delete(slug);
-  }
-
-  // cache do HTML original por módulo (os arquivos podem ter alguns MB)
+  // cache do HTML por versão (uma versão nunca muda, então o cache é sempre válido)
   const cacheHtml = new Map();
-  function lerHtml(m) {
-    if (!m || !m.arquivo) return null;
-    const c = cacheHtml.get(m.slug);
-    if (c && c.versao === m.versao_id) return c.html;
-    const html = fs.readFileSync(path.join(pastaModulos, m.arquivo), 'utf8');
-    cacheHtml.set(m.slug, { versao: m.versao_id, html });
+  async function lerHtml(m) {
+    if (!m || !m.versao_id) return null;
+    if (cacheHtml.has(m.versao_id)) return cacheHtml.get(m.versao_id);
+    const r = await db.um('SELECT conteudo FROM modulo_versoes WHERE id = $1', [m.versao_id]);
+    if (!r) return null;
+    const html = r.conteudo.toString('utf8');
+    if (cacheHtml.size > 30) cacheHtml.delete(cacheHtml.keys().next().value);
+    cacheHtml.set(m.versao_id, html);
     return html;
   }
 
   /* Lê o cabeçalho de uma coleção a partir da constante JS do próprio HTML (ex.: SHEET_HEADERS). */
-  function cabecalhoDoHtml(m, constante) {
+  async function cabecalhoDoHtml(m, constante) {
     if (!constante) return null;
-    const html = lerHtml(m);
+    const html = await lerHtml(m);
     if (!html) return null;
     const re = new RegExp('(?:const|let|var)\\s+' + constante + '\\s*=\\s*(\\[[\\s\\S]*?\\])\\s*;');
     const r = re.exec(html);
@@ -119,8 +94,8 @@ function criarServicoModulos(db, cfg) {
   }
 
   /* Monta o HTML entregue ao navegador: aplica o banco interno (se ativo) e injeta a ponte de armazenamento. */
-  function montarHtml(m, usuario) {
-    let html = lerHtml(m);
+  async function montarHtml(m, usuario) {
+    let html = await lerHtml(m);
     if (html == null) return null;
     const avisos = [];
 
@@ -143,7 +118,8 @@ function criarServicoModulos(db, cfg) {
     };
     if (m.armazenamento !== 'navegador') {
       const escopo = m.armazenamento === 'compartilhado' ? '*' : `u:${usuario.id}`;
-      conf.dados = Object.fromEntries(st.lerArmazenamento.all(m.slug, escopo).map((r) => [r.chave, r.valor]));
+      const { rows } = await db.q('SELECT chave, valor FROM armazenamento WHERE modulo_slug = $1 AND escopo = $2', [m.slug, escopo]);
+      conf.dados = Object.fromEntries(rows.map((r) => [r.chave, r.valor]));
     }
     const injecao = `<script>window.__MYBLUE__=${jsonEmScript(conf)};\n${BRIDGE_JS}</script>`;
 
@@ -156,17 +132,17 @@ function criarServicoModulos(db, cfg) {
   }
 
   /* Reconhece a qual módulo um HTML pertence pelo <title>. */
-  function reconhecer(buf) {
+  async function reconhecer(buf) {
     const t = /<title>([^<]*)<\/title>/i.exec(buf.subarray(0, 200000).toString('utf8'));
     if (!t) return null;
     const titulo = t[1];
-    for (const m of listar()) {
+    for (const m of await listar()) {
       if (m.config.titulo && titulo.toLowerCase().includes(String(m.config.titulo).toLowerCase())) return m.slug;
     }
     return null;
   }
 
-  return { SLUG_RE, obter, listar, validarHtml, salvarVersao, restaurarVersao, listarVersoes, removerArquivos, lerHtml, cabecalhoDoHtml, montarHtml, reconhecer };
+  return { SLUG_RE, obter, listar, validarHtml, salvarVersao, restaurarVersao, listarVersoes, lerHtml, cabecalhoDoHtml, montarHtml, reconhecer };
 }
 
 module.exports = { criarServicoModulos, SLUG_RE };

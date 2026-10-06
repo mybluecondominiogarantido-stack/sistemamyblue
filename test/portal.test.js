@@ -50,17 +50,25 @@ async function logar(email, senha) {
 
 before(async () => {
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'myblue-teste-'));
-  const cfg = lerConfig({ dataDir, adminEmail: 'admin@teste.com', adminSenha: 'Admin1234', silencioso: true, porta: 0 });
-  const r = criarApp(cfg);
+  // TEST_DATABASE_URL roda os testes num Postgres de verdade (o banco é apagado!); sem ele, usa o Postgres embutido em memória
+  const cfg = lerConfig({ dataDir: ':memoria:', databaseUrl: process.env.TEST_DATABASE_URL || '', adminEmail: 'admin@teste.com', adminSenha: 'Admin1234', silencioso: true, porta: 0 });
+  if (cfg.databaseUrl) {
+    const { Client } = require('pg');
+    const c = new Client({ connectionString: cfg.databaseUrl });
+    await c.connect();
+    await c.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
+    await c.end();
+  }
+  const r = await criarApp(cfg);
   ctx = r.ctx;
   servidor = http.createServer({ maxHeaderSize: 512 * 1024 }, r.app);
   await new Promise((ok) => servidor.listen(0, '127.0.0.1', ok));
   base = `http://127.0.0.1:${servidor.address().port}`;
 });
 
-after(() => {
+after(async () => {
   servidor.close();
-  ctx.db.close();
+  await ctx.db.fechar();
   fs.rmSync(dataDir, { recursive: true, force: true });
 });
 
@@ -300,21 +308,31 @@ test('auditoria registra as ações', async () => {
   assert.ok(filtrado.json.eventos.every((e) => e.acao !== 'modulo_aberto'));
 });
 
-test('remover módulo exige confirmação e apaga os arquivos', async () => {
+test('remover módulo exige confirmação e apaga as versões do HTML', async () => {
   const { c } = await logar('admin@teste.com', 'Admin1234');
   await c('POST', '/api/admin/modulos', { slug: 'temporario', nome: 'Temporário' });
   await c('PUT', '/api/admin/modulos/temporario/arquivo', HTML_SIMPLES, { headers: { 'content-type': 'text/html' } });
-  assert.ok(fs.existsSync(path.join(dataDir, 'modulos', 'temporario')));
+  const contar = async () => (await ctx.db.um("SELECT COUNT(*)::int AS n FROM modulo_versoes WHERE modulo_slug = 'temporario'")).n;
+  assert.equal(await contar(), 1);
   assert.equal((await c('DELETE', '/api/admin/modulos/temporario')).status, 400);
   assert.equal((await c('DELETE', '/api/admin/modulos/temporario?confirmar=temporario')).status, 200);
-  assert.ok(!fs.existsSync(path.join(dataDir, 'modulos', 'temporario')));
+  assert.equal(await contar(), 0);
   assert.equal((await c('POST', '/api/admin/modulos', { slug: 'Inválido!', nome: 'x' })).status, 400);
 });
 
-test('backup do banco', async () => {
+test('backup do banco (JSON, sem hashes de senha)', async () => {
   const { c } = await logar('admin@teste.com', 'Admin1234');
-  const r = await c('GET', '/api/admin/backup', undefined, { bruto: true });
+  const r = await c('GET', '/api/admin/backup');
   assert.equal(r.status, 200);
-  assert.equal(r.buffer.subarray(0, 15).toString(), 'SQLite format 3');
-  assert.equal(fs.readdirSync(dataDir).filter((f) => f.startsWith('myblue-backup')).length, 0);
+  assert.equal(r.json.sistema, 'portal-myblue');
+  assert.ok(r.json.tabelas.usuarios.length >= 1);
+  assert.ok(r.json.tabelas.usuarios.every((u) => !('senha_hash' in u)));
+  assert.ok(r.json.tabelas.modulo_versoes.length >= 1);
+  assert.equal(typeof r.json.tabelas.modulo_versoes[0].conteudo, 'string');
+});
+
+test('saúde informa o banco', async () => {
+  const r = await fetch(base + '/saude');
+  assert.equal(r.status, 200);
+  assert.ok(['embutido', 'postgres'].includes((await r.json()).banco));
 });

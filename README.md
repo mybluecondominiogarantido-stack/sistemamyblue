@@ -25,10 +25,10 @@ Navegador ──► /login ──► Portal (menu por setor, busca, início)
                               │
                               └── Administração: usuários, módulos (HTMLs e versões), dados, histórico, backup
                                                           │
-                                                   SQLite (data/myblue.db)
+                                                   Postgres (DATABASE_URL)
 ```
 
-- **Servidor:** Node.js + Express, banco SQLite (um arquivo, sem instalar servidor de banco).
+- **Servidor:** Node.js + Express, banco Postgres (Supabase, Railway ou outro). Sem Postgres configurado, usa um Postgres embutido, bom para testes no computador.
 - **Portal:** HTML/CSS/JS puro, sem etapa de build, na identidade visual MyBlue.
 - **Ferramentas:** os HTMLs originais, sem edição manual. O portal só injeta, na hora de entregar, uma pequena ponte para salvar os dados no servidor.
 
@@ -107,22 +107,42 @@ O arquivo atual de Suprimentos é protegido por senha (StatiCrypt). O portal ent
 
 ### No Railway
 
-O repositório já vem pronto para o Railway (`railway.json` + `Dockerfile`). O portal detecta o Railway sozinho: usa o volume anexado para o banco, confia no proxy HTTPS deles e marca o cookie como seguro.
+O repositório já vem pronto para o Railway (`railway.json` + `Dockerfile`). O banco é um **Postgres**: pode ser o Supabase ou o Postgres do próprio Railway. Tudo fica no banco, inclusive os HTMLs enviados, então **não é preciso volume**.
 
-1. **Criar o serviço.** No Railway: *New Project* → *Deploy from GitHub repo* → escolha `sistemamyblue`. Em *Settings* → *Source*, selecione o branch que deve ir para o ar (o `main`, depois de juntar as mudanças).
-2. **Anexar o volume (obrigatório).** Clique com o botão direito no serviço → *Attach Volume* e use o caminho de montagem **`/app/data`**. Sem volume, o banco e os HTMLs somem a cada deploy (o log avisa em letras grandes).
-3. **Variáveis.** Em *Variables*, defina:
-   - `ADMIN_EMAIL` = seu e-mail (vira o login do primeiro administrador)
-   - `ADMIN_NOME` = seu nome
-   - `ADMIN_SENHA` = opcional. Se ficar vazio, a senha temporária aparece em *Deployments* → *View Logs*.
-   Não defina `PORT` nem `DATA_DIR`: o Railway e o portal cuidam disso.
-4. **Endereço.** Em *Settings* → *Networking*, clique em *Generate Domain* (ex.: `portal-myblue.up.railway.app`) ou ligue um domínio próprio, como `portal.myblue.com.br`.
-5. **Primeiro acesso.** Abra o endereço, entre com o administrador e envie os 5 HTMLs em *Módulos e dados* → *Enviar vários HTMLs*.
+1. **Criar o serviço.** No Railway: *New Project* → *Deploy from GitHub repo* → escolha `sistemamyblue` e o branch que deve ir para o ar.
+2. **Criar o banco** (escolha um):
+   - **Supabase:** crie o projeto em supabase.com, clique em *Connect* e copie a connection string do **Session pooler** (funciona pela rede IPv4 do Railway). Troque `[YOUR-PASSWORD]` pela senha do banco.
+   - **Postgres do Railway:** no projeto, *+ New* → *Database* → *PostgreSQL*.
+3. **Variáveis do serviço do portal** (*Variables*):
+   - `DATABASE_URL` = a connection string do Supabase, ou `${{Postgres.DATABASE_URL}}` se usar o Postgres do Railway
+   - `ADMIN_EMAIL` e `ADMIN_NOME` = o primeiro administrador
+   - `ADMIN_SENHA` = opcional; se ficar vazio, a senha temporária aparece em *View Logs*
+   Não defina `PORT`, `DATA_DIR`, `TRUST_PROXY` nem `COOKIE_SECURE`: o portal cuida disso no Railway.
+4. **Aplicar.** O Railway guarda mudanças como rascunho: clique em *Deploy* no aviso roxo para valer.
+5. **Endereço.** *Settings* → *Networking* → *Generate Domain* (porta **8080**) ou um domínio próprio.
+6. **Primeiro acesso.** Entre com o administrador e envie os HTMLs em *Módulos e dados* → *Enviar vários HTMLs*.
 
-Observações:
-- Com volume, o serviço roda com **uma réplica** (o SQLite fica num disco só). Para o tamanho da equipe isso sobra.
-- Cada `git push` no branch escolhido gera um deploy novo. O banco e os HTMLs enviados continuam no volume.
-- Backup: use o botão *Backup do banco* no portal, e se quiser também os backups de volume do próprio Railway.
+As tabelas são criadas sozinhas na primeira vez. As variáveis `ADMIN_*` só valem quando o banco ainda não tem usuários; depois, troque e-mail e senha pelo próprio portal.
+
+Para conferir: o endereço `/saude` responde `"banco":"postgres"` quando o `DATABASE_URL` está ativo. Sem `DATABASE_URL`, o portal usa um Postgres embutido e avisa no log que os dados se perdem a cada deploy.
+
+### Consultar os dados no Supabase
+
+Todas as tabelas ficam no schema `public` (*Table Editor* do Supabase). As principais:
+
+| Tabela | O que guarda |
+|---|---|
+| `registros` | Linhas das planilhas internas (Renegociações, Tickets, Parceiros…), com os dados em `dados` (JSONB) |
+| `armazenamento` | Dados salvos pelas ferramentas que usam o navegador, quando o módulo grava no banco |
+| `auditoria` | Histórico de quem fez o quê |
+| `usuarios`, `permissoes`, `modulos`, `modulo_versoes` | Acessos, módulos e as versões dos HTMLs |
+
+Exemplo, renegociações com condomínio e status:
+
+```sql
+SELECT dados->>1 AS condominio, dados->>4 AS status, atualizado_em
+FROM registros WHERE modulo_slug = 'renegociacoes' AND colecao = 'renegociacoes';
+```
 
 ### Com Docker
 
@@ -132,7 +152,7 @@ docker compose up -d --build
 docker compose logs portal   # mostra a senha temporária do primeiro acesso
 ```
 
-O banco e os HTMLs ficam no volume `dados`. Para importar HTMLs pela linha de comando dentro do container:
+Sem `DATABASE_URL`, o banco embutido fica no volume `dados`. Com `DATABASE_URL`, tudo vai para o Postgres. Para importar HTMLs pela linha de comando dentro do container:
 
 ```bash
 docker compose run --rm -v "$PWD/modulos-originais:/import:ro" portal npm run importar-html -- /import
@@ -144,16 +164,16 @@ Rode `npm ci --omit=dev` e `npm start` com um gerenciador de processos (pm2, sys
 
 ### Backup
 
-- Administração → *Módulos e dados* → **Backup do banco** baixa uma cópia consistente do SQLite.
+- Administração → *Módulos e dados* → **Backup do banco** baixa um JSON com todas as tabelas (sem as senhas). O Supabase e o Railway também fazem backup automático do Postgres.
 - Cada módulo tem **Exportar dados** (JSON) e CSV por aba da planilha interna.
-- Para backup automático, copie periodicamente a pasta `DATA_DIR` (banco + HTMLs enviados).
 
 ## Configuração (`.env`)
 
 | Variável | Padrão | Para que serve |
 |---|---|---|
 | `PORT` | 3000 | Porta HTTP |
-| `DATA_DIR` | ./data (no Railway, o volume) | Banco e HTMLs enviados |
+| `DATABASE_URL` | — | Endereço do Postgres (Supabase, Railway). Sem ele, usa o banco embutido |
+| `DATA_DIR` | ./data | Pasta do banco embutido (só quando não há `DATABASE_URL`) |
 | `ADMIN_EMAIL` / `ADMIN_NOME` / `ADMIN_SENHA` | — | Primeiro administrador (só quando o banco está vazio) |
 | `SESSAO_HORAS` | 12 | Duração da sessão (renova sozinha enquanto a pessoa usa) |
 | `COOKIE_SECURE` | false | `true` quando o portal estiver em HTTPS |
@@ -176,7 +196,8 @@ Os links de Apps Script que estão dentro dos HTMLs dão acesso de leitura e esc
 ```
 server/
   index.js          configuração, montagem do app e primeiro administrador
-  db.js             esquema do banco (SQLite) e catálogo inicial
+  banco.js          conexão com o Postgres (Supabase/Railway) ou o Postgres embutido
+  db.js             esquema do banco e catálogo inicial
   catalogo.js       setores e módulos que já nascem cadastrados
   seguranca.js      senhas, sessões, permissões, CSRF, limite de tentativas, auditoria
   modulos.js        versões dos HTMLs, injeção da ponte e ligação com a planilha interna
@@ -188,4 +209,4 @@ scripts/            importar-html e criar-admin
 test/               testes automatizados (npm test)
 ```
 
-Testes: `npm test` (usam HTMLs sintéticos, sem dados reais).
+Testes: `npm test` (usam HTMLs sintéticos e o Postgres embutido). Para testar num Postgres de verdade: `TEST_DATABASE_URL=postgres://… npm test` (o banco indicado é apagado).

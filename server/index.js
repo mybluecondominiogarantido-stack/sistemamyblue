@@ -22,13 +22,15 @@ function carregarEnv(arquivo) {
 function lerConfig(sobrescrever = {}) {
   carregarEnv(path.join(__dirname, '..', '.env'));
   const e = process.env;
-  // no Railway: usa o volume anexado e confia no proxy de HTTPS deles
+  // no Railway: confia no proxy de HTTPS deles
   const railway = !!(e.RAILWAY_PROJECT_ID || e.RAILWAY_ENVIRONMENT_NAME || e.RAILWAY_ENVIRONMENT);
   return {
     porta: Number(e.PORT) || 3000,
+    // Postgres (Supabase, Railway…). Sem ele, usa o Postgres embutido gravado em DATA_DIR.
+    databaseUrl: e.DATABASE_URL || '',
     dataDir: path.resolve(e.DATA_DIR || e.RAILWAY_VOLUME_MOUNT_PATH || path.join(__dirname, '..', 'data')),
     railway,
-    railwaySemVolume: railway && !e.RAILWAY_VOLUME_MOUNT_PATH && !e.DATA_DIR,
+    semBancoPersistente: railway && !e.DATABASE_URL && !e.RAILWAY_VOLUME_MOUNT_PATH,
     sessaoHoras: Number(e.SESSAO_HORAS) || 12,
     cookieSecure: e.COOKIE_SECURE === 'true',
     trustProxy: e.TRUST_PROXY || (railway ? '1' : '0'),
@@ -43,12 +45,12 @@ function lerConfig(sobrescrever = {}) {
 }
 
 /* Cria o primeiro administrador quando o banco ainda não tem usuários. */
-function garantirAdmin(db, cfg) {
-  const n = db.prepare('SELECT COUNT(*) AS n FROM usuarios').get().n;
+async function garantirAdmin(db, cfg) {
+  const { n } = await db.um('SELECT COUNT(*)::int AS n FROM usuarios');
   if (n > 0) return null;
   const senha = cfg.adminSenha || senhaAleatoria();
-  db.prepare("INSERT INTO usuarios (nome, email, senha_hash, papel, trocar_senha) VALUES (?, ?, ?, 'admin', ?)")
-    .run(cfg.adminNome, cfg.adminEmail, hashSenha(senha), cfg.adminSenha ? 0 : 1);
+  await db.q("INSERT INTO usuarios (nome, email, senha_hash, papel, trocar_senha) VALUES ($1, $2, $3, 'admin', $4) ON CONFLICT (email) DO NOTHING",
+    [cfg.adminNome, cfg.adminEmail, hashSenha(senha), !cfg.adminSenha]);
   if (!cfg.silencioso) {
     console.log('\n================ PRIMEIRO ACESSO ================');
     console.log(`  Administrador: ${cfg.adminEmail}`);
@@ -58,9 +60,9 @@ function garantirAdmin(db, cfg) {
   return senha;
 }
 
-function criarApp(cfg) {
-  const db = abrir(cfg.dataDir);
-  const senhaInicial = garantirAdmin(db, cfg);
+async function criarApp(cfg) {
+  const db = await abrir(cfg);
+  const senhaInicial = await garantirAdmin(db, cfg);
   const seg = criarSeguranca(db, cfg);
   const modulos = criarServicoModulos(db, cfg);
   const registros = criarRegistros(db);
@@ -76,10 +78,11 @@ function criarApp(cfg) {
     res.set('Referrer-Policy', 'same-origin');
     next();
   });
+  app.get('/saude', async (req, res) => {
+    try { await db.q('SELECT 1'); res.json({ ok: true, banco: db.tipo }); } catch { res.status(503).json({ ok: false }); }
+  });
   app.use(seg.identificar);
   app.use('/api', seg.mesmaOrigem);
-
-  app.get('/saude', (req, res) => res.json({ ok: true }));
 
   app.use(rotasAuth(ctx));
   app.use(rotasAdmin(ctx));
@@ -110,30 +113,29 @@ function criarApp(cfg) {
   return { app, db, senhaInicial, ctx };
 }
 
-function conferirPastaDeDados(cfg) {
-  try {
-    fs.mkdirSync(cfg.dataDir, { recursive: true });
-    fs.accessSync(cfg.dataDir, fs.constants.W_OK);
-  } catch (e) {
-    console.error(`\n[ERRO] Sem permissão para gravar em ${cfg.dataDir} (${e.code}).`);
-    console.error('No Railway, confira se o volume está anexado ao serviço. Em outros servidores, ajuste o dono da pasta ou a variável DATA_DIR.\n');
-    process.exit(1);
-  }
-  if (cfg.railwaySemVolume) {
-    console.warn('\n[ATENÇÃO] Rodando no Railway SEM volume: o banco e os HTMLs serão APAGADOS a cada novo deploy.');
-    console.warn('Anexe um volume ao serviço (montado em /app/data) antes de cadastrar usuários ou enviar arquivos.\n');
+function avisos(cfg) {
+  if (cfg.semBancoPersistente) {
+    console.warn('\n[ATENÇÃO] Rodando no Railway SEM banco: os dados serão APAGADOS a cada novo deploy.');
+    console.warn('Defina a variável DATABASE_URL (Supabase ou Postgres do Railway) antes de cadastrar usuários ou enviar arquivos.\n');
   }
 }
 
-function iniciar(cfg = lerConfig()) {
-  conferirPastaDeDados(cfg);
-  const { app, db } = criarApp(cfg);
+async function iniciar(cfg = lerConfig()) {
+  avisos(cfg);
+  let app, db;
+  try {
+    ({ app, db } = await criarApp(cfg));
+  } catch (e) {
+    console.error('\n[ERRO] Não foi possível abrir o banco de dados:', e.message);
+    if (cfg.databaseUrl) console.error('Confira a variável DATABASE_URL (endereço, usuário e senha do Postgres).\n');
+    process.exit(1);
+  }
   // cabeçalhos maiores: algumas ferramentas gravam dados via URL (JSONP), como faziam no Apps Script
   const servidor = http.createServer({ maxHeaderSize: 512 * 1024 }, app);
   servidor.listen(cfg.porta, () => {
     if (!cfg.silencioso) console.log(`Portal MyBlue rodando em http://localhost:${servidor.address().port}`);
   });
-  const fechar = () => servidor.close(() => { db.close(); process.exit(0); });
+  const fechar = () => servidor.close(async () => { await db.fechar(); process.exit(0); });
   process.once('SIGTERM', fechar);
   process.once('SIGINT', fechar);
   return servidor;
