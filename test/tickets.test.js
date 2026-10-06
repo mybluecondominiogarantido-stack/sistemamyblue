@@ -97,15 +97,16 @@ test('admin monta a equipe do setor e os tipos de demanda', async () => {
 let ticket;
 test('qualquer pessoa abre ticket para um setor; prazo vem do tipo de demanda', async () => {
   assert.equal((await solicitante('POST', '/api/tickets', { titulo: '', setor_id: setorCobranca })).status, 400);
-  const antes = Date.now();
   const r = await solicitante('POST', '/api/tickets', { titulo: 'Boleto do Cond. Azul', descricao: 'Síndico pediu a 2ª via', setor_id: setorCobranca, categoria_id: categoria });
   assert.equal(r.status, 201, r.texto);
   ticket = r.json.id;
   const d = (await solicitante('GET', `/api/tickets/${ticket}`)).json;
   assert.equal(d.ticket.status, 'novo');
   assert.equal(d.ticket.prioridade, 'alta');
-  const horas = (new Date(d.ticket.prazo) - antes) / 3600000;
-  assert.ok(horas > 7.9 && horas < 8.1, 'prazo de 8h');
+  // 8 h de expediente (seg–sex, 8h–17h) contadas da abertura
+  const { criarExpediente } = require('../server/expediente');
+  const esperado = criarExpediente().somarHorasUteis(new Date(d.ticket.criado_em), 8);
+  assert.ok(Math.abs(new Date(d.ticket.prazo) - esperado) < 5000, 'prazo de 8 h úteis');
   assert.equal(d.pode.equipe, false);
   // categoria de outro setor é recusada
   assert.equal((await solicitante('POST', '/api/tickets', { titulo: 'x', setor_id: setorCredito, categoria_id: categoria })).status, 400);

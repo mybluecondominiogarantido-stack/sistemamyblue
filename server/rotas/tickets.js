@@ -14,14 +14,15 @@ const express = require('express');
 const PRIORIDADES = ['baixa', 'media', 'alta', 'urgente'];
 const STATUS = ['novo', 'em_andamento', 'aguardando', 'resolvido', 'cancelado'];
 const EM_ABERTO = "('novo','em_andamento','aguardando')";
-// prazo usado quando o tipo de demanda não define um (horas corridas)
-const PRAZO_PADRAO_HORAS = { urgente: 4, alta: 24, media: 72, baixa: 168 };
+// prazo usado quando o tipo de demanda não define um, em horas de expediente
+// (dia útil de 9 h: urgente 4 h, alta 1 dia útil, média 3 dias úteis, baixa 5 dias úteis)
+const PRAZO_PADRAO_HORAS = { urgente: 4, alta: 9, media: 27, baixa: 45 };
 
 const texto = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
 // administração e supervisão: veem e direcionam os tickets de todos os setores
 const ehGestor = (u) => u.papel === 'admin' || !!u.supervisor_tickets;
 
-function rotasTickets({ db, seg, cfg, avisos }) {
+function rotasTickets({ db, seg, cfg, avisos, expediente }) {
   const r = express.Router();
   const json = express.json({ limit: '1mb' });
   const limiteAnexo = (cfg.limiteAnexoMb || 10) * 1024 * 1024;
@@ -91,6 +92,7 @@ function rotasTickets({ db, seg, cfg, avisos }) {
         meu: equipes.has(s.id) ? { lider: equipes.get(s.id).lider } : null,
       })),
       prazo_padrao_horas: PRAZO_PADRAO_HORAS,
+      expediente: expediente.config,
     });
   });
 
@@ -170,7 +172,7 @@ function rotasTickets({ db, seg, cfg, avisos }) {
     }
     const prioridade = PRIORIDADES.includes(b.prioridade) ? b.prioridade : cat ? cat.prioridade : 'media';
     const horas = cat && cat.prazo_horas ? cat.prazo_horas : PRAZO_PADRAO_HORAS[prioridade];
-    const prazo = new Date(Date.now() + horas * 3600 * 1000);
+    const prazo = expediente.somarHorasUteis(new Date(), horas);
     const id = await db.tx(async (t) => {
       const { id: novo } = await t.um(`INSERT INTO tickets (titulo, descricao, setor_id, categoria_id, prioridade, solicitante_id, prazo)
         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`, [titulo, descricao, setor.id, cat ? cat.id : null, prioridade, req.usuario.id, prazo]);

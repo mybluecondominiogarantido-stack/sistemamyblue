@@ -127,7 +127,7 @@ Demandas internas entre os setores: quem precisa de algo de outro setor abre um 
 | Supervisão / Coordenação | Ver e direcionar os tickets de **todos** os setores, com painel geral. Não dá acesso à administração do portal |
 | Administrador | Tudo, mais montar equipes e tipos de demanda |
 
-O perfil **Supervisão / Coordenação** é marcado no cadastro da pessoa, em *Usuários e acessos*. As equipes, os líderes e os **tipos de demanda** de cada setor (com prazo em horas e prioridade sugerida) ficam em *Administração → Equipes e tipos de demanda*. Sem tipo cadastrado, o prazo segue a prioridade: urgente 4 h, alta 24 h, média 3 dias e baixa 7 dias, contados em horas corridas.
+O perfil **Supervisão / Coordenação** é marcado no cadastro da pessoa, em *Usuários e acessos*. As equipes, os líderes e os **tipos de demanda** de cada setor (com prazo em horas e prioridade sugerida) ficam em *Administração → Equipes e tipos de demanda*. Os prazos contam só o **expediente: segunda a sexta, das 8h às 17h (horário de Brasília)**, ou seja, 9 h = 1 dia útil. Um ticket urgente aberto na sexta às 16h30 vence na segunda às 11h30. Sem tipo cadastrado, o prazo segue a prioridade: urgente 4 h, alta 1 dia útil, média 3 dias úteis e baixa 5 dias úteis. Feriados entram na variável `FERIADOS`.
 
 **Avisos**
 
@@ -236,6 +236,9 @@ Rode `npm ci --omit=dev` e `npm start` com um gerenciador de processos (pm2, sys
 | `TRUST_PROXY` | 0 (no Railway, 1) | `1` quando houver proxy reverso na frente |
 | `LIMITE_HTML_MB` / `LIMITE_DADOS_MB` | 40 / 25 | Tamanho máximo de HTML enviado e de dados gravados por vez |
 | `LIMITE_ANEXO_MB` | 10 | Tamanho máximo de cada anexo de ticket |
+| `EXPEDIENTE_INICIO` / `EXPEDIENTE_FIM` | 8 / 17 | Horário de expediente usado nos prazos dos tickets |
+| `EXPEDIENTE_DIAS` | 1,2,3,4,5 | Dias com expediente (0 = domingo … 6 = sábado) |
+| `FERIADOS` | — | Dias sem expediente, ex.: `2026-11-02,2026-11-15,2026-11-20,2026-12-25` |
 | `PORTAL_URL` | — | Endereço público do portal (ex.: `https://portal.myblue.com.br`), usado no link dos e-mails |
 | `EMAIL_REMETENTE` | — | Caixa que envia os avisos, ex.: `Portal MyBlue <naoresponda@myblue.com.br>` |
 | `M365_TENANT_ID` / `M365_CLIENT_ID` / `M365_CLIENT_SECRET` | — | Envio pelo Microsoft 365 (Graph). Passo a passo na seção Central de Tickets |
@@ -266,6 +269,7 @@ server/
   registros.js      planilha interna (coleções e registros)
   notificacoes.js   avisos da Central de Tickets (sino do portal e e-mail)
   email.js          envio de e-mail: Microsoft 365 (Graph) ou SMTP
+  expediente.js     prazos em horário de expediente (seg–sex, 8h–17h)
   rotas/            auth, admin, ferramentas (entrega, armazenamento, protocolo Apps Script) e tickets
 public/             portal (login, início, menu, administração)
 scripts/            importar-html e criar-admin

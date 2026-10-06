@@ -869,6 +869,20 @@
     if (h < 48) return Math.round(h) + ' h';
     return Math.round(h / 24) + ' dias';
   }
+  /* prazo em horas de expediente: "4 h úteis", "1 dia útil", "3 dias úteis" */
+  function horasUteis(h) {
+    var dia = (metaTickets && metaTickets.expediente && metaTickets.expediente.horasDia) || 9;
+    if (h == null) return '—';
+    if (h % dia === 0) return (h / dia) + (h / dia === 1 ? ' dia útil' : ' dias úteis');
+    return h + ' h úteis';
+  }
+  function textoExpediente() {
+    var e = metaTickets && metaTickets.expediente;
+    if (!e) return 'horário de expediente';
+    var nomes = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+    var dias = e.dias.join(',') === '1,2,3,4,5' ? 'seg–sex' : e.dias.map(function (d) { return nomes[d]; }).join(', ');
+    return dias + ', ' + e.inicio + 'h–' + e.fim + 'h';
+  }
   function horas(h) { return h == null ? '—' : h < 1 ? Math.max(1, Math.round(h * 60)) + ' min' : h < 48 ? String(h).replace('.', ',') + ' h' : (Math.round(h / 24 * 10) / 10).toString().replace('.', ',') + ' dias'; }
   /* prazo com aviso de atraso (sempre com texto, nunca só cor) */
   function prazoTxt(t) {
@@ -1025,7 +1039,7 @@
       var s = setor();
       var c = s && s.categorias.find(function (x) { return String(x.id) === $('#tCat', m).value; });
       var h = c && c.prazo_horas ? c.prazo_horas : meta.prazo_padrao_horas[$('#tPrio', m).value];
-      $('#tPrazo', m).textContent = 'Prazo de atendimento: ' + horas(h) + (c && c.prazo_horas ? ' (definido para este tipo de demanda)' : '') + '.';
+      $('#tPrazo', m).textContent = 'Prazo de atendimento: ' + horasUteis(h) + (c && c.prazo_horas ? ' (definido para este tipo de demanda)' : '') + ', contando só o expediente (' + textoExpediente() + ').';
     }
     $('#tSetor', m).onchange = function () {
       var s = setor();
@@ -1378,7 +1392,7 @@
     definirBarra('<span class="setor">Administração</span><span class="sep">/</span><span class="nome">Equipes e tipos de demanda</span>');
     $('#conteudo').innerHTML = carregandoHtml();
     var j;
-    try { j = await api('GET', '/api/admin/equipes'); } catch (e) { toast(e.message, 'erro'); return; }
+    try { j = await api('GET', '/api/admin/equipes'); await carregarMeta(); } catch (e) { toast(e.message, 'erro'); return; }
     var nomeU = {};
     j.usuarios.forEach(function (u) { nomeU[u.id] = u.nome; });
     var em = j.email || {};
@@ -1423,15 +1437,15 @@
           (s.categorias.map(function (c) {
             return '<div class="linha" style="padding:8px 12px;border-bottom:1px solid var(--border)" data-cat="' + c.id + '">' +
               '<input class="campo" style="flex:2;min-width:160px" data-campo="nome" value="' + esc(c.nome) + '">' +
-              '<input class="campo" style="width:110px" type="number" min="1" data-campo="prazo_horas" value="' + (c.prazo_horas || '') + '" placeholder="prazo (h)" title="Prazo em horas">' +
+              '<input class="campo" style="width:110px" type="number" min="1" data-campo="prazo_horas" value="' + (c.prazo_horas || '') + '" placeholder="h úteis" title="Prazo em horas de expediente">' +
               '<select class="campo" style="width:120px" data-campo="prioridade">' + ['baixa', 'media', 'alta', 'urgente'].map(function (p) { return '<option value="' + p + '"' + (p === c.prioridade ? ' selected' : '') + '>' + PRIO[p][0] + '</option>'; }).join('') + '</select>' +
               '<label class="linha" style="font-size:12.5px;font-weight:700;color:var(--muted)"><input type="checkbox" data-campo="ativo"' + (c.ativo ? ' checked' : '') + '> ativo</label>' +
               '<button class="btn icon danger" data-apagar-cat="' + c.id + '" title="' + (c.tickets ? 'Já usado em ' + c.tickets + ' ticket(s): desative em vez de remover' : 'Remover tipo') + '"' + (c.tickets ? ' disabled' : '') + '>' + IC.fechar + '</button></div>';
           }).join('') || '<div class="sec" style="padding:12px">Nenhum tipo cadastrado. Sem tipo, o prazo segue a prioridade.</div>') + '</div></div>' +
-          '<div class="linha"><input class="campo" id="nCat" placeholder="Novo tipo (ex.: 2ª via de boleto)" style="flex:2;min-width:180px"><input class="campo" id="nPrazo" type="number" min="1" placeholder="prazo (h)" style="width:110px">' +
+          '<div class="linha"><input class="campo" id="nCat" placeholder="Novo tipo (ex.: 2ª via de boleto)" style="flex:2;min-width:180px"><input class="campo" id="nPrazo" type="number" min="1" placeholder="h úteis" style="width:110px">' +
           '<select class="campo" id="nPrio" style="width:120px">' + ['baixa', 'media', 'alta', 'urgente'].map(function (p) { return '<option value="' + p + '"' + (p === 'media' ? ' selected' : '') + '>' + PRIO[p][0] + '</option>'; }).join('') + '</select>' +
           '<button class="btn ghost" id="btAddCat">' + IC.mais + 'Adicionar</button></div>' +
-          '<div class="ajuda">Prazo em horas corridas, contado da abertura. Em branco: usa o padrão da prioridade (urgente 4 h, alta 24 h, média 3 dias, baixa 7 dias).</div>' +
+          '<div class="ajuda">Prazo em horas de expediente (' + esc(textoExpediente()) + '; 9 h = 1 dia útil), contado da abertura. Em branco: usa o padrão da prioridade (urgente 4 h, alta 1 dia útil, média 3 dias úteis, baixa 5 dias úteis).</div>' +
           '<div class="linha"><button class="btn primary" id="btSalvarCats">Salvar tipos</button></div></div>',
         pe: '<button class="btn ghost" data-fechar>Fechar</button>',
         aoFechar: function () { metaTickets = null; },

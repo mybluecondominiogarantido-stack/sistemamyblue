@@ -8,6 +8,7 @@ const { criarSeguranca, hashSenha, senhaAleatoria } = require('./seguranca');
 const { criarServicoModulos } = require('./modulos');
 const { criarRegistros } = require('./registros');
 const { criarNotificador } = require('./notificacoes');
+const { criarExpediente, lerExpediente } = require('./expediente');
 const { rotasAuth } = require('./rotas/auth');
 const { rotasAdmin } = require('./rotas/admin');
 const { rotasFerramentas } = require('./rotas/ferramentas');
@@ -70,7 +71,8 @@ async function criarApp(cfg) {
   const modulos = criarServicoModulos(db, cfg);
   const registros = criarRegistros(db);
   const avisos = criarNotificador(db, cfg);
-  const ctx = { db, seg, modulos, registros, avisos, cfg };
+  const expediente = criarExpediente(lerExpediente());
+  const ctx = { db, seg, modulos, registros, avisos, expediente, cfg };
 
   const app = express();
   app.disable('x-powered-by');
