@@ -106,14 +106,14 @@ function criarSeguranca(db, cfg) {
       const token = lerCookies(req)[COOKIE];
       if (token) {
         const th = sha256(token);
-        const s = await db.um(`SELECT s.expira_em, u.id, u.nome, u.email, u.papel, u.ativo, u.trocar_senha
+        const s = await db.um(`SELECT s.expira_em, u.id, u.nome, u.email, u.papel, u.ativo, u.trocar_senha, u.supervisor_tickets
           FROM sessoes s JOIN usuarios u ON u.id = s.usuario_id WHERE s.token_hash = $1`, [th]);
         if (s && s.ativo && new Date(s.expira_em) > new Date()) {
           if (new Date(s.expira_em) - Date.now() < duracaoMs / 2) {
             await db.q('UPDATE sessoes SET expira_em = $1 WHERE token_hash = $2', [new Date(Date.now() + duracaoMs), th]);
             res.setHeader('Set-Cookie', montarCookie(req, token, duracaoMs));
           }
-          req.usuario = { id: s.id, nome: s.nome, email: s.email, papel: s.papel, trocar_senha: !!s.trocar_senha };
+          req.usuario = { id: s.id, nome: s.nome, email: s.email, papel: s.papel, trocar_senha: !!s.trocar_senha, supervisor_tickets: !!s.supervisor_tickets };
         } else if (s) {
           await db.q('DELETE FROM sessoes WHERE token_hash = $1', [th]);
         }

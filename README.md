@@ -105,6 +105,39 @@ Para voltar atrás, marque **Planilha Google (como hoje)**. O que foi lançado n
 
 A versão publicada no portal é a do arquivo **sem** a senha própria (StatiCrypt): o acesso é controlado só pelo login e pelas permissões do portal. A planilha dessa ferramenta não tem coluna de ID (o nº do pedido se repete nas parcelas) e as alterações apontam a linha pela posição; na planilha interna, o portal confere o nº do pedido e o vencimento antes de alterar, para nunca mexer na linha errada. Excluir um pedido nessa ferramenta só remove da tela, como já acontecia com a planilha Google.
 
+## Central de Tickets
+
+Demandas internas entre os setores: quem precisa de algo de outro setor abre um ticket, o setor recebe, o líder distribui e o responsável trata até resolver. Fica no menu **Central de Tickets** e não depende de nenhum HTML enviado.
+
+**Fluxo**
+
+1. **Abrir:** qualquer pessoa logada escolhe o setor, o tipo de demanda, a prioridade, descreve e pode anexar arquivos.
+2. **Fila do setor:** o ticket entra como *Novo*, sem responsável. Os líderes do setor recebem aviso (sino, som e e-mail). Se o setor não tiver líder, a equipe inteira recebe.
+3. **Distribuir:** o líder atribui a alguém da equipe. Qualquer pessoa do setor também pode **assumir** um ticket da fila, ou devolver para a fila um que esteja com ela.
+4. **Tratar:** o responsável muda a situação (*Em andamento*, *Aguardando*), conversa com quem abriu e registra **notas internas** (quem abriu não vê). Também pode transferir para outro setor, e aí o ticket volta para a fila do novo setor.
+5. **Resolver:** quem abriu é avisado e pode **reabrir** se não ficou resolvido. Também pode cancelar o próprio pedido.
+
+**Quem faz o quê**
+
+| Perfil | O que pode |
+|---|---|
+| Qualquer pessoa | Abrir tickets, acompanhar os que abriu, comentar, anexar, cancelar ou reabrir os seus |
+| Equipe do setor | Ver a fila do setor, assumir, tratar, mudar situação, prioridade e prazo, transferir, notas internas |
+| Líder do setor (coordenação do setor) | Tudo da equipe, mais distribuir tickets para qualquer pessoa do setor |
+| Supervisão / Coordenação | Ver e direcionar os tickets de **todos** os setores, com painel geral. Não dá acesso à administração do portal |
+| Administrador | Tudo, mais montar equipes e tipos de demanda |
+
+O perfil **Supervisão / Coordenação** é marcado no cadastro da pessoa, em *Usuários e acessos*. As equipes, os líderes e os **tipos de demanda** de cada setor (com prazo em horas e prioridade sugerida) ficam em *Administração → Equipes e tipos de demanda*. Sem tipo cadastrado, o prazo segue a prioridade: urgente 4 h, alta 24 h, média 3 dias e baixa 7 dias, contados em horas corridas.
+
+**Avisos**
+
+- **No portal:** sino na barra superior com o número de avisos não lidos, som e alerta do computador (cada pessoa ativa os alertas no sino). O portal confere a cada 30 segundos.
+- **Por e-mail:** vão para quem recebeu o ticket, para os líderes quando chega ticket novo ou transferido para o setor, para quem abriu quando o ticket é resolvido ou cancelado, e para o responsável quando o ticket é reaberto. Comentários avisam só no portal. É preciso configurar as variáveis `SMTP_*` (veja abaixo); sem elas, os avisos aparecem só no portal.
+
+**Painel:** em aberto, sem responsável, atrasados, resolvidos no período, % no prazo, tempo médio de resolução e de 1ª resposta, por setor, por responsável e por tipo de demanda. Cada pessoa vê os setores de que faz parte; administração e supervisão veem todos.
+
+**Anexos:** até 10 MB por arquivo (`LIMITE_ANEXO_MB`), guardados no banco. Por segurança, só imagens abrem no navegador; os demais arquivos são sempre baixados.
+
 ## Colocar no ar
 
 ### No Railway
@@ -181,6 +214,12 @@ Rode `npm ci --omit=dev` e `npm start` com um gerenciador de processos (pm2, sys
 | `COOKIE_SECURE` | false | `true` quando o portal estiver em HTTPS |
 | `TRUST_PROXY` | 0 (no Railway, 1) | `1` quando houver proxy reverso na frente |
 | `LIMITE_HTML_MB` / `LIMITE_DADOS_MB` | 40 / 25 | Tamanho máximo de HTML enviado e de dados gravados por vez |
+| `LIMITE_ANEXO_MB` | 10 | Tamanho máximo de cada anexo de ticket |
+| `PORTAL_URL` | — | Endereço público do portal (ex.: `https://portal.myblue.com.br`), usado no link dos e-mails |
+| `SMTP_HOST` / `SMTP_PORT` | — / 587 | Servidor de e-mail para os avisos de tickets. Sem `SMTP_HOST`, não envia e-mail |
+| `SMTP_USUARIO` / `SMTP_SENHA` | — | Login no servidor de e-mail (Google Workspace: o e-mail e uma *senha de app*) |
+| `SMTP_SEGURO` | automático | `true` para SSL direto (porta 465); com 587 usa STARTTLS |
+| `EMAIL_REMETENTE` | `SMTP_USUARIO` | Remetente dos avisos, ex.: `"Portal MyBlue <naoresponda@myblue.com.br>"` |
 
 ## Segurança
 
@@ -205,7 +244,8 @@ server/
   modulos.js        versões dos HTMLs, injeção da ponte e ligação com a planilha interna
   bridge.js         ponte de armazenamento (roda dentro de cada ferramenta)
   registros.js      planilha interna (coleções e registros)
-  rotas/            auth, admin e ferramentas (entrega, armazenamento, protocolo Apps Script)
+  notificacoes.js   avisos da Central de Tickets (sino do portal e e-mail)
+  rotas/            auth, admin, ferramentas (entrega, armazenamento, protocolo Apps Script) e tickets
 public/             portal (login, início, menu, administração)
 scripts/            importar-html e criar-admin
 test/               testes automatizados (npm test)

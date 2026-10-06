@@ -1,6 +1,6 @@
 'use strict';
 const { conectar } = require('./banco');
-const { SETORES, MODULOS, CHAVES_DE_SISTEMA } = require('./catalogo');
+const { SETORES, SETORES_RENOMEADOS, MODULOS, CHAVES_DE_SISTEMA } = require('./catalogo');
 
 /* Esquema em Postgres. Os HTMLs das ferramentas também ficam no banco (coluna conteudo),
    então o servidor não precisa de disco persistente. */
@@ -112,15 +112,97 @@ CREATE TABLE IF NOT EXISTS auditoria (
 );
 CREATE INDEX IF NOT EXISTS idx_auditoria_quando ON auditoria(quando);
 CREATE INDEX IF NOT EXISTS idx_auditoria_usuario ON auditoria(usuario_id, acao);
+
+-- ===== Central de Tickets =====
+-- quem faz parte de cada setor (o líder distribui os tickets do setor)
+CREATE TABLE IF NOT EXISTS setor_membros (
+  setor_id INTEGER NOT NULL REFERENCES setores(id) ON DELETE CASCADE,
+  usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  lider BOOLEAN NOT NULL DEFAULT FALSE,
+  PRIMARY KEY (setor_id, usuario_id)
+);
+CREATE INDEX IF NOT EXISTS idx_setor_membros_usuario ON setor_membros(usuario_id);
+
+-- tipos de demanda de cada setor, com prazo (SLA) e prioridade sugerida
+CREATE TABLE IF NOT EXISTS ticket_categorias (
+  id SERIAL PRIMARY KEY,
+  setor_id INTEGER NOT NULL REFERENCES setores(id) ON DELETE CASCADE,
+  nome TEXT NOT NULL,
+  prazo_horas INTEGER,
+  prioridade TEXT NOT NULL DEFAULT 'media' CHECK (prioridade IN ('baixa','media','alta','urgente')),
+  ativo BOOLEAN NOT NULL DEFAULT TRUE,
+  UNIQUE (setor_id, nome)
+);
+
+CREATE TABLE IF NOT EXISTS tickets (
+  id SERIAL PRIMARY KEY,
+  titulo TEXT NOT NULL,
+  descricao TEXT NOT NULL DEFAULT '',
+  setor_id INTEGER NOT NULL REFERENCES setores(id),
+  categoria_id INTEGER REFERENCES ticket_categorias(id) ON DELETE SET NULL,
+  prioridade TEXT NOT NULL DEFAULT 'media' CHECK (prioridade IN ('baixa','media','alta','urgente')),
+  status TEXT NOT NULL DEFAULT 'novo' CHECK (status IN ('novo','em_andamento','aguardando','resolvido','cancelado')),
+  solicitante_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  responsavel_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  prazo TIMESTAMPTZ,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  primeira_resposta_em TIMESTAMPTZ,
+  resolvido_em TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_tickets_setor ON tickets(setor_id, status);
+CREATE INDEX IF NOT EXISTS idx_tickets_responsavel ON tickets(responsavel_id, status);
+CREATE INDEX IF NOT EXISTS idx_tickets_solicitante ON tickets(solicitante_id);
+
+-- linha do tempo: comentários, notas internas e cada mudança (status, responsável, setor…)
+CREATE TABLE IF NOT EXISTS ticket_eventos (
+  id SERIAL PRIMARY KEY,
+  ticket_id INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+  usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  tipo TEXT NOT NULL,
+  texto TEXT,
+  interno BOOLEAN NOT NULL DEFAULT FALSE,
+  detalhe JSONB,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_ticket_eventos_ticket ON ticket_eventos(ticket_id, id);
+
+CREATE TABLE IF NOT EXISTS ticket_anexos (
+  id SERIAL PRIMARY KEY,
+  ticket_id INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+  nome TEXT NOT NULL,
+  tipo TEXT NOT NULL,
+  tamanho INTEGER NOT NULL,
+  conteudo BYTEA NOT NULL,
+  interno BOOLEAN NOT NULL DEFAULT FALSE,
+  enviado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  enviado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_ticket_anexos_ticket ON ticket_anexos(ticket_id);
+
+-- avisos para cada pessoa (sino do portal)
+CREATE TABLE IF NOT EXISTS notificacoes (
+  id SERIAL PRIMARY KEY,
+  usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  ticket_id INTEGER REFERENCES tickets(id) ON DELETE CASCADE,
+  tipo TEXT NOT NULL,
+  titulo TEXT NOT NULL,
+  texto TEXT,
+  lida BOOLEAN NOT NULL DEFAULT FALSE,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_notificacoes_usuario ON notificacoes(usuario_id, id);
 `;
 
 /* Supabase publica o schema "public" pela API dele (PostgREST). Com RLS ligado e sem
    políticas, ninguém lê nem grava por lá; o portal conecta como dono das tabelas e não é afetado. */
-const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 'permissoes', 'armazenamento', 'colecoes', 'registros', 'auditoria'];
+const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 'permissoes', 'armazenamento', 'colecoes', 'registros', 'auditoria',
+  'setor_membros', 'ticket_categorias', 'tickets', 'ticket_eventos', 'ticket_anexos', 'notificacoes'];
 const RLS = TABELAS.map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`).join(';\n');
 
 /* Ajustes em bancos já existentes (rodam a cada início e não fazem nada se já estiverem aplicados). */
 const AJUSTES = `
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS supervisor_tickets BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE modulos DROP CONSTRAINT IF EXISTS modulos_adaptador_check;
 ALTER TABLE modulos ADD CONSTRAINT modulos_adaptador_check CHECK (adaptador IS NULL OR adaptador IN ('gas-linhas','gas-objetos','gas-posicional'))
 `;
@@ -132,6 +214,7 @@ async function abrir(cfg) {
     await t.q('SELECT pg_advisory_xact_lock(7240513)');
     for (const cmd of (SCHEMA + ';' + RLS + ';' + AJUSTES).split(';').map((s) => s.trim()).filter(Boolean)) await t.q(cmd);
     await semear(t);
+    await semearSetores(t);
     await sincronizarCatalogo(t);
   });
   return db;
@@ -150,6 +233,19 @@ async function semear(t) {
     ]);
   }
   await t.q("INSERT INTO auditoria (acao, detalhe) VALUES ('catalogo_semeado', $1::jsonb)", [JSON.stringify({ modulos: MODULOS.map((m) => m.slug) })]);
+}
+
+/* Lista oficial de setores (Central de Tickets), aplicada uma única vez em bancos já instalados:
+   renomeia os antigos, cria os que faltam e acerta a ordem. Depois disso o admin manda. */
+async function semearSetores(t) {
+  if (await t.um("SELECT 1 FROM auditoria WHERE acao = 'setores_oficiais' LIMIT 1")) return;
+  for (const [antigo, novo] of Object.entries(SETORES_RENOMEADOS)) {
+    if (!(await t.um('SELECT 1 FROM setores WHERE nome = $1', [novo]))) await t.q('UPDATE setores SET nome = $1 WHERE nome = $2', [novo, antigo]);
+  }
+  for (const s of SETORES) {
+    await t.q('INSERT INTO setores (nome, ordem) VALUES ($1, $2) ON CONFLICT (nome) DO UPDATE SET ordem = EXCLUDED.ordem', [s.nome, s.ordem]);
+  }
+  await t.q("INSERT INTO auditoria (acao, detalhe) VALUES ('setores_oficiais', $1::jsonb)", [JSON.stringify({ setores: SETORES.map((s) => s.nome) })]);
 }
 
 /* Leva para os módulos já cadastrados a configuração técnica do catálogo (pontos de ligação com

@@ -107,6 +107,7 @@
     enviar: svg('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5M12 3v12"/>'),
     baixar: svg('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/>'),
     mais: svg('<path d="M12 5v14M5 12h14"/>'),
+    sino: svg('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>'),
     banco: svg('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/>'),
   };
   var ROTULO_ICONE = { app: 'Genérico', calculadora: 'Calculadora', grafico: 'Gráfico', aperto: 'Negociação', caixa: 'Pacote', carteira: 'Carteira', documento: 'Documento', pessoas: 'Pessoas', ticket: 'Ticket', casa: 'Condomínio', calendario: 'Calendário', escudo: 'Segurança' };
@@ -186,6 +187,12 @@
     var lista = modulos.filter(function (m) { return !termo || normal(m.nome + ' ' + m.setor + ' ' + m.descricao).indexOf(termo) >= 0; });
     var rota = location.hash || '#/';
     var html = termo ? '' : '<a href="#/" class="' + (rota === '#/' ? 'on' : '') + '">' + IC.inicio + 'Início</a>';
+    if (!termo) {
+      html += '<div class="grupo">Central de Tickets</div>' +
+        '<a href="#/tickets" class="' + (rota.indexOf('#/tickets') === 0 && rota.indexOf('#/tickets/painel') !== 0 ? 'on' : '') + '">' + IC.ticket + '<span>Tickets</span>' +
+        '<i data-contador="fila" class="contador" hidden></i></a>' +
+        (souEquipe() ? '<a href="#/tickets/painel" class="' + (rota.indexOf('#/tickets/painel') === 0 ? 'on' : '') + '">' + IC.grafico + 'Painel de tickets</a>' : '');
+    }
     porSetor(lista).forEach(function (g) {
       html += '<div class="grupo">' + esc(g.setor) + '</div>';
       g.itens.forEach(function (m) {
@@ -198,9 +205,11 @@
       html += '<div class="grupo">Administração</div>' +
         '<a href="#/admin/usuarios" class="' + (rota.indexOf('#/admin/usuarios') === 0 ? 'on' : '') + '">' + IC.usuarios + 'Usuários e acessos</a>' +
         '<a href="#/admin/modulos" class="' + (rota.indexOf('#/admin/modulos') === 0 ? 'on' : '') + '">' + IC.camadas + 'Módulos e dados</a>' +
+        '<a href="#/admin/equipes" class="' + (rota.indexOf('#/admin/equipes') === 0 ? 'on' : '') + '">' + IC.pessoas + 'Equipes e tipos de demanda</a>' +
         '<a href="#/admin/auditoria" class="' + (rota.indexOf('#/admin/auditoria') === 0 ? 'on' : '') + '">' + IC.historico + 'Histórico de atividades</a>';
     }
     $('#nav').innerHTML = html;
+    if (resumoTickets) { var bc = $('#nav [data-contador=fila]'); if (bc) { bc.textContent = resumoTickets.minha_fila; bc.hidden = !resumoTickets.minha_fila; if (resumoTickets.minha_fila_atrasados) bc.classList.add('alerta'); } }
     $$('#nav a').forEach(function (a) { a.addEventListener('click', function () { $('#casca').classList.remove('menu-aberto'); }); });
   }
 
@@ -225,7 +234,14 @@
     $('#casca').classList.remove('menu-aberto');
     if (partes[0] === 'm' && partes[1]) return abrirModulo(decodeURIComponent(partes[1]));
     mostrarConteudo();
+    if (partes[0] === 'tickets') {
+      if (partes[1] === 'painel') return paginaPainelTickets();
+      if (partes[1] === 'fila') return paginaTickets(partes[2]);
+      if (/^\d+$/.test(partes[1] || '')) return paginaTicket(Number(partes[1]));
+      return paginaTickets(lembrar('tickets.visao', 'minha'));
+    }
     if (partes[0] === 'admin' && eu.papel === 'admin') {
+      if (partes[1] === 'equipes') return paginaEquipes();
       if (partes[1] === 'usuarios') return paginaUsuarios();
       if (partes[1] === 'modulos') return paginaModulos();
       if (partes[1] === 'auditoria') return paginaAuditoria();
@@ -295,6 +311,11 @@
     var ola = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
     var html = '<div class="pagina"><div class="saudacao"><div><h1>' + ola + ', ' + esc(eu.nome.split(' ')[0]) + '</h1>' +
       '<p class="sub" style="margin:0">Escolha uma ferramenta para começar. Você tem acesso a ' + modulos.length + ' ferramenta' + (modulos.length === 1 ? '' : 's') + '.</p></div></div>';
+    var rt = resumoTickets;
+    html += '<div class="atalho-tickets"><div class="icone-mod">' + IC.ticket + '</div><div style="flex:1;min-width:200px"><b style="font-family:var(--display)">Central de Tickets</b>' +
+      '<span class="sec" style="display:block;color:var(--muted);font-weight:600;font-size:13px" id="iniTickets">' +
+      (rt && souEquipe() ? rt.minha_fila + ' na sua fila' + (rt.minha_fila_atrasados ? ' · ⚠ ' + rt.minha_fila_atrasados + ' atrasado(s)' : '') + ' · ' + rt.sem_responsavel + ' sem responsável nos seus setores' : 'Precisa de algo de outro setor? Abra um ticket.') +
+      '</span></div><a class="btn ghost sm" href="#/tickets">Ver tickets</a><button class="btn primary sm" id="btIniNovoT">' + IC.mais + 'Novo ticket</button></div>';
     var rec = recentes.map(function (s) { return modulos.find(function (m) { return m.slug === s; }); }).filter(Boolean);
     if (rec.length) {
       html += '<div class="grupo" style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--faint);font-weight:800;margin-bottom:8px">Usadas recentemente</div><div class="recentes">' +
@@ -314,6 +335,7 @@
     }
     html += '</div>';
     $('#conteudo').innerHTML = html;
+    $('#btIniNovoT').onclick = novoTicket;
     $$('[data-nova]').forEach(function (b) {
       b.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); window.open('/m/' + b.getAttribute('data-nova') + '/', '_blank', 'noopener'); });
     });
@@ -415,7 +437,7 @@
         var ferr = u.papel === 'admin' ? '<span class="etiqueta azul">todas</span>' :
           u.modulos.length ? '<span title="' + esc(u.modulos.map(function (s) { return nomeMod[s] || s; }).join('\n')) + '">' + u.modulos.length + ' de ' + mods.length + '</span>' : '<span class="etiqueta ambar">nenhuma</span>';
         return '<tr class="clicavel" data-id="' + u.id + '"><td><b>' + esc(u.nome) + '</b><span class="sec">' + esc(u.email) + '</span></td>' +
-          '<td>' + (u.papel === 'admin' ? 'Administrador' : 'Usuário') + '</td><td>' + ferr + '</td><td>' + quando(u.ultimo_login) + '</td>' +
+          '<td>' + (u.papel === 'admin' ? 'Administrador' : 'Usuário') + (u.supervisor_tickets ? ' <span class="etiqueta azul">supervisão tickets</span>' : '') + '</td><td>' + ferr + '</td><td>' + quando(u.ultimo_login) + '</td>' +
           '<td>' + (!u.ativo ? '<span class="etiqueta cinza">desativado</span>' : u.trocar_senha ? '<span class="etiqueta ambar">aguardando 1º acesso</span>' : '<span class="etiqueta verde">ativo</span>') + '</td></tr>';
       }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);font-weight:700;padding:30px">Nenhum usuário encontrado.</td></tr>';
       $$('#tbUsu tr[data-id]').forEach(function (tr) {
@@ -438,6 +460,8 @@
           '<div><label class="rot">Perfil</label><div class="grade-2">' +
           '<label class="opcao-radio"><input type="radio" name="uPapel" value="usuario"' + (u.papel !== 'admin' ? ' checked' : '') + '><div><b>Usuário</b><span>Abre só as ferramentas marcadas abaixo.</span></div></label>' +
           '<label class="opcao-radio"><input type="radio" name="uPapel" value="admin"' + (u.papel === 'admin' ? ' checked' : '') + '><div><b>Administrador</b><span>Acessa tudo e gerencia usuários, módulos e dados.</span></div></label></div></div>' +
+          '<label class="opcao-radio" style="margin:0"><input type="checkbox" id="uSup"' + (u.supervisor_tickets ? ' checked' : '') + '><div><b>Supervisão / Coordenação da Central de Tickets</b>' +
+          '<span>Vê os tickets de todos os setores e direciona: troca o responsável, transfere, muda situação, prioridade e prazo. Não dá acesso à administração do portal.</span></div></label>' +
           '<div id="blocoMods"><label class="rot">Ferramentas liberadas</label>' + seletorModulos(mods, u.modulos, 'uMod') + '</div>' +
           (novo ? '<div><label class="rot" for="uSenha">Senha inicial (opcional)</label><input class="campo" id="uSenha" type="text" autocomplete="off" placeholder="Deixe em branco para gerar uma automaticamente"><div class="ajuda">A pessoa precisará trocar a senha no primeiro acesso.</div></div>' :
             '<label class="linha" style="font-weight:700"><input type="checkbox" id="uAtivo"' + (u.ativo ? ' checked' : '') + '> Usuário ativo (desmarque para bloquear o acesso)</label>') +
@@ -453,6 +477,7 @@
         var corpo = {
           nome: $('#uNome', m).value, email: $('#uEmail', m).value, papel: $('input[name=uPapel]:checked', m).value,
           modulos: $$('input[name=uMod]:checked', m).map(function (i) { return i.value; }),
+          supervisor_tickets: $('#uSup', m).checked,
         };
         try {
           if (novo) {
@@ -568,9 +593,9 @@
         corpo: '<div class="pilha"><div class="caixa-opcoes" style="max-height:none">' + setores.map(function (s) {
           return '<div class="linha" style="padding:8px 12px;border-bottom:1px solid var(--border)"><input class="campo" style="flex:1" data-id="' + s.id + '" data-campo="nome" value="' + esc(s.nome) + '">' +
             '<input class="campo" style="width:80px" type="number" data-id="' + s.id + '" data-campo="ordem" value="' + s.ordem + '" title="Ordem">' +
-            '<button class="btn icon danger" data-apagar="' + s.id + '" title="Remover setor"' + (s.modulos ? ' disabled' : '') + '>' + IC.fechar + '</button></div>';
+            '<button class="btn icon danger" data-apagar="' + s.id + '" title="' + (s.tickets ? 'Setor com tickets: transfira-os antes' : 'Remover setor') + '"' + (s.modulos || s.tickets ? ' disabled' : '') + '>' + IC.fechar + '</button></div>';
         }).join('') + '</div><div class="linha"><input class="campo" id="novoSetor" placeholder="Novo setor" style="flex:1"><button class="btn ghost" id="btAddSetor">' + IC.mais + 'Adicionar</button></div>' +
-          '<div class="ajuda">Só é possível remover setores sem módulos.</div></div>',
+          '<div class="ajuda">Só é possível remover setores sem módulos e sem tickets.</div></div>',
         pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="btSalvarSetores">Salvar</button>',
       });
       $('#btAddSetor', m).onclick = async function () {
@@ -821,6 +846,626 @@
     try { var j = await api('GET', '/api/modulos'); modulos = j.modulos; desenharMenu(); } catch (e) { /* ignora */ }
   }
 
+  /* ======================= Central de Tickets ======================= */
+  var ST_TICKET = {
+    novo: ['Novo', 'azul'], em_andamento: ['Em andamento', 'ambar'], aguardando: ['Aguardando', 'cinza'],
+    resolvido: ['Resolvido', 'verde'], cancelado: ['Cancelado', 'cinza'],
+  };
+  var PRIO = { urgente: ['Urgente', 'vermelha'], alta: ['Alta', 'ambar'], media: ['Média', 'azul'], baixa: ['Baixa', 'cinza'] };
+  var ROTULO_STATUS_AJUDA = {
+    novo: 'Na fila do setor, ainda sem tratamento.', em_andamento: 'Alguém do setor está tratando.',
+    aguardando: 'Parado esperando retorno de quem abriu ou de terceiros.', resolvido: 'Demanda atendida.', cancelado: 'Não será atendido.',
+  };
+  var metaTickets = null;
+  var resumoTickets = null;
+
+  function etq(par) { return '<span class="etiqueta ' + par[1] + '">' + esc(par[0]) + '</span>'; }
+  function etqStatus(s) { return etq(ST_TICKET[s] || [s, 'cinza']); }
+  function etqPrio(p) { return etq(PRIO[p] || [p, 'cinza']); }
+  function numTicket(id) { return '#' + id; }
+  function duracao(ms) {
+    var h = Math.abs(ms) / 3600000;
+    if (h < 1) return Math.max(1, Math.round(h * 60)) + ' min';
+    if (h < 48) return Math.round(h) + ' h';
+    return Math.round(h / 24) + ' dias';
+  }
+  function horas(h) { return h == null ? '—' : h < 1 ? Math.max(1, Math.round(h * 60)) + ' min' : h < 48 ? String(h).replace('.', ',') + ' h' : (Math.round(h / 24 * 10) / 10).toString().replace('.', ',') + ' dias'; }
+  /* prazo com aviso de atraso (sempre com texto, nunca só cor) */
+  function prazoTxt(t) {
+    if (!t.prazo) return '<span class="sec">sem prazo</span>';
+    var falta = new Date(t.prazo) - Date.now();
+    var aberto = ['novo', 'em_andamento', 'aguardando'].indexOf(t.status) >= 0;
+    if (!aberto) return '<span title="' + esc(quando(t.prazo)) + '">' + quando(t.prazo) + '</span>';
+    if (falta < 0) return '<span class="etiqueta vermelha" title="Prazo: ' + esc(quando(t.prazo)) + '">⚠ atrasado ' + duracao(falta) + '</span>';
+    return '<span title="Prazo: ' + esc(quando(t.prazo)) + '"' + (falta < 4 * 3600000 ? ' class="etiqueta ambar"' : '') + '>vence em ' + duracao(falta) + '</span>';
+  }
+  function localInput(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    var p = function (n) { return String(n).padStart(2, '0'); };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+  function carregandoHtml() { return '<div class="pagina"><div class="carregando" style="position:static;background:none"><div><div class="giro"></div>Carregando…</div></div></div>'; }
+
+  async function carregarMeta(forcar) {
+    if (!metaTickets || forcar) metaTickets = await api('GET', '/api/tickets/meta');
+    return metaTickets;
+  }
+  function meusSetores() { return (metaTickets ? metaTickets.setores : []).filter(function (s) { return s.meu; }); }
+  function gestorTickets() { return eu.papel === 'admin' || !!eu.supervisor_tickets; }
+  function souEquipe() { return gestorTickets() || meusSetores().length > 0; }
+
+  /* ---------- avisos: sino, som e alerta do navegador ---------- */
+  var avisosCache = { notificacoes: [], nao_lidas: 0 };
+  var ultimoAviso = lembrar('avisos.ultimo', 0);
+  var audioCtx = null;
+  document.addEventListener('pointerdown', function () {
+    // o navegador só libera som depois de um clique na página
+    if (!audioCtx && (window.AudioContext || window.webkitAudioContext)) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { /* sem som */ } }
+  }, { once: true });
+  function tocarSom() {
+    if (!lembrar('avisos.som', true) || !audioCtx) return;
+    try {
+      [[880, 0], [1320, 0.16]].forEach(function (n) {
+        var o = audioCtx.createOscillator(); var g = audioCtx.createGain();
+        o.type = 'sine'; o.frequency.value = n[0];
+        g.gain.setValueAtTime(0.0001, audioCtx.currentTime + n[1]);
+        g.gain.exponentialRampToValueAtTime(0.25, audioCtx.currentTime + n[1] + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + n[1] + 0.3);
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start(audioCtx.currentTime + n[1]); o.stop(audioCtx.currentTime + n[1] + 0.32);
+      });
+    } catch (e) { /* sem som */ }
+  }
+  function alertaNavegador(n) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    try {
+      var a = new Notification(n.titulo, { body: n.texto || '', icon: '/img/icone.png', tag: 'myblue-' + n.id });
+      a.onclick = function () { window.focus(); if (n.ticket_id) location.hash = '#/tickets/' + n.ticket_id; a.close(); };
+    } catch (e) { /* navegador sem suporte */ }
+  }
+  function desenharSino() {
+    var b = $('#btSino');
+    if (!b) return;
+    var n = avisosCache.nao_lidas;
+    b.innerHTML = IC.sino + (n ? '<i class="contador-sino">' + (n > 99 ? '99+' : n) + '</i>' : '');
+    b.title = n ? n + ' aviso(s) não lido(s)' : 'Avisos';
+  }
+  async function buscarAvisos() {
+    var r;
+    try { r = await api('GET', '/api/notificacoes'); } catch (e) { return; }
+    var novos = r.notificacoes.filter(function (n) { return n.id > ultimoAviso && !n.lida; });
+    var primeiraVez = lembrar('avisos.ultimo', null) === null;
+    avisosCache = r;
+    if (r.notificacoes.length) ultimoAviso = Math.max(ultimoAviso, r.notificacoes[0].id);
+    guardar('avisos.ultimo', ultimoAviso);
+    if (novos.length && !primeiraVez) {
+      tocarSom();
+      novos.slice(0, 3).forEach(alertaNavegador);
+      if (novos.length === 1) toast(novos[0].titulo, 'ok');
+      else toast(novos.length + ' novos avisos de tickets.', 'ok');
+    }
+    desenharSino();
+  }
+  function abrirAvisos() {
+    var suporta = 'Notification' in window;
+    var perm = suporta ? Notification.permission : 'denied';
+    var m = modal({
+      titulo: 'Avisos',
+      corpo: '<div class="pilha">' +
+        '<div class="linha">' + (suporta && perm !== 'granted' ? '<button class="btn ghost sm" id="btPermitir"' + (perm === 'denied' ? ' disabled title="Bloqueado no navegador: libere nas configurações do site"' : '') + '>Ativar alertas no computador</button>' :
+          suporta ? '<span class="etiqueta verde">alertas do computador ativos</span>' : '') +
+        '<label class="linha" style="font-weight:700;font-size:13px;color:var(--muted)"><input type="checkbox" id="avSom"' + (lembrar('avisos.som', true) ? ' checked' : '') + '> tocar som</label>' +
+        '<span class="espaco"></span><button class="btn ghost sm" id="btLerTodos">Marcar todos como lidos</button></div>' +
+        (avisosCache.email_ativo === false ? '<div class="ajuda" style="margin-top:-6px">O envio de e-mails ainda não foi configurado no servidor: por enquanto os avisos aparecem só aqui.</div>' : '') +
+        '<div class="lista-avisos">' + (avisosCache.notificacoes.map(function (n) {
+          return '<a href="' + (n.ticket_id ? '#/tickets/' + n.ticket_id : '#/tickets') + '" class="aviso' + (n.lida ? '' : ' nao-lido') + '" data-id="' + n.id + '">' +
+            '<b>' + esc(n.titulo) + '</b><span>' + esc(n.texto || '') + '</span><span class="sec">' + quando(n.criado_em) + '</span></a>';
+        }).join('') || '<div class="vazio" style="padding:24px">Nenhum aviso por enquanto.</div>') + '</div></div>',
+    });
+    $('#avSom', m).onchange = function () { guardar('avisos.som', this.checked); if (this.checked && audioCtx) tocarSom(); };
+    if ($('#btPermitir', m)) $('#btPermitir', m).onclick = function () {
+      Notification.requestPermission().then(function (p) { if (p === 'granted') { toast('Alertas ativados neste computador.', 'ok'); m.fechar(); abrirAvisos(); } });
+    };
+    $('#btLerTodos', m).onclick = async function () {
+      try { await api('POST', '/api/notificacoes/lidas', { todas: true }); m.fechar(); buscarAvisos(); } catch (e) { toast(e.message, 'erro'); }
+    };
+    $$('.aviso', m).forEach(function (a) { a.addEventListener('click', function () { m.fechar(); setTimeout(buscarAvisos, 800); }); });
+  }
+
+  async function atualizarResumo() {
+    try { resumoTickets = await api('GET', '/api/tickets/resumo'); } catch (e) { return; }
+    var b = $('#nav [data-contador=fila]');
+    if (b) {
+      var n = resumoTickets.minha_fila;
+      b.textContent = n;
+      b.hidden = !n;
+      b.className = 'contador' + (resumoTickets.minha_fila_atrasados ? ' alerta' : '');
+      b.title = n + ' na sua fila' + (resumoTickets.minha_fila_atrasados ? ' · ' + resumoTickets.minha_fila_atrasados + ' atrasado(s)' : '');
+    }
+  }
+
+  async function enviarAnexo(ticketId, arquivo, interno) {
+    var r = await fetch('/api/tickets/' + ticketId + '/anexos', {
+      method: 'POST', credentials: 'same-origin', body: arquivo,
+      headers: { 'Content-Type': arquivo.type || 'application/octet-stream', 'X-Nome-Arquivo': encodeURIComponent(arquivo.name), 'X-Interno': interno ? '1' : '0' },
+    });
+    if (r.status === 413) throw new Error('"' + arquivo.name + '" passa do tamanho máximo permitido.');
+    if (!r.ok) { var j = {}; try { j = await r.json(); } catch (e) { /* sem JSON */ } throw new Error(j.erro || 'Falha ao enviar ' + arquivo.name); }
+  }
+  async function enviarAnexos(ticketId, arquivos, interno) {
+    var falhas = [];
+    for (var i = 0; i < arquivos.length; i++) {
+      try { await enviarAnexo(ticketId, arquivos[i], interno); } catch (e) { falhas.push(e.message); }
+    }
+    if (falhas.length) toast(falhas.join(' '), 'erro');
+  }
+
+  /* ---------- novo ticket ---------- */
+  async function novoTicket() {
+    var meta;
+    try { meta = await carregarMeta(); } catch (e) { toast(e.message, 'erro'); return; }
+    var m = modal({
+      titulo: 'Novo ticket', largo: true,
+      corpo: '<form id="fT" class="pilha" novalidate>' +
+        '<div class="grade-2"><div><label class="rot" for="tSetor">Para qual setor?</label><select class="campo" id="tSetor"><option value="">Escolha o setor…</option>' +
+        meta.setores.map(function (s) { return '<option value="' + s.id + '">' + esc(s.nome) + '</option>'; }).join('') + '</select></div>' +
+        '<div><label class="rot" for="tCat">Tipo de demanda</label><select class="campo" id="tCat" disabled><option value="">Escolha o setor primeiro</option></select></div></div>' +
+        '<div><label class="rot" for="tTitulo">Assunto</label><input class="campo" id="tTitulo" maxlength="160" placeholder="Resumo da demanda em uma linha"></div>' +
+        '<div><label class="rot" for="tDesc">Descrição</label><textarea class="campo" id="tDesc" rows="6" maxlength="10000" placeholder="O que precisa ser feito, condomínio/unidade, valores, datas… Quanto mais detalhe, mais rápido o atendimento."></textarea></div>' +
+        '<div class="grade-2"><div><label class="rot" for="tPrio">Prioridade</label><select class="campo" id="tPrio">' +
+        ['baixa', 'media', 'alta', 'urgente'].map(function (p) { return '<option value="' + p + '"' + (p === 'media' ? ' selected' : '') + '>' + PRIO[p][0] + '</option>'; }).join('') + '</select>' +
+        '<div class="ajuda" id="tPrazo"></div></div>' +
+        '<div><label class="rot" for="tArq">Anexos (opcional)</label><input class="campo" id="tArq" type="file" multiple></div></div>' +
+        '<div id="tMsg" class="msg erro" hidden></div></form>',
+      pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="btCriarT">Abrir ticket</button>',
+    });
+    function setor() { return meta.setores.find(function (s) { return String(s.id) === $('#tSetor', m).value; }); }
+    function prazoAjuda() {
+      var s = setor();
+      var c = s && s.categorias.find(function (x) { return String(x.id) === $('#tCat', m).value; });
+      var h = c && c.prazo_horas ? c.prazo_horas : meta.prazo_padrao_horas[$('#tPrio', m).value];
+      $('#tPrazo', m).textContent = 'Prazo de atendimento: ' + horas(h) + (c && c.prazo_horas ? ' (definido para este tipo de demanda)' : '') + '.';
+    }
+    $('#tSetor', m).onchange = function () {
+      var s = setor();
+      var sel = $('#tCat', m);
+      sel.disabled = !s || !s.categorias.length;
+      sel.innerHTML = !s ? '<option value="">Escolha o setor primeiro</option>' : !s.categorias.length ? '<option value="">Este setor não tem tipos cadastrados</option>' :
+        '<option value="">Outro / não sei</option>' + s.categorias.map(function (c) { return '<option value="' + c.id + '">' + esc(c.nome) + '</option>'; }).join('');
+      prazoAjuda();
+    };
+    $('#tCat', m).onchange = function () {
+      var s = setor();
+      var c = s && s.categorias.find(function (x) { return String(x.id) === $('#tCat', m).value; });
+      if (c) $('#tPrio', m).value = c.prioridade;
+      prazoAjuda();
+    };
+    $('#tPrio', m).onchange = prazoAjuda;
+    prazoAjuda();
+    $('#btCriarT', m).onclick = async function () {
+      var bt = this;
+      var msg = $('#tMsg', m);
+      if (!$('#tSetor', m).value) { msg.textContent = 'Escolha o setor que vai atender.'; msg.hidden = false; return; }
+      if (!$('#tTitulo', m).value.trim()) { msg.textContent = 'Informe o assunto.'; msg.hidden = false; return; }
+      bt.disabled = true;
+      try {
+        var r = await api('POST', '/api/tickets', {
+          setor_id: Number($('#tSetor', m).value), categoria_id: $('#tCat', m).value ? Number($('#tCat', m).value) : null,
+          prioridade: $('#tPrio', m).value, titulo: $('#tTitulo', m).value, descricao: $('#tDesc', m).value,
+        });
+        var arqs = Array.prototype.slice.call($('#tArq', m).files);
+        if (arqs.length) await enviarAnexos(r.id, arqs, false);
+        m.fechar();
+        toast('Ticket ' + numTicket(r.id) + ' aberto.', 'ok');
+        location.hash = '#/tickets/' + r.id;
+      } catch (e) { msg.textContent = e.message; msg.hidden = false; bt.disabled = false; }
+    };
+  }
+
+  /* ---------- lista / filas ---------- */
+  var VISOES = [
+    ['minha', 'Minha fila', 'Tickets em que você é o responsável.'],
+    ['setor', 'Fila do setor', 'Tudo o que chegou para os setores de que você faz parte.'],
+    ['abertos', 'Abertos por mim', 'Demandas que você pediu para outros setores.'],
+    ['todos', 'Todos', 'Todos os tickets de todos os setores (administração e supervisão).'],
+  ];
+
+  async function paginaTickets(visao) {
+    try { await carregarMeta(); } catch (e) { toast(e.message, 'erro'); }
+    var visoes = VISOES.filter(function (v) { return (v[0] !== 'todos' || gestorTickets()) && (v[0] !== 'setor' || souEquipe()) && (v[0] !== 'minha' || souEquipe()); });
+    if (!visoes.some(function (v) { return v[0] === visao; })) visao = visoes[0][0];
+    guardar('tickets.visao', visao);
+    var filtros = lembrar('tickets.filtros.' + visao, { status: 'abertos', setor: '', q: '', atrasados: false, semResp: false });
+    definirBarra('<span class="setor">Central de Tickets</span><span class="sep">/</span><span class="nome">' + esc(visoes.find(function (v) { return v[0] === visao; })[1]) + '</span>');
+    var setoresFiltro = visao === 'setor' && !gestorTickets() ? meusSetores() : (metaTickets ? metaTickets.setores : []);
+    $('#conteudo').innerHTML = '<div class="pagina"><h1>Central de Tickets</h1><p class="sub">Demandas entre os setores: abra, acompanhe e trate tudo em um só lugar.</p>' +
+      '<nav class="abas">' + visoes.map(function (v) { return '<a href="#/tickets/fila/' + v[0] + '" class="' + (v[0] === visao ? 'on' : '') + '" title="' + esc(v[2]) + '">' + esc(v[1]) + '</a>'; }).join('') + '</nav>' +
+      '<div class="painel"><div class="cab-painel">' +
+      '<input class="campo" id="fTq" type="search" placeholder="Buscar por nº ou assunto…" style="max-width:260px" value="' + esc(filtros.q) + '">' +
+      '<select class="campo" id="fTst" style="max-width:170px"><option value="abertos">Em aberto</option><option value="todos">Todas as situações</option>' +
+      Object.keys(ST_TICKET).map(function (k) { return '<option value="' + k + '">' + ST_TICKET[k][0] + '</option>'; }).join('') + '</select>' +
+      (visao === 'minha' ? '' : '<select class="campo" id="fTse" style="max-width:200px"><option value="">Todos os setores</option>' +
+        setoresFiltro.map(function (s) { return '<option value="' + s.id + '">' + esc(s.nome) + '</option>'; }).join('') + '</select>') +
+      '<label class="linha" style="font-weight:700;font-size:13px;color:var(--muted)"><input type="checkbox" id="fTat"> só atrasados</label>' +
+      (visao === 'setor' || visao === 'todos' ? '<label class="linha" style="font-weight:700;font-size:13px;color:var(--muted)"><input type="checkbox" id="fTsr"> sem responsável</label>' : '') +
+      '<span class="espaco"></span><button class="btn primary" id="btNovoTicket">' + IC.mais + 'Novo ticket</button></div>' +
+      '<div class="tabela-wrap"><table><thead><tr><th>Nº</th><th>Assunto</th><th>Setor</th><th>Prioridade</th><th>Situação</th><th>' + (visao === 'minha' ? 'Aberto por' : 'Responsável') + '</th><th>Prazo</th></tr></thead>' +
+      '<tbody id="tbT"></tbody></table></div></div></div>';
+    $('#fTst').value = filtros.status;
+    if ($('#fTse')) $('#fTse').value = filtros.setor;
+    $('#fTat').checked = !!filtros.atrasados;
+    if ($('#fTsr')) $('#fTsr').checked = !!filtros.semResp;
+    $('#btNovoTicket').onclick = novoTicket;
+
+    var seq = 0;
+    async function carregar() {
+      filtros = { status: $('#fTst').value, setor: $('#fTse') ? $('#fTse').value : '', q: $('#fTq').value.trim(), atrasados: $('#fTat').checked, semResp: $('#fTsr') ? $('#fTsr').checked : false };
+      guardar('tickets.filtros.' + visao, filtros);
+      var q = '?vis=' + visao + '&status=' + filtros.status + (filtros.setor ? '&setor=' + filtros.setor : '') + (filtros.q ? '&q=' + encodeURIComponent(filtros.q) : '') +
+        (filtros.atrasados ? '&atrasados=1' : '') + (filtros.semResp ? '&responsavel=nenhum' : '');
+      var meu = ++seq;
+      var r;
+      try { r = await api('GET', '/api/tickets' + q); } catch (e) { toast(e.message, 'erro'); return; }
+      if (meu !== seq) return;
+      $('#tbT').innerHTML = r.tickets.map(function (t) {
+        var pessoa = visao === 'minha' ? esc(t.solicitante_nome || '—') : t.responsavel_nome ? esc(t.responsavel_nome) : '<span class="etiqueta ambar">sem responsável</span>';
+        return '<tr class="clicavel" data-id="' + t.id + '"><td class="num" style="text-align:left;white-space:nowrap"><b>' + numTicket(t.id) + '</b></td>' +
+          '<td><b>' + esc(t.titulo) + '</b><span class="sec">' + (t.categoria_nome ? esc(t.categoria_nome) + ' · ' : '') + 'aberto por ' + esc(t.solicitante_nome || '—') + ' em ' + quando(t.criado_em) +
+          (t.comentarios ? ' · ' + t.comentarios + ' comentário' + (t.comentarios === 1 ? '' : 's') : '') + '</span></td>' +
+          '<td>' + esc(t.setor_nome) + '</td><td>' + etqPrio(t.prioridade) + '</td><td>' + etqStatus(t.status) + '</td><td>' + pessoa + '</td><td style="white-space:nowrap">' + prazoTxt(t) + '</td></tr>';
+      }).join('') || '<tr><td colspan="7"><div class="vazio" style="border:0;padding:34px">' +
+        (visao === 'minha' ? 'Nada na sua fila agora.' : visao === 'abertos' ? 'Você ainda não abriu tickets com estes filtros.' : 'Nenhum ticket com estes filtros.') + '</div></td></tr>';
+      $$('#tbT tr[data-id]').forEach(function (tr) { tr.onclick = function () { location.hash = '#/tickets/' + tr.getAttribute('data-id'); }; });
+    }
+    var espera;
+    $('#fTq').oninput = function () { clearTimeout(espera); espera = setTimeout(carregar, 300); };
+    $$('#fTst,#fTse,#fTat,#fTsr').forEach(function (el) { el.onchange = carregar; });
+    carregar();
+    atualizarResumo();
+  }
+
+  /* ---------- detalhe ---------- */
+  function textoEvento(e) {
+    var d = e.detalhe || {};
+    switch (e.tipo) {
+      case 'criado': return 'abriu o ticket para <b>' + esc(d.setor || '') + '</b>';
+      case 'status': return 'mudou a situação de ' + etqStatus(d.de) + ' para ' + etqStatus(d.para);
+      case 'atribuicao': return d.para ? 'atribuiu a <b>' + esc(d.para) + '</b>' : 'devolveu o ticket para a fila do setor';
+      case 'transferencia': return 'transferiu de <b>' + esc(d.de || '') + '</b> para <b>' + esc(d.para || '') + '</b>' + (d.categoria ? ' (' + esc(d.categoria) + ')' : '');
+      case 'prioridade': return 'mudou a prioridade de ' + etqPrio(d.de) + ' para ' + etqPrio(d.para);
+      case 'prazo': return 'mudou o prazo para <b>' + (d.para ? quando(d.para) : 'sem prazo') + '</b>';
+      case 'anexo': return 'anexou <b>' + esc(d.nome || 'arquivo') + '</b>';
+      default: return esc(e.tipo);
+    }
+  }
+
+  async function paginaTicket(id) {
+    definirBarra('<span class="setor">Central de Tickets</span><span class="sep">/</span><span class="nome">' + numTicket(id) + '</span>');
+    $('#conteudo').innerHTML = carregandoHtml();
+    var d;
+    try { d = await api('GET', '/api/tickets/' + id); await carregarMeta(); } catch (e) {
+      $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">' + esc(e.message) + '<br><a class="btn ghost" style="margin-top:14px" href="#/tickets">Voltar para os tickets</a></div></div>';
+      return;
+    }
+    var t = d.ticket;
+    var pode = d.pode;
+    var setorMeta = metaTickets.setores.find(function (s) { return s.id === t.setor_id; }) || { membros: [], categorias: [] };
+    var aberto = ['novo', 'em_andamento', 'aguardando'].indexOf(t.status) >= 0;
+    definirBarra('<span class="setor">Central de Tickets</span><span class="sep">/</span><span class="nome">' + numTicket(t.id) + ' · ' + esc(t.titulo) + '</span>',
+      '<a class="btn ghost sm" href="#/tickets">Voltar</a>');
+
+    var anexosPorId = {};
+    d.anexos.forEach(function (a) { anexosPorId[a.id] = a; });
+    function linkAnexo(a) {
+      var url = '/api/tickets/' + t.id + '/anexos/' + a.id;
+      var img = /^image\/(png|jpeg|gif|webp)$/.test(a.tipo);
+      return '<a class="anexo" href="' + url + (img ? '?ver=1' : '') + '" target="_blank" rel="noopener">' + IC.documento + '<span>' + esc(a.nome) + '</span><span class="sec">' + tamanho(a.tamanho) + '</span>' +
+        (a.interno ? '<span class="etiqueta ambar">interno</span>' : '') + '</a>';
+    }
+
+    var linhaTempo = d.eventos.map(function (e) {
+      var quem = '<b>' + esc(e.usuario_nome || 'Sistema') + '</b>';
+      if (e.tipo === 'comentario') {
+        return '<div class="evento comentario' + (e.interno ? ' interno' : '') + '"><div class="avatar mini">' + esc(iniciais(e.usuario_nome)) + '</div><div class="balao">' +
+          '<div class="cab-ev">' + quem + (e.interno ? ' <span class="etiqueta ambar">nota interna · só a equipe vê</span>' : '') + '<span class="espaco"></span><span class="sec">' + quando(e.criado_em) + '</span></div>' +
+          '<div class="texto-livre">' + esc(e.texto) + '</div></div></div>';
+      }
+      var anexo = e.tipo === 'anexo' && e.detalhe && anexosPorId[e.detalhe.anexo] ? '<div style="margin-top:6px">' + linkAnexo(anexosPorId[e.detalhe.anexo]) + '</div>' : '';
+      return '<div class="evento sistema"><span class="ponto"></span><div>' + quem + ' ' + textoEvento(e) + ' <span class="sec" style="display:inline">· ' + quando(e.criado_em) + '</span>' +
+        (e.texto ? '<div class="texto-livre motivo">' + esc(e.texto) + '</div>' : '') + anexo + '</div></div>';
+    }).join('');
+
+    var opcoesResp = '';
+    if (pode.atribuir) {
+      opcoesResp = '<select class="campo" id="dResp"><option value="">— Sem responsável (fila do setor) —</option>' +
+        (setorMeta.membros || []).map(function (p) { return '<option value="' + p.id + '"' + (p.id === t.responsavel_id ? ' selected' : '') + '>' + esc(p.nome) + (p.lider ? ' (líder)' : '') + '</option>'; }).join('') +
+        (t.responsavel_id && !(setorMeta.membros || []).some(function (p) { return p.id === t.responsavel_id; }) ? '<option value="' + t.responsavel_id + '" selected>' + esc(t.responsavel_nome) + '</option>' : '') +
+        '</select>';
+    }
+
+    $('#conteudo').innerHTML = '<div class="pagina ticket">' +
+      '<div class="cab-ticket"><div><span class="setor-cartao">' + numTicket(t.id) + ' · ' + esc(t.setor_nome) + (t.categoria_nome ? ' · ' + esc(t.categoria_nome) : '') + '</span>' +
+      '<h1>' + esc(t.titulo) + '</h1><div class="linha">' + etqStatus(t.status) + etqPrio(t.prioridade) + (t.atrasado ? '<span class="etiqueta vermelha">⚠ atrasado</span>' : '') + '</div></div></div>' +
+      '<div class="grade-ticket"><div class="pilha">' +
+      '<div class="painel" style="padding:18px"><div class="cab-ev"><b>' + esc(t.solicitante_nome || '—') + '</b><span class="sec" style="display:inline"> abriu em ' + quando(t.criado_em) + '</span></div>' +
+      '<div class="texto-livre" style="margin-top:8px">' + (t.descricao ? esc(t.descricao) : '<span class="sec">Sem descrição.</span>') + '</div>' +
+      (d.anexos.length ? '<div class="anexos">' + d.anexos.map(linkAnexo).join('') + '</div>' : '') + '</div>' +
+      '<div class="linha-tempo">' + linhaTempo + '</div>' +
+      '<div class="painel" style="padding:16px"><form id="fCom" class="pilha">' +
+      '<textarea class="campo" id="cTexto" rows="4" maxlength="10000" placeholder="' + (pode.equipe ? 'Responder a quem abriu ou registrar uma nota interna…' : 'Escreva uma mensagem para a equipe que está atendendo…') + '"></textarea>' +
+      '<div class="linha"><input type="file" id="cArq" multiple class="campo" style="max-width:320px">' +
+      (pode.interno ? '<label class="linha" style="font-weight:700;font-size:13px;color:var(--ink-2)"><input type="checkbox" id="cInterno"> nota interna (só a equipe vê)</label>' : '') +
+      '<span class="espaco"></span><button class="btn primary" type="submit" id="btComentar">Enviar</button></div></form></div>' +
+      '</div><aside class="pilha lado-ticket">' +
+      '<div class="painel" style="padding:16px" id="ladoAcoes">' +
+      '<div class="campo-lado"><label class="rot">Situação</label>' +
+      (pode.equipe ? '<select class="campo" id="dStatus">' + Object.keys(ST_TICKET).map(function (k) { return '<option value="' + k + '"' + (k === t.status ? ' selected' : '') + '>' + ST_TICKET[k][0] + '</option>'; }).join('') + '</select>' +
+        '<div class="ajuda" id="dStatusAjuda">' + esc(ROTULO_STATUS_AJUDA[t.status]) + '</div>' : etqStatus(t.status)) + '</div>' +
+      '<div class="campo-lado"><label class="rot">Responsável</label>' + (opcoesResp || '<div style="font-weight:700">' + (t.responsavel_nome ? esc(t.responsavel_nome) : '<span class="etiqueta ambar">sem responsável</span>') + '</div>') +
+      '<div class="linha" style="margin-top:8px">' + (pode.assumir ? '<button class="btn ghost sm" id="btAssumir">Assumir para mim</button>' : '') +
+      (t.responsavel_id === eu.id && aberto && !pode.atribuir ? '<button class="btn ghost sm" id="btDevolver">Devolver à fila</button>' : '') + '</div></div>' +
+      '<div class="campo-lado"><label class="rot">Prioridade</label>' + (pode.equipe ? '<select class="campo" id="dPrio">' + ['baixa', 'media', 'alta', 'urgente'].map(function (p) { return '<option value="' + p + '"' + (p === t.prioridade ? ' selected' : '') + '>' + PRIO[p][0] + '</option>'; }).join('') + '</select>' : etqPrio(t.prioridade)) + '</div>' +
+      '<div class="campo-lado"><label class="rot">Prazo</label>' + (pode.equipe ? '<input class="campo" type="datetime-local" id="dPrazo" value="' + localInput(t.prazo) + '">' : '') + '<div style="margin-top:6px">' + prazoTxt(t) + '</div></div>' +
+      (pode.equipe ? '<div class="linha"><button class="btn primary" id="btSalvarT" style="flex:1">Salvar alterações</button></div>' : '') +
+      '</div>' +
+      '<div class="painel" style="padding:16px"><div class="pilha" style="gap:8px">' +
+      (pode.equipe && aberto ? '<button class="btn ghost" id="btTransferir">Transferir para outro setor</button>' : '') +
+      (pode.equipe && aberto ? '<button class="btn ghost" id="btResolver">' + 'Marcar como resolvido</button>' : '') +
+      (!pode.equipe && pode.cancelar ? '<button class="btn danger" id="btCancelarT">Cancelar meu pedido</button>' : '') +
+      (pode.reabrir ? '<button class="btn ghost" id="btReabrir">Reabrir ticket</button>' : '') +
+      '<dl class="info-ticket"><dt>Setor</dt><dd>' + esc(t.setor_nome) + '</dd><dt>Tipo</dt><dd>' + esc(t.categoria_nome || '—') + '</dd>' +
+      '<dt>Aberto por</dt><dd>' + esc(t.solicitante_nome || '—') + '</dd><dt>Aberto em</dt><dd>' + quando(t.criado_em) + '</dd>' +
+      '<dt>1ª resposta</dt><dd>' + (t.primeira_resposta_em ? quando(t.primeira_resposta_em) : '—') + '</dd>' +
+      (t.resolvido_em ? '<dt>Resolvido em</dt><dd>' + quando(t.resolvido_em) + '</dd>' : '') + '</dl></div></div>' +
+      '</aside></div></div>';
+
+    var recarregar = function () { paginaTicket(id); atualizarResumo(); };
+    setTimeout(buscarAvisos, 300);
+    async function mudar(corpo, ok) {
+      try { await api('PATCH', '/api/tickets/' + t.id, corpo); toast(ok || 'Ticket atualizado.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+    }
+    function pedirMotivo(titulo, rotulo, obrigatorio, botao, perigo) {
+      return new Promise(function (resolve) {
+        var valor = null;
+        var mm = modal({
+          titulo: titulo,
+          corpo: '<label class="rot" for="mMotivo">' + esc(rotulo) + '</label><textarea class="campo" id="mMotivo" rows="3" maxlength="2000"></textarea><div id="mMsgM" class="msg erro" hidden style="margin-top:10px"></div>',
+          pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn ' + (perigo ? 'danger' : 'primary') + '" id="mOkM">' + esc(botao) + '</button>',
+          aoFechar: function () { resolve(valor); },
+        });
+        $('#mOkM', mm).onclick = function () {
+          var v = $('#mMotivo', mm).value.trim();
+          if (obrigatorio && !v) { $('#mMsgM', mm).textContent = 'Escreva o motivo.'; $('#mMsgM', mm).hidden = false; return; }
+          valor = v; mm.fechar();
+        };
+      });
+    }
+
+    $('#fCom').onsubmit = async function (e) {
+      e.preventDefault();
+      var txt = $('#cTexto').value.trim();
+      var arqs = Array.prototype.slice.call($('#cArq').files);
+      var interno = $('#cInterno') ? $('#cInterno').checked : false;
+      if (!txt && !arqs.length) { toast('Escreva uma mensagem ou escolha um arquivo.', 'erro'); return; }
+      $('#btComentar').disabled = true;
+      try {
+        if (txt) await api('POST', '/api/tickets/' + t.id + '/comentarios', { texto: txt, interno: interno });
+        if (arqs.length) await enviarAnexos(t.id, arqs, interno);
+        recarregar();
+      } catch (err) { toast(err.message, 'erro'); $('#btComentar').disabled = false; }
+    };
+    if ($('#dStatus')) $('#dStatus').onchange = function () { $('#dStatusAjuda').textContent = ROTULO_STATUS_AJUDA[this.value]; };
+    if ($('#btSalvarT')) {
+      $('#btSalvarT').onclick = async function () {
+        var corpo = {};
+        if ($('#dStatus').value !== t.status) corpo.status = $('#dStatus').value;
+        if ($('#dPrio').value !== t.prioridade) corpo.prioridade = $('#dPrio').value;
+        if ($('#dPrazo').value !== localInput(t.prazo)) corpo.prazo = $('#dPrazo').value ? new Date($('#dPrazo').value).toISOString() : null;
+        if ($('#dResp')) { var rsp = $('#dResp').value ? Number($('#dResp').value) : null; if (rsp !== t.responsavel_id) corpo.responsavel_id = rsp; }
+        if (!Object.keys(corpo).length) { toast('Nada foi alterado.'); return; }
+        if (corpo.status === 'resolvido' || corpo.status === 'cancelado') {
+          var mot = await pedirMotivo(corpo.status === 'resolvido' ? 'Resolver ticket' : 'Cancelar ticket', corpo.status === 'resolvido' ? 'O que foi feito? (aparece para quem abriu)' : 'Por que não será atendido?', corpo.status === 'cancelado', 'Confirmar', corpo.status === 'cancelado');
+          if (mot === null) return;
+          corpo.motivo = mot;
+        }
+        mudar(corpo);
+      };
+    }
+    if ($('#btAssumir')) $('#btAssumir').onclick = function () { mudar({ responsavel_id: eu.id }, 'Ticket assumido.'); };
+    if ($('#btDevolver')) $('#btDevolver').onclick = function () { mudar({ responsavel_id: null }, 'Ticket devolvido para a fila do setor.'); };
+    if ($('#btResolver')) {
+      $('#btResolver').onclick = async function () {
+        var mot = await pedirMotivo('Resolver ticket', 'O que foi feito? (aparece para quem abriu)', false, 'Marcar como resolvido');
+        if (mot !== null) mudar({ status: 'resolvido', motivo: mot }, 'Ticket resolvido.');
+      };
+    }
+    if ($('#btCancelarT')) {
+      $('#btCancelarT').onclick = async function () {
+        var mot = await pedirMotivo('Cancelar pedido', 'Por que está cancelando?', false, 'Cancelar pedido', true);
+        if (mot !== null) mudar({ status: 'cancelado', motivo: mot }, 'Pedido cancelado.');
+      };
+    }
+    if ($('#btReabrir')) {
+      $('#btReabrir').onclick = async function () {
+        var mot = await pedirMotivo('Reabrir ticket', 'Por que precisa reabrir?', true, 'Reabrir');
+        if (mot !== null) mudar({ status: 'em_andamento', motivo: mot }, 'Ticket reaberto.');
+      };
+    }
+    if ($('#btTransferir')) {
+      $('#btTransferir').onclick = function () {
+        var outros = metaTickets.setores.filter(function (s) { return s.id !== t.setor_id; });
+        var mm = modal({
+          titulo: 'Transferir ' + numTicket(t.id),
+          corpo: '<div class="pilha"><p style="margin:0;font-weight:600;color:var(--ink-2)">O ticket vai para a fila do novo setor, sem responsável, e o líder de lá distribui.</p>' +
+            '<div class="grade-2"><div><label class="rot" for="trSetor">Novo setor</label><select class="campo" id="trSetor"><option value="">Escolha…</option>' +
+            outros.map(function (s) { return '<option value="' + s.id + '">' + esc(s.nome) + '</option>'; }).join('') + '</select></div>' +
+            '<div><label class="rot" for="trCat">Tipo de demanda</label><select class="campo" id="trCat" disabled><option value="">—</option></select></div></div>' +
+            '<div><label class="rot" for="trMot">Motivo da transferência</label><textarea class="campo" id="trMot" rows="3" maxlength="2000"></textarea></div><div id="trMsg" class="msg erro" hidden></div></div>',
+          pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="btTrOk">Transferir</button>',
+        });
+        $('#trSetor', mm).onchange = function () {
+          var s = outros.find(function (x) { return String(x.id) === $('#trSetor', mm).value; });
+          $('#trCat', mm).disabled = !s || !s.categorias.length;
+          $('#trCat', mm).innerHTML = '<option value="">' + (s && s.categorias.length ? 'Outro / não sei' : '—') + '</option>' + (s ? s.categorias.map(function (c) { return '<option value="' + c.id + '">' + esc(c.nome) + '</option>'; }).join('') : '');
+        };
+        $('#btTrOk', mm).onclick = async function () {
+          if (!$('#trSetor', mm).value) { $('#trMsg', mm).textContent = 'Escolha o setor.'; $('#trMsg', mm).hidden = false; return; }
+          try {
+            await api('PATCH', '/api/tickets/' + t.id, { setor_id: Number($('#trSetor', mm).value), categoria_id: $('#trCat', mm).value ? Number($('#trCat', mm).value) : null, motivo: $('#trMot', mm).value });
+            mm.fechar();
+            toast('Ticket transferido.', 'ok');
+            recarregar();
+          } catch (e) { $('#trMsg', mm).textContent = e.message; $('#trMsg', mm).hidden = false; }
+        };
+      };
+    }
+  }
+
+  /* ---------- painel de indicadores ---------- */
+  async function paginaPainelTickets() {
+    definirBarra('<span class="setor">Central de Tickets</span><span class="sep">/</span><span class="nome">Painel</span>');
+    try { await carregarMeta(); } catch (e) { toast(e.message, 'erro'); }
+    var dias = lembrar('tickets.painel.dias', 30);
+    var setor = '';
+    var setores = gestorTickets() ? metaTickets.setores : meusSetores();
+    $('#conteudo').innerHTML = '<div class="pagina"><h1>Painel de tickets</h1><p class="sub">' + (gestorTickets() ? 'Todos os setores.' : 'Setores de que você faz parte.') + ' Em aberto e atrasados mostram a situação de agora; os demais números são do período escolhido.</p>' +
+      '<div class="linha" style="margin-bottom:18px"><select class="campo" id="pDias" style="max-width:180px">' +
+      [[7, 'Últimos 7 dias'], [30, 'Últimos 30 dias'], [90, 'Últimos 90 dias'], [365, 'Últimos 12 meses']].map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === dias ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' +
+      (setores.length > 1 ? '<select class="campo" id="pSetor" style="max-width:220px"><option value="">Todos os setores</option>' + setores.map(function (s) { return '<option value="' + s.id + '">' + esc(s.nome) + '</option>'; }).join('') + '</select>' : '') +
+      '</div><div id="pCorpo">' + carregandoHtml() + '</div></div>';
+    async function carregar() {
+      dias = Number($('#pDias').value);
+      guardar('tickets.painel.dias', dias);
+      setor = $('#pSetor') ? $('#pSetor').value : '';
+      var r;
+      try { r = await api('GET', '/api/tickets/painel/indicadores?dias=' + dias + (setor ? '&setor=' + setor : '')); } catch (e) {
+        $('#pCorpo').innerHTML = '<div class="vazio">' + esc(e.message) + '</div>'; return;
+      }
+      var g = r.geral;
+      var pct = g.resolvidos ? Math.round(g.no_prazo / g.resolvidos * 100) + '%' : '—';
+      function tile(rotulo, valor, extra, alerta) {
+        return '<div class="tile' + (alerta ? ' alerta' : '') + '"><span class="rot-tile">' + rotulo + '</span><b>' + valor + '</b>' + (extra ? '<span class="sec">' + extra + '</span>' : '') + '</div>';
+      }
+      var linhaMetricas = function (x) {
+        return '<td class="num">' + x.abertos + '</td><td class="num">' + (x.atrasados ? '<span class="etiqueta vermelha">⚠ ' + x.atrasados + '</span>' : '0') + '</td>' +
+          '<td class="num">' + x.resolvidos + '</td><td class="num">' + (x.resolvidos ? Math.round(x.no_prazo / x.resolvidos * 100) + '%' : '—') + '</td><td class="num">' + horas(x.horas_resolucao) + '</td>';
+      };
+      var cabMetricas = '<th class="num">Em aberto</th><th class="num">Atrasados</th><th class="num">Resolvidos</th><th class="num">No prazo</th><th class="num">Tempo médio</th>';
+      $('#pCorpo').innerHTML =
+        '<div class="tiles">' +
+        tile('Em aberto', g.abertos, g.sem_responsavel + ' sem responsável') +
+        tile('Atrasados', g.atrasados ? '⚠ ' + g.atrasados : '0', 'prazo vencido, ainda em aberto', g.atrasados > 0) +
+        tile('Abertos no período', g.criados, '') +
+        tile('Resolvidos no período', g.resolvidos, g.resolvidos ? pct + ' dentro do prazo' : '') +
+        tile('Tempo médio de resolução', horas(g.horas_resolucao), 'da abertura até resolver') +
+        tile('Tempo médio de 1ª resposta', horas(g.horas_primeira_resposta), 'até o primeiro retorno da equipe') +
+        '</div>' +
+        '<div class="painel" style="margin-top:18px"><div class="cab-painel"><b style="font-family:var(--display)">Por setor</b></div><div class="tabela-wrap"><table><thead><tr><th>Setor</th>' + cabMetricas + '</tr></thead><tbody>' +
+        (r.por_setor.map(function (s) { return '<tr><td><b>' + esc(s.nome) + '</b></td>' + linhaMetricas(s) + '</tr>'; }).join('') || '<tr><td colspan="6" class="sec" style="text-align:center;padding:20px">Sem tickets ainda.</td></tr>') + '</tbody></table></div></div>' +
+        '<div class="painel" style="margin-top:18px"><div class="cab-painel"><b style="font-family:var(--display)">Por responsável</b></div><div class="tabela-wrap"><table><thead><tr><th>Pessoa</th>' + cabMetricas + '</tr></thead><tbody>' +
+        (r.por_pessoa.map(function (s) { return '<tr><td><b>' + esc(s.nome) + '</b></td>' + linhaMetricas(s) + '</tr>'; }).join('') || '<tr><td colspan="6" class="sec" style="text-align:center;padding:20px">Nenhum ticket atribuído ainda.</td></tr>') + '</tbody></table></div></div>' +
+        '<div class="painel" style="margin-top:18px"><div class="cab-painel"><b style="font-family:var(--display)">Tipos de demanda mais abertos no período</b></div><div class="tabela-wrap"><table><thead><tr><th>Tipo</th><th>Setor</th><th class="num">Tickets</th></tr></thead><tbody>' +
+        (r.por_categoria.map(function (c) { return '<tr><td>' + esc(c.nome) + '</td><td>' + esc(c.setor) + '</td><td class="num">' + c.n + '</td></tr>'; }).join('') || '<tr><td colspan="3" class="sec" style="text-align:center;padding:20px">Nada no período.</td></tr>') + '</tbody></table></div></div>';
+    }
+    $('#pDias').onchange = carregar;
+    if ($('#pSetor')) $('#pSetor').onchange = carregar;
+    carregar();
+  }
+
+  /* ---------- admin: equipes e tipos de demanda ---------- */
+  async function paginaEquipes() {
+    definirBarra('<span class="setor">Administração</span><span class="sep">/</span><span class="nome">Equipes e tipos de demanda</span>');
+    $('#conteudo').innerHTML = carregandoHtml();
+    var j;
+    try { j = await api('GET', '/api/admin/equipes'); } catch (e) { toast(e.message, 'erro'); return; }
+    var nomeU = {};
+    j.usuarios.forEach(function (u) { nomeU[u.id] = u.nome; });
+    $('#conteudo').innerHTML = '<div class="pagina"><h1>Equipes e tipos de demanda</h1><p class="sub">Para cada setor, quem atende os tickets (e quem é líder, que distribui) e os tipos de demanda com o prazo de atendimento.</p>' +
+      '<div class="cartoes">' + j.setores.map(function (s) {
+        var lideres = s.membros.filter(function (m) { return m.lider; }).map(function (m) { return nomeU[m.usuario_id]; });
+        var ativos = s.categorias.filter(function (c) { return c.ativo; });
+        return '<div class="cartao" data-setor="' + s.id + '" style="cursor:pointer"><div class="cab"><div class="icone-mod">' + IC.pessoas + '</div><div style="flex:1;min-width:0"><h3>' + esc(s.nome) + '</h3>' +
+          '<span class="sec">' + s.membros.length + ' pessoa' + (s.membros.length === 1 ? '' : 's') + ' · ' + ativos.length + ' tipo' + (ativos.length === 1 ? '' : 's') + ' de demanda</span></div>' +
+          (!s.membros.length ? '<span class="etiqueta ambar">sem equipe</span>' : !lideres.length ? '<span class="etiqueta ambar">sem líder</span>' : '') + '</div>' +
+          '<p>' + (lideres.length ? 'Líder: ' + esc(lideres.join(', ')) : 'Defina quem distribui os tickets deste setor.') + '</p>' +
+          '<div class="acoes"><span class="btn ghost sm">Configurar</span></div></div>';
+      }).join('') + '</div><p class="ajuda" style="margin-top:14px">Para criar, renomear ou remover setores use <a href="#/admin/modulos">Módulos e dados → Setores</a>.</p></div>';
+    $$('[data-setor]').forEach(function (c) { c.onclick = function () { editarEquipe(j.setores.find(function (s) { return s.id === Number(c.getAttribute('data-setor')); })); }; });
+
+    function editarEquipe(s) {
+      var membros = {};
+      s.membros.forEach(function (m) { membros[m.usuario_id] = m.lider; });
+      var m = modal({
+        titulo: s.nome, largo: true,
+        corpo: '<div class="pilha"><div><label class="rot">Equipe que atende os tickets do setor</label>' +
+          '<input class="campo" id="eBusca" placeholder="Filtrar pessoas…" style="margin-bottom:8px">' +
+          '<div class="caixa-opcoes" id="eLista">' + j.usuarios.filter(function (u) { return u.ativo || membros[u.id] !== undefined; }).map(function (u) {
+            var dentro = membros[u.id] !== undefined;
+            return '<label data-nome="' + esc(normal(u.nome + ' ' + u.email)) + '"><input type="checkbox" name="eMembro" value="' + u.id + '"' + (dentro ? ' checked' : '') + '>' +
+              '<span style="flex:1">' + esc(u.nome) + ' <span class="sec" style="display:inline">' + esc(u.email) + '</span></span>' +
+              '<span class="linha" style="font-size:12.5px;font-weight:700;color:var(--muted)"><input type="checkbox" name="eLider" value="' + u.id + '"' + (membros[u.id] ? ' checked' : '') + (dentro ? '' : ' disabled') + '> líder</span></label>';
+          }).join('') + '</div><div class="ajuda">Líder: vê a fila do setor e distribui para qualquer pessoa da equipe. Demais pessoas: veem a fila, assumem tickets e tratam os que estão com elas.</div></div>' +
+          '<div class="linha"><button class="btn primary" id="btSalvarEquipe">Salvar equipe</button></div>' +
+          '<hr style="border:0;border-top:1px solid var(--border);margin:6px 0">' +
+          '<div><label class="rot">Tipos de demanda</label><div class="caixa-opcoes" style="max-height:none">' +
+          (s.categorias.map(function (c) {
+            return '<div class="linha" style="padding:8px 12px;border-bottom:1px solid var(--border)" data-cat="' + c.id + '">' +
+              '<input class="campo" style="flex:2;min-width:160px" data-campo="nome" value="' + esc(c.nome) + '">' +
+              '<input class="campo" style="width:110px" type="number" min="1" data-campo="prazo_horas" value="' + (c.prazo_horas || '') + '" placeholder="prazo (h)" title="Prazo em horas">' +
+              '<select class="campo" style="width:120px" data-campo="prioridade">' + ['baixa', 'media', 'alta', 'urgente'].map(function (p) { return '<option value="' + p + '"' + (p === c.prioridade ? ' selected' : '') + '>' + PRIO[p][0] + '</option>'; }).join('') + '</select>' +
+              '<label class="linha" style="font-size:12.5px;font-weight:700;color:var(--muted)"><input type="checkbox" data-campo="ativo"' + (c.ativo ? ' checked' : '') + '> ativo</label>' +
+              '<button class="btn icon danger" data-apagar-cat="' + c.id + '" title="' + (c.tickets ? 'Já usado em ' + c.tickets + ' ticket(s): desative em vez de remover' : 'Remover tipo') + '"' + (c.tickets ? ' disabled' : '') + '>' + IC.fechar + '</button></div>';
+          }).join('') || '<div class="sec" style="padding:12px">Nenhum tipo cadastrado. Sem tipo, o prazo segue a prioridade.</div>') + '</div></div>' +
+          '<div class="linha"><input class="campo" id="nCat" placeholder="Novo tipo (ex.: 2ª via de boleto)" style="flex:2;min-width:180px"><input class="campo" id="nPrazo" type="number" min="1" placeholder="prazo (h)" style="width:110px">' +
+          '<select class="campo" id="nPrio" style="width:120px">' + ['baixa', 'media', 'alta', 'urgente'].map(function (p) { return '<option value="' + p + '"' + (p === 'media' ? ' selected' : '') + '>' + PRIO[p][0] + '</option>'; }).join('') + '</select>' +
+          '<button class="btn ghost" id="btAddCat">' + IC.mais + 'Adicionar</button></div>' +
+          '<div class="ajuda">Prazo em horas corridas, contado da abertura. Em branco: usa o padrão da prioridade (urgente 4 h, alta 24 h, média 3 dias, baixa 7 dias).</div>' +
+          '<div class="linha"><button class="btn primary" id="btSalvarCats">Salvar tipos</button></div></div>',
+        pe: '<button class="btn ghost" data-fechar>Fechar</button>',
+        aoFechar: function () { metaTickets = null; },
+      });
+      $('#eBusca', m).oninput = function () {
+        var t = normal(this.value);
+        $$('#eLista label[data-nome]', m).forEach(function (l) { l.hidden = t && l.getAttribute('data-nome').indexOf(t) < 0; });
+      };
+      $$('input[name=eMembro]', m).forEach(function (cb) {
+        cb.onchange = function () { var l = $('input[name=eLider][value="' + cb.value + '"]', m); l.disabled = !cb.checked; if (!cb.checked) l.checked = false; };
+      });
+      $('#btSalvarEquipe', m).onclick = async function () {
+        var lista = $$('input[name=eMembro]:checked', m).map(function (cb) { return { usuario_id: Number(cb.value), lider: $('input[name=eLider][value="' + cb.value + '"]', m).checked }; });
+        try { await api('PUT', '/api/admin/equipes/' + s.id + '/membros', { membros: lista }); toast('Equipe de ' + s.nome + ' salva.', 'ok'); m.fechar(); paginaEquipes(); } catch (e) { toast(e.message, 'erro'); }
+      };
+      $('#btAddCat', m).onclick = async function () {
+        var nome = $('#nCat', m).value.trim();
+        if (!nome) return;
+        try {
+          await api('POST', '/api/admin/equipes/' + s.id + '/categorias', { nome: nome, prazo_horas: $('#nPrazo', m).value, prioridade: $('#nPrio', m).value });
+          m.fechar(); await paginaEquipes();
+          var atual = (await api('GET', '/api/admin/equipes')).setores.find(function (x) { return x.id === s.id; });
+          if (atual) editarEquipe(atual);
+        } catch (e) { toast(e.message, 'erro'); }
+      };
+      $$('[data-apagar-cat]', m).forEach(function (b) {
+        b.onclick = async function () {
+          try { await api('DELETE', '/api/admin/categorias/' + b.getAttribute('data-apagar-cat')); b.closest('[data-cat]').remove(); toast('Tipo removido.', 'ok'); } catch (e) { toast(e.message, 'erro'); }
+        };
+      });
+      $('#btSalvarCats', m).onclick = async function () {
+        try {
+          var linhas = $$('[data-cat]', m);
+          for (var i = 0; i < linhas.length; i++) {
+            var l = linhas[i];
+            var c = s.categorias.find(function (x) { return x.id === Number(l.getAttribute('data-cat')); });
+            var novo = { nome: $('[data-campo=nome]', l).value.trim(), prazo_horas: $('[data-campo=prazo_horas]', l).value ? Number($('[data-campo=prazo_horas]', l).value) : null, prioridade: $('[data-campo=prioridade]', l).value, ativo: $('[data-campo=ativo]', l).checked };
+            if (novo.nome !== c.nome || novo.prazo_horas !== c.prazo_horas || novo.prioridade !== c.prioridade || novo.ativo !== c.ativo) await api('PATCH', '/api/admin/categorias/' + c.id, novo);
+          }
+          toast('Tipos de demanda salvos.', 'ok'); m.fechar(); paginaEquipes();
+        } catch (e) { toast(e.message, 'erro'); }
+      };
+    }
+  }
+
   /* ======================= admin: auditoria ======================= */
   var ROTULO_ACAO = {
     login: 'Entrou no portal', login_falha: 'Tentativa de login falhou', logout: 'Saiu', senha_alterada: 'Trocou a senha', senha_redefinida: 'Redefiniu senha de usuário',
@@ -829,6 +1474,8 @@
     dados_importados: 'Importou dados da planilha', dados_exportados: 'Exportou dados', backup_baixado: 'Baixou backup', setor_criado: 'Criou setor', setor_editado: 'Editou setor', setor_removido: 'Removeu setor',
     registro_add: 'Incluiu registro', registro_update: 'Alterou registro', registro_delete: 'Excluiu registro', registro_upsert: 'Gravou registro', registro_addMany: 'Incluiu registros em lote', registro_replaceAll: 'Regravou a aba inteira', registro_dedupe: 'Removeu duplicados',
     catalogo_semeado: 'Sistema instalado',
+    setores_oficiais: 'Setores oficiais cadastrados', ticket_criado: 'Abriu ticket', ticket_atribuicao: 'Atribuiu ticket', ticket_transferencia: 'Transferiu ticket',
+    ticket_status: 'Mudou situação de ticket', equipe_editada: 'Editou equipe do setor', categoria_criada: 'Criou tipo de demanda', categoria_editada: 'Editou tipo de demanda', categoria_removida: 'Removeu tipo de demanda',
   };
 
   async function paginaAuditoria() {
@@ -878,7 +1525,12 @@
       document.body.innerHTML = '<div class="pagina-aviso"><div class="aviso-card"><h1>Não foi possível carregar o portal</h1><p>' + esc(e.message) + '</p><a class="btn primary" href="/">Tentar de novo</a></div></div>';
       return;
     }
+    try { await carregarMeta(); } catch (e) { /* a central carrega depois */ }
     montarCasca();
+    atualizarResumo();
+    buscarAvisos();
+    $('#btSino').onclick = abrirAvisos;
+    setInterval(function () { atualizarResumo(); buscarAvisos(); }, 30 * 1000);
     window.addEventListener('hashchange', rotear);
     rotear();
   }
