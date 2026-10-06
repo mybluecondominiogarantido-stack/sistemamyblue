@@ -9,7 +9,7 @@ As ferramentas que já existem (os arquivos HTML de cada setor) continuam funcio
 | Crédito | Central de Ferramentas — Crédito | não guarda | não precisa |
 | Cobrança | Central de Ferramentas — Cobrança / Gestão | não guarda | não precisa |
 | Sucesso do Cliente | Controle de Renegociações e Tickets | planilha Google | planilha interna do portal |
-| Suprimentos | Controle de Pedidos | navegador (arquivo protegido por senha) | banco do portal, compartilhado pela equipe |
+| Suprimentos | Controle de Pedidos | planilha Google | planilha Google (acesso só pelo login do portal) |
 | Parceiros | Prestação de Contas — Comissão de Parceiros | planilha Google | planilha interna do portal |
 
 ---
@@ -101,7 +101,7 @@ Para voltar atrás, marque **Planilha Google (como hoje)**. O que foi lançado n
 
 ### Controle de Pedidos (Suprimentos)
 
-O arquivo atual de Suprimentos é protegido por senha (StatiCrypt). O portal entrega o arquivo como está, então a senha continua sendo pedida dentro do portal. Se a equipe preferir que o login do portal seja suficiente, envie no módulo a versão do HTML **sem** a proteção. Como o arquivo é criptografado, não foi possível conferir como ele guarda os pedidos. O módulo já vem configurado como *Banco do portal · equipe*; confira se os pedidos aparecem para todos depois de publicar.
+A versão publicada no portal é a do arquivo **sem** a senha própria (StatiCrypt): o acesso é controlado só pelo login e pelas permissões do portal. Os pedidos continuam gravados na planilha Google da ferramenta, e o navegador guarda apenas uma cópia temporária. Para mover esses dados para o banco do portal é preciso ligar a ferramenta à planilha interna, como já é feito em Renegociações e Parceiros.
 
 ## Colocar no ar
 

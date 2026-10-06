@@ -79,10 +79,11 @@ const MODULOS = [
     setor: 'Suprimentos',
     icone: 'caixa',
     ordem: 1,
-    armazenamento: 'compartilhado',
+    // os pedidos ficam na planilha Google (Apps Script); o navegador guarda só uma cópia temporária
+    armazenamento: 'navegador',
     config: {
       titulo: 'Controle de Pedidos',
-      // chaves que continuam só no navegador (o "lembrar senha" do arquivo protegido)
+      // caso volte a ser usado um arquivo protegido por senha, o "lembrar senha" fica só no navegador
       chaves_locais: ['^staticrypt'],
     },
   },
