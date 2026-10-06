@@ -15,7 +15,8 @@ function rotasAuth({ db, seg }) {
 
   r.post('/api/auth/login', json, (req, res) => {
     const email = String((req.body && req.body.email) || '').trim().toLowerCase();
-    const senha = String((req.body && req.body.senha) || '');
+    // ignora espaços nas pontas (comuns ao copiar a senha temporária do log ou de mensagens)
+    const senha = String((req.body && req.body.senha) || '').trim();
     if (!email || !senha) return res.status(400).json({ erro: 'Informe e-mail e senha.' });
     const chave = `${req.ip}|${email}`;
     if (seg.bloqueado(chave)) return res.status(429).json({ erro: 'Muitas tentativas. Aguarde 15 minutos e tente de novo.' });
@@ -50,10 +51,10 @@ function rotasAuth({ db, seg }) {
     if (!req.usuario) return res.status(401).json({ erro: 'Faça login para continuar.' });
     const { atual, nova } = req.body || {};
     const u = st.porId.get(req.usuario.id);
-    if (!conferirSenha(String(atual || ''), u.senha_hash)) return res.status(400).json({ erro: 'A senha atual está incorreta.' });
+    if (!conferirSenha(String(atual || '').trim(), u.senha_hash)) return res.status(400).json({ erro: 'A senha atual está incorreta.' });
     const erro = validarNovaSenha(nova);
     if (erro) return res.status(400).json({ erro });
-    if (String(nova) === String(atual)) return res.status(400).json({ erro: 'A nova senha precisa ser diferente da atual.' });
+    if (String(nova) === String(atual || '').trim()) return res.status(400).json({ erro: 'A nova senha precisa ser diferente da atual.' });
     st.trocarSenha.run(hashSenha(nova), u.id);
     // encerra as sessões abertas em outros aparelhos
     const cookie = (req.headers.cookie || '').split(';').map((c) => c.trim()).find((c) => c.startsWith(COOKIE + '='));

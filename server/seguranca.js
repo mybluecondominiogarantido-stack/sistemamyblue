@@ -29,6 +29,7 @@ function validarNovaSenha(senha) {
   const s = String(senha || '');
   if (s.length < 8) return 'A senha precisa ter pelo menos 8 caracteres.';
   if (s.length > 200) return 'Senha longa demais.';
+  if (s !== s.trim()) return 'A senha não pode começar nem terminar com espaço.';
   if (!/[A-Za-z]/.test(s) || !/[0-9]/.test(s)) return 'Use letras e números na senha.';
   return null;
 }

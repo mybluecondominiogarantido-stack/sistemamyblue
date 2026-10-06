@@ -78,6 +78,7 @@ test('anônimo é mandado para o login e a API recusa', async () => {
 test('login: senha errada, certa e cookie seguro', async () => {
   const errado = await logar('admin@teste.com', 'nada1234');
   assert.equal(errado.r.status, 401);
+  assert.equal((await logar('admin@teste.com', '  Admin1234 \n')).r.status, 200); // espaços da cópia
   const { c, r } = await logar('ADMIN@teste.com', 'Admin1234');
   assert.equal(r.status, 200);
   assert.equal(r.json.usuario.papel, 'admin');
