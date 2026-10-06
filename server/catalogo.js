@@ -14,6 +14,7 @@
  *  - adaptador: protocolo de planilha que a ferramenta usa hoje (Google Apps Script)
  *      'gas-linhas'  → leitura em linhas (cabeçalho + linhas), gravações via POST
  *      'gas-objetos' → leitura em objetos, gravações upsert/delete via JSONP
+ *      'gas-posicional' → leitura em linhas; alterações apontam a linha pela posição na planilha
  *  - fonte_dados: 'google' (continua na planilha Google) ou 'interno' (banco do portal)
  *  - config.titulo: trecho do <title> usado para reconhecer o arquivo no import automático
  */
@@ -27,7 +28,9 @@ const SETORES = [
 ];
 
 // Substituições aplicadas ao HTML quando o módulo usa o banco interno no lugar do Google.
-const URL_PLANILHA = { tipo: 'regex', busca: '(SHEET_URL_BUILTIN\\s*=\\s*)(["\'])[^"\']*\\2', troca: '$1"{{GAS_URL}}"' };
+// aceita aspas normais ou escapadas (\") — algumas ferramentas vêm empacotadas dentro de uma string
+const URL_PLANILHA = { tipo: 'regex', busca: '(SHEET_URL_BUILTIN\\s*=\\s*)(\\\\?["\'])[^"\'\\\\]*\\2', troca: '$1$2{{GAS_URL}}$2' };
+const ACEITAR_URL_INTERNA = { tipo: 'texto', busca: 'function isAppsScript(url){', troca: "function isAppsScript(url){ if(String(url||'').indexOf('/api/gas/')===0) return true;" };
 
 const MODULOS = [
   {
@@ -68,7 +71,7 @@ const MODULOS = [
       patches_interno: [
         URL_PLANILHA,
         // a ferramenta só aceita links do Google; passa a aceitar também o endereço interno
-        { tipo: 'texto', busca: 'function isAppsScript(url){', troca: "function isAppsScript(url){ if(String(url||'').indexOf('/api/gas/')===0) return true;" },
+        ACEITAR_URL_INTERNA,
       ],
     },
   },
@@ -79,10 +82,17 @@ const MODULOS = [
     setor: 'Suprimentos',
     icone: 'caixa',
     ordem: 1,
-    // os pedidos ficam na planilha Google (Apps Script); o navegador guarda só uma cópia temporária
+    // os pedidos ficam na planilha (Google ou interna); o navegador guarda só uma cópia temporária
     armazenamento: 'navegador',
+    adaptador: 'gas-posicional',
+    fonte_dados: 'google',
     config: {
       titulo: 'Controle de Pedidos',
+      colecao_padrao: 'pedidos',
+      colecoes: { pedidos: null },
+      // ordem das colunas que a ferramenta grava (usada quando a planilha interna ainda está vazia)
+      cabecalho_padrao: ['Nº do Pedido', 'Descrição / Fornecedor', 'Valor', 'Forma de Pagamento', 'Parcelas', 'Vencimento', 'Status'],
+      patches_interno: [URL_PLANILHA, ACEITAR_URL_INTERNA],
       // caso volte a ser usado um arquivo protegido por senha, o "lembrar senha" fica só no navegador
       chaves_locais: ['^staticrypt'],
     },
@@ -105,4 +115,4 @@ const MODULOS = [
   },
 ];
 
-module.exports = { SETORES, MODULOS };
+module.exports = { SETORES, MODULOS, CHAVES_DE_SISTEMA: ['colecao_padrao', 'colecoes', 'cabecalho_padrao', 'patches_interno', 'titulo'] };

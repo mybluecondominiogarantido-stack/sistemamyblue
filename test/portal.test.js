@@ -278,6 +278,55 @@ test('planilha interna em objetos (Parceiros): upsert/delete via JSONP', async (
   assert.equal((await c('GET', `/api/gas/parceiros?sheet=condos&action=upsert&item=${grande}`, undefined, mesmoSite)).status, 200);
 });
 
+test('planilha posicional (Controle de Pedidos): incluir, alterar pela linha e marcar pago', async () => {
+  const { c } = await logar('admin@teste.com', 'Admin1234');
+  // ferramenta empacotada: o código fica dentro de uma string, com aspas escapadas
+  const HTML_PED = '<!DOCTYPE html><html><head><title>MyBlue — Controle de Pedidos</title></head><body><script type="__bundler/template">"'
+    + 'const SHEET_URL_BUILTIN = \\"https://script.google.com/macros/s/CCC/exec\\";\\nfunction isAppsScript(url){ return /x/.test(url); }'
+    + '"</script></body></html>';
+  assert.equal((await c('PUT', '/api/admin/modulos/suprimentos/arquivo', HTML_PED, { headers: { 'content-type': 'text/html' } })).status, 200);
+  const adm = (await c('GET', '/api/admin/modulos')).json.modulos.find((m) => m.slug === 'suprimentos');
+  assert.equal(adm.adaptador, 'gas-posicional');
+  assert.equal(adm.google_url_detectada, 'https://script.google.com/macros/s/CCC/exec');
+
+  await c('PATCH', '/api/admin/modulos/suprimentos', { fonte_dados: 'interno' });
+  const pag = await c('GET', '/m/suprimentos/');
+  assert.match(pag.texto, /SHEET_URL_BUILTIN = \\"\/api\/gas\/suprimentos\\"/);
+  assert.match(pag.texto, /indexOf\('\/api\/gas\/'\)===0\) return true;/);
+
+  // planilha vazia: devolve só o cabeçalho padrão
+  let r = await c('GET', '/api/gas/suprimentos?callback=mbcb_1');
+  assert.match(r.texto, /^\/\*\*\/mbcb_1\(\[\["Nº do Pedido"/);
+
+  const post = (corpo) => c('POST', '/api/gas/suprimentos', JSON.stringify(corpo), { headers: { 'content-type': 'text/plain;charset=utf-8' } });
+  await post({ action: 'addMany', rows: [
+    ['101', 'Papelaria', 50, 'À vista', '', '10/11/2026', 'Em aberto'],
+    ['102', 'Gráfica', 300, 'Parcelado', '1/2', '15/11/2026', 'Em aberto'],
+    ['102', 'Gráfica', 300, 'Parcelado', '2/2', '15/12/2026', 'Em aberto'],
+  ] });
+  // marca a 2ª parcela (linha 4 da planilha) como paga
+  assert.equal((await post({ action: 'setStatus', row: 4, num: '102', venc: '15/12/2026', status: 'Pago' })).json.ok, true);
+  // edita o pedido 101 (linha 2)
+  await post({ action: 'update', row: 2, num: '101', desc: 'Papelaria Central', valor: 55, venc: '12/11/2026', status: 'Em aberto' });
+  r = await c('GET', '/api/gas/suprimentos');
+  assert.deepEqual(r.json.slice(1), [
+    ['101', 'Papelaria Central', '55', 'À vista', '', '12/11/2026', 'Em aberto'],
+    ['102', 'Gráfica', '300', 'Parcelado', '1/2', '15/11/2026', 'Em aberto'],
+    ['102', 'Gráfica', '300', 'Parcelado', '2/2', '15/12/2026', 'Pago'],
+  ]);
+  // posição desatualizada: acha pelo nº do pedido + vencimento (inclusive com data no formato da planilha Google)
+  await c('POST', '/api/admin/modulos/suprimentos/importar', { colecao: 'pedidos', dados: [
+    ['Nº do Pedido', 'Descrição', 'Valor', 'Forma de Pagamento', 'Parcelas', 'Vencimento', 'Status'],
+    ['200', 'Limpeza', 80, 'À vista', '', '2026-11-20T03:00:00.000Z', 'Em aberto'],
+    ['200', 'Limpeza', 80, 'À vista', '', '2026-11-20T03:00:00.000Z', 'Em aberto'],
+  ] });
+  assert.equal((await c('GET', '/api/gas/suprimentos')).json.length, 3); // cabeçalho + 2 linhas (repetidas são mantidas)
+  assert.equal((await post({ action: 'setStatus', row: 99, num: '200', venc: '20/11/2026', status: 'Pago' })).json.ok, true);
+  assert.equal((await post({ action: 'setStatus', row: 2, num: '999', venc: '20/11/2026', status: 'Pago' })).status, 409);
+  const csv = await c('GET', '/api/admin/modulos/suprimentos/dados/pedidos.csv');
+  assert.match(csv.texto, /Nº do Pedido;Descrição;Valor/);
+});
+
 test('importação da planilha Google e exportação', async () => {
   const { c } = await logar('admin@teste.com', 'Admin1234');
   let r = await c('POST', '/api/admin/modulos/renegociacoes/importar', {

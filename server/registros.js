@@ -14,6 +14,12 @@ function criarRegistros(db) {
     return rows.map((r) => r.dados);
   }
 
+  /* com o identificador de cada linha, na ordem da planilha */
+  async function listarComIds(slug, colecao) {
+    const { rows } = await db.q('SELECT item_id, dados FROM registros WHERE modulo_slug = $1 AND colecao = $2 ORDER BY rid', [slug, colecao]);
+    return rows.map((r) => ({ id: r.item_id, dados: r.dados }));
+  }
+
   async function upsert(slug, colecao, id, dados, usuarioId, t = db) {
     const r = await t.um(UPSERT, [slug, colecao, String(id), JSON.stringify(dados), usuarioId || null]);
     return r && r.inserido ? 'inserido' : 'atualizado';
@@ -41,7 +47,7 @@ function criarRegistros(db) {
   const salvarCabecalho = (slug, colecao, cab) => db.q(`INSERT INTO colecoes (modulo_slug, colecao, cabecalho) VALUES ($1, $2, $3::jsonb)
     ON CONFLICT (modulo_slug, colecao) DO UPDATE SET cabecalho = excluded.cabecalho`, [slug, colecao, JSON.stringify(cab)]);
 
-  return { listar, upsert, apagar, substituirTudo, lote, resumo, cabecalho, salvarCabecalho };
+  return { listar, listarComIds, upsert, apagar, substituirTudo, lote, resumo, cabecalho, salvarCabecalho };
 }
 
 module.exports = { criarRegistros };

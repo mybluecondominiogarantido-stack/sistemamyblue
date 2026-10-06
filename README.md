@@ -9,7 +9,7 @@ As ferramentas que já existem (os arquivos HTML de cada setor) continuam funcio
 | Crédito | Central de Ferramentas — Crédito | não guarda | não precisa |
 | Cobrança | Central de Ferramentas — Cobrança / Gestão | não guarda | não precisa |
 | Sucesso do Cliente | Controle de Renegociações e Tickets | planilha Google | planilha interna do portal |
-| Suprimentos | Controle de Pedidos | planilha Google | planilha Google (acesso só pelo login do portal) |
+| Suprimentos | Controle de Pedidos | planilha Google | planilha interna do portal |
 | Parceiros | Prestação de Contas — Comissão de Parceiros | planilha Google | planilha interna do portal |
 
 ---
@@ -87,13 +87,15 @@ Cada módulo tem a opção **Onde ficam os dados salvos pela ferramenta**:
 
 Isso funciona para qualquer ferramenta que use `localStorage`, inclusive as que forem criadas no futuro, sem mudar o código dela.
 
-### Trocar a planilha Google pela planilha interna
+### Trocar a planilha Google pela planilha interna (backup + migração)
 
-Renegociações e Parceiros gravam hoje numa planilha Google via Apps Script. O portal tem uma planilha interna que fala o mesmo "idioma" do Apps Script. A troca é feita assim, em *Módulos e dados*, clicando no módulo:
+Renegociações, Parceiros e Controle de Pedidos gravam hoje numa planilha Google via Apps Script. O portal tem uma planilha interna (no Supabase) que fala o mesmo "idioma" do Apps Script. Para cada um dos três módulos, em *Módulos e dados*:
 
-1. Em **Planilha da ferramenta**, confira o link do Apps Script (o portal já detecta o que vem no HTML) e clique em **Importar da planilha**. Os dados são copiados para o banco do portal. A planilha Google não é alterada.
-2. Confira os totais de cada aba e, se quiser, baixe o CSV para comparar.
-3. Marque **Banco do portal** e salve. A partir daí a ferramenta lê e grava no banco do MyBlue, com login e histórico de quem alterou cada registro.
+1. **Backup da planilha Google.** No Google Sheets: *Arquivo → Fazer uma cópia* (e, se quiser, *Arquivo → Fazer download → Excel*). A planilha original nunca é alterada pelo portal.
+2. **Importar.** Clique no módulo → *Planilha da ferramenta* → confira o link do Apps Script (o portal já detecta o que vem no HTML) → **Importar da planilha**. A importação é feita pelo seu navegador e substitui o que houver no banco do portal para aquele módulo.
+3. **Conferir.** Veja os totais de cada aba e baixe o CSV para comparar com a planilha.
+4. **Ativar.** Marque **Banco do portal** e salve. A partir daí a ferramenta lê e grava no Supabase, com login e histórico de quem alterou cada registro.
+5. **Avisar a equipe** para recarregar a ferramenta (o botão ⟳ da barra do portal) e não lançar mais nada direto na planilha Google.
 
 Para voltar atrás, marque **Planilha Google (como hoje)**. O que foi lançado no portal nesse meio-tempo não é enviado de volta para a planilha, então exporte antes (JSON ou CSV).
 
@@ -101,7 +103,7 @@ Para voltar atrás, marque **Planilha Google (como hoje)**. O que foi lançado n
 
 ### Controle de Pedidos (Suprimentos)
 
-A versão publicada no portal é a do arquivo **sem** a senha própria (StatiCrypt): o acesso é controlado só pelo login e pelas permissões do portal. Os pedidos continuam gravados na planilha Google da ferramenta, e o navegador guarda apenas uma cópia temporária. Para mover esses dados para o banco do portal é preciso ligar a ferramenta à planilha interna, como já é feito em Renegociações e Parceiros.
+A versão publicada no portal é a do arquivo **sem** a senha própria (StatiCrypt): o acesso é controlado só pelo login e pelas permissões do portal. A planilha dessa ferramenta não tem coluna de ID (o nº do pedido se repete nas parcelas) e as alterações apontam a linha pela posição; na planilha interna, o portal confere o nº do pedido e o vencimento antes de alterar, para nunca mexer na linha errada. Excluir um pedido nessa ferramenta só remove da tela, como já acontecia com a planilha Google.
 
 ## Colocar no ar
 

@@ -739,7 +739,7 @@
             res.appendChild(linha);
             try {
               // a aba padrão é lida sem o parâmetro "sheet", exatamente como a ferramenta faz
-              var ehPadrao = mod.adaptador === 'gas-linhas' && c === mod.config.colecao_padrao;
+              var ehPadrao = mod.adaptador !== 'gas-objetos' && c === mod.config.colecao_padrao;
               var dados = await lerJsonp(ehPadrao ? url : url + (url.indexOf('?') >= 0 ? '&' : '?') + 'sheet=' + encodeURIComponent(c));
               if (!Array.isArray(dados)) throw new Error('a planilha não devolveu uma lista (verifique o link).');
               var r = await api('POST', '/api/admin/modulos/' + mod.slug + '/importar', { colecao: c, dados: dados });

@@ -97,6 +97,65 @@ function rotasFerramentas({ db, seg, modulos, registros, cfg }) {
     try { return hostsDoPortal(req).has(new URL(ref).host); } catch { return false; }
   }
 
+  /* ---------- planilha "posicional" (Controle de Pedidos): as alterações apontam a linha pela posição ---------- */
+  const semAcento = (x) => String(x == null ? '' : x).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  // mesma regra que a ferramenta usa para achar as colunas pelo cabeçalho
+  function colunas(cab) {
+    const idx = {};
+    (cab || []).forEach((col, i) => {
+      const k = semAcento(col);
+      if (k.includes('pedido') || k === 'n' || k.includes('numero')) idx.num = i;
+      else if (k.includes('descri') || k.includes('fornecedor')) idx.desc = i;
+      else if (k.includes('valor') || k.includes('preco')) idx.valor = i;
+      else if (k.includes('parcela')) idx.parcelas = i;
+      else if (k.includes('forma') || k.includes('pagamento')) idx.forma = i;
+      else if (k.includes('vencimento') || k.includes('venc') || k.includes('data')) idx.venc = i;
+      else if (k.includes('status') || k.includes('situa')) idx.status = i;
+    });
+    return idx;
+  }
+  const novoId = () => `p-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+  async function planilhaPosicional(req, res, cb, m, colecao, acao, p, uid, log) {
+    const cab = (await registros.cabecalho(m.slug, colecao)) || m.config.cabecalho_padrao || [];
+    // devolve as células como texto, como a planilha Google entrega (a ferramenta usa .trim() em cada célula)
+    const texto = (row) => row.map((v) => (v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v)));
+    if (!acao) return responder(res, cb, [cab, ...(await registros.listar(m.slug, colecao)).map(texto)]);
+    if (acao === 'addMany' || acao === 'add') {
+      const rows = acao === 'add' ? [p.row] : p.rows;
+      if (!Array.isArray(rows) || !rows.every(Array.isArray)) return responder(res, cb, { ok: false, error: 'linhas inválidas' }, 400);
+      if (!(await registros.cabecalho(m.slug, colecao)) && cab.length) await registros.salvarCabecalho(m.slug, colecao, cab);
+      await registros.lote(m.slug, colecao, rows.map((row) => ({ id: novoId(), dados: row })), uid);
+      await log({ total: rows.length });
+      return responder(res, cb, { ok: true });
+    }
+    if (acao === 'update' || acao === 'setStatus') {
+      const idx = colunas(cab);
+      const linhas = await registros.listarComIds(m.slug, colecao);
+      const igual = (a, b) => String(a == null ? '' : a).trim() === String(b == null ? '' : b).trim();
+      // datas podem vir como 31/12/2026 (da ferramenta) ou 2026-12-31… (da planilha Google importada)
+      const dia = (v) => { const t = String(v == null ? '' : v).trim(); let x;
+        if ((x = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(t))) return `${x[1]}-${x[2].padStart(2, '0')}-${x[3].padStart(2, '0')}`;
+        if ((x = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})/.exec(t))) return `${x[3].length === 2 ? '20' + x[3] : x[3]}-${x[2].padStart(2, '0')}-${x[1].padStart(2, '0')}`;
+        return t; };
+      const mesmaData = (a, b) => dia(a) === dia(b);
+      // a ferramenta envia a linha da planilha (cabeçalho = linha 1); confere pelo nº do pedido antes de alterar
+      let alvo = linhas[Number(p.row) - 2];
+      const confere = (l) => l && (idx.num === undefined || igual(l.dados[idx.num], p.num)) && (!p.venc || idx.venc === undefined || mesmaData(l.dados[idx.venc], p.venc) || acao === 'update');
+      if (!confere(alvo)) alvo = linhas.find((l) => idx.num !== undefined && igual(l.dados[idx.num], p.num) && (!p.venc || idx.venc === undefined || mesmaData(l.dados[idx.venc], p.venc)));
+      if (!alvo) return responder(res, cb, { ok: false, error: 'linha não encontrada' }, 409);
+      const dados = [...alvo.dados];
+      while (dados.length < cab.length) dados.push('');
+      const por = (campo, valor) => { if (idx[campo] !== undefined && valor !== undefined) dados[idx[campo]] = valor; };
+      por('status', p.status);
+      if (acao === 'update') { por('num', p.num); por('desc', p.desc); por('valor', p.valor); por('venc', p.venc); }
+      await registros.upsert(m.slug, colecao, alvo.id, dados, uid);
+      await log({ linha: Number(p.row), pedido: p.num, status: p.status });
+      return responder(res, cb, { ok: true });
+    }
+    return responder(res, cb, { ok: false, error: 'Ação desconhecida: ' + acao }, 400);
+  }
+
   r.all('/api/gas/:slug', seg.exigirLogin, express.text({ type: () => true, limit: `${cfg.limiteDadosMb}mb` }), async (req, res) => {
     const cb = req.query.callback && CALLBACK_RE.test(req.query.callback) ? req.query.callback : null;
     if (req.query.callback && !cb) return res.status(400).json({ erro: 'callback inválido' });
@@ -158,6 +217,8 @@ function rotasFerramentas({ db, seg, modulos, registros, cfg }) {
         }
         return responder(res, cb, { ok: false, error: 'Dados incompletos para ' + acao }, 400);
       }
+
+      if (m.adaptador === 'gas-posicional') return await planilhaPosicional(req, res, cb, m, colecao, acao, p, uid, log);
 
       // gas-objetos
       if (!acao) return responder(res, cb, await registros.listar(m.slug, colecao));

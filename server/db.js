@@ -1,6 +1,6 @@
 'use strict';
 const { conectar } = require('./banco');
-const { SETORES, MODULOS } = require('./catalogo');
+const { SETORES, MODULOS, CHAVES_DE_SISTEMA } = require('./catalogo');
 
 /* Esquema em Postgres. Os HTMLs das ferramentas também ficam no banco (coluna conteudo),
    então o servidor não precisa de disco persistente. */
@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS modulos (
   ativo BOOLEAN NOT NULL DEFAULT TRUE,
   versao_id INTEGER,
   armazenamento TEXT NOT NULL DEFAULT 'navegador' CHECK (armazenamento IN ('navegador','usuario','compartilhado')),
-  adaptador TEXT CHECK (adaptador IS NULL OR adaptador IN ('gas-linhas','gas-objetos')),
+  adaptador TEXT,
   fonte_dados TEXT NOT NULL DEFAULT 'google' CHECK (fonte_dados IN ('google','interno')),
   config JSONB NOT NULL DEFAULT '{}'::jsonb,
   criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -119,13 +119,20 @@ CREATE INDEX IF NOT EXISTS idx_auditoria_usuario ON auditoria(usuario_id, acao);
 const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 'permissoes', 'armazenamento', 'colecoes', 'registros', 'auditoria'];
 const RLS = TABELAS.map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`).join(';\n');
 
+/* Ajustes em bancos já existentes (rodam a cada início e não fazem nada se já estiverem aplicados). */
+const AJUSTES = `
+ALTER TABLE modulos DROP CONSTRAINT IF EXISTS modulos_adaptador_check;
+ALTER TABLE modulos ADD CONSTRAINT modulos_adaptador_check CHECK (adaptador IS NULL OR adaptador IN ('gas-linhas','gas-objetos','gas-posicional'))
+`;
+
 async function abrir(cfg) {
   const db = await conectar(cfg);
   await db.tx(async (t) => {
     // evita que duas instâncias subindo juntas criem o esquema ao mesmo tempo
     await t.q('SELECT pg_advisory_xact_lock(7240513)');
-    for (const cmd of (SCHEMA + ';' + RLS).split(';').map((s) => s.trim()).filter(Boolean)) await t.q(cmd);
+    for (const cmd of (SCHEMA + ';' + RLS + ';' + AJUSTES).split(';').map((s) => s.trim()).filter(Boolean)) await t.q(cmd);
     await semear(t);
+    await sincronizarCatalogo(t);
   });
   return db;
 }
@@ -143,6 +150,18 @@ async function semear(t) {
     ]);
   }
   await t.q("INSERT INTO auditoria (acao, detalhe) VALUES ('catalogo_semeado', $1::jsonb)", [JSON.stringify({ modulos: MODULOS.map((m) => m.slug) })]);
+}
+
+/* Leva para os módulos já cadastrados a configuração técnica do catálogo (pontos de ligação com
+   a planilha interna, colunas, tipo de planilha). Não toca em nome, setor, ícone, permissões nem
+   nas escolhas do administrador (onde ficam os dados, fonte, chaves locais). */
+async function sincronizarCatalogo(t) {
+  for (const m of MODULOS) {
+    const sistema = {};
+    for (const k of CHAVES_DE_SISTEMA) if (m.config && m.config[k] !== undefined) sistema[k] = m.config[k];
+    await t.q(`UPDATE modulos SET adaptador = COALESCE(adaptador, $2), config = config || $3::jsonb WHERE slug = $1`,
+      [m.slug, m.adaptador || null, JSON.stringify(sistema)]);
+  }
 }
 
 module.exports = { abrir, SCHEMA, RLS };

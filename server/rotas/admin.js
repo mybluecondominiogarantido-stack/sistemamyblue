@@ -18,7 +18,7 @@ function rotasAdmin({ db, seg, modulos, registros, cfg }) {
   async function urlPlanilhaDoHtml(m) {
     try {
       const html = await modulos.lerHtml(m);
-      const r2 = html && /SHEET_URL_BUILTIN\s*=\s*["'](https:\/\/script\.google\.com\/[^"']+)["']/.exec(html);
+      const r2 = html && /SHEET_URL_BUILTIN\s*=\s*\\?["'](https:\/\/script\.google\.com\/[^"'\\]+)\\?["']/.exec(html);
       return r2 ? r2[1] : null;
     } catch { return null; }
   }
@@ -250,7 +250,7 @@ function rotasAdmin({ db, seg, modulos, registros, cfg }) {
     for (const x of await registros.resumo(m.slug)) nomes.add(x.colecao);
     return [...nomes];
   }
-  const cabecalhoDe = async (m, c) => (await modulos.cabecalhoDoHtml(m, (m.config.colecoes || {})[c])) || (await registros.cabecalho(m.slug, c));
+  const cabecalhoDe = async (m, c) => (await modulos.cabecalhoDoHtml(m, (m.config.colecoes || {})[c])) || (await registros.cabecalho(m.slug, c)) || m.config.cabecalho_padrao || null;
 
   r.get('/api/admin/modulos/:slug/dados', async (req, res) => {
     const m = await modulos.obter(req.params.slug);
@@ -269,7 +269,7 @@ function rotasAdmin({ db, seg, modulos, registros, cfg }) {
     const c = req.params.colecao;
     const linhas = await registros.listar(m.slug, c);
     let cab, matriz;
-    if (m.adaptador === 'gas-linhas') {
+    if (m.adaptador !== 'gas-objetos') {
       cab = (await cabecalhoDe(m, c)) || [];
       matriz = linhas;
     } else {
@@ -294,12 +294,14 @@ function rotasAdmin({ db, seg, modulos, registros, cfg }) {
     if (!Array.isArray(dados)) return erro(res, 400, 'Dados inválidos.');
     const itens = [];
     const vistos = new Set();
-    if (m.adaptador === 'gas-linhas') {
+    if (m.adaptador !== 'gas-objetos') {
       if (!dados.every(Array.isArray)) return erro(res, 400, 'Esperava linhas da planilha.');
       const [cab, ...rows] = dados;
       if (cab) await registros.salvarCabecalho(m.slug, colecao, cab);
       rows.forEach((row, i) => {
         if (!row.some((v) => v !== '' && v != null)) return;
+        // planilha posicional: sem coluna de ID (o nº do pedido se repete nas parcelas), mantém todas as linhas na ordem
+        if (m.adaptador === 'gas-posicional') { itens.push({ id: `sheet-${String(i + 1).padStart(6, '0')}`, dados: row }); return; }
         const id = row[0] != null && String(row[0]).trim() !== '' ? String(row[0]) : `sheet-${i + 1}`;
         if (vistos.has(id)) return; // mantém a primeira ocorrência (mesma regra do "remover duplicados")
         vistos.add(id);
