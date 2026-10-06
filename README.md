@@ -159,6 +159,8 @@ Fora do Microsoft 365, dá para usar SMTP comum com as variáveis `SMTP_*`.
 
 **Anexos:** até 10 MB por arquivo (`LIMITE_ANEXO_MB`), guardados no banco. Por segurança, só imagens abrem no navegador; os demais arquivos são sempre baixados.
 
+**Manuais em PDF:** o Manual Geral e um manual para cada setor ficam em [`docs/manuais`](docs/manuais).
+
 ## Colocar no ar
 
 ### No Railway
