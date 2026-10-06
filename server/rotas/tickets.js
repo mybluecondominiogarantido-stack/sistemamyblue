@@ -432,13 +432,23 @@ function rotasTickets({ db, seg, cfg, avisos }) {
 }
 
 /* ===================== administração: equipes e tipos de demanda ===================== */
-function rotasAdminTickets({ db, seg }) {
+function rotasAdminTickets({ db, seg, avisos }) {
   const r = express.Router();
   const json = express.json({ limit: '1mb' });
   r.use('/api/admin/equipes', seg.exigirLogin, seg.exigirAdmin);
   r.use('/api/admin/categorias', seg.exigirLogin, seg.exigirAdmin);
   const erro = (res, status, msg) => res.status(status).json({ erro: msg });
   const ehDuplicado = (e) => e && (e.code === '23505' || /duplicate key|unique/i.test(String(e.message)));
+
+  r.post('/api/admin/equipes/email-teste', async (req, res) => {
+    try {
+      await avisos.emailTeste(req.usuario);
+    } catch (e) {
+      return erro(res, 400, e.message);
+    }
+    await seg.auditar(req, 'email_teste', null, { tipo: avisos.emailTipo });
+    res.json({ ok: true, para: req.usuario.email });
+  });
 
   r.get('/api/admin/equipes', async (req, res) => {
     const setores = (await db.q('SELECT id, nome, ordem FROM setores ORDER BY ordem, nome')).rows;
@@ -453,6 +463,7 @@ function rotasAdminTickets({ db, seg }) {
         categorias: cats.filter((c) => c.setor_id === s.id),
       })),
       usuarios,
+      email: { ativo: avisos.emailAtivo, tipo: avisos.emailTipo, remetente: avisos.emailRemetente },
     });
   });
 

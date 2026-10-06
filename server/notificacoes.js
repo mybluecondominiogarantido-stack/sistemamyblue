@@ -2,38 +2,23 @@
 /*
  * Avisos da Central de Tickets.
  *  - No portal: cada aviso vira uma linha em "notificacoes" (sino com contador, som e alerta do navegador).
- *  - Por e-mail: enviado quando o SMTP está configurado (variáveis SMTP_*). Sem SMTP, só o aviso no portal.
+ *  - Por e-mail: Microsoft 365 (Graph) ou SMTP, quando configurado (veja server/email.js). Sem isso, só o aviso no portal.
  * Nada aqui derruba a requisição: falha de e-mail só vai para o log.
  */
 
-function configEmail(cfg) {
-  const e = process.env;
-  const host = cfg.smtpHost !== undefined ? cfg.smtpHost : e.SMTP_HOST;
-  if (!host) return null;
-  const porta = Number(e.SMTP_PORT) || 587;
-  return {
-    host,
-    port: porta,
-    secure: e.SMTP_SEGURO ? e.SMTP_SEGURO === 'true' : porta === 465,
-    auth: e.SMTP_USUARIO ? { user: e.SMTP_USUARIO, pass: e.SMTP_SENHA || '' } : undefined,
-    remetente: e.EMAIL_REMETENTE || e.SMTP_USUARIO,
-  };
-}
+const { criarEnvioEmail } = require('./email');
 
 const escHtml = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 function criarNotificador(db, cfg) {
-  const smtp = configEmail(cfg);
-  let transporte = null;
-  // envio de teste (cfg.enviarEmail) ou SMTP real
-  const enviar = cfg.enviarEmail || (smtp && (async (msg) => {
-    if (!transporte) {
-      const nodemailer = require('nodemailer');
-      transporte = nodemailer.createTransport({ host: smtp.host, port: smtp.port, secure: smtp.secure, auth: smtp.auth });
-    }
-    await transporte.sendMail({ from: smtp.remetente, ...msg });
-  }));
-  if (!enviar && !cfg.silencioso) console.log('[avisos] SMTP não configurado: avisos de tickets só aparecem dentro do portal.');
+  let correio = null;
+  try {
+    correio = cfg.enviarEmail ? { tipo: 'teste', remetente: 'teste', enviar: cfg.enviarEmail } : criarEnvioEmail();
+  } catch (e) {
+    console.error('[avisos] e-mail desligado:', e.message);
+  }
+  const enviar = correio && correio.enviar;
+  if (!cfg.silencioso) console.log(correio ? `[avisos] e-mail dos tickets: ${correio.tipo} (${correio.remetente})` : '[avisos] e-mail não configurado: avisos de tickets só aparecem dentro do portal.');
 
   const urlPortal = () => String(process.env.PORTAL_URL || cfg.portalUrl || '').replace(/\/+$/, '');
 
@@ -74,7 +59,7 @@ function criarNotificador(db, cfg) {
       const msg = montarEmail(n, ticket);
       // e-mail sai em segundo plano: a tela não espera o servidor de e-mail
       for (const u of destino) {
-        Promise.resolve(enviar({ to: `"${u.nome.replace(/["\r\n]/g, '')}" <${u.email}>`, ...msg }))
+        Promise.resolve(enviar({ para: { nome: u.nome, email: u.email }, ...msg }))
           .catch((e) => console.error('[avisos] falha ao enviar e-mail para', u.email, '-', e.message));
       }
     } catch (e) {
@@ -90,7 +75,19 @@ function criarNotificador(db, cfg) {
     return lideres.length ? lideres : rows.map((r) => r.usuario_id);
   }
 
-  return { notificar, triagemDoSetor, emailAtivo: !!enviar };
+  /* e-mail de teste pela administração: aqui o erro volta para a tela */
+  async function emailTeste(u) {
+    if (!enviar) throw new Error('O envio de e-mail não está configurado no servidor.');
+    const link = urlPortal();
+    await enviar({
+      para: { nome: u.nome, email: u.email },
+      subject: 'Teste de e-mail — Portal MyBlue',
+      text: `Olá, ${u.nome}! Os avisos da Central de Tickets estão chegando por e-mail.${link ? `\n\n${link}` : ''}`,
+      html: `<p>Olá, ${escHtml(u.nome)}!</p><p>Os avisos da Central de Tickets estão chegando por e-mail.</p>${link ? `<p><a href="${escHtml(link)}">${escHtml(link)}</a></p>` : '<p style="color:#d98a1b">Falta definir PORTAL_URL para os e-mails terem o link do ticket.</p>'}`,
+    });
+  }
+
+  return { notificar, triagemDoSetor, emailTeste, emailAtivo: !!enviar, emailTipo: correio ? correio.tipo : null, emailRemetente: correio ? correio.remetente : null };
 }
 
 module.exports = { criarNotificador };

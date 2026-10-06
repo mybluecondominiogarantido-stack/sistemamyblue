@@ -1381,7 +1381,12 @@
     try { j = await api('GET', '/api/admin/equipes'); } catch (e) { toast(e.message, 'erro'); return; }
     var nomeU = {};
     j.usuarios.forEach(function (u) { nomeU[u.id] = u.nome; });
+    var em = j.email || {};
     $('#conteudo').innerHTML = '<div class="pagina"><h1>Equipes e tipos de demanda</h1><p class="sub">Para cada setor, quem atende os tickets (e quem é líder, que distribui) e os tipos de demanda com o prazo de atendimento.</p>' +
+      '<div class="atalho-tickets"><div class="icone-mod">' + IC.sino + '</div><div style="flex:1;min-width:220px"><b style="font-family:var(--display)">Avisos por e-mail</b>' +
+      '<span class="sec" style="display:block;color:var(--muted);font-weight:600;font-size:13px">' +
+      (em.ativo ? 'Enviando ' + (em.tipo === 'microsoft365' ? 'pelo Microsoft 365' : 'por SMTP') + ' como <b>' + esc(em.remetente || '') + '</b>.' : 'Não configurado: por enquanto os avisos aparecem só no portal (veja o README, seção Central de Tickets).') +
+      '</span></div>' + (em.ativo ? '<button class="btn ghost sm" id="btEmailTeste">Enviar e-mail de teste para mim</button>' : '<span class="etiqueta ambar">sem e-mail</span>') + '</div>' +
       '<div class="cartoes">' + j.setores.map(function (s) {
         var lideres = s.membros.filter(function (m) { return m.lider; }).map(function (m) { return nomeU[m.usuario_id]; });
         var ativos = s.categorias.filter(function (c) { return c.ativo; });
@@ -1391,6 +1396,12 @@
           '<p>' + (lideres.length ? 'Líder: ' + esc(lideres.join(', ')) : 'Defina quem distribui os tickets deste setor.') + '</p>' +
           '<div class="acoes"><span class="btn ghost sm">Configurar</span></div></div>';
       }).join('') + '</div><p class="ajuda" style="margin-top:14px">Para criar, renomear ou remover setores use <a href="#/admin/modulos">Módulos e dados → Setores</a>.</p></div>';
+    if ($('#btEmailTeste')) $('#btEmailTeste').onclick = async function () {
+      var bt = this; bt.disabled = true;
+      try { var r = await api('POST', '/api/admin/equipes/email-teste'); toast('E-mail de teste enviado para ' + r.para + '. Confira a caixa de entrada (e o lixo eletrônico).', 'ok'); }
+      catch (e) { toast(e.message, 'erro'); }
+      bt.disabled = false;
+    };
     $$('[data-setor]').forEach(function (c) { c.onclick = function () { editarEquipe(j.setores.find(function (s) { return s.id === Number(c.getAttribute('data-setor')); })); }; });
 
     function editarEquipe(s) {
@@ -1473,7 +1484,7 @@
     modulo_criado: 'Criou módulo', modulo_editado: 'Editou módulo', modulo_removido: 'Removeu módulo', arquivo_enviado: 'Enviou HTML', versao_restaurada: 'Restaurou versão',
     dados_importados: 'Importou dados da planilha', dados_exportados: 'Exportou dados', backup_baixado: 'Baixou backup', setor_criado: 'Criou setor', setor_editado: 'Editou setor', setor_removido: 'Removeu setor',
     registro_add: 'Incluiu registro', registro_update: 'Alterou registro', registro_delete: 'Excluiu registro', registro_upsert: 'Gravou registro', registro_addMany: 'Incluiu registros em lote', registro_replaceAll: 'Regravou a aba inteira', registro_dedupe: 'Removeu duplicados',
-    catalogo_semeado: 'Sistema instalado',
+    catalogo_semeado: 'Sistema instalado', email_teste: 'Enviou e-mail de teste',
     setores_oficiais: 'Setores oficiais cadastrados', ticket_criado: 'Abriu ticket', ticket_atribuicao: 'Atribuiu ticket', ticket_transferencia: 'Transferiu ticket',
     ticket_status: 'Mudou situação de ticket', equipe_editada: 'Editou equipe do setor', categoria_criada: 'Criou tipo de demanda', categoria_editada: 'Editou tipo de demanda', categoria_removida: 'Removeu tipo de demanda',
   };

@@ -238,7 +238,7 @@ test('quem recebe o ticket é avisado no portal e por e-mail', async () => {
   const id = r.json.id;
   await esperar();
   // ticket novo: avisa o líder do setor (triagem)
-  assert.ok(emails.some((e) => /lider@teste\.com/.test(e.to) && e.subject.includes(`#${id}`)), 'e-mail para o líder');
+  assert.ok(emails.some((e) => e.para.email === 'lider@teste.com' && e.subject.includes(`#${id}`)), 'e-mail para o líder');
   let n = (await lider('GET', '/api/notificacoes')).json;
   assert.ok(n.nao_lidas >= 1);
   assert.equal(n.notificacoes[0].ticket_id, id);
@@ -247,7 +247,7 @@ test('quem recebe o ticket é avisado no portal e por e-mail', async () => {
   emails.length = 0;
   assert.equal((await lider('PATCH', `/api/tickets/${id}`, { responsavel_id: ids['membro@teste.com'] })).status, 200);
   await esperar();
-  const e = emails.find((x) => /membro@teste\.com/.test(x.to));
+  const e = emails.find((x) => x.para.email === 'membro@teste.com');
   assert.ok(e, 'e-mail para o responsável');
   assert.match(e.subject, /passado para você/);
   assert.ok(e.text.includes(`https://portal.teste/#/tickets/${id}`), 'link do ticket no e-mail');
@@ -268,7 +268,7 @@ test('quem recebe o ticket é avisado no portal e por e-mail', async () => {
   assert.equal((await solicitante('GET', '/api/notificacoes')).json.notificacoes[0].tipo, 'comentario');
   await membro('PATCH', `/api/tickets/${id}`, { status: 'resolvido', motivo: 'Baixa feita' });
   await esperar();
-  assert.ok(emails.some((x) => /sara@teste\.com/.test(x.to) && /resolvido/.test(x.subject)));
+  assert.ok(emails.some((x) => x.para.email === 'sara@teste.com' && /resolvido/.test(x.subject)));
   assert.equal(emails.length, 1, 'comentário não gera e-mail');
   assert.equal((await solicitante('POST', '/api/notificacoes/lidas', { todas: true })).status, 200);
   assert.equal((await solicitante('GET', '/api/notificacoes')).json.nao_lidas, 0);
@@ -297,4 +297,13 @@ test('perfil Supervisão vê e direciona tickets de todos os setores', async () 
   assert.ok(p.por_setor.length >= 2, 'painel com todos os setores');
   const meta = (await sup('GET', '/api/tickets/meta')).json;
   assert.ok(meta.setores.find((s) => s.id === setorCobranca).membros.length >= 2, 'vê as equipes para direcionar');
+});
+
+test('administração envia e-mail de teste para si', async () => {
+  emails.length = 0;
+  const r = await admin('POST', '/api/admin/equipes/email-teste');
+  assert.equal(r.status, 200, r.texto);
+  assert.equal(emails[0].para.email, 'admin@teste.com');
+  assert.equal((await lider('POST', '/api/admin/equipes/email-teste')).status, 403);
+  assert.equal((await admin('GET', '/api/admin/equipes')).json.email.ativo, true);
 });
