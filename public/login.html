@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/estilos.css?v=2">
+<link rel="stylesheet" href="/estilos.css?v=3">
 </head>
 <body>
 <div class="tela-login">
@@ -32,7 +32,7 @@
         </div>
         <div>
           <label class="rot" for="senha">Senha</label>
-          <input class="campo" id="senha" name="senha" type="password" autocomplete="current-password" required>
+          <div class="campo-senha"><input class="campo" id="senha" name="senha" type="password" autocomplete="current-password" required><button type="button" class="ver-senha" data-alvo="senha" aria-label="Mostrar senha" title="Mostrar senha"></button></div>
         </div>
         <button class="btn primary" type="submit" id="btEntrar" style="width:100%;padding:12px">Entrar</button>
         <p class="ajuda" style="text-align:center">Esqueceu a senha? Peça para a administração redefinir.</p>
@@ -46,18 +46,18 @@
         <div id="msg2" class="msg erro" role="alert" hidden></div>
         <div>
           <label class="rot" for="nova">Nova senha</label>
-          <input class="campo" id="nova" type="password" autocomplete="new-password" required>
+          <div class="campo-senha"><input class="campo" id="nova" type="password" autocomplete="new-password" required><button type="button" class="ver-senha" data-alvo="nova" aria-label="Mostrar senha" title="Mostrar senha"></button></div>
           <div class="ajuda">Pelo menos 8 caracteres, com letras e números.</div>
         </div>
         <div>
           <label class="rot" for="nova2">Repita a nova senha</label>
-          <input class="campo" id="nova2" type="password" autocomplete="new-password" required>
+          <div class="campo-senha"><input class="campo" id="nova2" type="password" autocomplete="new-password" required><button type="button" class="ver-senha" data-alvo="nova2" aria-label="Mostrar senha" title="Mostrar senha"></button></div>
         </div>
         <button class="btn primary" type="submit" style="width:100%;padding:12px">Salvar e entrar</button>
       </form>
     </div>
   </section>
 </div>
-<script src="/login.js?v=2"></script>
+<script src="/login.js?v=3"></script>
 </body>
 </html>
