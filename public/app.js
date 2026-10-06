@@ -715,7 +715,14 @@
         res.innerHTML = '<div class="msg aviso" style="margin-top:8px">Enviando ' + esc(f.name) + '…</div>';
         try {
           var r = await api('PUT', '/api/admin/modulos/' + mod.slug + '/arquivo', await f.arrayBuffer(), { bruto: true, headers: { 'X-Nome-Arquivo': encodeURIComponent(f.name) } });
-          res.innerHTML = '<div class="msg ok" style="margin-top:8px">Arquivo publicado. Quem abrir a ferramenta já recebe a nova versão.</div>' +
+          if (r.fonte_dados) {
+            // o HTML já não usa planilha Google: a janela acompanha a mudança feita no servidor
+            var radio = $('input[name=mFonte][value="' + r.fonte_dados + '"]', m);
+            if (radio) radio.checked = true;
+            mod.fonte_dados = r.fonte_dados;
+          }
+          res.innerHTML = '<div class="msg ok" style="margin-top:8px">Arquivo publicado. Quem abrir a ferramenta já recebe a nova versão.' +
+            (r.fonte_dados === 'interno' ? ' Este arquivo não usa planilha Google: o módulo passou para <b>Banco do portal</b>.' : '') + '</div>' +
             (r.aviso ? '<div class="msg aviso" style="margin-top:8px">' + esc(r.aviso) + '</div>' : '') +
             (r.aviso_banco ? '<div class="msg aviso" style="margin-top:8px">' + esc(r.aviso_banco) + '</div>' : '');
           recarregarQuadro(mod.slug);
