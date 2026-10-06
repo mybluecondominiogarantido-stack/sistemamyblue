@@ -56,6 +56,17 @@ function lerCookies(req) {
   return out;
 }
 
+/* Endereços pelos quais o portal está sendo acessado. Atrás de proxy (Railway, Nginx),
+   o endereço público chega em X-Forwarded-Host. Um site de terceiros não consegue
+   forjar esses cabeçalhos no navegador da vítima, então aceitar os dois é seguro. */
+function hostsDoPortal(req) {
+  const hosts = new Set();
+  if (req.headers.host) hosts.add(req.headers.host);
+  const fwd = req.headers['x-forwarded-host'];
+  if (fwd) String(fwd).split(',').forEach((h) => hosts.add(h.trim()));
+  return hosts;
+}
+
 function criarSeguranca(db, cfg) {
   const st = {
     criarSessao: db.prepare('INSERT INTO sessoes (token_hash, usuario_id, expira_em, ip, user_agent) VALUES (?, ?, ?, ?, ?)'),
@@ -144,7 +155,7 @@ function criarSeguranca(db, cfg) {
     if (origem && origem !== 'null') {
       let host;
       try { host = new URL(origem).host; } catch { host = null; }
-      if (host !== req.headers.host) return res.status(403).json({ erro: 'Origem não permitida.' });
+      if (!hostsDoPortal(req).has(host)) return res.status(403).json({ erro: 'Origem não permitida.' });
     } else if (origem === 'null') {
       return res.status(403).json({ erro: 'Origem não permitida.' });
     }
@@ -176,4 +187,4 @@ function criarSeguranca(db, cfg) {
   };
 }
 
-module.exports = { criarSeguranca, hashSenha, conferirSenha, validarNovaSenha, senhaAleatoria, HASH_FALSO, sha256, COOKIE };
+module.exports = { criarSeguranca, hostsDoPortal, hashSenha, conferirSenha, validarNovaSenha, senhaAleatoria, HASH_FALSO, sha256, COOKIE };

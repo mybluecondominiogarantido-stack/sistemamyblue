@@ -105,6 +105,25 @@ O arquivo atual de Suprimentos é protegido por senha (StatiCrypt). O portal ent
 
 ## Colocar no ar
 
+### No Railway
+
+O repositório já vem pronto para o Railway (`railway.json` + `Dockerfile`). O portal detecta o Railway sozinho: usa o volume anexado para o banco, confia no proxy HTTPS deles e marca o cookie como seguro.
+
+1. **Criar o serviço.** No Railway: *New Project* → *Deploy from GitHub repo* → escolha `sistemamyblue`. Em *Settings* → *Source*, selecione o branch que deve ir para o ar (o `main`, depois de juntar as mudanças).
+2. **Anexar o volume (obrigatório).** Clique com o botão direito no serviço → *Attach Volume* e use o caminho de montagem **`/app/data`**. Sem volume, o banco e os HTMLs somem a cada deploy (o log avisa em letras grandes).
+3. **Variáveis.** Em *Variables*, defina:
+   - `ADMIN_EMAIL` = seu e-mail (vira o login do primeiro administrador)
+   - `ADMIN_NOME` = seu nome
+   - `ADMIN_SENHA` = opcional. Se ficar vazio, a senha temporária aparece em *Deployments* → *View Logs*.
+   Não defina `PORT` nem `DATA_DIR`: o Railway e o portal cuidam disso.
+4. **Endereço.** Em *Settings* → *Networking*, clique em *Generate Domain* (ex.: `portal-myblue.up.railway.app`) ou ligue um domínio próprio, como `portal.myblue.com.br`.
+5. **Primeiro acesso.** Abra o endereço, entre com o administrador e envie os 5 HTMLs em *Módulos e dados* → *Enviar vários HTMLs*.
+
+Observações:
+- Com volume, o serviço roda com **uma réplica** (o SQLite fica num disco só). Para o tamanho da equipe isso sobra.
+- Cada `git push` no branch escolhido gera um deploy novo. O banco e os HTMLs enviados continuam no volume.
+- Backup: use o botão *Backup do banco* no portal, e se quiser também os backups de volume do próprio Railway.
+
 ### Com Docker
 
 ```bash
@@ -121,7 +140,7 @@ docker compose run --rm -v "$PWD/modulos-originais:/import:ro" portal npm run im
 
 ### Sem Docker (VPS, servidor interno)
 
-Rode `npm ci --omit=dev` e `npm start` com um gerenciador de processos (pm2, systemd). Coloque um proxy com HTTPS na frente (Nginx, Caddy) e use `COOKIE_SECURE=true` e `TRUST_PROXY=1`. Serviços como Render ou Railway funcionam desde que tenham **disco persistente** para a pasta `DATA_DIR`.
+Rode `npm ci --omit=dev` e `npm start` com um gerenciador de processos (pm2, systemd). Coloque um proxy com HTTPS na frente (Nginx, Caddy) e use `COOKIE_SECURE=true` e `TRUST_PROXY=1`. Outros serviços de nuvem (Render, Fly.io) funcionam desde que tenham **disco persistente** para a pasta `DATA_DIR`.
 
 ### Backup
 
@@ -134,11 +153,11 @@ Rode `npm ci --omit=dev` e `npm start` com um gerenciador de processos (pm2, sys
 | Variável | Padrão | Para que serve |
 |---|---|---|
 | `PORT` | 3000 | Porta HTTP |
-| `DATA_DIR` | ./data | Banco e HTMLs enviados |
+| `DATA_DIR` | ./data (no Railway, o volume) | Banco e HTMLs enviados |
 | `ADMIN_EMAIL` / `ADMIN_NOME` / `ADMIN_SENHA` | — | Primeiro administrador (só quando o banco está vazio) |
 | `SESSAO_HORAS` | 12 | Duração da sessão (renova sozinha enquanto a pessoa usa) |
 | `COOKIE_SECURE` | false | `true` quando o portal estiver em HTTPS |
-| `TRUST_PROXY` | 0 | `1` quando houver proxy reverso na frente |
+| `TRUST_PROXY` | 0 (no Railway, 1) | `1` quando houver proxy reverso na frente |
 | `LIMITE_HTML_MB` / `LIMITE_DADOS_MB` | 40 / 25 | Tamanho máximo de HTML enviado e de dados gravados por vez |
 
 ## Segurança

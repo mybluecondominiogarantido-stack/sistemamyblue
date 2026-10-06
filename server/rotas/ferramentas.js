@@ -1,5 +1,6 @@
 'use strict';
 const express = require('express');
+const { hostsDoPortal } = require('../seguranca');
 
 const CALLBACK_RE = /^[A-Za-z_$][\w$]{0,80}$/;
 const COLECAO_RE = /^[A-Za-z0-9_-]{1,40}$/;
@@ -96,7 +97,7 @@ function rotasFerramentas({ db, seg, modulos, registros, cfg }) {
     if (sfs) return sfs === 'same-origin';
     const ref = req.headers.referer;
     if (!ref) return false;
-    try { return new URL(ref).host === req.headers.host; } catch { return false; }
+    try { return hostsDoPortal(req).has(new URL(ref).host); } catch { return false; }
   }
 
   r.all('/api/gas/:slug', seg.exigirLogin, express.text({ type: () => true, limit: `${cfg.limiteDadosMb}mb` }), (req, res) => {
