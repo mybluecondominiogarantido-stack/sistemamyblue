@@ -92,7 +92,11 @@ function criarApp(cfg) {
     res.set('Cache-Control', 'no-store');
     res.sendFile(path.join(publico, 'index.html'));
   });
-  app.use(express.static(publico, { index: false, maxAge: '1h' }));
+  // CSS/JS/HTML: o navegador sempre confere se há versão nova (evita misturar arquivos antigos e novos após um deploy)
+  app.use(express.static(publico, {
+    index: false,
+    setHeaders: (res, arquivo) => res.set('Cache-Control', /\.(png|jpe?g|webp|svg|ico)$/i.test(arquivo) ? 'public, max-age=86400' : 'no-cache'),
+  }));
 
   app.use('/api', (req, res) => res.status(404).json({ erro: 'Rota não encontrada.' }));
   // eslint-disable-next-line no-unused-vars
