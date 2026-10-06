@@ -1,0 +1,21 @@
+{
+  "name": "sistema-myblue",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Portal MyBlue — reúne as centrais de ferramentas dos setores com login, permissões e banco de dados.",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node --test test/*.test.js",
+    "importar-html": "node scripts/importar-html.js",
+    "criar-admin": "node scripts/criar-admin.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.4.1",
+    "express": "^5.1.0"
+  }
+}
