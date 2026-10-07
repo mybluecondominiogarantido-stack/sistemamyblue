@@ -241,7 +241,7 @@ CREATE TABLE IF NOT EXISTS links_campanhas (
   id SERIAL PRIMARY KEY,
   nome TEXT NOT NULL,
   inicio DATE NOT NULL,
-  escurecer INTEGER NOT NULL DEFAULT 35 CHECK (escurecer BETWEEN 0 AND 85),
+  escurecer INTEGER NOT NULL DEFAULT 0 CHECK (escurecer BETWEEN 0 AND 85),
   fundo BYTEA,
   fundo_tipo TEXT,
   fundo_celular BYTEA,
