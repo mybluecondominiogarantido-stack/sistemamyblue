@@ -105,27 +105,35 @@ Para voltar atrás, marque **Planilha Google (como hoje)**. O que foi lançado n
 
 A versão publicada no portal é a do arquivo **sem** a senha própria (StatiCrypt): o acesso é controlado só pelo login e pelas permissões do portal. A planilha dessa ferramenta não tem coluna de ID (o nº do pedido se repete nas parcelas) e as alterações apontam a linha pela posição; na planilha interna, o portal confere o nº do pedido e o vencimento antes de alterar, para nunca mexer na linha errada. Excluir um pedido nessa ferramenta só remove da tela, como já acontecia com a planilha Google.
 
+## Carteira de condomínios
+
+Menu **Carteira → Carteira de condomínios**. Reúne os condomínios atendidos e quem cuida de cada um:
+
+| Função | Coluna na planilha |
+|---|---|
+| Analista de cobrança | ANALISTA ADMINISTRATIVA |
+| Analista extrajudicial (ApoioCob, prestador de serviços) | ANALISTA EXTRAJUDICIAL |
+| Assistente de crédito | ASSISTENTE CRÉDITO |
+
+- **Condomínios:** indicadores (ativos, comarcas, pessoas por função, ativos sem responsável), busca por nome, razão social, CNPJ ou ID, filtros por situação, UF, administradora e responsável, e ordenação por coluna. Clique no condomínio para ver a ficha completa e o histórico de alterações.
+- **Responsáveis:** quantos condomínios ativos cada pessoa tem, por UF. A administração usa **Transferir** para passar a carteira de uma pessoa (toda ou só alguns condomínios) para outra.
+- **Quem pode o quê:** todos que entram no portal consultam e exportam. Cadastrar, editar, remover, importar e transferir é da administração. Toda alteração fica no histórico do condomínio (o que mudou, quem e quando).
+- **Importar / exportar:** a carga inicial vem do CSV da planilha *Carteira de Condomínios* (no Excel: *Salvar como → CSV separado por ponto e vírgula*). Cada condomínio é reconhecido pelo **ID**: os existentes são atualizados, os novos incluídos e os que não estão no arquivo ficam como estão. O *Exportar CSV* gera o mesmo formato, que abre no Excel e pode ser importado de volta.
+- Os dados da carteira **não vão para o Git** (o repositório é público): entram só pelo portal. Arquivos `.csv` ficam fora do Git.
+
+Próximo passo previsto: usar a carteira na Central de Tickets (escolher o condomínio no ticket e mandar direto para o responsável do setor).
+
 ## Central de Tickets
 
 Demandas internas entre os setores: quem precisa de algo de outro setor abre um ticket, o setor recebe, o líder distribui e o responsável trata até resolver. Fica no menu **Central de Tickets** e não depende de nenhum HTML enviado.
 
 **Fluxo**
 
-1. **Abrir:** qualquer pessoa logada escolhe o setor, o tipo de demanda, o **condomínio** (ou *Interno*, quando não é de um condomínio), a prioridade, descreve e pode anexar arquivos.
+1. **Abrir:** qualquer pessoa logada escolhe o setor, o tipo de demanda, a prioridade, descreve e pode anexar arquivos.
 2. **Fila do setor:** o ticket entra como *Novo*, sem responsável. Os líderes do setor recebem aviso (sino, som e e-mail). Se o setor não tiver líder, a equipe inteira recebe.
 3. **Distribuir:** o líder atribui a alguém da equipe. Qualquer pessoa do setor também pode **assumir** um ticket da fila, ou devolver para a fila um que esteja com ela.
 4. **Tratar:** o responsável muda a situação (*Em andamento*, *Aguardando*), conversa com quem abriu e registra **notas internas** (quem abriu não vê). Também pode transferir para outro setor, e aí o ticket volta para a fila do novo setor.
 5. **Resolver:** quem abriu é avisado e pode **reabrir** se não ficou resolvido. Também pode cancelar o próprio pedido.
-
-**Carteira de condomínios (direto para o responsável)**
-
-Em *Administração → Equipes e tipos de demanda → Carteira de condomínios*, importe o CSV da planilha *Carteira de Condomínios* (no Excel: *Salvar como → CSV separado por ponto e vírgula*). O arquivo **não vai para o Git**: entra só pelo portal.
-
-- A lista de condomínios aparece no campo *Condomínio* do novo ticket (busca pelo nome; nomes repetidos mostram a comarca).
-- Cada coluna de pessoas da planilha pode ser ligada a um setor. Na primeira importação: **ASSISTENTE CRÉDITO → Crédito** e **ANALISTA EXTRAJUDICIAL → Cobrança**; *ANALISTA ADMINISTRATIVA* fica sem setor. Dá para mudar na mesma tela.
-- Ao abrir um ticket para Crédito ou Cobrança sobre um condomínio, ele já nasce com a pessoa da carteira como responsável (ela recebe o aviso por e-mail; o líder não precisa distribuir). O mesmo vale ao transferir o ticket para esses setores.
-- A pessoa é encontrada pelo nome (sem acento, sem o ramal, ex.: `CHAYANNE FREITAS - 4624` → *Chayanne Freitas*) entre os membros da equipe do setor. A tela mostra quem não foi encontrado; nesses casos, e em demandas *Internas*, o ticket entra na fila do setor normalmente.
-- Importar de novo substitui a carteira: quem saiu do arquivo some da lista, mas os tickets antigos continuam ligados ao condomínio.
 
 **Quem faz o quê**
 

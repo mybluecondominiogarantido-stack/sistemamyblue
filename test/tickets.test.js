@@ -96,8 +96,8 @@ test('admin monta a equipe do setor e os tipos de demanda', async () => {
 
 let ticket;
 test('qualquer pessoa abre ticket para um setor; prazo vem do tipo de demanda', async () => {
-  assert.equal((await solicitante('POST', '/api/tickets', { interno: true, titulo: '', setor_id: setorCobranca })).status, 400);
-  const r = await solicitante('POST', '/api/tickets', { interno: true, titulo: 'Boleto do Cond. Azul', descricao: 'Síndico pediu a 2ª via', setor_id: setorCobranca, categoria_id: categoria });
+  assert.equal((await solicitante('POST', '/api/tickets', { titulo: '', setor_id: setorCobranca })).status, 400);
+  const r = await solicitante('POST', '/api/tickets', { titulo: 'Boleto do Cond. Azul', descricao: 'Síndico pediu a 2ª via', setor_id: setorCobranca, categoria_id: categoria });
   assert.equal(r.status, 201, r.texto);
   ticket = r.json.id;
   const d = (await solicitante('GET', `/api/tickets/${ticket}`)).json;
@@ -109,7 +109,7 @@ test('qualquer pessoa abre ticket para um setor; prazo vem do tipo de demanda', 
   assert.ok(Math.abs(new Date(d.ticket.prazo) - esperado) < 5000, 'prazo de 8 h úteis');
   assert.equal(d.pode.equipe, false);
   // categoria de outro setor é recusada
-  assert.equal((await solicitante('POST', '/api/tickets', { interno: true, titulo: 'x', setor_id: setorCredito, categoria_id: categoria })).status, 400);
+  assert.equal((await solicitante('POST', '/api/tickets', { titulo: 'x', setor_id: setorCredito, categoria_id: categoria })).status, 400);
 });
 
 test('visibilidade: setor vê, quem é de fora não vê', async () => {
@@ -203,7 +203,7 @@ test('transferir para outro setor volta para a fila do novo setor', async () => 
 });
 
 test('atrasados e painel de indicadores', async () => {
-  const r = await solicitante('POST', '/api/tickets', { interno: true, titulo: 'Acordo de cobrança', setor_id: setorCobranca, prioridade: 'urgente' });
+  const r = await solicitante('POST', '/api/tickets', { titulo: 'Acordo de cobrança', setor_id: setorCobranca, prioridade: 'urgente' });
   const atrasado = r.json.id;
   assert.equal((await lider('PATCH', `/api/tickets/${atrasado}`, { prazo: new Date(Date.now() - 3600e3).toISOString() })).status, 200);
   const lista = (await lider('GET', '/api/tickets?vis=setor&atrasados=1')).json.tickets;
@@ -235,7 +235,7 @@ const esperar = () => new Promise((ok) => setTimeout(ok, 30));
 
 test('quem recebe o ticket é avisado no portal e por e-mail', async () => {
   emails.length = 0;
-  const r = await solicitante('POST', '/api/tickets', { interno: true, titulo: 'Negativação indevida', setor_id: setorCobranca });
+  const r = await solicitante('POST', '/api/tickets', { titulo: 'Negativação indevida', setor_id: setorCobranca });
   const id = r.json.id;
   await esperar();
   // ticket novo: avisa o líder do setor (triagem)
@@ -277,7 +277,7 @@ test('quem recebe o ticket é avisado no portal e por e-mail', async () => {
 
 test('perfil Supervisão vê e direciona tickets de todos os setores', async () => {
   const sup = await criarPessoa('Sueli Supervisora', 'sup@teste.com');
-  const r0 = await solicitante('POST', '/api/tickets', { interno: true, titulo: 'Contrato novo', setor_id: setorCobranca });
+  const r0 = await solicitante('POST', '/api/tickets', { titulo: 'Contrato novo', setor_id: setorCobranca });
   const id = r0.json.id;
   // antes do perfil: não vê
   assert.equal((await sup('GET', `/api/tickets/${id}`)).status, 404);
@@ -307,109 +307,4 @@ test('administração envia e-mail de teste para si', async () => {
   assert.equal(emails[0].para.email, 'admin@teste.com');
   assert.equal((await lider('POST', '/api/admin/equipes/email-teste')).status, 403);
   assert.equal((await admin('GET', '/api/admin/equipes')).json.email.ativo, true);
-});
-
-/* ===================== carteira de condomínios ===================== */
-// CSV como o Excel salva: ponto e vírgula, Windows-1252, CRLF
-const CARTEIRA = Buffer.from([
-  'ID;SITUAÇÃO;COMARCA;CONDOMÍNIO;ANALISTA ADMINISTRATIVA;ANALISTA EXTRAJUDICIAL;ASSISTENTE CRÉDITO;RAZÃO SOCIAL;CNPJ;',
-  '1;ATIVO;CE;Jardim Azul ;ANA ADM - 4600;MARIO MEMBRO - 4601;OTAVIO OUTRO - 4602;CONDOMINIO JARDIM AZUL;00.000.000/0001-00;',
-  '2;ATIVO;PB;Jardim Azul;ANA ADM - 4600;FULANO DE TAL - 4603;OTAVIO OUTRO - 4602;RESIDENCIAL JARDIM AZUL PB;11.111.111/0001-11;',
-  '3;DISTRATADO;CE;Solar;;;;"CONDOMINIO SOLAR; BLOCO A";;',
-].join('\r\n'), 'latin1');
-let cond1, cond2;
-
-test('administração importa a carteira (CSV do Excel) e cada coluna já vem ligada ao setor', async () => {
-  assert.equal((await lider('POST', '/api/admin/carteira', CARTEIRA, { headers: { 'content-type': 'text/csv' } })).status, 403);
-  assert.equal((await admin('POST', '/api/admin/carteira', Buffer.from('a;b\n1;2'), { headers: { 'content-type': 'text/csv' } })).status, 400);
-  const r = await admin('POST', '/api/admin/carteira', CARTEIRA, { headers: { 'content-type': 'text/csv' } });
-  assert.equal(r.status, 200, r.texto);
-  assert.equal(r.json.condominios, 3);
-  assert.equal(r.json.ativos, 2);
-  cond1 = (await ctx.db.um("SELECT id, nome, razao_social FROM condominios WHERE codigo = '1'"));
-  cond2 = (await ctx.db.um("SELECT id FROM condominios WHERE codigo = '2'")).id;
-  assert.equal(cond1.nome, 'Jardim Azul', 'tira espaços sobrando');
-  assert.equal((await ctx.db.um("SELECT razao_social FROM condominios WHERE codigo = '3'")).razao_social, 'CONDOMINIO SOLAR; BLOCO A');
-  const c = (await admin('GET', '/api/admin/carteira')).json;
-  const col = (n) => c.colunas.find((x) => x.coluna === n);
-  assert.equal(col('ASSISTENTE CREDITO').setor_id, setorCredito);
-  assert.equal(col('ANALISTA EXTRAJUDICIAL').setor_id, setorCobranca);
-  assert.equal(col('ANALISTA ADMINISTRATIVA').setor_id, null);
-  const pessoas = col('ANALISTA EXTRAJUDICIAL').pessoas;
-  assert.equal(pessoas.find((p) => p.nome === 'MARIO MEMBRO - 4601').usuario.id, ids['membro@teste.com'], 'acha "Mário Membro" sem acento e sem ramal');
-  assert.equal(pessoas.find((p) => p.nome === 'FULANO DE TAL - 4603').usuario, null);
-});
-
-test('ticket exige condomínio ou "interno"; meta lista a carteira com quem recebe', async () => {
-  assert.equal((await solicitante('POST', '/api/tickets', { titulo: 'Sem condomínio', setor_id: setorCobranca })).status, 400);
-  assert.equal((await solicitante('POST', '/api/tickets', { titulo: 'Inexistente', setor_id: setorCobranca, condominio_id: 99999 })).status, 400);
-  const meta = (await solicitante('GET', '/api/tickets/meta')).json;
-  const c1 = meta.condominios.find((c) => c.id === cond1.id);
-  assert.equal(c1.resp[setorCobranca], 'Mário Membro');
-  assert.equal(c1.resp[setorCredito], 'Otávio Outro');
-  assert.equal(meta.condominios.find((c) => c.id === cond2).resp[setorCobranca], undefined, 'Fulano não tem cadastro');
-  assert.ok(meta.condominios.find((c) => c.nome === 'Solar').distratado);
-});
-
-let tCredito, tFila;
-test('crédito e cobrança: o ticket vai direto para a pessoa da carteira do condomínio', async () => {
-  emails.length = 0;
-  let r = await solicitante('POST', '/api/tickets', { titulo: '2ª via', setor_id: setorCobranca, condominio_id: cond1.id });
-  assert.equal(r.status, 201, r.texto);
-  assert.equal(r.json.responsavel.id, ids['membro@teste.com']);
-  let d = (await membro('GET', `/api/tickets/${r.json.id}`)).json;
-  assert.equal(d.ticket.responsavel_id, ids['membro@teste.com']);
-  assert.equal(d.ticket.condominio_nome, 'Jardim Azul');
-  assert.equal(d.ticket.condominio_razao_social, 'CONDOMINIO JARDIM AZUL');
-  assert.ok(d.eventos.some((e) => e.tipo === 'atribuicao' && e.detalhe.automatico));
-  assert.ok(emails.some((x) => x.para.email === 'membro@teste.com'), 'responsável é avisado por e-mail');
-  assert.ok(!emails.some((x) => x.para.email === 'lider@teste.com'), 'líder não precisa distribuir');
-  assert.ok((await membro('GET', '/api/tickets?vis=minha')).json.tickets.some((t) => t.id === r.json.id));
-
-  r = await solicitante('POST', '/api/tickets', { titulo: 'Balancete', setor_id: setorCredito, condominio_id: cond1.id });
-  tCredito = r.json.id;
-  assert.equal(r.json.responsavel.id, ids['outro@teste.com']);
-
-  // pessoa da carteira sem cadastro: entra na fila do setor
-  r = await solicitante('POST', '/api/tickets', { titulo: 'Acordo unidade 12', setor_id: setorCobranca, condominio_id: cond2 });
-  tFila = r.json.id;
-  assert.equal(r.json.responsavel, null);
-  assert.equal((await lider('GET', `/api/tickets/${tFila}`)).json.ticket.responsavel_id, null);
-
-  // setor sem coluna na carteira e demanda interna: fila normal
-  const cs = (await admin('GET', '/api/admin/equipes')).json.setores.find((s) => s.nome === 'CS').id;
-  assert.equal((await solicitante('POST', '/api/tickets', { titulo: 'Retorno ao síndico', setor_id: cs, condominio_id: cond1.id })).json.responsavel, null);
-  r = await solicitante('POST', '/api/tickets', { titulo: 'Notebook novo', setor_id: setorCredito, interno: true });
-  assert.equal(r.json.responsavel, null);
-  assert.equal((await admin('GET', `/api/tickets/${r.json.id}`)).json.ticket.demanda_interna, true);
-
-  // busca e filtro pelo condomínio
-  const lista = (await admin('GET', '/api/tickets?vis=todos&q=jardim azul')).json.tickets;
-  assert.ok(lista.some((t) => t.id === tCredito && t.condominio_nome === 'Jardim Azul'));
-  assert.ok((await admin('GET', `/api/tickets?vis=todos&condominio=${cond2}`)).json.tickets.every((t) => t.condominio_id === cond2));
-});
-
-test('transferir para crédito leva o ticket à pessoa da carteira de lá', async () => {
-  const r = await lider('PATCH', `/api/tickets/${tFila}`, { setor_id: setorCredito, motivo: 'É de repasse' });
-  assert.equal(r.status, 200, r.texto);
-  const d = (await outro('GET', `/api/tickets/${tFila}`)).json;
-  assert.equal(d.ticket.setor_id, setorCredito);
-  assert.equal(d.ticket.responsavel_id, ids['outro@teste.com']);
-});
-
-test('administração muda o setor das colunas; nova importação tira quem saiu da carteira', async () => {
-  let r = await admin('PUT', '/api/admin/carteira/colunas', { colunas: { 'ANALISTA EXTRAJUDICIAL': null } });
-  assert.equal(r.status, 200);
-  r = await solicitante('POST', '/api/tickets', { titulo: 'Negativação', setor_id: setorCobranca, condominio_id: cond1.id });
-  assert.equal(r.json.responsavel, null);
-  await admin('PUT', '/api/admin/carteira/colunas', { colunas: { 'ANALISTA EXTRAJUDICIAL': setorCobranca } });
-
-  const menor = Buffer.from(CARTEIRA.toString('latin1').split('\r\n').slice(0, 2).join('\r\n'), 'latin1');
-  r = await admin('POST', '/api/admin/carteira', menor, { headers: { 'content-type': 'text/csv' } });
-  assert.equal(r.json.condominios, 1);
-  const meta = (await solicitante('GET', '/api/tickets/meta')).json;
-  assert.deepEqual(meta.condominios.map((c) => c.id), [cond1.id]);
-  // ticket antigo continua mostrando o condomínio
-  assert.ok((await admin('GET', `/api/tickets?vis=todos&condominio=${cond2}`)).json.tickets.length >= 1);
-  assert.equal((await admin('GET', '/api/admin/carteira')).json.colunas.find((x) => x.coluna === 'ANALISTA EXTRAJUDICIAL').setor_id, setorCobranca, 'reimportar não desfaz a configuração');
 });

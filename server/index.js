@@ -13,6 +13,7 @@ const { rotasAuth } = require('./rotas/auth');
 const { rotasAdmin } = require('./rotas/admin');
 const { rotasFerramentas } = require('./rotas/ferramentas');
 const { rotasTickets, rotasAdminTickets } = require('./rotas/tickets');
+const { rotasCarteira } = require('./rotas/carteira');
 const { rotasLinks } = require('./rotas/links');
 
 function carregarEnv(arquivo) {
@@ -97,6 +98,7 @@ async function criarApp(cfg) {
   app.use(rotasFerramentas(ctx));
   app.use(rotasTickets(ctx));
   app.use(rotasAdminTickets(ctx));
+  app.use(rotasCarteira(ctx));
   app.use(rotasLinks(ctx));
 
   const publico = path.join(__dirname, '..', 'public');

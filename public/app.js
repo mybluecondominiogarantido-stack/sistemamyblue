@@ -203,7 +203,9 @@
       html += '<div class="grupo">Central de Tickets</div>' +
         '<a href="#/tickets" class="' + (rota.indexOf('#/tickets') === 0 && rota.indexOf('#/tickets/painel') !== 0 ? 'on' : '') + '">' + IC.ticket + '<span>Tickets</span>' +
         '<i data-contador="fila" class="contador" hidden></i></a>' +
-        (souEquipe() ? '<a href="#/tickets/painel" class="' + (rota.indexOf('#/tickets/painel') === 0 ? 'on' : '') + '">' + IC.grafico + 'Painel de tickets</a>' : '');
+        (souEquipe() ? '<a href="#/tickets/painel" class="' + (rota.indexOf('#/tickets/painel') === 0 ? 'on' : '') + '">' + IC.grafico + 'Painel de tickets</a>' : '') +
+        '<div class="grupo">Carteira</div>' +
+        '<a href="#/carteira" class="' + (rota.indexOf('#/carteira') === 0 ? 'on' : '') + '">' + IC.casa + 'Carteira de condomínios</a>';
     }
     porSetor(lista).forEach(function (g) {
       html += '<div class="grupo">' + esc(g.setor) + '</div>';
@@ -252,6 +254,7 @@
       if (/^\d+$/.test(partes[1] || '')) return paginaTicket(Number(partes[1]));
       return paginaTickets(lembrar('tickets.visao', 'minha'));
     }
+    if (partes[0] === 'carteira') return paginaCarteira(partes[1]);
     if (partes[0] === 'links') {
       if (partes[1] === 'gestao' && editorLinks()) return paginaGestaoLinks(partes[2]);
       if (partes[1] === 'previa' && editorLinks()) return paginaLinks(Number(partes[2]) || null);
@@ -1039,24 +1042,14 @@
   async function novoTicket() {
     var meta;
     try { meta = await carregarMeta(); } catch (e) { toast(e.message, 'erro'); return; }
-    // "Interno" primeiro; nomes repetidos (mesmo condomínio em outra comarca) levam a comarca
-    var INTERNO = 'Interno (não é de um condomínio)';
-    var condLista = [{ id: 'interno', rotulo: INTERNO, resp: {} }].concat((meta.condominios || []).map(function (c) {
-      return { id: c.id, resp: c.resp || {}, rotulo: c.nome + (c.comarca ? ' · ' + c.comarca : '') + (c.distratado ? ' · distratado' : '') };
-    }));
-    var porRotulo = {};
-    condLista.forEach(function (c) { if (porRotulo[normal(c.rotulo)]) { c.rotulo += ' · nº ' + c.id; } porRotulo[normal(c.rotulo)] = c; });
     var m = modal({
       titulo: 'Novo ticket', largo: true,
       corpo: '<form id="fT" class="pilha" novalidate>' +
         '<div class="grade-2"><div><label class="rot" for="tSetor">Para qual setor?</label><select class="campo" id="tSetor"><option value="">Escolha o setor…</option>' +
         meta.setores.map(function (s) { return '<option value="' + s.id + '">' + esc(s.nome) + '</option>'; }).join('') + '</select></div>' +
         '<div><label class="rot" for="tCat">Tipo de demanda</label><select class="campo" id="tCat" disabled><option value="">Escolha o setor primeiro</option></select></div></div>' +
-        '<div><label class="rot" for="tCond">Condomínio</label><input class="campo" id="tCond" list="tCondLista" autocomplete="off" placeholder="Digite o nome do condomínio ou escolha &quot;Interno&quot;">' +
-        '<datalist id="tCondLista">' + condLista.map(function (c) { return '<option value="' + esc(c.rotulo) + '"></option>'; }).join('') + '</datalist>' +
-        '<div class="ajuda" id="tCondAjuda"></div></div>' +
         '<div><label class="rot" for="tTitulo">Assunto</label><input class="campo" id="tTitulo" maxlength="160" placeholder="Resumo da demanda em uma linha"></div>' +
-        '<div><label class="rot" for="tDesc">Descrição</label><textarea class="campo" id="tDesc" rows="6" maxlength="10000" placeholder="O que precisa ser feito, unidade, valores, datas… Quanto mais detalhe, mais rápido o atendimento."></textarea></div>' +
+        '<div><label class="rot" for="tDesc">Descrição</label><textarea class="campo" id="tDesc" rows="6" maxlength="10000" placeholder="O que precisa ser feito, condomínio/unidade, valores, datas… Quanto mais detalhe, mais rápido o atendimento."></textarea></div>' +
         '<div class="grade-2"><div><label class="rot" for="tPrio">Prioridade</label><select class="campo" id="tPrio">' +
         ['baixa', 'media', 'alta', 'urgente'].map(function (p) { return '<option value="' + p + '"' + (p === 'media' ? ' selected' : '') + '>' + PRIO[p][0] + '</option>'; }).join('') + '</select>' +
         '<div class="ajuda" id="tPrazo"></div></div>' +
@@ -1065,18 +1058,6 @@
       pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="btCriarT">Abrir ticket</button>',
     });
     function setor() { return meta.setores.find(function (s) { return String(s.id) === $('#tSetor', m).value; }); }
-    function condominio() { return porRotulo[normal($('#tCond', m).value.trim())] || null; }
-    // mostra se o ticket vai direto para a pessoa da carteira do condomínio
-    function condAjuda() {
-      var c = condominio(), s = setor(), v = $('#tCond', m).value.trim();
-      var el = $('#tCondAjuda', m);
-      if (!v) { el.textContent = (meta.condominios || []).length ? 'Escolha da lista. Se a demanda não for de um condomínio, escolha "Interno".' : 'A carteira de condomínios ainda não foi importada: por enquanto, escolha "Interno".'; return; }
-      if (!c) { el.innerHTML = '<span style="color:var(--red)">Condomínio não encontrado. Escolha um nome da lista.</span>'; return; }
-      if (c.id === 'interno') { el.textContent = 'Demanda interna, sem condomínio.'; return; }
-      el.innerHTML = s && c.resp[s.id] ? 'Vai direto para <b>' + esc(c.resp[s.id]) + '</b>, responsável por este condomínio em ' + esc(s.nome) + '.' : s ? 'Entra na fila de ' + esc(s.nome) + ' e o líder distribui.' : '';
-    }
-    $('#tCond', m).oninput = condAjuda;
-    condAjuda();
     function prazoAjuda() {
       var s = setor();
       var c = s && s.categorias.find(function (x) { return String(x.id) === $('#tCat', m).value; });
@@ -1090,7 +1071,6 @@
       sel.innerHTML = !s ? '<option value="">Escolha o setor primeiro</option>' : !s.categorias.length ? '<option value="">Este setor não tem tipos cadastrados</option>' :
         '<option value="">Outro / não sei</option>' + s.categorias.map(function (c) { return '<option value="' + c.id + '">' + esc(c.nome) + '</option>'; }).join('');
       prazoAjuda();
-      condAjuda();
     };
     $('#tCat', m).onchange = function () {
       var s = setor();
@@ -1104,20 +1084,17 @@
       var bt = this;
       var msg = $('#tMsg', m);
       if (!$('#tSetor', m).value) { msg.textContent = 'Escolha o setor que vai atender.'; msg.hidden = false; return; }
-      var cond = condominio();
-      if (!cond) { msg.textContent = 'Escolha o condomínio da lista (ou "Interno", se não for de um condomínio).'; msg.hidden = false; return; }
       if (!$('#tTitulo', m).value.trim()) { msg.textContent = 'Informe o assunto.'; msg.hidden = false; return; }
       bt.disabled = true;
       try {
         var r = await api('POST', '/api/tickets', {
           setor_id: Number($('#tSetor', m).value), categoria_id: $('#tCat', m).value ? Number($('#tCat', m).value) : null,
           prioridade: $('#tPrio', m).value, titulo: $('#tTitulo', m).value, descricao: $('#tDesc', m).value,
-          condominio_id: cond.id === 'interno' ? null : cond.id, interno: cond.id === 'interno',
         });
         var arqs = Array.prototype.slice.call($('#tArq', m).files);
         if (arqs.length) await enviarAnexos(r.id, arqs, false);
         m.fechar();
-        toast('Ticket ' + numTicket(r.id) + ' aberto' + (r.responsavel ? ' e enviado para ' + r.responsavel.nome : '') + '.', 'ok');
+        toast('Ticket ' + numTicket(r.id) + ' aberto.', 'ok');
         location.hash = '#/tickets/' + r.id;
       } catch (e) { msg.textContent = e.message; msg.hidden = false; bt.disabled = false; }
     };
@@ -1171,7 +1148,7 @@
       $('#tbT').innerHTML = r.tickets.map(function (t) {
         var pessoa = visao === 'minha' ? esc(t.solicitante_nome || '—') : t.responsavel_nome ? esc(t.responsavel_nome) : '<span class="etiqueta ambar">sem responsável</span>';
         return '<tr class="clicavel" data-id="' + t.id + '"><td class="num" style="text-align:left;white-space:nowrap"><b>' + numTicket(t.id) + '</b></td>' +
-          '<td><b>' + esc(t.titulo) + '</b><span class="sec">' + (t.condominio_nome ? esc(t.condominio_nome) + ' · ' : t.demanda_interna ? 'Interno · ' : '') + (t.categoria_nome ? esc(t.categoria_nome) + ' · ' : '') + 'aberto por ' + esc(t.solicitante_nome || '—') + ' em ' + quando(t.criado_em) +
+          '<td><b>' + esc(t.titulo) + '</b><span class="sec">' + (t.categoria_nome ? esc(t.categoria_nome) + ' · ' : '') + 'aberto por ' + esc(t.solicitante_nome || '—') + ' em ' + quando(t.criado_em) +
           (t.comentarios ? ' · ' + t.comentarios + ' comentário' + (t.comentarios === 1 ? '' : 's') : '') + '</span></td>' +
           '<td>' + esc(t.setor_nome) + '</td><td>' + etqPrio(t.prioridade) + '</td><td>' + etqStatus(t.status) + '</td><td>' + pessoa + '</td><td style="white-space:nowrap">' + prazoTxt(t) + '</td></tr>';
       }).join('') || '<tr><td colspan="7"><div class="vazio" style="border:0;padding:34px">' +
@@ -1189,9 +1166,9 @@
   function textoEvento(e) {
     var d = e.detalhe || {};
     switch (e.tipo) {
-      case 'criado': return 'abriu o ticket para <b>' + esc(d.setor || '') + '</b>' + (d.condominio ? ' · ' + esc(d.condominio) : '');
+      case 'criado': return 'abriu o ticket para <b>' + esc(d.setor || '') + '</b>';
       case 'status': return 'mudou a situação de ' + etqStatus(d.de) + ' para ' + etqStatus(d.para);
-      case 'atribuicao': return d.para ? 'atribuiu a <b>' + esc(d.para) + '</b>' + (d.automatico ? ' (responsável pelo condomínio na carteira)' : '') : 'devolveu o ticket para a fila do setor';
+      case 'atribuicao': return d.para ? 'atribuiu a <b>' + esc(d.para) + '</b>' : 'devolveu o ticket para a fila do setor';
       case 'transferencia': return 'transferiu de <b>' + esc(d.de || '') + '</b> para <b>' + esc(d.para || '') + '</b>' + (d.categoria ? ' (' + esc(d.categoria) + ')' : '');
       case 'prioridade': return 'mudou a prioridade de ' + etqPrio(d.de) + ' para ' + etqPrio(d.para);
       case 'prazo': return 'mudou o prazo para <b>' + (d.para ? quando(d.para) : 'sem prazo') + '</b>';
@@ -1275,8 +1252,6 @@
       (!pode.equipe && pode.cancelar ? '<button class="btn danger" id="btCancelarT">Cancelar meu pedido</button>' : '') +
       (pode.reabrir ? '<button class="btn ghost" id="btReabrir">Reabrir ticket</button>' : '') +
       '<dl class="info-ticket"><dt>Setor</dt><dd>' + esc(t.setor_nome) + '</dd><dt>Tipo</dt><dd>' + esc(t.categoria_nome || '—') + '</dd>' +
-      '<dt>Condomínio</dt><dd>' + (t.condominio_nome ? esc(t.condominio_nome) + (t.condominio_comarca ? ' · ' + esc(t.condominio_comarca) : '') +
-        (t.condominio_cnpj ? '<span class="sec" style="display:block">' + esc(t.condominio_razao_social || '') + ' · ' + esc(t.condominio_cnpj) + '</span>' : '') : t.demanda_interna ? 'Interno' : '—') + '</dd>' +
       '<dt>Aberto por</dt><dd>' + esc(t.solicitante_nome || '—') + '</dd><dt>Aberto em</dt><dd>' + quando(t.criado_em) + '</dd>' +
       '<dt>1ª resposta</dt><dd>' + (t.primeira_resposta_em ? quando(t.primeira_resposta_em) : '—') + '</dd>' +
       (t.resolvido_em ? '<dt>Resolvido em</dt><dd>' + quando(t.resolvido_em) + '</dd>' : '') + '</dl></div></div>' +
@@ -1359,7 +1334,7 @@
         var outros = metaTickets.setores.filter(function (s) { return s.id !== t.setor_id; });
         var mm = modal({
           titulo: 'Transferir ' + numTicket(t.id),
-          corpo: '<div class="pilha"><p style="margin:0;font-weight:600;color:var(--ink-2)">O ticket vai para a fila do novo setor, sem responsável, e o líder de lá distribui. Se o condomínio tiver responsável na carteira para o novo setor, vai direto para essa pessoa.</p>' +
+          corpo: '<div class="pilha"><p style="margin:0;font-weight:600;color:var(--ink-2)">O ticket vai para a fila do novo setor, sem responsável, e o líder de lá distribui.</p>' +
             '<div class="grade-2"><div><label class="rot" for="trSetor">Novo setor</label><select class="campo" id="trSetor"><option value="">Escolha…</option>' +
             outros.map(function (s) { return '<option value="' + s.id + '">' + esc(s.nome) + '</option>'; }).join('') + '</select></div>' +
             '<div><label class="rot" for="trCat">Tipo de demanda</label><select class="campo" id="trCat" disabled><option value="">—</option></select></div></div>' +
@@ -1435,73 +1410,308 @@
     carregar();
   }
 
+  /* ======================= Carteira de condomínios ======================= */
+  var CART_SIT = { ATIVO: ['Ativo', 'verde'], DISTRATADO: ['Distratado', 'cinza'] };
+  // "EDUARDO SOUSA - 4663" → { nome: 'Eduardo Sousa', ramal: '4663' }
+  function pessoaCarteira(v) {
+    var m = String(v || '').match(/^(.*?)\s*-\s*(\d+)\s*$/);
+    var nome = (m ? m[1] : String(v || '')).toLowerCase().replace(/(^|\s)(\S)/g, function (x, a, b) { return a + b.toUpperCase(); })
+      .replace(/ (Da|De|Do|Das|Dos|E) /g, function (x) { return x.toLowerCase(); });
+    return { nome: nome, ramal: m ? m[2] : '' };
+  }
+  function celPessoa(v) {
+    if (!v) return '<span class="etiqueta ambar">sem responsável</span>';
+    var p = pessoaCarteira(v);
+    return '<b style="font-weight:700">' + esc(p.nome) + '</b>' + (p.ramal ? '<span class="sec">ramal ' + esc(p.ramal) + '</span>' : '');
+  }
+  function etqSituacao(s) { var x = CART_SIT[s] || [s || '—', 'ambar']; return '<span class="etiqueta ' + x[1] + '">' + esc(x[0]) + '</span>'; }
+  function unicos(lista) { return lista.filter(function (v, i, a) { return v && a.indexOf(v) === i; }).sort(function (a, b) { return a.localeCompare(b, 'pt-BR'); }); }
+
+  async function paginaCarteira(aba) {
+    aba = aba === 'responsaveis' ? 'responsaveis' : 'condominios';
+    definirBarra('<span class="setor">Carteira</span><span class="sep">/</span><span class="nome">' + (aba === 'responsaveis' ? 'Responsáveis' : 'Condomínios') + '</span>');
+    $('#conteudo').innerHTML = carregandoHtml();
+    var j;
+    try { j = await api('GET', '/api/carteira'); } catch (e) { toast(e.message, 'erro'); return; }
+    var conds = j.condominios, funcoes = j.funcoes, admin = j.pode_editar;
+    var ativos = conds.filter(function (c) { return c.situacao === 'ATIVO'; });
+    var porUf = {};
+    ativos.forEach(function (c) { porUf[c.comarca || '—'] = (porUf[c.comarca || '—'] || 0) + 1; });
+    var ufs = Object.keys(porUf).sort(function (a, b) { return porUf[b] - porUf[a]; });
+    var semResp = ativos.filter(function (c) { return funcoes.some(function (f) { return !c[f.campo]; }); });
+    function tile(rotulo, valor, extra, alerta) {
+      return '<div class="tile' + (alerta ? ' alerta' : '') + '"><span class="rot-tile">' + rotulo + '</span><b>' + valor + '</b>' + (extra ? '<span class="sec">' + extra + '</span>' : '') + '</div>';
+    }
+    $('#conteudo').innerHTML = '<div class="pagina"><h1>Carteira de condomínios</h1>' +
+      '<p class="sub">Os condomínios atendidos e quem cuida de cada um: analista de cobrança, analista extrajudicial (ApoioCob) e assistente de crédito.</p>' +
+      (conds.length ? '<div class="tiles" style="margin-bottom:20px;grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">' +
+        tile('Condomínios ativos', ativos.length, conds.length - ativos.length + ' distratado' + (conds.length - ativos.length === 1 ? '' : 's')) +
+        tile('Comarcas', ufs.length, ufs.slice(0, 4).map(function (u) { return esc(u) + ' ' + porUf[u]; }).join(' · ')) +
+        funcoes.map(function (f) {
+          var n = unicos(ativos.map(function (c) { return c[f.campo]; })).length;
+          return tile(esc(f.rotulo.replace(' (ApoioCob)', '')), n, n ? 'pessoas · média de ' + Math.round(ativos.filter(function (c) { return c[f.campo]; }).length / n) + ' cada' : '');
+        }).join('') +
+        tile('Sem responsável', semResp.length, 'ativos com função em branco', semResp.length > 0) + '</div>' : '') +
+      '<nav class="abas"><a href="#/carteira" class="' + (aba === 'condominios' ? 'on' : '') + '">Condomínios</a>' +
+      '<a href="#/carteira/responsaveis" class="' + (aba === 'responsaveis' ? 'on' : '') + '">Responsáveis</a></nav><div id="cCorpo"></div></div>';
+
+    var acoes = '<button class="btn ghost" id="btCExportar"' + (conds.length ? '' : ' disabled') + '>' + IC.baixar + 'Exportar CSV</button>' +
+      (admin ? '<button class="btn ghost" id="btCImportar">' + IC.enviar + 'Importar CSV</button><button class="btn primary" id="btCNovo">' + IC.mais + 'Novo condomínio</button>' : '');
+
+    if (!conds.length) {
+      $('#cCorpo').innerHTML = '<div class="vazio">A carteira ainda está vazia.' + (admin ? '<div class="ajuda" style="margin:8px 0 16px">Importe o CSV da planilha <i>Carteira de Condomínios</i> ou cadastre o primeiro condomínio.</div><div class="linha" style="justify-content:center">' + acoes + '</div>' : ' A administração ainda vai importar a planilha.') + '</div>';
+    } else if (aba === 'condominios') desenharCondominios();
+    else desenharResponsaveis();
+    ligarAcoes();
+
+    function ligarAcoes() {
+      if ($('#btCExportar')) $('#btCExportar').onclick = function () { location.href = '/api/carteira/exportar'; };
+      if ($('#btCImportar')) $('#btCImportar').onclick = importarCarteira;
+      if ($('#btCNovo')) $('#btCNovo').onclick = function () { editarCondominio(null); };
+    }
+
+    function desenharCondominios() {
+      var f = lembrar('carteira.filtros', { q: '', situacao: 'ATIVO', uf: '', adm: '', pessoa: '', semResp: false, ordem: 'nome', desc: false });
+      var pessoas = funcoes.map(function (fn) {
+        return '<optgroup label="' + esc(fn.rotulo) + '">' + unicos(conds.map(function (c) { return c[fn.campo]; })).map(function (p) {
+          return '<option value="' + esc(fn.campo + '|' + p) + '">' + esc(pessoaCarteira(p).nome) + '</option>';
+        }).join('') + '</optgroup>';
+      }).join('');
+      var cols = [['codigo', 'ID'], ['nome', 'Condomínio'], ['comarca', 'UF'], ['vencimento', 'Venc.']]
+        .concat(funcoes.map(function (fn) { return [fn.campo, fn.rotulo.replace(' (ApoioCob)', '')]; }))
+        .concat([['administradora', 'Administradora'], ['situacao', 'Situação']]);
+      $('#cCorpo').innerHTML = '<div class="painel"><div class="cab-painel">' +
+        '<input class="campo" id="cfQ" type="search" placeholder="Buscar nome, razão social, CNPJ ou ID…" style="max-width:280px">' +
+        '<select class="campo" id="cfSit" style="max-width:150px"><option value="ATIVO">Ativos</option><option value="DISTRATADO">Distratados</option><option value="">Todas as situações</option></select>' +
+        '<select class="campo" id="cfUf" style="max-width:130px"><option value="">Todas as UFs</option>' + unicos(conds.map(function (c) { return c.comarca; })).map(function (u) { return '<option>' + esc(u) + '</option>'; }).join('') + '</select>' +
+        '<select class="campo" id="cfAdm" style="max-width:190px"><option value="">Todas as administradoras</option>' + unicos(conds.map(function (c) { return c.administradora; })).map(function (u) { return '<option>' + esc(u) + '</option>'; }).join('') + '</select>' +
+        '<select class="campo" id="cfPes" style="max-width:220px"><option value="">Todos os responsáveis</option>' + pessoas + '</select>' +
+        '<label class="linha" style="font-weight:700;font-size:13px;color:var(--muted)"><input type="checkbox" id="cfSem"> sem responsável</label>' +
+        '<span class="espaco"></span>' + acoes + '</div>' +
+        '<div class="tabela-wrap"><table><thead><tr>' + cols.map(function (c) {
+          return '<th data-ordem="' + c[0] + '" style="cursor:pointer" title="Ordenar">' + esc(c[1]) + ' <span data-seta="' + c[0] + '"></span></th>';
+        }).join('') + '</tr></thead><tbody id="tbC"></tbody></table></div>' +
+        '<div class="ajuda" id="cTotal" style="padding:10px 16px;border-top:1px solid var(--border)"></div></div>';
+      $('#cfQ').value = f.q; $('#cfSit').value = f.situacao; $('#cfUf').value = f.uf; $('#cfAdm').value = f.adm; $('#cfPes').value = f.pessoa; $('#cfSem').checked = !!f.semResp;
+      function filtrar() {
+        f = { q: $('#cfQ').value.trim(), situacao: $('#cfSit').value, uf: $('#cfUf').value, adm: $('#cfAdm').value, pessoa: $('#cfPes').value, semResp: $('#cfSem').checked, ordem: f.ordem, desc: f.desc };
+        guardar('carteira.filtros', f);
+        var t = normal(f.q), dig = f.q.replace(/\D/g, '');
+        var pes = f.pessoa ? f.pessoa.split('|') : null;
+        var lista = conds.filter(function (c) {
+          if (f.situacao && c.situacao !== f.situacao) return false;
+          if (f.uf && c.comarca !== f.uf) return false;
+          if (f.adm && c.administradora !== f.adm) return false;
+          if (pes && c[pes[0]] !== pes[1]) return false;
+          if (f.semResp && !funcoes.some(function (fn) { return !c[fn.campo]; })) return false;
+          if (t && normal(c.nome + ' ' + c.razao_social + ' ' + c.codigo + ' ' + c.administradora).indexOf(t) < 0 && !(dig.length >= 4 && c.cnpj.replace(/\D/g, '').indexOf(dig) >= 0)) return false;
+          return true;
+        });
+        lista.sort(function (a, b) {
+          var x = a[f.ordem] || '', y = b[f.ordem] || '';
+          var r = /^\d+$/.test(x) && /^\d+$/.test(y) ? Number(x) - Number(y) : String(x).localeCompare(String(y), 'pt-BR', { numeric: true });
+          return (f.desc ? -r : r) || a.nome.localeCompare(b.nome, 'pt-BR');
+        });
+        $$('[data-seta]').forEach(function (s) { s.textContent = s.getAttribute('data-seta') === f.ordem ? (f.desc ? '↓' : '↑') : ''; });
+        $('#tbC').innerHTML = lista.map(function (c) {
+          return '<tr class="clicavel" data-id="' + c.id + '"><td class="sec" style="white-space:nowrap">' + esc(c.codigo) + '</td>' +
+            '<td style="min-width:220px;max-width:320px"><b>' + esc(c.nome) + '</b><span class="sec" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + esc(c.razao_social || '') + '">' +
+              esc(c.cnpj || '') + (c.cnpj && c.razao_social ? ' · ' : '') + esc(c.razao_social || '') + '</span></td>' +
+            '<td>' + esc(c.comarca || '—') + '</td><td style="white-space:nowrap">' + esc(c.vencimento || '—') + '</td>' +
+            funcoes.map(function (fn) { return '<td>' + celPessoa(c[fn.campo]) + '</td>'; }).join('') +
+            '<td>' + esc(c.administradora && c.administradora !== '-' ? c.administradora : '—') + (c.forma_envio ? '<span class="sec">' + esc(c.forma_envio) + '</span>' : '') + '</td>' +
+            '<td>' + etqSituacao(c.situacao) + '</td></tr>';
+        }).join('') || '<tr><td colspan="' + cols.length + '"><div class="vazio" style="border:0;padding:34px">Nenhum condomínio com estes filtros.</div></td></tr>';
+        $('#cTotal').textContent = lista.length + ' de ' + conds.length + ' condomínio' + (conds.length === 1 ? '' : 's');
+        $$('#tbC tr[data-id]').forEach(function (tr) { tr.onclick = function () { verCondominio(Number(tr.getAttribute('data-id'))); }; });
+      }
+      var espera;
+      $('#cfQ').oninput = function () { clearTimeout(espera); espera = setTimeout(filtrar, 200); };
+      $$('#cfSit,#cfUf,#cfAdm,#cfPes,#cfSem').forEach(function (el) { el.onchange = filtrar; });
+      $$('th[data-ordem]').forEach(function (th) {
+        th.onclick = function () { var o = th.getAttribute('data-ordem'); f.desc = f.ordem === o ? !f.desc : false; f.ordem = o; filtrar(); };
+      });
+      filtrar();
+    }
+
+    function desenharResponsaveis() {
+      $('#cCorpo').innerHTML = '<div class="linha" style="margin-bottom:14px"><span class="ajuda" style="flex:1;min-width:240px">Quantos condomínios cada pessoa tem na carteira. Clique no número para ver a lista' +
+        (admin ? '; use <b>Transferir</b> quando alguém sair ou a carteira for redistribuída.' : '.') + '</span>' + acoes + '</div>' +
+        funcoes.map(function (fn) {
+          var nomes = unicos(conds.map(function (c) { return c[fn.campo]; }));
+          var sem = ativos.filter(function (c) { return !c[fn.campo]; }).length;
+          var linhas = nomes.map(function (p) {
+            var deles = conds.filter(function (c) { return c[fn.campo] === p; });
+            var at = deles.filter(function (c) { return c.situacao === 'ATIVO'; });
+            var porU = {};
+            at.forEach(function (c) { porU[c.comarca || '—'] = (porU[c.comarca || '—'] || 0) + 1; });
+            var pp = pessoaCarteira(p);
+            return { p: p, html: '<tr><td><b>' + esc(pp.nome) + '</b></td><td class="sec">' + esc(pp.ramal || '—') + '</td>' +
+              '<td class="num"><a href="#" data-ver="' + esc(fn.campo + '|' + p) + '"><b>' + at.length + '</b></a></td>' +
+              '<td class="sec">' + Object.keys(porU).sort(function (a, b) { return porU[b] - porU[a]; }).map(function (u) { return esc(u) + ' ' + porU[u]; }).join(' · ') + '</td>' +
+              '<td class="num">' + (deles.length - at.length) + '</td>' +
+              (admin ? '<td style="text-align:right"><button class="btn ghost sm" data-transferir="' + esc(fn.campo + '|' + p) + '">Transferir</button></td>' : '') + '</tr>', n: at.length };
+          }).sort(function (a, b) { return b.n - a.n; });
+          return '<div class="painel" style="margin-bottom:18px"><div class="cab-painel"><b style="font-family:var(--display)">' + esc(fn.rotulo) + '</b>' +
+            '<span class="sec" style="color:var(--muted);font-weight:600;font-size:13px">' + nomes.length + ' pessoa' + (nomes.length === 1 ? '' : 's') + '</span><span class="espaco"></span>' +
+            (sem ? '<a href="#" class="etiqueta ambar" data-sem="1">' + sem + ' ativo' + (sem === 1 ? '' : 's') + ' sem responsável</a>' : '') + '</div>' +
+            '<div class="tabela-wrap"><table><thead><tr><th>Pessoa</th><th>Ramal</th><th class="num">Ativos</th><th>Por UF</th><th class="num">Distratados</th>' + (admin ? '<th></th>' : '') + '</tr></thead><tbody>' +
+            (linhas.map(function (l) { return l.html; }).join('') || '<tr><td colspan="6" class="sec" style="text-align:center;padding:20px">Ninguém nesta função.</td></tr>') + '</tbody></table></div></div>';
+        }).join('');
+      $$('[data-ver]').forEach(function (a) {
+        a.onclick = function (e) {
+          e.preventDefault();
+          guardar('carteira.filtros', { q: '', situacao: 'ATIVO', uf: '', adm: '', pessoa: a.getAttribute('data-ver'), semResp: false, ordem: 'nome', desc: false });
+          location.hash = '#/carteira';
+        };
+      });
+      $$('[data-sem]').forEach(function (a) {
+        a.onclick = function (e) {
+          e.preventDefault();
+          guardar('carteira.filtros', { q: '', situacao: 'ATIVO', uf: '', adm: '', pessoa: '', semResp: true, ordem: 'nome', desc: false });
+          location.hash = '#/carteira';
+        };
+      });
+      $$('[data-transferir]').forEach(function (b) {
+        b.onclick = function () { var x = b.getAttribute('data-transferir').split('|'); transferir(x[0], x.slice(1).join('|')); };
+      });
+    }
+
+    function transferir(campo, de) {
+      var fn = funcoes.find(function (x) { return x.campo === campo; });
+      var deles = conds.filter(function (c) { return c[campo] === de; }).sort(function (a, b) { return (a.situacao === 'ATIVO' ? 0 : 1) - (b.situacao === 'ATIVO' ? 0 : 1) || a.nome.localeCompare(b.nome, 'pt-BR'); });
+      var m = modal({
+        titulo: 'Transferir carteira', largo: true,
+        corpo: '<div class="pilha"><p style="margin:0;font-weight:600;color:var(--ink-2)">' + esc(fn.rotulo) + ': condomínios de <b>' + esc(pessoaCarteira(de).nome) + '</b>. Desmarque os que devem continuar com essa pessoa.</p>' +
+          '<div><label class="rot" for="trPara">Passar para</label><input class="campo" id="trPara" list="trLista" placeholder="NOME - RAMAL (ex.: MARIA SILVA - 4700)">' +
+          '<datalist id="trLista">' + unicos(conds.map(function (c) { return c[campo]; })).filter(function (p) { return p !== de; }).map(function (p) { return '<option value="' + esc(p) + '"></option>'; }).join('') + '</datalist></div>' +
+          '<div class="caixa-opcoes"><div class="grp"><input type="checkbox" id="trTodos" checked> ' + deles.length + ' condomínio' + (deles.length === 1 ? '' : 's') + '</div>' + deles.map(function (c) {
+            return '<label><input type="checkbox" name="trC" value="' + c.id + '" checked><span style="flex:1">' + esc(c.nome) + ' <span class="sec" style="display:inline">' + esc(c.comarca) + '</span></span>' + etqSituacao(c.situacao) + '</label>';
+          }).join('') + '</div><div id="trMsg" class="msg erro" hidden></div></div>',
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="btTrOk">Transferir</button>',
+      });
+      $('#trTodos', m).onchange = function () { var v = this.checked; $$('input[name=trC]', m).forEach(function (i) { i.checked = v; }); };
+      $('#btTrOk', m).onclick = async function () {
+        var ids = $$('input[name=trC]:checked', m).map(function (i) { return Number(i.value); });
+        var msg = $('#trMsg', m);
+        if (!$('#trPara', m).value.trim()) { msg.textContent = 'Informe para quem vai a carteira.'; msg.hidden = false; return; }
+        if (!ids.length) { msg.textContent = 'Marque pelo menos um condomínio.'; msg.hidden = false; return; }
+        try {
+          var r = await api('POST', '/api/carteira/transferir', { funcao: campo, de: de, para: $('#trPara', m).value, ids: ids });
+          m.fechar();
+          toast(r.condominios + ' condomínio' + (r.condominios === 1 ? '' : 's') + ' transferido' + (r.condominios === 1 ? '' : 's') + '.', 'ok');
+          paginaCarteira('responsaveis');
+        } catch (e) { msg.textContent = e.message; msg.hidden = false; }
+      };
+    }
+
+    function importarCarteira() {
+      var m = modal({
+        titulo: 'Importar carteira',
+        corpo: '<div class="pilha"><div><label class="rot" for="ciArq">Arquivo CSV da Carteira de Condomínios</label><input class="campo" id="ciArq" type="file" accept=".csv,text/csv"></div>' +
+          '<div class="ajuda">No Excel: <i>Arquivo → Salvar como → CSV (separado por ponto e vírgula)</i>. Cada condomínio é reconhecido pela coluna <b>ID</b>: os que já existem são atualizados, ' +
+          'os novos são incluídos e os que não estão no arquivo ficam como estão. Toda mudança fica no histórico do condomínio.</div><div id="ciRes"></div></div>',
+        pe: '<button class="btn ghost" data-fechar>Fechar</button><button class="btn primary" id="btCiOk">' + IC.enviar + 'Importar</button>',
+      });
+      var feito = false;
+      $('#btCiOk', m).onclick = async function () {
+        if (feito) { m.fechar(); paginaCarteira(aba); return; }
+        var arq = $('#ciArq', m).files[0];
+        if (!arq) { toast('Escolha o arquivo CSV.', 'erro'); return; }
+        var bt = this; bt.disabled = true;
+        try {
+          var r = await api('POST', '/api/carteira/importar', arq, { bruto: true, headers: { 'Content-Type': 'text/csv' } });
+          $('#ciRes', m).innerHTML = '<div class="tiles" style="grid-template-columns:repeat(3,1fr)">' + tile('Novos', r.novos) + tile('Atualizados', r.atualizados) + tile('Sem mudança', r.iguais) + '</div>' +
+            (r.avisos.length ? '<div class="msg erro" style="margin-top:12px">' + r.avisos.map(esc).join('<br>') + '</div>' : '');
+          feito = true;
+          bt.innerHTML = 'Ver carteira';
+        } catch (e) { toast(e.message, 'erro'); }
+        bt.disabled = false;
+      };
+    }
+
+    async function verCondominio(id) {
+      var d;
+      try { d = await api('GET', '/api/carteira/' + id); } catch (e) { toast(e.message, 'erro'); return; }
+      editarCondominio(d.condominio, d.historico);
+    }
+
+    var ROTULO_CAMPO = { codigo: 'ID', nome: 'Condomínio', situacao: 'Situação', comarca: 'UF', vencimento: 'Vencimento', administradora: 'Administradora', forma_envio: 'Forma de envio',
+      inicio_contrato: 'Início do contrato', razao_social: 'Razão social', cnpj: 'CNPJ', observacoes: 'Observações' };
+    funcoes.forEach(function (fn) { ROTULO_CAMPO[fn.campo] = fn.rotulo; });
+
+    function editarCondominio(c, historico) {
+      var novo = !c;
+      c = c || { situacao: 'ATIVO' };
+      var ro = !admin;
+      function campo(id, rotulo, valor, extra) {
+        return '<div><label class="rot" for="' + id + '">' + rotulo + '</label><input class="campo" id="' + id + '" value="' + esc(valor || '') + '"' + (ro ? ' readonly' : '') + (extra || '') + '></div>';
+      }
+      function lista(id, valores) { return '<datalist id="' + id + '">' + unicos(valores).map(function (v) { return '<option value="' + esc(v) + '"></option>'; }).join('') + '</datalist>'; }
+      var hist = (historico || []).map(function (h) {
+        var det = h.detalhe || {};
+        var o = h.acao === 'condominio_criado' ? 'cadastrou o condomínio' : Object.keys(det.mudancas || {}).map(function (k) {
+          var v = det.mudancas[k];
+          return '<b>' + esc(ROTULO_CAMPO[k] || k) + '</b>: ' + esc(v[0] || '(vazio)') + ' → ' + esc(v[1] || '(vazio)');
+        }).join('; ');
+        var como = h.acao === 'condominio_importado' ? ' (importação)' : h.acao === 'carteira_transferida' ? ' (transferência de carteira)' : '';
+        return '<div class="evento sistema"><span class="ponto"></span><div><b>' + esc(h.usuario_nome || 'Sistema') + '</b> ' + o + esc(como) + ' <span class="sec" style="display:inline">· ' + quando(h.quando) + '</span></div></div>';
+      }).join('');
+      var m = modal({
+        titulo: novo ? 'Novo condomínio' : c.nome, largo: true,
+        corpo: '<form class="pilha" id="fCond" novalidate>' +
+          '<div class="grade-3">' + campo('cdCodigo', 'ID', c.codigo, novo ? ' placeholder="automático"' : '') +
+          '<div><label class="rot" for="cdSit">Situação</label><select class="campo" id="cdSit"' + (ro ? ' disabled' : '') + '>' +
+            unicos(j.situacoes.concat([c.situacao])).map(function (s) { return '<option value="' + esc(s) + '"' + (s === c.situacao ? ' selected' : '') + '>' + esc((CART_SIT[s] || [s])[0]) + '</option>'; }).join('') + '</select></div>' +
+          campo('cdUf', 'UF (comarca)', c.comarca, ' maxlength="30" list="cdUfs"') + '</div>' +
+          campo('cdNome', 'Condomínio', c.nome, ' maxlength="160"') +
+          '<div class="grade-2">' + campo('cdRazao', 'Razão social', c.razao_social, ' maxlength="200"') + campo('cdCnpj', 'CNPJ', c.cnpj, ' maxlength="20" inputmode="numeric"') + '</div>' +
+          '<div class="grade-3">' + campo('cdVenc', 'Vencimento', c.vencimento, ' maxlength="40" placeholder="10 ou 5º DIA ÚTIL" list="cdVencs"') +
+          campo('cdAdm', 'Administradora', c.administradora, ' maxlength="120" list="cdAdms"') + campo('cdEnvio', 'Forma de envio', c.forma_envio, ' maxlength="60" list="cdEnvios"') + '</div>' +
+          '<div class="grade-3">' + funcoes.map(function (fn) { return campo('cd_' + fn.campo, esc(fn.rotulo), c[fn.campo], ' maxlength="120" list="cdl_' + fn.campo + '" placeholder="NOME - RAMAL"'); }).join('') + '</div>' +
+          '<div class="grade-3">' + campo('cdInicio', 'Início do contrato', c.inicio_contrato, ' type="date"') + '</div>' +
+          '<div><label class="rot" for="cdObs">Observações</label><textarea class="campo" id="cdObs" rows="3" maxlength="4000"' + (ro ? ' readonly' : '') + '>' + esc(c.observacoes || '') + '</textarea></div>' +
+          lista('cdUfs', conds.map(function (x) { return x.comarca; })) + lista('cdVencs', conds.map(function (x) { return x.vencimento; })) +
+          lista('cdAdms', conds.map(function (x) { return x.administradora; })) + lista('cdEnvios', conds.map(function (x) { return x.forma_envio; })) +
+          funcoes.map(function (fn) { return lista('cdl_' + fn.campo, conds.map(function (x) { return x[fn.campo]; })); }).join('') +
+          '<div id="cdMsg" class="msg erro" hidden></div>' +
+          (novo ? '' : '<div class="ajuda">Atualizado em ' + quando(c.atualizado_em) + (c.atualizado_por_nome ? ' por ' + esc(c.atualizado_por_nome) : '') + '.</div>') +
+          (hist ? '<hr style="border:0;border-top:1px solid var(--border);margin:4px 0"><div><label class="rot">Histórico</label><div class="linha-tempo">' + hist + '</div></div>' : '') + '</form>',
+        pe: (admin && !novo ? '<button class="btn danger" id="btCdApagar" style="margin-right:auto">Remover</button>' : '') +
+          '<button class="btn ghost" data-fechar>' + (admin ? 'Cancelar' : 'Fechar') + '</button>' + (admin ? '<button class="btn primary" id="btCdOk">' + (novo ? 'Cadastrar' : 'Salvar') + '</button>' : ''),
+      });
+      if (!admin) return;
+      $('#btCdOk', m).onclick = async function () {
+        var corpo = {
+          codigo: $('#cdCodigo', m).value, situacao: $('#cdSit', m).value, comarca: $('#cdUf', m).value, nome: $('#cdNome', m).value,
+          razao_social: $('#cdRazao', m).value, cnpj: $('#cdCnpj', m).value, vencimento: $('#cdVenc', m).value, administradora: $('#cdAdm', m).value,
+          forma_envio: $('#cdEnvio', m).value, inicio_contrato: $('#cdInicio', m).value, observacoes: $('#cdObs', m).value,
+        };
+        funcoes.forEach(function (fn) { corpo[fn.campo] = $('#cd_' + fn.campo, m).value; });
+        var msg = $('#cdMsg', m);
+        if (!corpo.nome.trim()) { msg.textContent = 'Informe o nome do condomínio.'; msg.hidden = false; return; }
+        if (!novo && !corpo.codigo.trim()) { msg.textContent = 'Informe o ID.'; msg.hidden = false; return; }
+        var bt = this; bt.disabled = true;
+        try {
+          if (novo) await api('POST', '/api/carteira', corpo); else await api('PATCH', '/api/carteira/' + c.id, corpo);
+          m.fechar();
+          toast(novo ? 'Condomínio cadastrado.' : 'Condomínio atualizado.', 'ok');
+          paginaCarteira(aba);
+        } catch (e) { msg.textContent = e.message; msg.hidden = false; bt.disabled = false; }
+      };
+      if ($('#btCdApagar', m)) $('#btCdApagar', m).onclick = async function () {
+        if (!(await confirmar('Remover ' + c.nome + '?', 'O condomínio sai da carteira. Se ele apenas deixou de ser atendido, prefira mudar a situação para Distratado e manter o histórico.', 'Remover', true))) return;
+        try { await api('DELETE', '/api/carteira/' + c.id); m.fechar(); toast('Condomínio removido.', 'ok'); paginaCarteira(aba); } catch (e) { toast(e.message, 'erro'); }
+      };
+    }
+  }
+
   /* ---------- admin: equipes e tipos de demanda ---------- */
-  /* "Crédito: ASSISTENTE CRÉDITO · Cobrança: ANALISTA EXTRAJUDICIAL" */
-  function resumoCarteira(cart) {
-    var nomeS = {};
-    (metaTickets ? metaTickets.setores : []).forEach(function (s) { nomeS[s.id] = s.nome; });
-    return cart.colunas.filter(function (c) { return c.setor_id; }).map(function (c) {
-      var faltam = c.pessoas.filter(function (p) { return !p.usuario; }).length;
-      return esc(nomeS[c.setor_id] || '?') + ' recebe direto (' + esc(c.coluna.toLowerCase()) + ')' + (faltam ? ', ' + faltam + ' pessoa' + (faltam === 1 ? '' : 's') + ' sem cadastro na equipe' : '');
-    }).join(' · ');
-  }
-
-  /* importar o CSV da carteira e ligar cada coluna de pessoas a um setor */
-  function configurarCarteira(cart) {
-    var setores = metaTickets ? metaTickets.setores : [];
-    var m = modal({
-      titulo: 'Carteira de condomínios', largo: true,
-      corpo: '<div class="pilha"><div><label class="rot" for="cArq">Arquivo CSV da Carteira de Condomínios</label><input class="campo" id="cArq" type="file" accept=".csv,text/csv">' +
-        '<div class="ajuda">No Excel: <i>Arquivo → Salvar como → CSV (separado por ponto e vírgula)</i>. Precisa ter as colunas CONDOMÍNIO e as das pessoas (ASSISTENTE CRÉDITO, ANALISTA EXTRAJUDICIAL…). ' +
-        'O arquivo substitui a carteira atual; condomínios que saíram dele somem da lista, mas os tickets antigos continuam ligados a eles.</div></div>' +
-        '<div class="linha"><button class="btn primary" id="btImportarC">' + IC.enviar + 'Importar</button></div>' +
-        (cart.colunas.length ? '<hr style="border:0;border-top:1px solid var(--border);margin:6px 0">' +
-          '<div><label class="rot">Quem recebe direto, por setor</label><div class="ajuda" style="margin-bottom:8px">Ao abrir um ticket para o setor escolhido, ele vai direto para a pessoa desta coluna no condomínio. ' +
-          'A pessoa precisa estar cadastrada no portal com o mesmo nome e fazer parte da equipe do setor; se não for encontrada, o ticket entra na fila do setor.</div>' +
-          '<div class="caixa-opcoes" style="max-height:none">' + cart.colunas.map(function (c) {
-            var sem = c.pessoas.filter(function (p) { return !p.usuario; });
-            return '<div style="padding:10px 12px;border-bottom:1px solid var(--border)"><div class="linha"><b style="flex:1;min-width:180px">' + esc(c.coluna) + '</b>' +
-              '<select class="campo" style="width:220px" data-coluna="' + esc(c.coluna) + '"><option value="">— não recebe direto —</option>' +
-              setores.map(function (s) { return '<option value="' + s.id + '"' + (s.id === c.setor_id ? ' selected' : '') + '>' + esc(s.nome) + '</option>'; }).join('') + '</select></div>' +
-              (c.setor_id ? '<div class="sec" style="margin-top:6px">' + c.pessoas.map(function (p) {
-                return esc(p.nome) + ' (' + p.condominios + ') ' + (p.usuario ? '<span class="etiqueta verde">' + esc(p.usuario.nome) + '</span>' : '<span class="etiqueta ambar">não está na equipe</span>');
-              }).join(' · ') + '</div>' + (sem.length ? '<div class="ajuda">Cadastre ' + (sem.length === 1 ? 'essa pessoa' : 'essas pessoas') + ' em Usuários e acessos e coloque na equipe do setor.</div>' : '') : '') + '</div>';
-          }).join('') + '</div></div><div class="linha"><button class="btn primary" id="btSalvarColunas">Salvar</button></div>' : '') + '</div>',
-      pe: '<button class="btn ghost" data-fechar>Fechar</button>',
-      aoFechar: function () { metaTickets = null; },
-    });
-    $('#btImportarC', m).onclick = async function () {
-      var arq = $('#cArq', m).files[0];
-      if (!arq) { toast('Escolha o arquivo CSV.', 'erro'); return; }
-      var bt = this; bt.disabled = true;
-      try {
-        var r = await api('POST', '/api/admin/carteira', arq, { bruto: true, headers: { 'Content-Type': 'text/csv' } });
-        toast(r.condominios + ' condomínios importados (' + r.ativos + ' ativos).', 'ok');
-        m.fechar();
-        metaTickets = null;
-        await paginaEquipes();
-        configurarCarteira(await api('GET', '/api/admin/carteira'));
-      } catch (e) { toast(e.message, 'erro'); bt.disabled = false; }
-    };
-    if ($('#btSalvarColunas', m)) $('#btSalvarColunas', m).onclick = async function () {
-      var colunas = {};
-      $$('select[data-coluna]', m).forEach(function (sel) { colunas[sel.getAttribute('data-coluna')] = sel.value ? Number(sel.value) : null; });
-      try {
-        await api('PUT', '/api/admin/carteira/colunas', { colunas: colunas });
-        toast('Carteira salva.', 'ok');
-        m.fechar();
-        await paginaEquipes();
-        configurarCarteira(await api('GET', '/api/admin/carteira'));
-      } catch (e) { toast(e.message, 'erro'); }
-    };
-  }
-
   async function paginaEquipes() {
     definirBarra('<span class="setor">Administração</span><span class="sep">/</span><span class="nome">Equipes e tipos de demanda</span>');
     $('#conteudo').innerHTML = carregandoHtml();
     var j;
-    var cart;
-    try { j = await api('GET', '/api/admin/equipes'); cart = await api('GET', '/api/admin/carteira'); await carregarMeta(); } catch (e) { toast(e.message, 'erro'); return; }
+    try { j = await api('GET', '/api/admin/equipes'); await carregarMeta(); } catch (e) { toast(e.message, 'erro'); return; }
     var nomeU = {};
     j.usuarios.forEach(function (u) { nomeU[u.id] = u.nome; });
     var em = j.email || {};
@@ -1510,11 +1720,6 @@
       '<span class="sec" style="display:block;color:var(--muted);font-weight:600;font-size:13px">' +
       (em.ativo ? 'Enviando ' + (em.tipo === 'microsoft365' ? 'pelo Microsoft 365' : 'por SMTP') + ' como <b>' + esc(em.remetente || '') + '</b>.' : 'Não configurado: por enquanto os avisos aparecem só no portal (veja o README, seção Central de Tickets).') +
       '</span></div>' + (em.ativo ? '<button class="btn ghost sm" id="btEmailTeste">Enviar e-mail de teste para mim</button>' : '<span class="etiqueta ambar">sem e-mail</span>') + '</div>' +
-      '<div class="atalho-tickets"><div class="icone-mod">' + IC.casa + '</div><div style="flex:1;min-width:220px"><b style="font-family:var(--display)">Carteira de condomínios</b>' +
-      '<span class="sec" style="display:block;color:var(--muted);font-weight:600;font-size:13px">' +
-      (cart.total ? cart.total + ' condomínios (' + cart.ativos + ' ativos), atualizada em ' + quando(cart.atualizado_em) + '. ' +
-        (resumoCarteira(cart) || 'Nenhuma coluna ligada a setor: os tickets entram na fila do setor.') : 'Ainda não importada. Importe o CSV para escolher o condomínio no ticket e mandar direto para o responsável.') +
-      '</span></div><button class="btn ghost sm" id="btCarteira">' + (cart.total ? 'Atualizar / configurar' : 'Importar CSV') + '</button></div>' +
       '<div class="cartoes">' + j.setores.map(function (s) {
         var lideres = s.membros.filter(function (m) { return m.lider; }).map(function (m) { return nomeU[m.usuario_id]; });
         var ativos = s.categorias.filter(function (c) { return c.ativo; });
@@ -1524,7 +1729,6 @@
           '<p>' + (lideres.length ? 'Líder: ' + esc(lideres.join(', ')) : 'Defina quem distribui os tickets deste setor.') + '</p>' +
           '<div class="acoes"><span class="btn ghost sm">Configurar</span></div></div>';
       }).join('') + '</div><p class="ajuda" style="margin-top:14px">Para criar, renomear ou remover setores use <a href="#/admin/modulos">Módulos e dados → Setores</a>.</p></div>';
-    $('#btCarteira').onclick = function () { configurarCarteira(cart); };
     if ($('#btEmailTeste')) $('#btEmailTeste').onclick = async function () {
       var bt = this; bt.disabled = true;
       try { var r = await api('POST', '/api/admin/equipes/email-teste'); toast('E-mail de teste enviado para ' + r.para + '. Confira a caixa de entrada (e o lixo eletrônico).', 'ok'); }
