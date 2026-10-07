@@ -2,14 +2,16 @@
 /*
  * Central de Tickets: demandas internas entre setores.
  *
- * Fluxo: quem abre escolhe o setor (e o tipo de demanda); o ticket cai na fila do setor;
- * o líder distribui para uma pessoa (ou alguém do setor assume); o responsável trata,
+ * Fluxo: quem abre escolhe o setor, o tipo de demanda e o condomínio (ou "interno"); se o setor
+ * tem pessoa definida na carteira do condomínio (ex.: Crédito, Cobrança), o ticket já vai para ela;
+ * senão cai na fila do setor e o líder distribui para uma pessoa (ou alguém do setor assume); o responsável trata,
  * comenta e resolve. Pode ser transferido para outro setor.
  *
  * Quem vê um ticket: quem abriu, o responsável, as pessoas do setor dele e a administração.
  * Notas internas e anexos internos: só o setor, o responsável e a administração.
  */
 const express = require('express');
+const carteira = require('../carteira');
 
 const PRIORIDADES = ['baixa', 'media', 'alta', 'urgente'];
 const STATUS = ['novo', 'em_andamento', 'aguardando', 'resolvido', 'cancelado'];
@@ -83,7 +85,15 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
     const membros = (await db.q(`SELECT sm.setor_id, sm.lider, u.id, u.nome FROM setor_membros sm JOIN usuarios u ON u.id = sm.usuario_id
       WHERE u.ativo ORDER BY u.nome`)).rows;
     const admin = ehGestor(req.usuario);
+    const responsavel = await carteira.carregarRegras(db);
+    const conds = (await db.q('SELECT id, nome, comarca, situacao, pessoas FROM condominios WHERE na_carteira ORDER BY nome, comarca')).rows;
     res.json({
+      // condomínios da carteira e, por setor, quem recebe o ticket automaticamente
+      condominios: conds.map((c) => {
+        const resp = {};
+        for (const s of setores) { const x = responsavel(c, s.id); if (x && x.id) resp[s.id] = x.nome; }
+        return { id: c.id, nome: c.nome, comarca: c.comarca, distratado: c.situacao !== 'ATIVO', resp };
+      }),
       setores: setores.map((s) => ({
         ...s,
         categorias: cats.filter((c) => c.setor_id === s.id),
@@ -131,6 +141,8 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
     else if (STATUS.includes(st)) where.push('t.status = ' + p(st));
     else if (st !== 'todos') return erro(res, 400, 'Status inválido.');
     if (req.query.setor) where.push('t.setor_id = ' + p(Number(req.query.setor)));
+    if (req.query.condominio === 'interno') where.push('t.demanda_interna');
+    else if (req.query.condominio) where.push('t.condominio_id = ' + p(Number(req.query.condominio)));
     if (req.query.responsavel === 'nenhum') where.push('t.responsavel_id IS NULL');
     else if (req.query.responsavel) where.push('t.responsavel_id = ' + p(Number(req.query.responsavel)));
     if (req.query.prioridade && PRIORIDADES.includes(req.query.prioridade)) where.push('t.prioridade = ' + p(req.query.prioridade));
@@ -138,16 +150,16 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
     const busca = texto(req.query.q, 100);
     if (busca) {
       const n = Number(busca.replace(/^#/, ''));
-      where.push(`(t.titulo ILIKE ${p('%' + busca + '%')} OR t.descricao ILIKE $${args.length}${Number.isInteger(n) && n > 0 ? ' OR t.id = ' + p(n) : ''})`);
+      where.push(`(t.titulo ILIKE ${p('%' + busca + '%')} OR t.descricao ILIKE $${args.length} OR cd.nome ILIKE $${args.length}${Number.isInteger(n) && n > 0 ? ' OR t.id = ' + p(n) : ''})`);
     }
     const limite = Math.min(Number(req.query.limite) || 200, 500);
     const { rows } = await db.q(`SELECT t.id, t.titulo, t.status, t.prioridade, t.prazo, t.criado_em, t.atualizado_em, t.resolvido_em,
-        t.setor_id, s.nome AS setor_nome, c.nome AS categoria_nome,
+        t.setor_id, s.nome AS setor_nome, c.nome AS categoria_nome, t.condominio_id, cd.nome AS condominio_nome, t.demanda_interna,
         t.solicitante_id, us.nome AS solicitante_nome, t.responsavel_id, ur.nome AS responsavel_nome,
         (t.prazo < now() AND t.status IN ${EM_ABERTO}) AS atrasado,
         (SELECT COUNT(*)::int FROM ticket_eventos e WHERE e.ticket_id = t.id AND e.tipo = 'comentario') AS comentarios
       FROM tickets t JOIN setores s ON s.id = t.setor_id
-      LEFT JOIN ticket_categorias c ON c.id = t.categoria_id
+      LEFT JOIN ticket_categorias c ON c.id = t.categoria_id LEFT JOIN condominios cd ON cd.id = t.condominio_id
       LEFT JOIN usuarios us ON us.id = t.solicitante_id LEFT JOIN usuarios ur ON ur.id = t.responsavel_id
       ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
       ORDER BY (t.status IN ${EM_ABERTO}) DESC,
@@ -170,21 +182,40 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
       cat = await db.um('SELECT * FROM ticket_categorias WHERE id = $1 AND setor_id = $2 AND ativo', [Number(b.categoria_id), setor.id]);
       if (!cat) return erro(res, 400, 'Tipo de demanda inválido para este setor.');
     }
+    // condomínio da carteira ou demanda interna (não é de condomínio)
+    const interna = b.interno === true || b.condominio_id === 'interno';
+    let cond = null;
+    if (!interna) {
+      cond = await db.um('SELECT id, nome FROM condominios WHERE id = $1', [Number(b.condominio_id) || 0]);
+      if (!cond) return erro(res, 400, 'Escolha o condomínio (ou "Interno", se não for de um condomínio).');
+    }
     const prioridade = PRIORIDADES.includes(b.prioridade) ? b.prioridade : cat ? cat.prioridade : 'media';
     const horas = cat && cat.prazo_horas ? cat.prazo_horas : PRAZO_PADRAO_HORAS[prioridade];
     const prazo = expediente.somarHorasUteis(new Date(), horas);
+    // pessoa da carteira do condomínio neste setor (ex.: assistente de crédito, analista de cobrança)
+    const auto = cond ? await carteira.responsavelAutomatico(db, cond.id, setor.id) : null;
     const id = await db.tx(async (t) => {
-      const { id: novo } = await t.um(`INSERT INTO tickets (titulo, descricao, setor_id, categoria_id, prioridade, solicitante_id, prazo)
-        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`, [titulo, descricao, setor.id, cat ? cat.id : null, prioridade, req.usuario.id, prazo]);
-      await registrar(t, novo, req.usuario.id, 'criado', null, false, { setor: setor.nome, prioridade });
+      const { id: novo } = await t.um(`INSERT INTO tickets (titulo, descricao, setor_id, categoria_id, prioridade, solicitante_id, prazo, condominio_id, demanda_interna, responsavel_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+      [titulo, descricao, setor.id, cat ? cat.id : null, prioridade, req.usuario.id, prazo, cond ? cond.id : null, interna, auto ? auto.id : null]);
+      await registrar(t, novo, req.usuario.id, 'criado', null, false, { setor: setor.nome, prioridade, condominio: cond ? cond.nome : 'Interno' });
+      if (auto) await registrar(t, novo, null, 'atribuicao', null, false, { para: auto.nome, para_id: auto.id, automatico: true, condominio: cond.nome });
       return novo;
     });
-    await seg.auditar(req, 'ticket_criado', null, { ticket: id, setor: setor.nome, titulo });
-    await avisos.notificar(await avisos.triagemDoSetor(setor.id), {
-      ticket_id: id, autor_id: req.usuario.id, tipo: 'novo', email: true,
-      titulo: `Novo ticket para ${setor.nome}`, texto: `${req.usuario.nome} abriu o ticket #${id} para ${setor.nome}: ${titulo}`,
-    });
-    res.status(201).json({ id });
+    await seg.auditar(req, 'ticket_criado', null, { ticket: id, setor: setor.nome, titulo, condominio: cond ? cond.nome : 'Interno', responsavel: auto ? auto.nome : null });
+    const sobre = cond ? ` (${cond.nome})` : '';
+    if (auto) {
+      await avisos.notificar([auto.id], {
+        ticket_id: id, autor_id: req.usuario.id, tipo: 'atribuido', email: true,
+        titulo: `Novo ticket #${id} para você`, texto: `${req.usuario.nome} abriu o ticket #${id} para ${setor.nome}${sobre}: ${titulo}. Veio direto para você por ser o condomínio da sua carteira.`,
+      });
+    } else {
+      await avisos.notificar(await avisos.triagemDoSetor(setor.id), {
+        ticket_id: id, autor_id: req.usuario.id, tipo: 'novo', email: true,
+        titulo: `Novo ticket para ${setor.nome}`, texto: `${req.usuario.nome} abriu o ticket #${id} para ${setor.nome}${sobre}: ${titulo}`,
+      });
+    }
+    res.status(201).json({ id, responsavel: auto ? { id: auto.id, nome: auto.nome } : null });
   });
 
   /* ===================== detalhe ===================== */
@@ -193,7 +224,8 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
     if (!v) return;
     const { t, p } = v;
     const info = await db.um(`SELECT s.nome AS setor_nome, c.nome AS categoria_nome, us.nome AS solicitante_nome, us.email AS solicitante_email,
-        ur.nome AS responsavel_nome FROM tickets t JOIN setores s ON s.id = t.setor_id LEFT JOIN ticket_categorias c ON c.id = t.categoria_id
+        ur.nome AS responsavel_nome, cd.nome AS condominio_nome, cd.comarca AS condominio_comarca, cd.razao_social AS condominio_razao_social, cd.cnpj AS condominio_cnpj
+        FROM tickets t JOIN setores s ON s.id = t.setor_id LEFT JOIN ticket_categorias c ON c.id = t.categoria_id LEFT JOIN condominios cd ON cd.id = t.condominio_id
         LEFT JOIN usuarios us ON us.id = t.solicitante_id LEFT JOIN usuarios ur ON ur.id = t.responsavel_id WHERE t.id = $1`, [t.id]);
     const eventos = (await db.q(`SELECT e.id, e.tipo, e.texto, e.interno, e.detalhe, e.criado_em, e.usuario_id, u.nome AS usuario_nome
       FROM ticket_eventos e LEFT JOIN usuarios u ON u.id = e.usuario_id WHERE e.ticket_id = $1 ${p.interno ? '' : 'AND NOT e.interno'} ORDER BY e.id`, [t.id])).rows;
@@ -236,7 +268,9 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
           titulo: `Ticket #${t.id} passado para você`, texto: `${u.nome} passou para você o ticket #${t.id}: ${t.titulo}${motivo ? ` (${motivo})` : ''}` });
       } else if (tipo === 'transferencia') {
         const novo = await db.um('SELECT setor_id FROM tickets WHERE id = $1', [t.id]);
-        await avisos.notificar(await avisos.triagemDoSetor(novo.setor_id), { ...base, tipo: 'novo', email: true,
+        // foi direto para a pessoa da carteira do condomínio: ela é avisada pela atribuição
+        const direto = eventos.some(([tp, , d]) => tp === 'atribuicao' && d.automatico);
+        if (!direto) await avisos.notificar(await avisos.triagemDoSetor(novo.setor_id), { ...base, tipo: 'novo', email: true,
           titulo: `Ticket #${t.id} transferido para ${det.para}`, texto: `${u.nome} transferiu de ${det.de} para ${det.para} o ticket #${t.id}: ${t.titulo}${motivo ? ` (${motivo})` : ''}` });
         await avisos.notificar([t.solicitante_id], { ...base, tipo: 'transferido', email: false,
           titulo: `Seu ticket #${t.id} foi para ${det.para}`, texto: `${u.nome} transferiu seu ticket de ${det.de} para ${det.para}.` });
@@ -290,10 +324,12 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
       const antigo = await db.um('SELECT nome FROM setores WHERE id = $1', [t.setor_id]);
       set('setor_id', novo.id);
       set('categoria_id', cat ? cat.id : null);
-      // volta para a fila do novo setor, sem responsável
-      sets.push('responsavel_id = NULL');
+      // vai para a pessoa da carteira do condomínio no novo setor, se houver; senão para a fila, sem responsável
+      const auto = await carteira.responsavelAutomatico(db, t.condominio_id, novo.id);
+      set('responsavel_id', auto ? auto.id : null);
       if (b.status === undefined && t.status !== 'novo' && ['em_andamento', 'aguardando'].includes(t.status)) sets.push("status = 'novo'");
       eventos.push(['transferencia', motivo, { de: antigo && antigo.nome, para: novo.nome, categoria: cat ? cat.nome : null }]);
+      if (auto) eventos.push(['atribuicao', null, { para: auto.nome, para_id: auto.id, automatico: true }]);
     } else if (b.responsavel_id !== undefined) {
       const alvo = b.responsavel_id === null || b.responsavel_id === '' ? null : Number(b.responsavel_id);
       if (alvo !== t.responsavel_id) {
@@ -439,6 +475,7 @@ function rotasAdminTickets({ db, seg, avisos }) {
   const json = express.json({ limit: '1mb' });
   r.use('/api/admin/equipes', seg.exigirLogin, seg.exigirAdmin);
   r.use('/api/admin/categorias', seg.exigirLogin, seg.exigirAdmin);
+  r.use('/api/admin/carteira', seg.exigirLogin, seg.exigirAdmin);
   const erro = (res, status, msg) => res.status(status).json({ erro: msg });
   const ehDuplicado = (e) => e && (e.code === '23505' || /duplicate key|unique/i.test(String(e.message)));
 
@@ -450,6 +487,55 @@ function rotasAdminTickets({ db, seg, avisos }) {
     }
     await seg.auditar(req, 'email_teste', null, { tipo: avisos.emailTipo });
     res.json({ ok: true, para: req.usuario.email });
+  });
+
+  /* ===================== carteira de condomínios ===================== */
+  /* situação da carteira e, para cada coluna de pessoas, quem foi (ou não) encontrado na equipe do setor */
+  r.get('/api/admin/carteira', async (req, res) => {
+    const tot = await db.um(`SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE situacao = 'ATIVO')::int AS ativos, MAX(atualizado_em) AS atualizado_em
+      FROM condominios WHERE na_carteira`);
+    const colunas = (await db.q('SELECT coluna, setor_id FROM condominio_colunas ORDER BY coluna')).rows;
+    const conds = (await db.q('SELECT id, nome, pessoas FROM condominios WHERE na_carteira')).rows;
+    const responsavel = await carteira.carregarRegras(db);
+    const lista = colunas.map((c) => {
+      const pessoas = new Map();
+      for (const cd of conds) {
+        const nome = cd.pessoas && cd.pessoas[c.coluna];
+        if (!nome) continue;
+        if (!pessoas.has(nome)) {
+          // só a coluna atual: a pessoa achada é a desta coluna (o setor pode ter mais de uma)
+          const r0 = c.setor_id ? responsavel({ pessoas: { [c.coluna]: nome } }, c.setor_id) : null;
+          pessoas.set(nome, { nome, condominios: 0, usuario: r0 && r0.id && r0.coluna === c.coluna ? { id: r0.id, nome: r0.nome } : null });
+        }
+        pessoas.get(nome).condominios++;
+      }
+      return { ...c, pessoas: [...pessoas.values()].sort((x, y) => x.nome.localeCompare(y.nome, 'pt-BR')) };
+    });
+    res.json({ ...tot, colunas: lista });
+  });
+
+  r.post('/api/admin/carteira', express.raw({ type: () => true, limit: '10mb' }), async (req, res) => {
+    const buf = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+    if (!buf.length) return erro(res, 400, 'Envie o arquivo CSV da carteira.');
+    let r0;
+    try { r0 = await carteira.importar(db, buf); } catch (e) { return erro(res, 400, e.message); }
+    await seg.auditar(req, 'carteira_importada', null, r0);
+    res.json(r0);
+  });
+
+  r.put('/api/admin/carteira/colunas', json, async (req, res) => {
+    const mapa = req.body && typeof req.body.colunas === 'object' && req.body.colunas;
+    if (!mapa) return erro(res, 400, 'Informe o setor de cada coluna.');
+    const setores = new Set((await db.q('SELECT id FROM setores')).rows.map((x) => x.id));
+    await db.tx(async (t) => {
+      for (const [coluna, setor] of Object.entries(mapa)) {
+        const id = setor === null || setor === '' ? null : Number(setor);
+        if (id !== null && !setores.has(id)) continue;
+        await t.q('UPDATE condominio_colunas SET setor_id = $2 WHERE coluna = $1', [coluna, id]);
+      }
+    });
+    await seg.auditar(req, 'carteira_colunas', null, mapa);
+    res.json({ ok: true });
   });
 
   r.get('/api/admin/equipes', async (req, res) => {

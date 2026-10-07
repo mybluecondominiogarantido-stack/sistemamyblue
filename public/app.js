@@ -1019,14 +1019,24 @@
   async function novoTicket() {
     var meta;
     try { meta = await carregarMeta(); } catch (e) { toast(e.message, 'erro'); return; }
+    // "Interno" primeiro; nomes repetidos (mesmo condomínio em outra comarca) levam a comarca
+    var INTERNO = 'Interno (não é de um condomínio)';
+    var condLista = [{ id: 'interno', rotulo: INTERNO, resp: {} }].concat((meta.condominios || []).map(function (c) {
+      return { id: c.id, resp: c.resp || {}, rotulo: c.nome + (c.comarca ? ' · ' + c.comarca : '') + (c.distratado ? ' · distratado' : '') };
+    }));
+    var porRotulo = {};
+    condLista.forEach(function (c) { if (porRotulo[normal(c.rotulo)]) { c.rotulo += ' · nº ' + c.id; } porRotulo[normal(c.rotulo)] = c; });
     var m = modal({
       titulo: 'Novo ticket', largo: true,
       corpo: '<form id="fT" class="pilha" novalidate>' +
         '<div class="grade-2"><div><label class="rot" for="tSetor">Para qual setor?</label><select class="campo" id="tSetor"><option value="">Escolha o setor…</option>' +
         meta.setores.map(function (s) { return '<option value="' + s.id + '">' + esc(s.nome) + '</option>'; }).join('') + '</select></div>' +
         '<div><label class="rot" for="tCat">Tipo de demanda</label><select class="campo" id="tCat" disabled><option value="">Escolha o setor primeiro</option></select></div></div>' +
+        '<div><label class="rot" for="tCond">Condomínio</label><input class="campo" id="tCond" list="tCondLista" autocomplete="off" placeholder="Digite o nome do condomínio ou escolha &quot;Interno&quot;">' +
+        '<datalist id="tCondLista">' + condLista.map(function (c) { return '<option value="' + esc(c.rotulo) + '"></option>'; }).join('') + '</datalist>' +
+        '<div class="ajuda" id="tCondAjuda"></div></div>' +
         '<div><label class="rot" for="tTitulo">Assunto</label><input class="campo" id="tTitulo" maxlength="160" placeholder="Resumo da demanda em uma linha"></div>' +
-        '<div><label class="rot" for="tDesc">Descrição</label><textarea class="campo" id="tDesc" rows="6" maxlength="10000" placeholder="O que precisa ser feito, condomínio/unidade, valores, datas… Quanto mais detalhe, mais rápido o atendimento."></textarea></div>' +
+        '<div><label class="rot" for="tDesc">Descrição</label><textarea class="campo" id="tDesc" rows="6" maxlength="10000" placeholder="O que precisa ser feito, unidade, valores, datas… Quanto mais detalhe, mais rápido o atendimento."></textarea></div>' +
         '<div class="grade-2"><div><label class="rot" for="tPrio">Prioridade</label><select class="campo" id="tPrio">' +
         ['baixa', 'media', 'alta', 'urgente'].map(function (p) { return '<option value="' + p + '"' + (p === 'media' ? ' selected' : '') + '>' + PRIO[p][0] + '</option>'; }).join('') + '</select>' +
         '<div class="ajuda" id="tPrazo"></div></div>' +
@@ -1035,6 +1045,18 @@
       pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="btCriarT">Abrir ticket</button>',
     });
     function setor() { return meta.setores.find(function (s) { return String(s.id) === $('#tSetor', m).value; }); }
+    function condominio() { return porRotulo[normal($('#tCond', m).value.trim())] || null; }
+    // mostra se o ticket vai direto para a pessoa da carteira do condomínio
+    function condAjuda() {
+      var c = condominio(), s = setor(), v = $('#tCond', m).value.trim();
+      var el = $('#tCondAjuda', m);
+      if (!v) { el.textContent = (meta.condominios || []).length ? 'Escolha da lista. Se a demanda não for de um condomínio, escolha "Interno".' : 'A carteira de condomínios ainda não foi importada: por enquanto, escolha "Interno".'; return; }
+      if (!c) { el.innerHTML = '<span style="color:var(--red)">Condomínio não encontrado. Escolha um nome da lista.</span>'; return; }
+      if (c.id === 'interno') { el.textContent = 'Demanda interna, sem condomínio.'; return; }
+      el.innerHTML = s && c.resp[s.id] ? 'Vai direto para <b>' + esc(c.resp[s.id]) + '</b>, responsável por este condomínio em ' + esc(s.nome) + '.' : s ? 'Entra na fila de ' + esc(s.nome) + ' e o líder distribui.' : '';
+    }
+    $('#tCond', m).oninput = condAjuda;
+    condAjuda();
     function prazoAjuda() {
       var s = setor();
       var c = s && s.categorias.find(function (x) { return String(x.id) === $('#tCat', m).value; });
@@ -1048,6 +1070,7 @@
       sel.innerHTML = !s ? '<option value="">Escolha o setor primeiro</option>' : !s.categorias.length ? '<option value="">Este setor não tem tipos cadastrados</option>' :
         '<option value="">Outro / não sei</option>' + s.categorias.map(function (c) { return '<option value="' + c.id + '">' + esc(c.nome) + '</option>'; }).join('');
       prazoAjuda();
+      condAjuda();
     };
     $('#tCat', m).onchange = function () {
       var s = setor();
@@ -1061,17 +1084,20 @@
       var bt = this;
       var msg = $('#tMsg', m);
       if (!$('#tSetor', m).value) { msg.textContent = 'Escolha o setor que vai atender.'; msg.hidden = false; return; }
+      var cond = condominio();
+      if (!cond) { msg.textContent = 'Escolha o condomínio da lista (ou "Interno", se não for de um condomínio).'; msg.hidden = false; return; }
       if (!$('#tTitulo', m).value.trim()) { msg.textContent = 'Informe o assunto.'; msg.hidden = false; return; }
       bt.disabled = true;
       try {
         var r = await api('POST', '/api/tickets', {
           setor_id: Number($('#tSetor', m).value), categoria_id: $('#tCat', m).value ? Number($('#tCat', m).value) : null,
           prioridade: $('#tPrio', m).value, titulo: $('#tTitulo', m).value, descricao: $('#tDesc', m).value,
+          condominio_id: cond.id === 'interno' ? null : cond.id, interno: cond.id === 'interno',
         });
         var arqs = Array.prototype.slice.call($('#tArq', m).files);
         if (arqs.length) await enviarAnexos(r.id, arqs, false);
         m.fechar();
-        toast('Ticket ' + numTicket(r.id) + ' aberto.', 'ok');
+        toast('Ticket ' + numTicket(r.id) + ' aberto' + (r.responsavel ? ' e enviado para ' + r.responsavel.nome : '') + '.', 'ok');
         location.hash = '#/tickets/' + r.id;
       } catch (e) { msg.textContent = e.message; msg.hidden = false; bt.disabled = false; }
     };
@@ -1125,7 +1151,7 @@
       $('#tbT').innerHTML = r.tickets.map(function (t) {
         var pessoa = visao === 'minha' ? esc(t.solicitante_nome || '—') : t.responsavel_nome ? esc(t.responsavel_nome) : '<span class="etiqueta ambar">sem responsável</span>';
         return '<tr class="clicavel" data-id="' + t.id + '"><td class="num" style="text-align:left;white-space:nowrap"><b>' + numTicket(t.id) + '</b></td>' +
-          '<td><b>' + esc(t.titulo) + '</b><span class="sec">' + (t.categoria_nome ? esc(t.categoria_nome) + ' · ' : '') + 'aberto por ' + esc(t.solicitante_nome || '—') + ' em ' + quando(t.criado_em) +
+          '<td><b>' + esc(t.titulo) + '</b><span class="sec">' + (t.condominio_nome ? esc(t.condominio_nome) + ' · ' : t.demanda_interna ? 'Interno · ' : '') + (t.categoria_nome ? esc(t.categoria_nome) + ' · ' : '') + 'aberto por ' + esc(t.solicitante_nome || '—') + ' em ' + quando(t.criado_em) +
           (t.comentarios ? ' · ' + t.comentarios + ' comentário' + (t.comentarios === 1 ? '' : 's') : '') + '</span></td>' +
           '<td>' + esc(t.setor_nome) + '</td><td>' + etqPrio(t.prioridade) + '</td><td>' + etqStatus(t.status) + '</td><td>' + pessoa + '</td><td style="white-space:nowrap">' + prazoTxt(t) + '</td></tr>';
       }).join('') || '<tr><td colspan="7"><div class="vazio" style="border:0;padding:34px">' +
@@ -1143,9 +1169,9 @@
   function textoEvento(e) {
     var d = e.detalhe || {};
     switch (e.tipo) {
-      case 'criado': return 'abriu o ticket para <b>' + esc(d.setor || '') + '</b>';
+      case 'criado': return 'abriu o ticket para <b>' + esc(d.setor || '') + '</b>' + (d.condominio ? ' · ' + esc(d.condominio) : '');
       case 'status': return 'mudou a situação de ' + etqStatus(d.de) + ' para ' + etqStatus(d.para);
-      case 'atribuicao': return d.para ? 'atribuiu a <b>' + esc(d.para) + '</b>' : 'devolveu o ticket para a fila do setor';
+      case 'atribuicao': return d.para ? 'atribuiu a <b>' + esc(d.para) + '</b>' + (d.automatico ? ' (responsável pelo condomínio na carteira)' : '') : 'devolveu o ticket para a fila do setor';
       case 'transferencia': return 'transferiu de <b>' + esc(d.de || '') + '</b> para <b>' + esc(d.para || '') + '</b>' + (d.categoria ? ' (' + esc(d.categoria) + ')' : '');
       case 'prioridade': return 'mudou a prioridade de ' + etqPrio(d.de) + ' para ' + etqPrio(d.para);
       case 'prazo': return 'mudou o prazo para <b>' + (d.para ? quando(d.para) : 'sem prazo') + '</b>';
@@ -1229,6 +1255,8 @@
       (!pode.equipe && pode.cancelar ? '<button class="btn danger" id="btCancelarT">Cancelar meu pedido</button>' : '') +
       (pode.reabrir ? '<button class="btn ghost" id="btReabrir">Reabrir ticket</button>' : '') +
       '<dl class="info-ticket"><dt>Setor</dt><dd>' + esc(t.setor_nome) + '</dd><dt>Tipo</dt><dd>' + esc(t.categoria_nome || '—') + '</dd>' +
+      '<dt>Condomínio</dt><dd>' + (t.condominio_nome ? esc(t.condominio_nome) + (t.condominio_comarca ? ' · ' + esc(t.condominio_comarca) : '') +
+        (t.condominio_cnpj ? '<span class="sec" style="display:block">' + esc(t.condominio_razao_social || '') + ' · ' + esc(t.condominio_cnpj) + '</span>' : '') : t.demanda_interna ? 'Interno' : '—') + '</dd>' +
       '<dt>Aberto por</dt><dd>' + esc(t.solicitante_nome || '—') + '</dd><dt>Aberto em</dt><dd>' + quando(t.criado_em) + '</dd>' +
       '<dt>1ª resposta</dt><dd>' + (t.primeira_resposta_em ? quando(t.primeira_resposta_em) : '—') + '</dd>' +
       (t.resolvido_em ? '<dt>Resolvido em</dt><dd>' + quando(t.resolvido_em) + '</dd>' : '') + '</dl></div></div>' +
@@ -1311,7 +1339,7 @@
         var outros = metaTickets.setores.filter(function (s) { return s.id !== t.setor_id; });
         var mm = modal({
           titulo: 'Transferir ' + numTicket(t.id),
-          corpo: '<div class="pilha"><p style="margin:0;font-weight:600;color:var(--ink-2)">O ticket vai para a fila do novo setor, sem responsável, e o líder de lá distribui.</p>' +
+          corpo: '<div class="pilha"><p style="margin:0;font-weight:600;color:var(--ink-2)">O ticket vai para a fila do novo setor, sem responsável, e o líder de lá distribui. Se o condomínio tiver responsável na carteira para o novo setor, vai direto para essa pessoa.</p>' +
             '<div class="grade-2"><div><label class="rot" for="trSetor">Novo setor</label><select class="campo" id="trSetor"><option value="">Escolha…</option>' +
             outros.map(function (s) { return '<option value="' + s.id + '">' + esc(s.nome) + '</option>'; }).join('') + '</select></div>' +
             '<div><label class="rot" for="trCat">Tipo de demanda</label><select class="campo" id="trCat" disabled><option value="">—</option></select></div></div>' +
@@ -1388,11 +1416,72 @@
   }
 
   /* ---------- admin: equipes e tipos de demanda ---------- */
+  /* "Crédito: ASSISTENTE CRÉDITO · Cobrança: ANALISTA EXTRAJUDICIAL" */
+  function resumoCarteira(cart) {
+    var nomeS = {};
+    (metaTickets ? metaTickets.setores : []).forEach(function (s) { nomeS[s.id] = s.nome; });
+    return cart.colunas.filter(function (c) { return c.setor_id; }).map(function (c) {
+      var faltam = c.pessoas.filter(function (p) { return !p.usuario; }).length;
+      return esc(nomeS[c.setor_id] || '?') + ' recebe direto (' + esc(c.coluna.toLowerCase()) + ')' + (faltam ? ', ' + faltam + ' pessoa' + (faltam === 1 ? '' : 's') + ' sem cadastro na equipe' : '');
+    }).join(' · ');
+  }
+
+  /* importar o CSV da carteira e ligar cada coluna de pessoas a um setor */
+  function configurarCarteira(cart) {
+    var setores = metaTickets ? metaTickets.setores : [];
+    var m = modal({
+      titulo: 'Carteira de condomínios', largo: true,
+      corpo: '<div class="pilha"><div><label class="rot" for="cArq">Arquivo CSV da Carteira de Condomínios</label><input class="campo" id="cArq" type="file" accept=".csv,text/csv">' +
+        '<div class="ajuda">No Excel: <i>Arquivo → Salvar como → CSV (separado por ponto e vírgula)</i>. Precisa ter as colunas CONDOMÍNIO e as das pessoas (ASSISTENTE CRÉDITO, ANALISTA EXTRAJUDICIAL…). ' +
+        'O arquivo substitui a carteira atual; condomínios que saíram dele somem da lista, mas os tickets antigos continuam ligados a eles.</div></div>' +
+        '<div class="linha"><button class="btn primary" id="btImportarC">' + IC.enviar + 'Importar</button></div>' +
+        (cart.colunas.length ? '<hr style="border:0;border-top:1px solid var(--border);margin:6px 0">' +
+          '<div><label class="rot">Quem recebe direto, por setor</label><div class="ajuda" style="margin-bottom:8px">Ao abrir um ticket para o setor escolhido, ele vai direto para a pessoa desta coluna no condomínio. ' +
+          'A pessoa precisa estar cadastrada no portal com o mesmo nome e fazer parte da equipe do setor; se não for encontrada, o ticket entra na fila do setor.</div>' +
+          '<div class="caixa-opcoes" style="max-height:none">' + cart.colunas.map(function (c) {
+            var sem = c.pessoas.filter(function (p) { return !p.usuario; });
+            return '<div style="padding:10px 12px;border-bottom:1px solid var(--border)"><div class="linha"><b style="flex:1;min-width:180px">' + esc(c.coluna) + '</b>' +
+              '<select class="campo" style="width:220px" data-coluna="' + esc(c.coluna) + '"><option value="">— não recebe direto —</option>' +
+              setores.map(function (s) { return '<option value="' + s.id + '"' + (s.id === c.setor_id ? ' selected' : '') + '>' + esc(s.nome) + '</option>'; }).join('') + '</select></div>' +
+              (c.setor_id ? '<div class="sec" style="margin-top:6px">' + c.pessoas.map(function (p) {
+                return esc(p.nome) + ' (' + p.condominios + ') ' + (p.usuario ? '<span class="etiqueta verde">' + esc(p.usuario.nome) + '</span>' : '<span class="etiqueta ambar">não está na equipe</span>');
+              }).join(' · ') + '</div>' + (sem.length ? '<div class="ajuda">Cadastre ' + (sem.length === 1 ? 'essa pessoa' : 'essas pessoas') + ' em Usuários e acessos e coloque na equipe do setor.</div>' : '') : '') + '</div>';
+          }).join('') + '</div></div><div class="linha"><button class="btn primary" id="btSalvarColunas">Salvar</button></div>' : '') + '</div>',
+      pe: '<button class="btn ghost" data-fechar>Fechar</button>',
+      aoFechar: function () { metaTickets = null; },
+    });
+    $('#btImportarC', m).onclick = async function () {
+      var arq = $('#cArq', m).files[0];
+      if (!arq) { toast('Escolha o arquivo CSV.', 'erro'); return; }
+      var bt = this; bt.disabled = true;
+      try {
+        var r = await api('POST', '/api/admin/carteira', arq, { bruto: true, headers: { 'Content-Type': 'text/csv' } });
+        toast(r.condominios + ' condomínios importados (' + r.ativos + ' ativos).', 'ok');
+        m.fechar();
+        metaTickets = null;
+        await paginaEquipes();
+        configurarCarteira(await api('GET', '/api/admin/carteira'));
+      } catch (e) { toast(e.message, 'erro'); bt.disabled = false; }
+    };
+    if ($('#btSalvarColunas', m)) $('#btSalvarColunas', m).onclick = async function () {
+      var colunas = {};
+      $$('select[data-coluna]', m).forEach(function (sel) { colunas[sel.getAttribute('data-coluna')] = sel.value ? Number(sel.value) : null; });
+      try {
+        await api('PUT', '/api/admin/carteira/colunas', { colunas: colunas });
+        toast('Carteira salva.', 'ok');
+        m.fechar();
+        await paginaEquipes();
+        configurarCarteira(await api('GET', '/api/admin/carteira'));
+      } catch (e) { toast(e.message, 'erro'); }
+    };
+  }
+
   async function paginaEquipes() {
     definirBarra('<span class="setor">Administração</span><span class="sep">/</span><span class="nome">Equipes e tipos de demanda</span>');
     $('#conteudo').innerHTML = carregandoHtml();
     var j;
-    try { j = await api('GET', '/api/admin/equipes'); await carregarMeta(); } catch (e) { toast(e.message, 'erro'); return; }
+    var cart;
+    try { j = await api('GET', '/api/admin/equipes'); cart = await api('GET', '/api/admin/carteira'); await carregarMeta(); } catch (e) { toast(e.message, 'erro'); return; }
     var nomeU = {};
     j.usuarios.forEach(function (u) { nomeU[u.id] = u.nome; });
     var em = j.email || {};
@@ -1401,6 +1490,11 @@
       '<span class="sec" style="display:block;color:var(--muted);font-weight:600;font-size:13px">' +
       (em.ativo ? 'Enviando ' + (em.tipo === 'microsoft365' ? 'pelo Microsoft 365' : 'por SMTP') + ' como <b>' + esc(em.remetente || '') + '</b>.' : 'Não configurado: por enquanto os avisos aparecem só no portal (veja o README, seção Central de Tickets).') +
       '</span></div>' + (em.ativo ? '<button class="btn ghost sm" id="btEmailTeste">Enviar e-mail de teste para mim</button>' : '<span class="etiqueta ambar">sem e-mail</span>') + '</div>' +
+      '<div class="atalho-tickets"><div class="icone-mod">' + IC.casa + '</div><div style="flex:1;min-width:220px"><b style="font-family:var(--display)">Carteira de condomínios</b>' +
+      '<span class="sec" style="display:block;color:var(--muted);font-weight:600;font-size:13px">' +
+      (cart.total ? cart.total + ' condomínios (' + cart.ativos + ' ativos), atualizada em ' + quando(cart.atualizado_em) + '. ' +
+        (resumoCarteira(cart) || 'Nenhuma coluna ligada a setor: os tickets entram na fila do setor.') : 'Ainda não importada. Importe o CSV para escolher o condomínio no ticket e mandar direto para o responsável.') +
+      '</span></div><button class="btn ghost sm" id="btCarteira">' + (cart.total ? 'Atualizar / configurar' : 'Importar CSV') + '</button></div>' +
       '<div class="cartoes">' + j.setores.map(function (s) {
         var lideres = s.membros.filter(function (m) { return m.lider; }).map(function (m) { return nomeU[m.usuario_id]; });
         var ativos = s.categorias.filter(function (c) { return c.ativo; });
@@ -1410,6 +1504,7 @@
           '<p>' + (lideres.length ? 'Líder: ' + esc(lideres.join(', ')) : 'Defina quem distribui os tickets deste setor.') + '</p>' +
           '<div class="acoes"><span class="btn ghost sm">Configurar</span></div></div>';
       }).join('') + '</div><p class="ajuda" style="margin-top:14px">Para criar, renomear ou remover setores use <a href="#/admin/modulos">Módulos e dados → Setores</a>.</p></div>';
+    $('#btCarteira').onclick = function () { configurarCarteira(cart); };
     if ($('#btEmailTeste')) $('#btEmailTeste').onclick = async function () {
       var bt = this; bt.disabled = true;
       try { var r = await api('POST', '/api/admin/equipes/email-teste'); toast('E-mail de teste enviado para ' + r.para + '. Confira a caixa de entrada (e o lixo eletrônico).', 'ok'); }
