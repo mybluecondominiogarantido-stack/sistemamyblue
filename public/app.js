@@ -1790,6 +1790,7 @@
   function htmlLinksGestao(j) {
     var html = '<div class="painel"><div class="cab-painel"><div style="flex:1;min-width:220px"><b style="font-family:var(--display)">Links</b>' +
       '<span class="ajuda" style="display:block;margin:2px 0 0">Use as setas para mudar a ordem. Links com o mesmo grupo aparecem juntos, sob o nome do grupo.</span></div>' +
+      '<button class="btn ghost sm" id="btColarLinks">' + IC.documento + 'Colar lista de links</button>' +
       '<button class="btn primary sm" id="btNovoLink">' + IC.mais + 'Novo link</button></div>';
     if (!j.links.length) return html + '<div style="padding:30px;text-align:center;color:var(--muted);font-weight:700">Nenhum link cadastrado.</div></div>';
     html += '<div class="tabela-wrap"><table><thead><tr><th style="width:70px">Ordem</th><th>Link</th><th>Grupo</th><th>Situação</th></tr></thead><tbody>' +
@@ -1807,6 +1808,7 @@
 
   function ligarLinksGestao(j) {
     $('#btNovoLink').onclick = function () { editarLink(j, null); };
+    $('#btColarLinks').onclick = colarLinks;
     $$('tr[data-link]').forEach(function (tr) {
       var id = Number(tr.getAttribute('data-link'));
       tr.onclick = function () { editarLink(j, j.links.find(function (l) { return l.id === id; })); };
@@ -1822,6 +1824,29 @@
         try { await api('PUT', '/api/links/gestao/ordem', { ids: ids }); paginaGestaoLinks('links'); } catch (er) { toast(er.message, 'erro'); }
       };
     });
+  }
+
+  function colarLinks() {
+    var m = modal({
+      titulo: 'Colar lista de links', largo: true,
+      corpo: '<div class="pilha"><div><label class="rot" for="cLista">Uma linha por link: nome, um traço e o endereço</label>' +
+        '<textarea class="campo" id="cLista" style="min-height:260px;font-size:13px" placeholder="Lista de Ramais — https://…&#10;Solicitação de Motoboy — https://…"></textarea>' +
+        '<div class="ajuda">Pode colar com marcadores (*, -, •). Os links entram no fim da lista, com ícone sugerido pelo nome; links que já existem (mesmo nome e endereço) são pulados. Depois dá para editar cada um.</div></div>' +
+        '<div><label class="rot" for="cGrupo">Grupo (opcional)</label><input class="campo" id="cGrupo" maxlength="80" placeholder="Deixe em branco para uma lista única"></div>' +
+        '<div id="cRes" class="msg" hidden></div></div>',
+      pe: '<button class="btn ghost" data-fechar>Fechar</button><button class="btn primary" id="btImportarLinks">Incluir links</button>',
+      aoFechar: function () { paginaGestaoLinks('links'); },
+    });
+    $('#btImportarLinks', m).onclick = async function () {
+      var res = $('#cRes', m);
+      try {
+        var r = await api('POST', '/api/links/gestao/importar', { texto: $('#cLista', m).value, grupo: $('#cGrupo', m).value });
+        res.className = 'msg ' + (r.erros.length ? 'aviso' : 'ok');
+        res.innerHTML = r.incluidos + ' link(s) incluído(s)' + (r.repetidos ? ', ' + r.repetidos + ' já existiam' : '') + '.' +
+          (r.erros.length ? '<br>Não entendi ' + r.erros.length + ' linha(s): ' + r.erros.map(function (e) { return esc(e.texto) + (e.motivo ? ' (' + esc(e.motivo) + ')' : ''); }).join('; ') : '');
+        res.hidden = false;
+      } catch (e) { res.className = 'msg erro'; res.textContent = e.message; res.hidden = false; }
+    };
   }
 
   function editarLink(j, l) {
@@ -1869,7 +1894,7 @@
     setores_oficiais: 'Setores oficiais cadastrados', ticket_criado: 'Abriu ticket', ticket_atribuicao: 'Atribuiu ticket', ticket_transferencia: 'Transferiu ticket',
     ticket_status: 'Mudou situação de ticket', equipe_editada: 'Editou equipe do setor', categoria_criada: 'Criou tipo de demanda', categoria_editada: 'Editou tipo de demanda', categoria_removida: 'Removeu tipo de demanda',
     links_pagina: 'Editou a Central de Links', link_criado: 'Incluiu link', link_editado: 'Editou link', link_removido: 'Removeu link',
-    campanha_criada: 'Criou campanha (Central de Links)', campanha_editada: 'Editou campanha (Central de Links)', campanha_removida: 'Removeu campanha (Central de Links)', campanha_fundo: 'Trocou fundo de campanha',
+    campanha_criada: 'Criou campanha (Central de Links)', campanha_editada: 'Editou campanha (Central de Links)', campanha_removida: 'Removeu campanha (Central de Links)', campanha_fundo: 'Trocou fundo de campanha', links_importados: 'Colou lista de links',
   };
 
   async function paginaAuditoria() {

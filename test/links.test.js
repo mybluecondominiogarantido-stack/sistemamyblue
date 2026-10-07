@@ -4,7 +4,7 @@ const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('http');
 const { criarApp, lerConfig } = require('../server/index');
-const { tipoImagem, hojeNoFuso } = require('../server/rotas/links');
+const { tipoImagem, hojeNoFuso, lerListaDeLinks } = require('../server/rotas/links');
 
 let servidor, base, ctx;
 
@@ -114,6 +114,32 @@ test('links: incluir, validar, ordenar, ocultar e excluir', async () => {
   assert.equal((await mkt('GET', '/api/links/gestao')).json.links.length, 2);
   assert.equal((await mkt('DELETE', `/api/links/gestao/links/${a}`)).status, 200);
   assert.equal((await mkt('DELETE', `/api/links/gestao/links/${a}`)).status, 404);
+});
+
+test('colar lista de links: lê o formato "Nome — endereço" e pula repetidos', async () => {
+  const texto = [
+    '* Formulário de Solicitações de TI — https://forms.example.com/r/abc',
+    '* Agendamento - Sala Espaço Inovação (206) — https://agenda.example.com/sala206/bookings/',
+    '- Lista de Ramais: https://drive.example.com/file/d/1/view?usp=sharing',
+    '',
+    'linha sem endereço',
+  ].join('\n');
+  const p = lerListaDeLinks(texto);
+  assert.deepEqual(p.itens.map((i) => i.titulo), ['Formulário de Solicitações de TI', 'Agendamento - Sala Espaço Inovação (206)', 'Lista de Ramais']);
+  assert.deepEqual(p.itens.map((i) => i.icone), ['ticket', 'calendario', 'pessoas']);
+  assert.equal(p.itens[2].url, 'https://drive.example.com/file/d/1/view?usp=sharing');
+  assert.equal(p.erros.length, 1);
+
+  assert.equal((await comum('POST', '/api/links/gestao/importar', { texto })).status, 403);
+  assert.equal((await mkt('POST', '/api/links/gestao/importar', { texto: 'nada aqui' })).status, 400);
+  const r1 = (await mkt('POST', '/api/links/gestao/importar', { texto })).json;
+  assert.equal(r1.incluidos, 3);
+  assert.equal(r1.erros.length, 1);
+  const r2 = (await mkt('POST', '/api/links/gestao/importar', { texto })).json;
+  assert.equal(r2.incluidos, 0);
+  assert.equal(r2.repetidos, 3);
+  const pub = (await comum('GET', '/api/links')).json.links.map((l) => l.titulo);
+  assert.equal(pub.slice(-3).join('|'), 'Formulário de Solicitações de TI|Agendamento - Sala Espaço Inovação (206)|Lista de Ramais');
 });
 
 test('título da página', async () => {

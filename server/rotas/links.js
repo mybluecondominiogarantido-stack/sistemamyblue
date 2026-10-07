@@ -7,7 +7,7 @@
  */
 const express = require('express');
 
-const ICONES_LINK = ['link', 'documento', 'calendario', 'pessoas', 'grafico', 'casa', 'ticket', 'escudo', 'carteira', 'calculadora', 'mensagem', 'video', 'pasta', 'megafone'];
+const ICONES_LINK = ['link', 'aperto', 'documento', 'calendario', 'pessoas', 'grafico', 'casa', 'ticket', 'escudo', 'carteira', 'calculadora', 'mensagem', 'video', 'pasta', 'megafone'];
 const URL_RE = /^(https?:\/\/[^\s]+|mailto:[^\s]+|tel:[+\d\s()-]+)$/i;
 const DATA_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -22,6 +22,34 @@ function tipoImagem(buf) {
 /* data de hoje no fuso da empresa (a campanha vira à meia-noite de Brasília, não de Londres) */
 function hojeNoFuso(fuso = process.env.EXPEDIENTE_FUSO || 'America/Sao_Paulo', agora = new Date()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: fuso, year: 'numeric', month: '2-digit', day: '2-digit' }).format(agora);
+}
+
+/* "Nome — https://…" por linha (aceita marcadores "*", "-", "•" e separadores "—", "-", ":", tab) */
+function lerListaDeLinks(texto) {
+  const itens = [];
+  const erros = [];
+  String(texto || '').split(/\r?\n/).forEach((bruta, i) => {
+    const linha = bruta.trim().replace(/^[*•·-]\s+/, '');
+    if (!linha) return;
+    const m = /(https?:\/\/\S+|mailto:\S+)/i.exec(linha);
+    const titulo = m ? linha.slice(0, m.index).replace(/[\s—–:|-]+$/, '').trim() : '';
+    if (!m || !titulo) { erros.push({ linha: i + 1, texto: linha.slice(0, 120) }); return; }
+    itens.push({ titulo, url: m[1], icone: iconeSugerido(titulo) });
+  });
+  return { itens, erros };
+}
+
+function iconeSugerido(titulo) {
+  const t = titulo.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if (/agendamento|reserva|agenda/.test(t)) return 'calendario';
+  if (/ramal|ramais|contato/.test(t)) return 'pessoas';
+  if (/credito/.test(t)) return 'carteira';
+  if (/implantacao/.test(t)) return 'casa';
+  if (/\bti\b|suporte/.test(t)) return 'ticket';
+  if (/\bmkt\b|marketing/.test(t)) return 'megafone';
+  if (/parceria/.test(t)) return 'aperto';
+  if (/formulario|solicitacao|contrato/.test(t)) return 'documento';
+  return 'link';
 }
 
 const podeEditar = (u) => !!u && (u.papel === 'admin' || !!u.editor_links);
@@ -151,6 +179,26 @@ function rotasLinks({ db, seg, cfg }) {
     res.json({ ok: true });
   });
 
+  /* cola uma lista inteira de uma vez; links já cadastrados (mesmo nome e endereço) são pulados */
+  r.post('/api/links/gestao/importar', json, async (req, res) => {
+    const { itens, erros } = lerListaDeLinks(req.body && req.body.texto);
+    if (!itens.length) return erro(res, 400, 'Nenhum link encontrado. Use uma linha por link: Nome — https://…');
+    let incluidos = 0;
+    let repetidos = 0;
+    await db.tx(async (t) => {
+      for (const it of itens) {
+        const d = dadosLink({ ...it, grupo: String((req.body && req.body.grupo) || '') });
+        if (d.erro) { erros.push({ texto: it.titulo, motivo: d.erro }); continue; }
+        if (await t.um('SELECT 1 FROM links WHERE titulo = $1 AND url = $2', [d.titulo, d.url])) { repetidos++; continue; }
+        await t.q(`INSERT INTO links (grupo, titulo, url, descricao, icone, ativo, ordem, atualizado_por)
+          VALUES ($1, $2, $3, '', $4, TRUE, (SELECT COALESCE(MAX(ordem), 0) + 1 FROM links), $5)`, [d.grupo, d.titulo, d.url, d.icone, req.usuario.id]);
+        incluidos++;
+      }
+    });
+    await seg.auditar(req, 'links_importados', null, { incluidos, repetidos, erros: erros.length });
+    res.json({ incluidos, repetidos, erros });
+  });
+
   function dadosCampanha(b) {
     const nome = String(b.nome || '').trim();
     const inicio = String(b.inicio || '').trim();
@@ -211,4 +259,4 @@ function rotasLinks({ db, seg, cfg }) {
   return r;
 }
 
-module.exports = { rotasLinks, tipoImagem, hojeNoFuso, ICONES_LINK };
+module.exports = { rotasLinks, tipoImagem, hojeNoFuso, lerListaDeLinks, ICONES_LINK };
