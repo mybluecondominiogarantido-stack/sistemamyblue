@@ -1422,6 +1422,14 @@
       } catch (err) { toast(err.message, 'erro'); $('#btComentar').disabled = false; }
     };
     if ($('#dStatus')) $('#dStatus').onchange = function () { $('#dStatusAjuda').textContent = ROTULO_STATUS_AJUDA[this.value]; };
+    // mudar a prioridade recalcula o prazo para resposta (enquanto ninguém respondeu)
+    if ($('#dPrio') && !t.primeira_resposta_em) {
+      $('#dPrio').insertAdjacentHTML('afterend', '<div class="ajuda" id="dPrioAjuda"></div>');
+      $('#dPrio').onchange = function () {
+        var h = metaTickets && metaTickets.prazo_padrao_horas && metaTickets.prazo_padrao_horas[this.value];
+        $('#dPrioAjuda').textContent = this.value !== t.prioridade && h ? 'Ao salvar, o prazo para resposta passa a ser ' + horasUteis(h) + ' contados da abertura.' : '';
+      };
+    }
     if ($('#btSalvarT')) {
       $('#btSalvarT').onclick = async function () {
         var corpo = {};
@@ -1456,7 +1464,7 @@
     function pedirConclusao() {
       return new Promise(function (resolve) {
         var valor = null;
-        var sugestao = t.prazo && new Date(t.prazo) > new Date() ? localInput(t.prazo) : '';
+        var sugestao = ''; // quem atende escolhe a data; não reaproveita o prazo para resposta
         var mm = modal({
           titulo: 'Iniciar atendimento',
           corpo: '<div class="pilha"><p style="margin:0;font-weight:600;color:var(--ink-2)">Até quando você conclui esta demanda? Quem abriu o ticket vê essa previsão.</p>' +

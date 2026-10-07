@@ -390,6 +390,12 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
       if (!PRIORIDADES.includes(b.prioridade)) return erro(res, 400, 'Prioridade inválida.');
       set('prioridade', b.prioridade);
       eventos.push(['prioridade', null, { de: t.prioridade, para: b.prioridade }]);
+      // o prazo para resposta acompanha a nova prioridade (contado da abertura), a não ser que o líder informe outro
+      if (b.prazo === undefined && !t.primeira_resposta_em) {
+        const novo = expediente.somarHorasUteis(new Date(t.criado_em), PRAZO_PADRAO_HORAS[b.prioridade]);
+        set('prazo', novo);
+        eventos.push(['prazo', null, { de: t.prazo, para: novo }]);
+      }
     }
 
     if (b.prazo !== undefined) {
