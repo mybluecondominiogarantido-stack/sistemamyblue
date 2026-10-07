@@ -1,22 +1,37 @@
 'use strict';
 /*
- * Carteira de condomínios: a planilha "Carteira de Condomínios" (CSV exportado do Excel/SharePoint)
- * importada pela administração. Cada condomínio traz as pessoas que cuidam dele em cada função
- * (ex.: ASSISTENTE CRÉDITO, ANALISTA EXTRAJUDICIAL). A administração liga cada coluna a um setor e,
- * ao abrir um ticket para esse setor sobre o condomínio, ele vai direto para a pessoa da carteira.
+ * Carteira de condomínios: campos, leitura do CSV da planilha "Carteira de Condomínios"
+ * (como o Excel salva: ponto e vírgula, Windows-1252) e exportação no mesmo formato.
  *
- * Os dados da carteira não ficam no repositório: entram só pelo upload no portal.
+ * Os dados da carteira não ficam no repositório: entram pela aba Carteira do portal.
  */
 
-// colunas de pessoas e o setor que cada uma atende quando a carteira é importada pela 1ª vez
-const COLUNAS_PADRAO = { 'ASSISTENTE CREDITO': 'Crédito', 'ANALISTA EXTRAJUDICIAL': 'Cobrança' };
-// cabeçalhos que são pessoas da carteira (o restante são dados do condomínio)
-const COLUNA_PESSOA = /^(ANALISTA|ASSISTENTE|AUXILIAR|COORDENADOR|GERENTE|SUPERVISOR|RESPONSAVEL)\b/;
+// pessoas que cuidam de cada condomínio (coluna da planilha → campo no banco)
+const FUNCOES = [
+  { campo: 'analista_cobranca', rotulo: 'Analista de cobrança', coluna: 'ANALISTA ADMINISTRATIVA' },
+  { campo: 'analista_extrajudicial', rotulo: 'Analista extrajudicial (ApoioCob)', coluna: 'ANALISTA EXTRAJUDICIAL' },
+  { campo: 'assistente_credito', rotulo: 'Assistente de crédito', coluna: 'ASSISTENTE CRÉDITO' },
+];
+
+// todos os campos editáveis, na ordem das colunas da planilha
+const CAMPOS = [
+  { campo: 'codigo', coluna: 'ID', max: 30 },
+  { campo: 'situacao', coluna: 'SITUAÇÃO', max: 30 },
+  { campo: 'comarca', coluna: 'COMARCA', max: 30 },
+  { campo: 'nome', coluna: 'CONDOMÍNIO', max: 160 },
+  { campo: 'vencimento', coluna: 'VENCIMENTO', max: 40 },
+  ...FUNCOES.map((f) => ({ campo: f.campo, coluna: f.coluna, max: 120, pessoa: true })),
+  { campo: 'administradora', coluna: 'ADMINISTRADORA', max: 120 },
+  { campo: 'forma_envio', coluna: 'FORMA DE ENVIO', max: 60 },
+  { campo: 'inicio_contrato', coluna: 'INÍCIO DO CONTRATO', data: true },
+  { campo: 'razao_social', coluna: 'RAZÃO SOCIAL', max: 200 },
+  { campo: 'cnpj', coluna: 'CNPJ', max: 20 },
+  { campo: 'observacoes', coluna: 'OBSERVAÇÕES', max: 4000 },
+];
+const SITUACOES = ['ATIVO', 'DISTRATADO'];
 
 const semAcento = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '');
 const cabecalho = (s) => semAcento(s).toUpperCase().replace(/\s+/g, ' ').trim();
-// "CHAYANNE FREITAS - 4624" → "chayanne freitas" (tira o ramal)
-const nomePessoa = (s) => semAcento(s).toLowerCase().replace(/\s*-\s*\d+\s*$/, '').replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim();
 const limpar = (s) => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
 
 /* UTF-8 quando for válido; senão Windows-1252 (padrão do Excel em português) */
@@ -26,12 +41,14 @@ function decodificar(buf) {
 
 /* CSV com ; ou , (o que aparecer mais no cabeçalho), aspas e quebras de linha dentro das aspas */
 function lerCsv(texto) {
-  const primeira = texto.slice(0, texto.indexOf('\n') >>> 0);
+  const fim = texto.indexOf('\n');
+  const primeira = fim < 0 ? texto : texto.slice(0, fim);
   const sep = (primeira.match(/;/g) || []).length >= (primeira.match(/,/g) || []).length ? ';' : ',';
   const linhas = [];
   let linha = [];
   let campo = '';
   let aspas = false;
+  const fecha = () => { linha.push(campo); campo = ''; if (linha.some((x) => x.trim())) linhas.push(linha); linha = []; };
   for (let i = 0; i < texto.length; i++) {
     const c = texto[i];
     if (aspas) {
@@ -39,14 +56,57 @@ function lerCsv(texto) {
     } else if (c === '"') aspas = true;
     else if (c === sep) { linha.push(campo); campo = ''; } else if (c === '\n' || c === '\r') {
       if (c === '\r' && texto[i + 1] === '\n') i++;
-      linha.push(campo); campo = '';
-      if (linha.some((x) => x.trim())) linhas.push(linha);
-      linha = [];
+      fecha();
     } else campo += c;
   }
-  linha.push(campo);
-  if (linha.some((x) => x.trim())) linhas.push(linha);
+  fecha();
   return linhas;
+}
+
+/* "05/03/2024", "2024-03-05" → "2024-03-05"; vazio → null; inválido → undefined */
+function data(v) {
+  const s = limpar(v);
+  if (!s) return null;
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (!m) return undefined;
+  const ano = m[3].length === 2 ? '20' + m[3] : m[3];
+  const d = new Date(Date.UTC(+ano, +m[2] - 1, +m[1]));
+  if (d.getUTCMonth() !== +m[2] - 1) return undefined;
+  return `${ano}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+}
+
+/* 14 dígitos → 00.000.000/0000-00; outro formato fica como foi digitado */
+function cnpj(v) {
+  const s = limpar(v);
+  const d = s.replace(/\D/g, '');
+  return d.length === 14 ? `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}` : s;
+}
+
+/* Valida e normaliza um condomínio (cadastro, edição ou linha do CSV). Só mexe nos campos presentes. */
+function normalizar(b) {
+  const out = {};
+  for (const c of CAMPOS) {
+    if (b[c.campo] === undefined) continue;
+    if (c.data) {
+      const d = data(b[c.campo]);
+      if (d === undefined) return { erro: 'Data de início do contrato inválida (use dd/mm/aaaa).' };
+      out[c.campo] = d;
+    } else if (c.campo === 'observacoes') {
+      out[c.campo] = String(b[c.campo] == null ? '' : b[c.campo]).trim().slice(0, c.max);
+    } else {
+      let v = limpar(b[c.campo]).slice(0, c.max);
+      // a planilha usa pessoas, situação e UF em maiúsculas ("EDUARDO SOUSA - 4663")
+      if (c.pessoa || c.campo === 'situacao' || c.campo === 'comarca') v = v.toUpperCase();
+      if (c.campo === 'cnpj') v = cnpj(v);
+      out[c.campo] = v;
+    }
+  }
+  if (out.nome !== undefined && !out.nome) return { erro: 'Informe o nome do condomínio.' };
+  if (out.codigo !== undefined && !out.codigo) return { erro: 'Informe o ID do condomínio.' };
+  if (out.situacao !== undefined && !out.situacao) out.situacao = 'ATIVO';
+  return { dados: out };
 }
 
 /* Lê o arquivo e devolve os condomínios. Erro com mensagem para o usuário se faltar o essencial. */
@@ -54,104 +114,41 @@ function interpretar(buf) {
   const linhas = lerCsv(decodificar(buf));
   if (linhas.length < 2) throw new Error('O arquivo não tem condomínios. Envie o CSV da Carteira de Condomínios.');
   const cab = linhas[0].map(cabecalho);
-  const col = (nome) => cab.indexOf(nome);
-  const iNome = col('CONDOMINIO');
-  if (iNome < 0) throw new Error('Não achei a coluna CONDOMÍNIO no arquivo. Confira se é o CSV da Carteira de Condomínios (separado por ponto e vírgula).');
-  const pessoas = cab.map((h, i) => [h, i]).filter(([h]) => COLUNA_PESSOA.test(h));
-  const pega = (l, nome) => { const i = col(nome); return i < 0 ? '' : limpar(l[i]); };
+  const indice = {};
+  for (const c of CAMPOS) indice[c.campo] = cab.indexOf(cabecalho(c.coluna));
+  if (indice.nome < 0) throw new Error('Não achei a coluna CONDOMÍNIO no arquivo. Confira se é o CSV da Carteira de Condomínios (separado por ponto e vírgula).');
+  if (indice.codigo < 0) throw new Error('Não achei a coluna ID no arquivo: ela identifica cada condomínio.');
   const condominios = [];
+  const avisos = [];
   const vistos = new Set();
-  for (const l of linhas.slice(1)) {
-    const nome = limpar(l[iNome]);
-    if (!nome) continue;
-    // sem ID na planilha, o condomínio é reconhecido pelo nome + comarca
-    const codigo = pega(l, 'ID') || 'nome:' + nomePessoa(nome) + '|' + pega(l, 'COMARCA').toUpperCase();
-    if (vistos.has(codigo)) continue;
-    vistos.add(codigo);
-    const p = {};
-    for (const [h, i] of pessoas) if (limpar(l[i])) p[h] = limpar(l[i]);
-    condominios.push({
-      codigo, nome,
-      situacao: (pega(l, 'SITUACAO') || 'ATIVO').toUpperCase(),
-      comarca: pega(l, 'COMARCA'),
-      razao_social: pega(l, 'RAZAO SOCIAL'),
-      cnpj: pega(l, 'CNPJ'),
-      administradora: pega(l, 'ADMINISTRADORA'),
-      pessoas: p,
-    });
-  }
-  if (!condominios.length) throw new Error('O arquivo não tem condomínios preenchidos.');
-  return { condominios, colunas: pessoas.map(([h]) => h) };
-}
-
-/* Substitui a carteira pela do arquivo. Quem saiu do arquivo fica fora da lista (os tickets antigos continuam ligados a ele). */
-async function importar(db, buf) {
-  const { condominios, colunas } = interpretar(buf);
-  await db.tx(async (t) => {
-    await t.q('UPDATE condominios SET na_carteira = FALSE');
-    for (const c of condominios) {
-      await t.q(`INSERT INTO condominios (codigo, nome, situacao, comarca, razao_social, cnpj, administradora, pessoas, na_carteira, atualizado_em)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, TRUE, now())
-        ON CONFLICT (codigo) DO UPDATE SET nome = EXCLUDED.nome, situacao = EXCLUDED.situacao, comarca = EXCLUDED.comarca, razao_social = EXCLUDED.razao_social,
-          cnpj = EXCLUDED.cnpj, administradora = EXCLUDED.administradora, pessoas = EXCLUDED.pessoas, na_carteira = TRUE, atualizado_em = now()`,
-      [c.codigo, c.nome, c.situacao, c.comarca, c.razao_social, c.cnpj, c.administradora, JSON.stringify(c.pessoas)]);
-    }
-    // colunas novas entram ligadas ao setor padrão (se houver); as já configuradas não mudam
-    for (const coluna of colunas) {
-      const setor = COLUNAS_PADRAO[coluna] ? await t.um('SELECT id FROM setores WHERE nome = $1', [COLUNAS_PADRAO[coluna]]) : null;
-      await t.q('INSERT INTO condominio_colunas (coluna, setor_id) VALUES ($1, $2) ON CONFLICT (coluna) DO NOTHING', [coluna, setor ? setor.id : null]);
-    }
+  linhas.slice(1).forEach((l, i) => {
+    const bruto = {};
+    for (const c of CAMPOS) if (indice[c.campo] >= 0) bruto[c.campo] = l[indice[c.campo]];
+    if (!limpar(bruto.nome) && !limpar(bruto.codigo)) return;
+    const n = normalizar(bruto);
+    const linha = i + 2;
+    if (n.erro) return avisos.push(`Linha ${linha}: ${n.erro}`);
+    if (vistos.has(n.dados.codigo)) return avisos.push(`Linha ${linha}: ID ${n.dados.codigo} repetido, ficou a primeira.`);
+    vistos.add(n.dados.codigo);
+    condominios.push(n.dados);
   });
-  return { condominios: condominios.length, ativos: condominios.filter((c) => c.situacao === 'ATIVO').length, colunas };
+  if (!condominios.length) throw new Error('O arquivo não tem condomínios preenchidos.');
+  return { condominios, avisos };
 }
 
-/* Acha a pessoa da equipe do setor que corresponde ao nome da planilha.
-   Precisa ser única: nome completo igual, todas as palavras da planilha no nome do portal,
-   ou primeiro + último nome iguais. */
-function acharPessoa(nomePlanilha, membros) {
-  const alvo = nomePessoa(nomePlanilha);
-  if (!alvo) return null;
-  const pal = alvo.split(' ');
-  const regras = [
-    (m) => m.chave === alvo,
-    (m) => pal.every((p) => m.palavras.includes(p)),
-    (m) => pal.length > 1 && m.palavras[0] === pal[0] && m.palavras[m.palavras.length - 1] === pal[pal.length - 1],
-  ];
-  for (const regra of regras) {
-    const achados = membros.filter(regra);
-    if (achados.length === 1) return achados[0];
-    if (achados.length > 1) return null; // ambíguo: deixa para o líder
-  }
-  return null;
+const aspas = (v) => (/[;"\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v);
+const dataBr = (d) => {
+  if (!d) return '';
+  const s = d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10);
+  const [a, m, dia] = s.split('-');
+  return `${dia}/${m}/${a}`;
+};
+
+/* CSV no mesmo formato da planilha (abre no Excel e pode ser importado de volta) */
+function exportar(linhas) {
+  const cab = CAMPOS.map((c) => c.coluna).join(';');
+  const corpo = linhas.map((l) => CAMPOS.map((c) => aspas(c.data ? dataBr(l[c.campo]) : String(l[c.campo] == null ? '' : l[c.campo]))).join(';'));
+  return '﻿' + [cab, ...corpo].join('\r\n') + '\r\n';
 }
 
-/* Prepara a busca de responsáveis: colunas ligadas a setores e as equipes ativas desses setores. */
-async function carregarRegras(db) {
-  const colunas = (await db.q('SELECT coluna, setor_id FROM condominio_colunas WHERE setor_id IS NOT NULL ORDER BY coluna')).rows;
-  const membros = (await db.q(`SELECT sm.setor_id, u.id, u.nome FROM setor_membros sm JOIN usuarios u ON u.id = sm.usuario_id WHERE u.ativo`)).rows
-    .map((m) => ({ ...m, chave: nomePessoa(m.nome), palavras: nomePessoa(m.nome).split(' ') }));
-  const porSetor = new Map();
-  for (const c of colunas) {
-    if (!porSetor.has(c.setor_id)) porSetor.set(c.setor_id, { colunas: [], membros: membros.filter((m) => m.setor_id === c.setor_id) });
-    porSetor.get(c.setor_id).colunas.push(c.coluna);
-  }
-  /* responsável da carteira para (condomínio, setor): { id, nome, planilha } | { id: null, planilha } | null (setor sem regra) */
-  return function responsavel(cond, setorId) {
-    const regra = porSetor.get(setorId);
-    if (!regra || !cond) return null;
-    const pessoas = cond.pessoas || {};
-    const coluna = regra.colunas.find((c) => pessoas[c]);
-    if (!coluna) return null;
-    const m = acharPessoa(pessoas[coluna], regra.membros);
-    return m ? { id: m.id, nome: m.nome, planilha: pessoas[coluna], coluna } : { id: null, planilha: pessoas[coluna], coluna };
-  };
-}
-
-async function responsavelAutomatico(db, condominioId, setorId) {
-  if (!condominioId) return null;
-  const cond = await db.um('SELECT id, nome, pessoas FROM condominios WHERE id = $1', [condominioId]);
-  const r = (await carregarRegras(db))(cond, setorId);
-  return r && r.id ? r : null;
-}
-
-module.exports = { interpretar, importar, carregarRegras, responsavelAutomatico, acharPessoa, nomePessoa, COLUNAS_PADRAO };
+module.exports = { FUNCOES, CAMPOS, SITUACOES, interpretar, normalizar, exportar, lerCsv };

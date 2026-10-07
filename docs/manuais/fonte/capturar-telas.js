@@ -50,13 +50,13 @@ const OUT = process.argv[2];
     await ctx.close();
   }
   const sara = await sessao('sara@myblue.com.br', 'Nova12345');
-  const t1 = await api(sara, 'POST', '/api/tickets', { interno: true, titulo: '2ª via do boleto — Cond. Jardim Azul, apto 302', descricao: 'Síndico pediu a 2ª via do boleto de outubro.\nVencimento original: 05/10. Enviar para sindico@jardimazul.com.br.', setor_id: S('Cobrança'), categoria_id: cat.id });
-  const t2 = await api(sara, 'POST', '/api/tickets', { interno: true, titulo: 'Acordo para unidade 104 — Ed. Solar', descricao: 'Condômino quer parcelar 3 meses em atraso.', setor_id: S('Cobrança'), prioridade: 'urgente' });
-  await api(sara, 'POST', '/api/tickets', { interno: true, titulo: 'Revisar taxa de administração — Res. Primavera', setor_id: S('Cobrança'), prioridade: 'baixa' });
-  await api(sara, 'POST', '/api/tickets', { interno: true, titulo: 'Balancete de setembro — Cond. Vila Rica', setor_id: S('Crédito'), prioridade: 'media' });
+  const t1 = await api(sara, 'POST', '/api/tickets', { titulo: '2ª via do boleto — Cond. Jardim Azul, apto 302', descricao: 'Síndico pediu a 2ª via do boleto de outubro.\nVencimento original: 05/10. Enviar para sindico@jardimazul.com.br.', setor_id: S('Cobrança'), categoria_id: cat.id });
+  const t2 = await api(sara, 'POST', '/api/tickets', { titulo: 'Acordo para unidade 104 — Ed. Solar', descricao: 'Condômino quer parcelar 3 meses em atraso.', setor_id: S('Cobrança'), prioridade: 'urgente' });
+  await api(sara, 'POST', '/api/tickets', { titulo: 'Revisar taxa de administração — Res. Primavera', setor_id: S('Cobrança'), prioridade: 'baixa' });
+  await api(sara, 'POST', '/api/tickets', { titulo: 'Balancete de setembro — Cond. Vila Rica', setor_id: S('Crédito'), prioridade: 'media' });
   const lia = await sessao('lia@myblue.com.br', 'Nova12345');
   await api(lia, 'PATCH', `/api/tickets/${t1.id}`, { responsavel_id: ids['marcos@myblue.com.br'] });
-  const lt = await api(lia, 'POST', '/api/tickets', { interno: true, titulo: 'Contrato do Cond. Bela Vista para renovação', setor_id: S('CS'), prioridade: 'alta' });
+  const lt = await api(lia, 'POST', '/api/tickets', { titulo: 'Contrato do Cond. Bela Vista para renovação', setor_id: S('CS'), prioridade: 'alta' });
   const marcos = await sessao('marcos@myblue.com.br', 'Nova12345');
   await api(marcos, 'POST', `/api/tickets/${t1.id}/comentarios`, { texto: 'Conferir se há acordo ativo antes de emitir.', interno: true });
   await api(marcos, 'POST', `/api/tickets/${t1.id}/comentarios`, { texto: 'Emitindo agora, envio ainda hoje para o síndico.' });

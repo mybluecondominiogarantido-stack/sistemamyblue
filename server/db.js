@@ -180,25 +180,26 @@ CREATE TABLE IF NOT EXISTS ticket_anexos (
 );
 CREATE INDEX IF NOT EXISTS idx_ticket_anexos_ticket ON ticket_anexos(ticket_id);
 
--- carteira de condomínios (importada do CSV da planilha) e quem cuida de cada um
+-- carteira de condomínios (aba Carteira, a 1ª carga vem do CSV da planilha)
 CREATE TABLE IF NOT EXISTS condominios (
   id SERIAL PRIMARY KEY,
   codigo TEXT NOT NULL UNIQUE,
   nome TEXT NOT NULL,
   situacao TEXT NOT NULL DEFAULT 'ATIVO',
   comarca TEXT NOT NULL DEFAULT '',
+  vencimento TEXT NOT NULL DEFAULT '',
+  analista_cobranca TEXT NOT NULL DEFAULT '',
+  analista_extrajudicial TEXT NOT NULL DEFAULT '',
+  assistente_credito TEXT NOT NULL DEFAULT '',
+  administradora TEXT NOT NULL DEFAULT '',
+  forma_envio TEXT NOT NULL DEFAULT '',
+  inicio_contrato DATE,
   razao_social TEXT NOT NULL DEFAULT '',
   cnpj TEXT NOT NULL DEFAULT '',
-  administradora TEXT NOT NULL DEFAULT '',
-  pessoas JSONB NOT NULL DEFAULT '{}'::jsonb,
-  na_carteira BOOLEAN NOT NULL DEFAULT TRUE,
-  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- coluna de pessoas da carteira → setor em que essa pessoa recebe os tickets do condomínio
-CREATE TABLE IF NOT EXISTS condominio_colunas (
-  coluna TEXT PRIMARY KEY,
-  setor_id INTEGER REFERENCES setores(id) ON DELETE SET NULL
+  observacoes TEXT NOT NULL DEFAULT '',
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
 );
 
 -- avisos para cada pessoa (sino do portal)
@@ -255,7 +256,7 @@ CREATE INDEX IF NOT EXISTS idx_links_campanhas_inicio ON links_campanhas(inicio)
 /* Supabase publica o schema "public" pela API dele (PostgREST). Com RLS ligado e sem
    políticas, ninguém lê nem grava por lá; o portal conecta como dono das tabelas e não é afetado. */
 const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 'permissoes', 'armazenamento', 'colecoes', 'registros', 'auditoria',
-  'setor_membros', 'ticket_categorias', 'tickets', 'ticket_eventos', 'ticket_anexos', 'notificacoes', 'condominios', 'condominio_colunas',
+  'setor_membros', 'ticket_categorias', 'tickets', 'ticket_eventos', 'ticket_anexos', 'notificacoes', 'condominios',
   'links_pagina', 'links', 'links_campanhas'];
 const RLS = TABELAS.map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`).join(';\n');
 
@@ -265,6 +266,15 @@ ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS supervisor_tickets BOOLEAN NOT NUL
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS editor_links BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE tickets ADD COLUMN IF NOT EXISTS condominio_id INTEGER REFERENCES condominios(id) ON DELETE SET NULL;
 ALTER TABLE tickets ADD COLUMN IF NOT EXISTS demanda_interna BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE condominios ADD COLUMN IF NOT EXISTS vencimento TEXT NOT NULL DEFAULT '';
+ALTER TABLE condominios ADD COLUMN IF NOT EXISTS analista_cobranca TEXT NOT NULL DEFAULT '';
+ALTER TABLE condominios ADD COLUMN IF NOT EXISTS analista_extrajudicial TEXT NOT NULL DEFAULT '';
+ALTER TABLE condominios ADD COLUMN IF NOT EXISTS assistente_credito TEXT NOT NULL DEFAULT '';
+ALTER TABLE condominios ADD COLUMN IF NOT EXISTS forma_envio TEXT NOT NULL DEFAULT '';
+ALTER TABLE condominios ADD COLUMN IF NOT EXISTS inicio_contrato DATE;
+ALTER TABLE condominios ADD COLUMN IF NOT EXISTS observacoes TEXT NOT NULL DEFAULT '';
+ALTER TABLE condominios ADD COLUMN IF NOT EXISTS criado_em TIMESTAMPTZ NOT NULL DEFAULT now();
+ALTER TABLE condominios ADD COLUMN IF NOT EXISTS atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL;
 ALTER TABLE modulos DROP CONSTRAINT IF EXISTS modulos_adaptador_check;
 ALTER TABLE modulos ADD CONSTRAINT modulos_adaptador_check CHECK (adaptador IS NULL OR adaptador IN ('gas-linhas','gas-objetos','gas-posicional'))
 `;
@@ -278,6 +288,7 @@ async function abrir(cfg) {
     await semear(t);
     await semearSetores(t);
     await sincronizarCatalogo(t);
+    await migrarCarteira(t);
   });
   return db;
 }
@@ -319,6 +330,16 @@ async function sincronizarCatalogo(t) {
     for (const k of CHAVES_DE_SISTEMA) if (m.config && m.config[k] !== undefined) sistema[k] = m.config[k];
     await t.q(`UPDATE modulos SET adaptador = COALESCE(adaptador, $2), config = config || $3::jsonb WHERE slug = $1`,
       [m.slug, m.adaptador || null, JSON.stringify(sistema)]);
+  }
+}
+
+/* Bancos que receberam a 1ª versão da carteira guardavam as pessoas num JSON (coluna da planilha → nome):
+   leva para os campos de cada função. Só preenche o que estiver vazio, então rodar de novo não muda nada. */
+async function migrarCarteira(t) {
+  const antiga = await t.um("SELECT 1 FROM information_schema.columns WHERE table_name = 'condominios' AND column_name = 'pessoas'");
+  if (!antiga) return;
+  for (const [campo, coluna] of [['analista_cobranca', 'ANALISTA ADMINISTRATIVA'], ['analista_extrajudicial', 'ANALISTA EXTRAJUDICIAL'], ['assistente_credito', 'ASSISTENTE CREDITO']]) {
+    await t.q(`UPDATE condominios SET ${campo} = UPPER(TRIM(pessoas->>$1)) WHERE ${campo} = '' AND COALESCE(pessoas->>$1, '') <> ''`, [coluna]);
   }
 }
 
