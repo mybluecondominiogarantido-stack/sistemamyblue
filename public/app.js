@@ -108,9 +108,20 @@
     baixar: svg('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/>'),
     mais: svg('<path d="M12 5v14M5 12h14"/>'),
     sino: svg('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>'),
+    link: svg('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'),
+    mensagem: svg('<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>'),
+    video: svg('<rect x="2" y="5" width="15" height="14" rx="2"/><path d="m17 10 5-3v10l-5-3z"/>'),
+    pasta: svg('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
+    megafone: svg('<path d="m3 11 15-6v14L3 13z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>'),
+    imagem: svg('<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>'),
+    lapis: svg('<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>'),
+    olho: svg('<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'),
+    cima: svg('<path d="m18 15-6-6-6 6"/>'),
+    baixo: svg('<path d="m6 9 6 6 6-6"/>'),
     banco: svg('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/>'),
   };
-  var ROTULO_ICONE = { app: 'Genérico', calculadora: 'Calculadora', grafico: 'Gráfico', aperto: 'Negociação', caixa: 'Pacote', carteira: 'Carteira', documento: 'Documento', pessoas: 'Pessoas', ticket: 'Ticket', casa: 'Condomínio', calendario: 'Calendário', escudo: 'Segurança' };
+  var ROTULO_ICONE = { app: 'Genérico', calculadora: 'Calculadora', grafico: 'Gráfico', aperto: 'Negociação', caixa: 'Pacote', carteira: 'Carteira', documento: 'Documento', pessoas: 'Pessoas', ticket: 'Ticket', casa: 'Condomínio', calendario: 'Calendário', escudo: 'Segurança',
+    link: 'Link', mensagem: 'Mensagem / WhatsApp', video: 'Vídeo', pasta: 'Pasta', megafone: 'Campanha / Comunicado' };
 
   /* ======================= estado ======================= */
   var eu = null;
@@ -186,7 +197,8 @@
     var termo = normal($('#busca').value);
     var lista = modulos.filter(function (m) { return !termo || normal(m.nome + ' ' + m.setor + ' ' + m.descricao).indexOf(termo) >= 0; });
     var rota = location.hash || '#/';
-    var html = termo ? '' : '<a href="#/" class="' + (rota === '#/' ? 'on' : '') + '">' + IC.inicio + 'Início</a>';
+    var html = termo ? '' : '<a href="#/" class="' + (rota === '#/' ? 'on' : '') + '">' + IC.inicio + 'Início</a>' +
+      '<a href="#/links" class="' + (rota.indexOf('#/links') === 0 ? 'on' : '') + '">' + IC.link + 'Central de Links</a>';
     if (!termo) {
       html += '<div class="grupo">Central de Tickets</div>' +
         '<a href="#/tickets" class="' + (rota.indexOf('#/tickets') === 0 && rota.indexOf('#/tickets/painel') !== 0 ? 'on' : '') + '">' + IC.ticket + '<span>Tickets</span>' +
@@ -243,6 +255,11 @@
       return paginaTickets(lembrar('tickets.visao', 'minha'));
     }
     if (partes[0] === 'carteira') return paginaCarteira(partes[1]);
+    if (partes[0] === 'links') {
+      if (partes[1] === 'gestao' && editorLinks()) return paginaGestaoLinks(partes[2]);
+      if (partes[1] === 'previa' && editorLinks()) return paginaLinks(Number(partes[2]) || null);
+      return paginaLinks(null);
+    }
     if (partes[0] === 'admin' && eu.papel === 'admin') {
       if (partes[1] === 'equipes') return paginaEquipes();
       if (partes[1] === 'usuarios') return paginaUsuarios();
@@ -440,7 +457,7 @@
         var ferr = u.papel === 'admin' ? '<span class="etiqueta azul">todas</span>' :
           u.modulos.length ? '<span title="' + esc(u.modulos.map(function (s) { return nomeMod[s] || s; }).join('\n')) + '">' + u.modulos.length + ' de ' + mods.length + '</span>' : '<span class="etiqueta ambar">nenhuma</span>';
         return '<tr class="clicavel" data-id="' + u.id + '"><td><b>' + esc(u.nome) + '</b><span class="sec">' + esc(u.email) + '</span></td>' +
-          '<td>' + (u.papel === 'admin' ? 'Administrador' : 'Usuário') + (u.supervisor_tickets ? ' <span class="etiqueta azul">supervisão tickets</span>' : '') + '</td><td>' + ferr + '</td><td>' + quando(u.ultimo_login) + '</td>' +
+          '<td>' + (u.papel === 'admin' ? 'Administrador' : 'Usuário') + (u.supervisor_tickets ? ' <span class="etiqueta azul">supervisão tickets</span>' : '') + (u.editor_links ? ' <span class="etiqueta azul">central de links</span>' : '') + '</td><td>' + ferr + '</td><td>' + quando(u.ultimo_login) + '</td>' +
           '<td>' + (!u.ativo ? '<span class="etiqueta cinza">desativado</span>' : u.trocar_senha ? '<span class="etiqueta ambar">aguardando 1º acesso</span>' : '<span class="etiqueta verde">ativo</span>') + '</td></tr>';
       }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);font-weight:700;padding:30px">Nenhum usuário encontrado.</td></tr>';
       $$('#tbUsu tr[data-id]').forEach(function (tr) {
@@ -465,6 +482,8 @@
           '<label class="opcao-radio"><input type="radio" name="uPapel" value="admin"' + (u.papel === 'admin' ? ' checked' : '') + '><div><b>Administrador</b><span>Acessa tudo e gerencia usuários, módulos e dados.</span></div></label></div></div>' +
           '<label class="opcao-radio" style="margin:0"><input type="checkbox" id="uSup"' + (u.supervisor_tickets ? ' checked' : '') + '><div><b>Supervisão / Coordenação da Central de Tickets</b>' +
           '<span>Vê os tickets de todos os setores e direciona: troca o responsável, transfere, muda situação, prioridade e prazo. Não dá acesso à administração do portal.</span></div></label>' +
+          '<label class="opcao-radio" style="margin:0"><input type="checkbox" id="uLinks"' + (u.editor_links ? ' checked' : '') + '><div><b>Marketing — Central de Links</b>' +
+          '<span>Troca o fundo da campanha do mês e edita os links da Central de Links. Não dá acesso à administração do portal.</span></div></label>' +
           '<div id="blocoMods"><label class="rot">Ferramentas liberadas</label>' + seletorModulos(mods, u.modulos, 'uMod') + '</div>' +
           (novo ? '<div><label class="rot" for="uSenha">Senha inicial (opcional)</label><input class="campo" id="uSenha" type="text" autocomplete="off" placeholder="Deixe em branco para gerar uma automaticamente"><div class="ajuda">A pessoa precisará trocar a senha no primeiro acesso.</div></div>' :
             '<label class="linha" style="font-weight:700"><input type="checkbox" id="uAtivo"' + (u.ativo ? ' checked' : '') + '> Usuário ativo (desmarque para bloquear o acesso)</label>') +
@@ -481,6 +500,7 @@
           nome: $('#uNome', m).value, email: $('#uEmail', m).value, papel: $('input[name=uPapel]:checked', m).value,
           modulos: $$('input[name=uMod]:checked', m).map(function (i) { return i.value; }),
           supervisor_tickets: $('#uSup', m).checked,
+          editor_links: $('#uLinks', m).checked,
         };
         try {
           if (novo) {
@@ -1790,6 +1810,255 @@
     }
   }
 
+  /* ======================= Central de Links ======================= */
+  function editorLinks() { return eu.papel === 'admin' || !!eu.editor_links; }
+  function dataBr(iso) { var p = String(iso || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : '—'; }
+
+  async function paginaLinks(previa) {
+    var trilha = '<span class="nome">Central de Links</span>';
+    definirBarra(trilha);
+    $('#conteudo').innerHTML = carregandoHtml();
+    var j;
+    try { j = await api('GET', '/api/links' + (previa ? '?campanha=' + previa : '')); } catch (e) { toast(e.message, 'erro'); return; }
+    if (j.pode_editar) {
+      definirBarra(previa ? '<span class="setor">Central de Links</span><span class="sep">/</span><span class="nome">Pré-visualização</span>' : trilha,
+        (previa ? '<a class="btn ghost sm" href="#/links/gestao">Voltar à edição</a>' : '') +
+        '<a class="btn ghost sm" href="#/links/gestao">' + IC.lapis + '<span class="so-desktop">Editar links e fundo</span></a>');
+    }
+    var c = j.campanha;
+    var estilo = '';
+    if (c && c.fundo_url) estilo += '--fundo:url(\'' + esc(c.fundo_url) + '\');';
+    if (c && (c.fundo_celular_url || c.fundo_url)) estilo += '--fundo-celular:url(\'' + esc(c.fundo_celular_url || c.fundo_url) + '\');';
+    estilo += '--escurecer:' + ((c ? c.escurecer : 0) / 100) + ';';
+    var grupos = [], porNome = {};
+    j.links.forEach(function (l) {
+      var g = l.grupo || '';
+      if (!porNome[g]) { porNome[g] = { nome: g, itens: [] }; grupos.push(porNome[g]); }
+      porNome[g].itens.push(l);
+    });
+    var html = '<div class="central-links' + (c && c.fundo_url ? ' com-fundo' : '') + '" style="' + estilo + '"><div class="cl-coluna">' +
+      '<div class="cl-cab"><h1>' + esc(j.pagina.titulo) + '</h1>' +
+      (j.pagina.subtitulo ? '<p>' + esc(j.pagina.subtitulo) + '</p>' : '') +
+      (previa ? '<span class="cl-campanha">' + IC.olho + 'Pré-visualização: ' + esc(c ? c.nome : 'campanha não encontrada') + '</span>' : '') + '</div>';
+    if (!j.links.length) {
+      html += '<div class="cl-vazio">Nenhum link publicado ainda.' + (j.pode_editar ? '<br><a class="btn primary sm" href="#/links/gestao/links" style="margin-top:12px">' + IC.mais + 'Cadastrar links</a>' : '') + '</div>';
+    }
+    grupos.forEach(function (g) {
+      html += '<section class="cl-grupo">' + (g.nome ? '<h2>' + esc(g.nome) + '</h2>' : '') + g.itens.map(function (l) {
+        return '<a class="cl-link" href="' + esc(l.url) + '" target="_blank" rel="noopener noreferrer">' +
+          '<b>' + esc(l.titulo) + '</b>' + (l.descricao ? '<span>' + esc(l.descricao) + '</span>' : '') + '</a>';
+      }).join('') + '</section>';
+    });
+    html += '</div></div>';
+    $('#conteudo').innerHTML = html;
+  }
+
+  async function paginaGestaoLinks(aba) {
+    aba = ['campanhas', 'links', 'pagina'].indexOf(aba) >= 0 ? aba : 'campanhas';
+    definirBarra('<span class="setor">Central de Links</span><span class="sep">/</span><span class="nome">Editar</span>',
+      '<a class="btn ghost sm" href="#/links">' + IC.olho + '<span class="so-desktop">Ver página</span></a>');
+    $('#conteudo').innerHTML = carregandoHtml();
+    var j;
+    try { j = await api('GET', '/api/links/gestao'); } catch (e) { toast(e.message, 'erro'); return; }
+    var ABAS = [['campanhas', 'Fundo da campanha'], ['links', 'Links'], ['pagina', 'Título da página']];
+    var html = '<div class="pagina"><h1>Central de Links</h1><p class="sub">Troque o fundo a cada campanha e mantenha os links em dia. Tudo o que for salvo aqui aparece na hora para todos do portal.</p>' +
+      '<nav class="abas">' + ABAS.map(function (a) { return '<a href="#/links/gestao/' + a[0] + '" class="' + (a[0] === aba ? 'on' : '') + '">' + a[1] + '</a>'; }).join('') + '</nav>';
+    if (aba === 'campanhas') html += htmlCampanhas(j);
+    if (aba === 'links') html += htmlLinksGestao(j);
+    if (aba === 'pagina') {
+      html += '<div class="painel" style="padding:18px;max-width:640px"><form id="fPag" class="pilha">' +
+        '<div><label class="rot" for="pTit">Título</label><input class="campo" id="pTit" maxlength="120" value="' + esc(j.pagina.titulo) + '"></div>' +
+        '<div><label class="rot" for="pSub">Subtítulo (opcional)</label><textarea class="campo" id="pSub" maxlength="300">' + esc(j.pagina.subtitulo) + '</textarea></div>' +
+        '<div><button class="btn primary" type="submit">Salvar</button></div></form></div>';
+    }
+    html += '</div>';
+    $('#conteudo').innerHTML = html;
+    if (aba === 'campanhas') ligarCampanhas(j);
+    if (aba === 'links') ligarLinksGestao(j);
+    if (aba === 'pagina') {
+      $('#fPag').onsubmit = async function (e) {
+        e.preventDefault();
+        try { await api('PUT', '/api/links/gestao/pagina', { titulo: $('#pTit').value, subtitulo: $('#pSub').value }); toast('Página atualizada.', 'ok'); } catch (er) { toast(er.message, 'erro'); }
+      };
+    }
+  }
+
+  /* ----- campanhas (fundos) ----- */
+  function htmlCampanhas(j) {
+    var vig = j.campanhas.find(function (c) { return c.id === j.vigente_id; });
+    var html = '<div class="painel"><div class="cab-painel"><div style="flex:1;min-width:220px"><b style="font-family:var(--display)">Campanhas</b>' +
+      '<span class="ajuda" style="display:block;margin:2px 0 0">Cada campanha entra no ar sozinha na data de início e fica até começar a próxima. Dá para deixar o mês seguinte pronto com antecedência.</span></div>' +
+      '<button class="btn primary sm" id="btNovaCamp">' + IC.mais + 'Nova campanha</button></div>';
+    if (!j.campanhas.length) {
+      html += '<div style="padding:30px;text-align:center;color:var(--muted);font-weight:700">Nenhuma campanha cadastrada. Enquanto isso, a página usa o fundo padrão MyBlue.</div>';
+    } else {
+      html += '<div class="lista-campanhas">' + j.campanhas.map(function (c) {
+        var situacao = c.id === j.vigente_id ? etq(['no ar agora', 'verde']) : c.inicio > j.hoje ? etq(['agendada', 'azul']) : etq(['encerrada', 'cinza']);
+        return '<div class="campanha" data-camp="' + c.id + '">' +
+          '<div class="miniatura"' + (c.fundo_url ? ' style="background-image:url(\'' + esc(c.fundo_url) + '\')"' : '') + '>' + (c.fundo_url ? '' : IC.imagem) + '</div>' +
+          '<div class="info"><div class="linha" style="gap:8px"><b>' + esc(c.nome) + '</b>' + situacao + (c.tem_fundo ? '' : etq(['sem imagem', 'ambar'])) + '</div>' +
+          '<span class="sec">A partir de ' + dataBr(c.inicio) + ' · escurecer ' + c.escurecer + '%' + (c.tem_fundo_celular ? ' · com versão para celular' : '') + '</span></div>' +
+          '<div class="linha" style="gap:6px"><a class="btn ghost sm" href="#/links/previa/' + c.id + '">' + IC.olho + 'Ver</a><button class="btn ghost sm" data-editar-camp="' + c.id + '">' + IC.lapis + 'Editar</button></div></div>';
+      }).join('') + '</div>';
+    }
+    html += '</div>';
+    if (!vig && j.campanhas.length) html += '<div class="msg aviso" style="margin-top:14px">Nenhuma campanha começou ainda: a página está com o fundo padrão MyBlue.</div>';
+    return html;
+  }
+
+  function ligarCampanhas(j) {
+    $('#btNovaCamp').onclick = function () { editarCampanha(j, null); };
+    $$('[data-editar-camp]').forEach(function (b) {
+      b.onclick = function () { editarCampanha(j, j.campanhas.find(function (c) { return c.id === Number(b.getAttribute('data-editar-camp')); })); };
+    });
+  }
+
+  function editarCampanha(j, c) {
+    var novo = !c;
+    var hoje = new Date();
+    var proxMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1);
+    var p2 = function (n) { return String(n).padStart(2, '0'); };
+    c = c || { nome: '', inicio: proxMes.getFullYear() + '-' + p2(proxMes.getMonth() + 1) + '-01', escurecer: 0 };
+    var arquivos = { fundo: null, 'fundo-celular': null };
+    function zonaImg(qual, rotulo, ajuda, url) {
+      return '<div><label class="rot">' + rotulo + '</label><div class="zona-img" id="z-' + qual + '">' +
+        '<div class="previa-img"' + (url ? ' style="background-image:url(\'' + esc(url) + '\')"' : '') + '>' + (url ? '' : IC.imagem) + '</div>' +
+        '<div class="ajuda" style="margin:0">' + ajuda + '</div><input type="file" accept="image/jpeg,image/png,image/webp" hidden></div></div>';
+    }
+    var m = modal({
+      titulo: novo ? 'Nova campanha' : 'Editar campanha', largo: true,
+      corpo: '<div class="pilha"><div class="grade-2">' +
+        '<div><label class="rot" for="cNome">Nome da campanha</label><input class="campo" id="cNome" maxlength="100" placeholder="Ex.: Outubro Rosa" value="' + esc(c.nome) + '"></div>' +
+        '<div><label class="rot" for="cInicio">Entra no ar em</label><input class="campo" id="cInicio" type="date" value="' + esc(c.inicio) + '"><div class="ajuda">Fica no ar até a data de início da próxima campanha.</div></div></div>' +
+        '<div class="grade-2">' +
+        zonaImg('fundo', 'Fundo — computador', 'Clique ou arraste a imagem (JPG, PNG ou WEBP, até ' + j.limite_fundo_mb + ' MB). Sugestão: 1920 × 1080 px, deitada, com o centro livre para os botões.', c.fundo_url) +
+        zonaImg('fundo-celular', 'Fundo — celular (opcional)', 'Sugestão: 1080 × 1920 px, em pé. Sem ela, o celular usa a do computador.', c.fundo_celular_url) +
+        '</div>' +
+        (!novo && c.tem_fundo_celular ? '<label class="linha" style="font-weight:700;font-size:13px"><input type="checkbox" id="cTirarCel"> remover a versão para celular</label>' : '') +
+        '<div><label class="rot" for="cEsc">Escurecer o fundo: <span id="cEscV">' + c.escurecer + '%</span></label><input id="cEsc" type="range" min="0" max="85" step="5" value="' + c.escurecer + '" style="width:100%;accent-color:var(--teal)">' +
+        '<div class="ajuda">A arte aparece como foi enviada (0%). Aumente só se o título ou os botões ficarem difíceis de ler sobre a imagem.</div></div>' +
+        '<div id="cMsg" class="msg erro" hidden></div></div>',
+      pe: (novo ? '' : '<button class="btn danger" id="btApagarCamp" style="margin-right:auto">Excluir</button>') +
+        '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="btSalvarCamp">' + (novo ? 'Criar campanha' : 'Salvar') + '</button>',
+    });
+    $('#cEsc', m).oninput = function () { $('#cEscV', m).textContent = this.value + '%'; };
+    Object.keys(arquivos).forEach(function (qual) {
+      var z = $('#z-' + qual, m), inp = $('input[type=file]', z);
+      function escolher(f) {
+        if (!f) return;
+        if (!/^image\/(jpeg|png|webp)$/.test(f.type)) { toast('Use uma imagem JPG, PNG ou WEBP.', 'erro'); return; }
+        if (f.size > j.limite_fundo_mb * 1048576) { toast('Imagem grande demais (máximo ' + j.limite_fundo_mb + ' MB).', 'erro'); return; }
+        arquivos[qual] = f;
+        var pv = $('.previa-img', z);
+        pv.innerHTML = '';
+        pv.style.backgroundImage = 'url(\'' + URL.createObjectURL(f) + '\')';
+      }
+      z.onclick = function () { inp.click(); };
+      inp.onchange = function () { escolher(inp.files[0]); inp.value = ''; };
+      z.addEventListener('dragover', function (e) { e.preventDefault(); z.classList.add('arrastando'); });
+      z.addEventListener('dragleave', function () { z.classList.remove('arrastando'); });
+      z.addEventListener('drop', function (e) { e.preventDefault(); z.classList.remove('arrastando'); escolher(e.dataTransfer.files[0]); });
+    });
+    $('#btSalvarCamp', m).onclick = async function () {
+      var bt = this, msg = $('#cMsg', m);
+      msg.hidden = true;
+      if (novo && !arquivos.fundo) { msg.textContent = 'Escolha a imagem de fundo para computador.'; msg.hidden = false; return; }
+      bt.disabled = true;
+      try {
+        var corpo = { nome: $('#cNome', m).value, inicio: $('#cInicio', m).value, escurecer: Number($('#cEsc', m).value) };
+        var id = c.id;
+        if (novo) id = (await api('POST', '/api/links/gestao/campanhas', corpo)).id;
+        else await api('PATCH', '/api/links/gestao/campanhas/' + id, corpo);
+        for (var qual in arquivos) {
+          if (arquivos[qual]) await api('PUT', '/api/links/gestao/campanhas/' + id + '/' + qual, arquivos[qual], { bruto: true, headers: { 'Content-Type': arquivos[qual].type } });
+        }
+        if ($('#cTirarCel', m) && $('#cTirarCel', m).checked && !arquivos['fundo-celular']) await api('DELETE', '/api/links/gestao/campanhas/' + id + '/fundo-celular');
+        m.fechar();
+        toast(novo ? 'Campanha criada.' : 'Campanha atualizada.', 'ok');
+        paginaGestaoLinks('campanhas');
+      } catch (e) {
+        msg.textContent = e.message; msg.hidden = false; bt.disabled = false;
+        if (novo && id) { novo = false; c = { id: id }; } // a campanha já existe: o próximo clique só reenvia a imagem
+      }
+    };
+    if (!novo) {
+      $('#btApagarCamp', m).onclick = async function () {
+        if (!(await confirmar('Excluir campanha', 'A campanha <b>' + esc(c.nome) + '</b> e as imagens dela serão apagadas.', 'Excluir', true))) return;
+        try { await api('DELETE', '/api/links/gestao/campanhas/' + c.id); m.fechar(); toast('Campanha excluída.', 'ok'); paginaGestaoLinks('campanhas'); } catch (e) { toast(e.message, 'erro'); }
+      };
+    }
+  }
+
+  /* ----- links ----- */
+  function htmlLinksGestao(j) {
+    var html = '<div class="painel"><div class="cab-painel"><div style="flex:1;min-width:220px"><b style="font-family:var(--display)">Links</b>' +
+      '<span class="ajuda" style="display:block;margin:2px 0 0">Use as setas para mudar a ordem. Links com o mesmo grupo aparecem juntos, sob o nome do grupo.</span></div>' +
+      '<button class="btn primary sm" id="btNovoLink">' + IC.mais + 'Novo link</button></div>';
+    if (!j.links.length) return html + '<div style="padding:30px;text-align:center;color:var(--muted);font-weight:700">Nenhum link cadastrado.</div></div>';
+    html += '<div class="tabela-wrap"><table><thead><tr><th style="width:70px">Ordem</th><th>Link</th><th>Grupo</th><th>Situação</th></tr></thead><tbody>' +
+      j.links.map(function (l, i) {
+        return '<tr class="clicavel" data-link="' + l.id + '"><td style="white-space:nowrap">' +
+          '<button class="btn icon ghost" data-mover="-1" title="Subir" aria-label="Subir"' + (i === 0 ? ' disabled' : '') + '>' + IC.cima + '</button> ' +
+          '<button class="btn icon ghost" data-mover="1" title="Descer" aria-label="Descer"' + (i === j.links.length - 1 ? ' disabled' : '') + '>' + IC.baixo + '</button></td>' +
+          '<td><b>' + esc(l.titulo) + '</b><span class="sec" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:460px">' + esc(l.url) + '</span></td>' +
+          '<td>' + (l.grupo ? esc(l.grupo) : '<span class="sec">—</span>') + '</td>' +
+          '<td>' + (l.ativo ? etq(['publicado', 'verde']) : etq(['oculto', 'cinza'])) + '</td></tr>';
+      }).join('') + '</tbody></table></div></div>';
+    return html;
+  }
+
+  function ligarLinksGestao(j) {
+    $('#btNovoLink').onclick = function () { editarLink(j, null); };
+    $$('tr[data-link]').forEach(function (tr) {
+      var id = Number(tr.getAttribute('data-link'));
+      tr.onclick = function () { editarLink(j, j.links.find(function (l) { return l.id === id; })); };
+    });
+    $$('[data-mover]').forEach(function (b) {
+      b.onclick = async function (e) {
+        e.stopPropagation();
+        var ids = j.links.map(function (l) { return l.id; });
+        var id = Number(b.closest('tr').getAttribute('data-link'));
+        var i = ids.indexOf(id), k = i + Number(b.getAttribute('data-mover'));
+        if (k < 0 || k >= ids.length) return;
+        ids[i] = ids[k]; ids[k] = id;
+        try { await api('PUT', '/api/links/gestao/ordem', { ids: ids }); paginaGestaoLinks('links'); } catch (er) { toast(er.message, 'erro'); }
+      };
+    });
+  }
+
+  function editarLink(j, l) {
+    var novo = !l;
+    l = l || { titulo: '', url: 'https://', grupo: '', descricao: '', icone: 'link', ativo: true };
+    var grupos = [];
+    j.links.forEach(function (x) { if (x.grupo && grupos.indexOf(x.grupo) < 0) grupos.push(x.grupo); });
+    var m = modal({
+      titulo: novo ? 'Novo link' : 'Editar link',
+      corpo: '<form class="pilha" id="fLink" novalidate>' +
+        '<div><label class="rot" for="lTit">Nome do botão</label><input class="campo" id="lTit" maxlength="120" value="' + esc(l.titulo) + '"></div>' +
+        '<div><label class="rot" for="lUrl">Endereço (link)</label><input class="campo" id="lUrl" type="url" maxlength="2000" value="' + esc(l.url) + '"><div class="ajuda">Link completo, começando com https://. Também aceita mailto: e tel:.</div></div>' +
+        '<div><label class="rot" for="lGrupo">Grupo (opcional)</label><input class="campo" id="lGrupo" maxlength="80" list="lGrupos" value="' + esc(l.grupo) + '" placeholder="Deixe em branco para uma lista única">' +
+        '<datalist id="lGrupos">' + grupos.map(function (g) { return '<option value="' + esc(g) + '">'; }).join('') + '</datalist><div class="ajuda">Links com o mesmo grupo aparecem juntos, sob o nome do grupo.</div></div>' +
+        '<div><label class="rot" for="lDesc">Descrição curta (opcional)</label><input class="campo" id="lDesc" maxlength="300" value="' + esc(l.descricao) + '"></div>' +
+        '<label class="linha" style="font-weight:700"><input type="checkbox" id="lAtivo"' + (l.ativo ? ' checked' : '') + '> Publicado (desmarque para esconder sem apagar)</label>' +
+        '<div id="lMsg" class="msg erro" hidden></div></form>',
+      pe: (novo ? '' : '<button class="btn danger" id="btApagarLink" style="margin-right:auto">Excluir</button>') +
+        '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="btSalvarLink">' + (novo ? 'Incluir' : 'Salvar') + '</button>',
+    });
+    $('#btSalvarLink', m).onclick = async function () {
+      var corpo = { titulo: $('#lTit', m).value, url: $('#lUrl', m).value, grupo: $('#lGrupo', m).value, descricao: $('#lDesc', m).value, ativo: $('#lAtivo', m).checked };
+      try {
+        if (novo) await api('POST', '/api/links/gestao/links', corpo); else await api('PATCH', '/api/links/gestao/links/' + l.id, corpo);
+        m.fechar(); toast(novo ? 'Link incluído.' : 'Link atualizado.', 'ok'); paginaGestaoLinks('links');
+      } catch (e) { var x = $('#lMsg', m); x.textContent = e.message; x.hidden = false; }
+    };
+    if (!novo) {
+      $('#btApagarLink', m).onclick = async function () {
+        if (!(await confirmar('Excluir link', 'O link <b>' + esc(l.titulo) + '</b> sai da Central de Links.', 'Excluir', true))) return;
+        try { await api('DELETE', '/api/links/gestao/links/' + l.id); m.fechar(); toast('Link excluído.', 'ok'); paginaGestaoLinks('links'); } catch (e) { toast(e.message, 'erro'); }
+      };
+    }
+  }
+
   /* ======================= admin: auditoria ======================= */
   var ROTULO_ACAO = {
     login: 'Entrou no portal', login_falha: 'Tentativa de login falhou', logout: 'Saiu', senha_alterada: 'Trocou a senha', senha_redefinida: 'Redefiniu senha de usuário',
@@ -1800,6 +2069,8 @@
     catalogo_semeado: 'Sistema instalado', email_teste: 'Enviou e-mail de teste',
     setores_oficiais: 'Setores oficiais cadastrados', ticket_criado: 'Abriu ticket', ticket_atribuicao: 'Atribuiu ticket', ticket_transferencia: 'Transferiu ticket',
     ticket_status: 'Mudou situação de ticket', equipe_editada: 'Editou equipe do setor', categoria_criada: 'Criou tipo de demanda', categoria_editada: 'Editou tipo de demanda', categoria_removida: 'Removeu tipo de demanda',
+    links_pagina: 'Editou a Central de Links', link_criado: 'Incluiu link', link_editado: 'Editou link', link_removido: 'Removeu link',
+    campanha_criada: 'Criou campanha (Central de Links)', campanha_editada: 'Editou campanha (Central de Links)', campanha_removida: 'Removeu campanha (Central de Links)', campanha_fundo: 'Trocou fundo de campanha',
   };
 
   async function paginaAuditoria() {
