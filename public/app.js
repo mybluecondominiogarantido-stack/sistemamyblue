@@ -923,11 +923,16 @@
       var tarde = t.prazo && new Date(t.primeira_resposta_em) > new Date(t.prazo);
       return '<span class="etiqueta ' + (tarde ? 'ambar' : 'verde') + '" title="Prazo: ' + esc(quando(t.prazo)) + '">✓ respondido ' + (tarde ? 'com atraso' : 'no prazo') + '</span>';
     }
-    return contagem(t.prazo, emAberto(t));
+    return atrasoTxt(t.prazo, emAberto(t));
+  }
+  /* no detalhe do ticket a data já aparece no campo: só sinaliza quando venceu */
+  function atrasoTxt(data, aberto) {
+    var falta = data ? new Date(data) - Date.now() : 0;
+    return aberto && data && falta < 0 ? '<span class="etiqueta vermelha">⚠ atrasado ' + duracao(falta) + '</span>' : '';
   }
   function prazoConclusaoTxt(t, comData) {
     if (!t.prazo_conclusao) return '<span class="sec">' + (emAberto(t) ? 'ainda não definido' : '—') + '</span>';
-    return (comData && emAberto(t) ? '<div style="font-weight:700">' + quando(t.prazo_conclusao) + '</div>' : '') + contagem(t.prazo_conclusao, emAberto(t));
+    return (comData ? '<div style="font-weight:700">' + quando(t.prazo_conclusao) + '</div>' : '') + atrasoTxt(t.prazo_conclusao, emAberto(t));
   }
   /* coluna "Prazo" da lista: antes do 1º retorno vale o da resposta; depois, o da conclusão */
   function prazoTxt(t) {
