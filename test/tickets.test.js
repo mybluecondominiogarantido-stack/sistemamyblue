@@ -182,6 +182,14 @@ test('notas internas e anexos internos ficam só com a equipe', async () => {
   const visto = (await solicitante('GET', `/api/tickets/${ticket}`)).json;
   assert.ok(!visto.eventos.some((e) => e.interno), 'solicitante não vê notas internas');
   assert.ok(visto.eventos.some((e) => e.texto === 'Estamos emitindo a 2ª via.'));
+
+  // foto de quem comentou aparece no comentário
+  const png = Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000000', 'hex');
+  assert.equal((await membro('PUT', '/api/auth/foto', png, { headers: { 'content-type': 'image/png' } })).status, 200);
+  const comFoto = (await solicitante('GET', `/api/tickets/${ticket}`)).json.eventos.find((e) => e.texto === 'Estamos emitindo a 2ª via.');
+  assert.ok(comFoto.usuario_foto_v, 'comentário traz a versão da foto do autor');
+  assert.equal((await solicitante('GET', `/api/usuarios/${comFoto.usuario_id}/foto`, undefined, { bruto: true })).status, 200);
+  assert.equal((await solicitante('GET', `/api/tickets/${ticket}`)).json.eventos.find((e) => e.texto === 'Obrigada!').usuario_foto_v, null);
   assert.deepEqual(visto.anexos.map((a) => a.id), [publico]);
   assert.equal((await solicitante('GET', `/api/tickets/${ticket}/anexos/${interno}`, undefined, { bruto: true })).status, 404);
   const equipe = (await membro('GET', `/api/tickets/${ticket}`)).json;
