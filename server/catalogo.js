@@ -19,13 +19,25 @@
  *  - config.titulo: trecho do <title> usado para reconhecer o arquivo no import automático
  */
 
+// setores da MyBlue (também são as equipes que atendem na Central de Tickets)
 const SETORES = [
-  { nome: 'Crédito', ordem: 1 },
+  { nome: 'Administrativa/Financeira', ordem: 1 },
   { nome: 'Cobrança', ordem: 2 },
-  { nome: 'Sucesso do Cliente', ordem: 3 },
-  { nome: 'Suprimentos', ordem: 4 },
-  { nome: 'Parceiros', ordem: 5 },
+  { nome: 'Comercial', ordem: 3 },
+  { nome: 'Crédito', ordem: 4 },
+  { nome: 'CS', ordem: 5 },
+  { nome: 'Implantação', ordem: 6 },
+  { nome: 'Jurídico', ordem: 7 },
+  { nome: 'Máquina de Vendas', ordem: 8 },
+  { nome: 'Marketing', ordem: 9 },
+  { nome: 'Supervisão', ordem: 10 },
+  { nome: 'Gerência', ordem: 11 },
+  // setores das ferramentas que já existiam antes da lista oficial
+  { nome: 'Suprimentos', ordem: 12 },
+  { nome: 'Parceiros', ordem: 13 },
 ];
+// nomes antigos → nome atual (renomeados uma vez em bancos já instalados)
+const SETORES_RENOMEADOS = { 'Sucesso do Cliente': 'CS' };
 
 // Substituições aplicadas ao HTML quando o módulo usa o banco interno no lugar do Google.
 // aceita aspas normais ou escapadas (\") — algumas ferramentas vêm empacotadas dentro de uma string
@@ -57,7 +69,7 @@ const MODULOS = [
     slug: 'renegociacoes',
     nome: 'Controle de Renegociações e Tickets',
     descricao: 'Renegociações de contrato, perda de receita no exercício e controle de tickets do Sucesso do Cliente.',
-    setor: 'Sucesso do Cliente',
+    setor: 'CS',
     icone: 'aperto',
     ordem: 1,
     armazenamento: 'navegador',
@@ -115,4 +127,4 @@ const MODULOS = [
   },
 ];
 
-module.exports = { SETORES, MODULOS, CHAVES_DE_SISTEMA: ['colecao_padrao', 'colecoes', 'cabecalho_padrao', 'patches_interno', 'titulo'] };
+module.exports = { SETORES_RENOMEADOS, SETORES, MODULOS, CHAVES_DE_SISTEMA: ['colecao_padrao', 'colecoes', 'cabecalho_padrao', 'patches_interno', 'titulo'] };

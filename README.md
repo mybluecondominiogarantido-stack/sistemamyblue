@@ -106,6 +106,60 @@ Para voltar atrás, marque **Planilha Google (como hoje)**. O que foi lançado n
 
 A versão publicada no portal é a do arquivo **sem** a senha própria (StatiCrypt): o acesso é controlado só pelo login e pelas permissões do portal. A planilha dessa ferramenta não tem coluna de ID (o nº do pedido se repete nas parcelas) e as alterações apontam a linha pela posição; na planilha interna, o portal confere o nº do pedido e o vencimento antes de alterar, para nunca mexer na linha errada. Excluir um pedido nessa ferramenta só remove da tela, como já acontecia com a planilha Google.
 
+## Central de Tickets
+
+Demandas internas entre os setores: quem precisa de algo de outro setor abre um ticket, o setor recebe, o líder distribui e o responsável trata até resolver. Fica no menu **Central de Tickets** e não depende de nenhum HTML enviado.
+
+**Fluxo**
+
+1. **Abrir:** qualquer pessoa logada escolhe o setor, o tipo de demanda, a prioridade, descreve e pode anexar arquivos.
+2. **Fila do setor:** o ticket entra como *Novo*, sem responsável. Os líderes do setor recebem aviso (sino, som e e-mail). Se o setor não tiver líder, a equipe inteira recebe.
+3. **Distribuir:** o líder atribui a alguém da equipe. Qualquer pessoa do setor também pode **assumir** um ticket da fila, ou devolver para a fila um que esteja com ela.
+4. **Tratar:** o responsável muda a situação (*Em andamento*, *Aguardando*), conversa com quem abriu e registra **notas internas** (quem abriu não vê). Também pode transferir para outro setor, e aí o ticket volta para a fila do novo setor.
+5. **Resolver:** quem abriu é avisado e pode **reabrir** se não ficou resolvido. Também pode cancelar o próprio pedido.
+
+**Quem faz o quê**
+
+| Perfil | O que pode |
+|---|---|
+| Qualquer pessoa | Abrir tickets, acompanhar os que abriu, comentar, anexar, cancelar ou reabrir os seus |
+| Equipe do setor | Ver a fila do setor, assumir, tratar, mudar situação, prioridade e prazo, transferir, notas internas |
+| Líder do setor (coordenação do setor) | Tudo da equipe, mais distribuir tickets para qualquer pessoa do setor |
+| Supervisão / Coordenação | Ver e direcionar os tickets de **todos** os setores, com painel geral. Não dá acesso à administração do portal |
+| Administrador | Tudo, mais montar equipes e tipos de demanda |
+
+O perfil **Supervisão / Coordenação** é marcado no cadastro da pessoa, em *Usuários e acessos*. As equipes, os líderes e os **tipos de demanda** de cada setor (com prazo em horas e prioridade sugerida) ficam em *Administração → Equipes e tipos de demanda*. Os prazos contam só o **expediente: segunda a sexta, das 8h às 17h (horário de Brasília)**, ou seja, 9 h = 1 dia útil. Um ticket urgente aberto na sexta às 16h30 vence na segunda às 11h30. Sem tipo cadastrado, o prazo segue a prioridade: urgente 4 h, alta 1 dia útil, média 3 dias úteis e baixa 5 dias úteis. Feriados entram na variável `FERIADOS`.
+
+**Avisos**
+
+- **No portal:** sino na barra superior com o número de avisos não lidos, som e alerta do computador (cada pessoa ativa os alertas no sino). O portal confere a cada 30 segundos.
+- **Por e-mail:** vão para quem recebeu o ticket, para os líderes quando chega ticket novo ou transferido para o setor, para quem abriu quando o ticket é resolvido ou cancelado, e para o responsável quando o ticket é reaberto. Comentários avisam só no portal. Sem e-mail configurado, os avisos aparecem só no portal.
+
+**E-mail pelo Microsoft 365**
+
+O portal envia pela API Microsoft Graph, com um aplicativo registrado na conta Microsoft da empresa. Não usa a senha de nenhuma caixa e não depende do SMTP com senha, que a Microsoft desliga por padrão a partir do fim de 2026. Quem faz é um **administrador global do Microsoft 365**:
+
+1. **Caixa remetente.** No Centro de administração do Exchange, crie uma *caixa compartilhada* (não usa licença), ex.: `naoresponda@myblue.com.br`.
+2. **Registrar o aplicativo.** Em [entra.microsoft.com](https://entra.microsoft.com): *Aplicativos → Registros de aplicativo → Novo registro*. Nome: `Portal MyBlue – avisos`, contas *somente deste diretório*, sem URI de redirecionamento. Anote o **ID do aplicativo (cliente)** e o **ID do diretório (locatário)**.
+3. **Segredo.** No aplicativo: *Certificados e segredos → Novo segredo do cliente* (validade de 24 meses). Copie o **Valor** na hora, porque ele só aparece uma vez. Anote na agenda para renovar antes de vencer.
+4. **Não** adicione a permissão `Mail.Send` em *Permissões de API* do Entra: dada ali, ela deixa o aplicativo enviar como **qualquer** caixa da empresa. A permissão é dada no Exchange, valendo só para a caixa dos avisos (*RBAC para aplicativos*, o modelo atual da Microsoft). Copie o **ID do objeto** em *Aplicativos empresariais → Portal MyBlue – avisos* (não é o do registro) e rode no PowerShell do Exchange Online:
+   ```powershell
+   Connect-ExchangeOnline
+   New-ServicePrincipal -AppId <ID do aplicativo> -ObjectId <ID do objeto do aplicativo empresarial> -DisplayName "Portal MyBlue – avisos"
+   New-ManagementScope -Name "Portal MyBlue – caixa de avisos" -RecipientRestrictionFilter "PrimarySmtpAddress -eq 'naoresponda@myblue.com.br'"
+   New-ManagementRoleAssignment -App <ID do aplicativo> -Role "Application Mail.Send" -CustomResourceScope "Portal MyBlue – caixa de avisos"
+   Test-ServicePrincipalAuthorization -Identity <ID do aplicativo> -Resource naoresponda@myblue.com.br   # InScope deve ser True
+   ```
+   A permissão pode levar de 30 minutos a 2 horas para começar a valer.
+5. **Variáveis no Railway:** `M365_TENANT_ID`, `M365_CLIENT_ID`, `M365_CLIENT_SECRET`, `EMAIL_REMETENTE` (ex.: `Portal MyBlue <naoresponda@myblue.com.br>`) e `PORTAL_URL`.
+6. **Testar.** Em *Administração → Equipes e tipos de demanda*, clique em **Enviar e-mail de teste para mim**. Se der erro, a mensagem da Microsoft aparece na tela: *Invalid client secret* (segredo errado ou vencido), *Access is denied* (a permissão do passo 4 ainda não valeu ou o filtro não pega a caixa remetente), *MailboxNotEnabledForRESTAPI* (a caixa remetente não existe no Exchange Online).
+
+Fora do Microsoft 365, dá para usar SMTP comum com as variáveis `SMTP_*`.
+
+**Painel:** em aberto, sem responsável, atrasados, resolvidos no período, % no prazo, tempo médio de resolução e de 1ª resposta, por setor, por responsável e por tipo de demanda. Cada pessoa vê os setores de que faz parte; administração e supervisão veem todos.
+
+**Anexos:** até 10 MB por arquivo (`LIMITE_ANEXO_MB`), guardados no banco. Por segurança, só imagens abrem no navegador; os demais arquivos são sempre baixados.
+
 ## Colocar no ar
 
 ### No Railway
@@ -182,6 +236,14 @@ Rode `npm ci --omit=dev` e `npm start` com um gerenciador de processos (pm2, sys
 | `COOKIE_SECURE` | false | `true` quando o portal estiver em HTTPS |
 | `TRUST_PROXY` | 0 (no Railway, 1) | `1` quando houver proxy reverso na frente |
 | `LIMITE_HTML_MB` / `LIMITE_DADOS_MB` | 40 / 25 | Tamanho máximo de HTML enviado e de dados gravados por vez |
+| `LIMITE_ANEXO_MB` | 10 | Tamanho máximo de cada anexo de ticket |
+| `EXPEDIENTE_INICIO` / `EXPEDIENTE_FIM` | 8 / 17 | Horário de expediente usado nos prazos dos tickets |
+| `EXPEDIENTE_DIAS` | 1,2,3,4,5 | Dias com expediente (0 = domingo … 6 = sábado) |
+| `FERIADOS` | — | Dias sem expediente, ex.: `2026-11-02,2026-11-15,2026-11-20,2026-12-25` |
+| `PORTAL_URL` | — | Endereço público do portal (ex.: `https://portal.myblue.com.br`), usado no link dos e-mails |
+| `EMAIL_REMETENTE` | — | Caixa que envia os avisos, ex.: `Portal MyBlue <naoresponda@myblue.com.br>` |
+| `M365_TENANT_ID` / `M365_CLIENT_ID` / `M365_CLIENT_SECRET` | — | Envio pelo Microsoft 365 (Graph). Passo a passo na seção Central de Tickets |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USUARIO` / `SMTP_SENHA` / `SMTP_SEGURO` | — / 587 | Alternativa: SMTP comum (usado só sem as variáveis `M365_*`) |
 
 ## Segurança
 
@@ -206,7 +268,10 @@ server/
   modulos.js        versões dos HTMLs, injeção da ponte e ligação com a planilha interna
   bridge.js         ponte de armazenamento (roda dentro de cada ferramenta)
   registros.js      planilha interna (coleções e registros)
-  rotas/            auth, admin e ferramentas (entrega, armazenamento, protocolo Apps Script)
+  notificacoes.js   avisos da Central de Tickets (sino do portal e e-mail)
+  email.js          envio de e-mail: Microsoft 365 (Graph) ou SMTP
+  expediente.js     prazos em horário de expediente (seg–sex, 8h–17h)
+  rotas/            auth, admin, ferramentas (entrega, armazenamento, protocolo Apps Script) e tickets
 public/             portal (login, início, menu, administração)
 scripts/            importar-html e criar-admin
 test/               testes automatizados (npm test)

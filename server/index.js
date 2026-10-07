@@ -7,9 +7,12 @@ const { abrir } = require('./db');
 const { criarSeguranca, hashSenha, senhaAleatoria } = require('./seguranca');
 const { criarServicoModulos } = require('./modulos');
 const { criarRegistros } = require('./registros');
+const { criarNotificador } = require('./notificacoes');
+const { criarExpediente, lerExpediente } = require('./expediente');
 const { rotasAuth } = require('./rotas/auth');
 const { rotasAdmin } = require('./rotas/admin');
 const { rotasFerramentas } = require('./rotas/ferramentas');
+const { rotasTickets, rotasAdminTickets } = require('./rotas/tickets');
 
 function carregarEnv(arquivo) {
   if (!fs.existsSync(arquivo)) return;
@@ -39,6 +42,7 @@ function lerConfig(sobrescrever = {}) {
     adminSenha: e.ADMIN_SENHA || '',
     limiteHtmlMb: Number(e.LIMITE_HTML_MB) || 40,
     limiteDadosMb: Number(e.LIMITE_DADOS_MB) || 25,
+    limiteAnexoMb: Number(e.LIMITE_ANEXO_MB) || 10,
     silencioso: false,
     ...sobrescrever,
   };
@@ -66,7 +70,9 @@ async function criarApp(cfg) {
   const seg = criarSeguranca(db, cfg);
   const modulos = criarServicoModulos(db, cfg);
   const registros = criarRegistros(db);
-  const ctx = { db, seg, modulos, registros, cfg };
+  const avisos = criarNotificador(db, cfg);
+  const expediente = criarExpediente(lerExpediente());
+  const ctx = { db, seg, modulos, registros, avisos, expediente, cfg };
 
   const app = express();
   app.disable('x-powered-by');
@@ -87,6 +93,8 @@ async function criarApp(cfg) {
   app.use(rotasAuth(ctx));
   app.use(rotasAdmin(ctx));
   app.use(rotasFerramentas(ctx));
+  app.use(rotasTickets(ctx));
+  app.use(rotasAdminTickets(ctx));
 
   const publico = path.join(__dirname, '..', 'public');
   app.get('/login', (req, res) => res.sendFile(path.join(publico, 'login.html')));
