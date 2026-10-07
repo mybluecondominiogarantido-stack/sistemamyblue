@@ -213,17 +213,56 @@ CREATE TABLE IF NOT EXISTS notificacoes (
   criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_notificacoes_usuario ON notificacoes(usuario_id, id);
+
+-- ===== Central de Links =====
+-- título e subtítulo da página (uma linha só)
+CREATE TABLE IF NOT EXISTS links_pagina (
+  id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  titulo TEXT NOT NULL DEFAULT 'Central de Links',
+  subtitulo TEXT NOT NULL DEFAULT '',
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS links (
+  id SERIAL PRIMARY KEY,
+  grupo TEXT NOT NULL DEFAULT '',
+  titulo TEXT NOT NULL,
+  url TEXT NOT NULL,
+  descricao TEXT NOT NULL DEFAULT '',
+  icone TEXT NOT NULL DEFAULT 'link',
+  ordem INTEGER NOT NULL DEFAULT 0,
+  ativo BOOLEAN NOT NULL DEFAULT TRUE,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
+);
+
+-- campanhas do marketing: cada uma vale a partir da data de início até começar a próxima
+CREATE TABLE IF NOT EXISTS links_campanhas (
+  id SERIAL PRIMARY KEY,
+  nome TEXT NOT NULL,
+  inicio DATE NOT NULL,
+  escurecer INTEGER NOT NULL DEFAULT 35 CHECK (escurecer BETWEEN 0 AND 85),
+  fundo BYTEA,
+  fundo_tipo TEXT,
+  fundo_celular BYTEA,
+  fundo_celular_tipo TEXT,
+  criado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_links_campanhas_inicio ON links_campanhas(inicio);
 `;
 
 /* Supabase publica o schema "public" pela API dele (PostgREST). Com RLS ligado e sem
    políticas, ninguém lê nem grava por lá; o portal conecta como dono das tabelas e não é afetado. */
 const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 'permissoes', 'armazenamento', 'colecoes', 'registros', 'auditoria',
-  'setor_membros', 'ticket_categorias', 'tickets', 'ticket_eventos', 'ticket_anexos', 'notificacoes', 'condominios', 'condominio_colunas'];
+  'setor_membros', 'ticket_categorias', 'tickets', 'ticket_eventos', 'ticket_anexos', 'notificacoes', 'condominios', 'condominio_colunas',
+  'links_pagina', 'links', 'links_campanhas'];
 const RLS = TABELAS.map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`).join(';\n');
 
 /* Ajustes em bancos já existentes (rodam a cada início e não fazem nada se já estiverem aplicados). */
 const AJUSTES = `
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS supervisor_tickets BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS editor_links BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE tickets ADD COLUMN IF NOT EXISTS condominio_id INTEGER REFERENCES condominios(id) ON DELETE SET NULL;
 ALTER TABLE tickets ADD COLUMN IF NOT EXISTS demanda_interna BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE modulos DROP CONSTRAINT IF EXISTS modulos_adaptador_check;

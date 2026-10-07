@@ -171,6 +171,18 @@ Fora do Microsoft 365, dá para usar SMTP comum com as variáveis `SMTP_*`.
 
 **Manuais em PDF:** o Manual Geral e um manual para cada setor ficam em [`docs/manuais`](docs/manuais).
 
+## Central de Links
+
+Página do portal com os links úteis da equipe (a antiga *Central de Links Grupo Apoio Cobrança* do pages.myblue.com.br), no menu **Central de Links**, logo abaixo de *Início*. Todos que entram no portal veem; os links abrem em nova aba.
+
+**Quem edita:** administradores e quem tiver marcado **Marketing — Central de Links** no cadastro (*Usuários e acessos*). Essa marcação não dá acesso à administração do portal. Na página aparece o botão **Editar links e fundo**, com três abas:
+
+- **Fundo da campanha:** cada campanha tem nome, data em que entra no ar, a imagem de fundo para computador (sugestão 1920 × 1080) e, se quiser, uma versão para celular (1080 × 1920). A campanha vale a partir da data de início (meia-noite de Brasília) até começar a próxima, então o marketing pode deixar o fundo do mês seguinte agendado com antecedência. O controle *Escurecer o fundo* garante a leitura dos botões. Imagens JPG, PNG ou WEBP de até 8 MB (`LIMITE_FUNDO_MB`), guardadas no banco. O botão **Ver** mostra como a página fica com aquela campanha antes de ela entrar no ar. Sem campanha, a página usa o fundo padrão MyBlue.
+- **Links:** incluir, mudar o nome do botão, o endereço (link), o grupo, o ícone e a descrição; mudar a ordem com as setas; ocultar sem apagar ou excluir. Links com o mesmo grupo aparecem juntos sob o nome do grupo.
+- **Título da página:** título e subtítulo que aparecem no topo.
+
+Toda alteração fica no *Histórico de atividades* e entra no backup.
+
 ## Colocar no ar
 
 ### No Railway
@@ -248,6 +260,7 @@ Rode `npm ci --omit=dev` e `npm start` com um gerenciador de processos (pm2, sys
 | `TRUST_PROXY` | 0 (no Railway, 1) | `1` quando houver proxy reverso na frente |
 | `LIMITE_HTML_MB` / `LIMITE_DADOS_MB` | 40 / 25 | Tamanho máximo de HTML enviado e de dados gravados por vez |
 | `LIMITE_ANEXO_MB` | 10 | Tamanho máximo de cada anexo de ticket |
+| `LIMITE_FUNDO_MB` | 8 | Tamanho máximo de cada imagem de fundo da Central de Links |
 | `EXPEDIENTE_INICIO` / `EXPEDIENTE_FIM` | 8 / 17 | Horário de expediente usado nos prazos dos tickets |
 | `EXPEDIENTE_DIAS` | 1,2,3,4,5 | Dias com expediente (0 = domingo … 6 = sábado) |
 | `FERIADOS` | — | Dias sem expediente, ex.: `2026-11-02,2026-11-15,2026-11-20,2026-12-25` |
@@ -282,7 +295,7 @@ server/
   notificacoes.js   avisos da Central de Tickets (sino do portal e e-mail)
   email.js          envio de e-mail: Microsoft 365 (Graph) ou SMTP
   expediente.js     prazos em horário de expediente (seg–sex, 8h–17h)
-  rotas/            auth, admin, ferramentas (entrega, armazenamento, protocolo Apps Script) e tickets
+  rotas/            auth, admin, ferramentas (entrega, armazenamento, protocolo Apps Script), tickets e links (Central de Links)
 public/             portal (login, início, menu, administração)
 scripts/            importar-html e criar-admin
 test/               testes automatizados (npm test)
