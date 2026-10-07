@@ -876,7 +876,7 @@
   };
   var PRIO = { urgente: ['Urgente', 'vermelha'], alta: ['Alta', 'ambar'], media: ['Média', 'azul'], baixa: ['Baixa', 'cinza'] };
   var ROTULO_STATUS_AJUDA = {
-    novo: 'Na fila do setor, ainda sem tratamento.', em_andamento: 'Alguém do setor está tratando.',
+    novo: 'Ainda não iniciado.', em_andamento: 'Alguém do setor está tratando.',
     aguardando: 'Parado esperando retorno de quem abriu ou de terceiros.', resolvido: 'Demanda atendida.', cancelado: 'Não será atendido.',
   };
   var metaTickets = null;
@@ -908,13 +908,32 @@
   }
   function horas(h) { return h == null ? '—' : h < 1 ? Math.max(1, Math.round(h * 60)) + ' min' : h < 48 ? String(h).replace('.', ',') + ' h' : (Math.round(h / 24 * 10) / 10).toString().replace('.', ',') + ' dias'; }
   /* prazo com aviso de atraso (sempre com texto, nunca só cor) */
+  /* contagem até uma data: "vence em 3 h" / "⚠ atrasado 1 h" */
+  function contagem(data, aberto) {
+    if (!data) return '<span class="sec">sem prazo</span>';
+    var falta = new Date(data) - Date.now();
+    if (!aberto) return '<span title="' + esc(quando(data)) + '">' + quando(data) + '</span>';
+    if (falta < 0) return '<span class="etiqueta vermelha" title="Prazo: ' + esc(quando(data)) + '">⚠ atrasado ' + duracao(falta) + '</span>';
+    return '<span title="Prazo: ' + esc(quando(data)) + '"' + (falta < 4 * 3600000 ? ' class="etiqueta ambar"' : '') + '>vence em ' + duracao(falta) + '</span>';
+  }
+  function emAberto(t) { return ['novo', 'em_andamento', 'aguardando'].indexOf(t.status) >= 0; }
+  /* prazo para resposta: conta até o 1º retorno da equipe */
+  function prazoRespostaTxt(t) {
+    if (t.primeira_resposta_em) {
+      var tarde = t.prazo && new Date(t.primeira_resposta_em) > new Date(t.prazo);
+      return '<span class="etiqueta ' + (tarde ? 'ambar' : 'verde') + '" title="Prazo: ' + esc(quando(t.prazo)) + '">✓ respondido ' + (tarde ? 'com atraso' : 'no prazo') + '</span>';
+    }
+    return contagem(t.prazo, emAberto(t));
+  }
+  function prazoConclusaoTxt(t, comData) {
+    if (!t.prazo_conclusao) return '<span class="sec">' + (emAberto(t) ? 'ainda não definido' : '—') + '</span>';
+    return (comData && emAberto(t) ? '<div style="font-weight:700">' + quando(t.prazo_conclusao) + '</div>' : '') + contagem(t.prazo_conclusao, emAberto(t));
+  }
+  /* coluna "Prazo" da lista: antes do 1º retorno vale o da resposta; depois, o da conclusão */
   function prazoTxt(t) {
-    if (!t.prazo) return '<span class="sec">sem prazo</span>';
-    var falta = new Date(t.prazo) - Date.now();
-    var aberto = ['novo', 'em_andamento', 'aguardando'].indexOf(t.status) >= 0;
-    if (!aberto) return '<span title="' + esc(quando(t.prazo)) + '">' + quando(t.prazo) + '</span>';
-    if (falta < 0) return '<span class="etiqueta vermelha" title="Prazo: ' + esc(quando(t.prazo)) + '">⚠ atrasado ' + duracao(falta) + '</span>';
-    return '<span title="Prazo: ' + esc(quando(t.prazo)) + '"' + (falta < 4 * 3600000 ? ' class="etiqueta ambar"' : '') + '>vence em ' + duracao(falta) + '</span>';
+    if (!t.primeira_resposta_em && emAberto(t)) return contagem(t.prazo, true) + '<span class="sec">resposta</span>';
+    if (t.prazo_conclusao) return contagem(t.prazo_conclusao, emAberto(t)) + '<span class="sec">conclusão</span>';
+    return emAberto(t) ? '<span class="sec">sem previsão</span>' : '<span class="sec">—</span>';
   }
   function localInput(iso) {
     if (!iso) return '';
@@ -1042,14 +1061,26 @@
   async function novoTicket() {
     var meta;
     try { meta = await carregarMeta(); } catch (e) { toast(e.message, 'erro'); return; }
+    // condomínios da carteira; nomes repetidos (mesmo nome em outra UF) levam a UF
+    var conds = (meta.condominios || []).map(function (c) {
+      return { id: c.id, resp: c.resp || {}, rotulo: c.nome + (c.comarca ? ' · ' + c.comarca : '') + (c.distratado ? ' · distratado' : '') };
+    });
+    var porRotulo = {};
+    conds.forEach(function (c) { if (porRotulo[normal(c.rotulo)]) c.rotulo += ' · nº ' + c.id; porRotulo[normal(c.rotulo)] = c; });
     var m = modal({
       titulo: 'Novo ticket', largo: true,
       corpo: '<form id="fT" class="pilha" novalidate>' +
         '<div class="grade-2"><div><label class="rot" for="tSetor">Para qual setor?</label><select class="campo" id="tSetor"><option value="">Escolha o setor…</option>' +
         meta.setores.map(function (s) { return '<option value="' + s.id + '">' + esc(s.nome) + '</option>'; }).join('') + '</select></div>' +
         '<div><label class="rot" for="tCat">Tipo de demanda</label><select class="campo" id="tCat" disabled><option value="">Escolha o setor primeiro</option></select></div></div>' +
+        '<div><label class="rot">A demanda é de</label><div class="grade-2">' +
+        '<label class="opcao-radio" style="margin:0"><input type="radio" name="tOrigem" value="condominio"><div><b>Um condomínio</b><span>Vai direto para o responsável pelo condomínio no setor</span></div></label>' +
+        '<label class="opcao-radio" style="margin:0"><input type="radio" name="tOrigem" value="interna"><div><b>Interna</b><span>Não é de um condomínio: vai para o líder do setor</span></div></label></div></div>' +
+        '<div id="tCondBloco" hidden><label class="rot" for="tCond">Condomínio</label><input class="campo" id="tCond" list="tCondLista" autocomplete="off" placeholder="Digite o nome do condomínio">' +
+        '<datalist id="tCondLista">' + conds.map(function (c) { return '<option value="' + esc(c.rotulo) + '"></option>'; }).join('') + '</datalist></div>' +
+        '<div class="ajuda" id="tDestino" hidden></div>' +
         '<div><label class="rot" for="tTitulo">Assunto</label><input class="campo" id="tTitulo" maxlength="160" placeholder="Resumo da demanda em uma linha"></div>' +
-        '<div><label class="rot" for="tDesc">Descrição</label><textarea class="campo" id="tDesc" rows="6" maxlength="10000" placeholder="O que precisa ser feito, condomínio/unidade, valores, datas… Quanto mais detalhe, mais rápido o atendimento."></textarea></div>' +
+        '<div><label class="rot" for="tDesc">Descrição</label><textarea class="campo" id="tDesc" rows="6" maxlength="10000" placeholder="O que precisa ser feito, unidade, valores, datas… Quanto mais detalhe, mais rápido o atendimento."></textarea></div>' +
         '<div class="grade-2"><div><label class="rot" for="tPrio">Prioridade</label><select class="campo" id="tPrio">' +
         ['baixa', 'media', 'alta', 'urgente'].map(function (p) { return '<option value="' + p + '"' + (p === 'media' ? ' selected' : '') + '>' + PRIO[p][0] + '</option>'; }).join('') + '</select>' +
         '<div class="ajuda" id="tPrazo"></div></div>' +
@@ -1062,9 +1093,29 @@
       var s = setor();
       var c = s && s.categorias.find(function (x) { return String(x.id) === $('#tCat', m).value; });
       var h = c && c.prazo_horas ? c.prazo_horas : meta.prazo_padrao_horas[$('#tPrio', m).value];
-      $('#tPrazo', m).textContent = 'Prazo de atendimento: ' + horasUteis(h) + (c && c.prazo_horas ? ' (definido para este tipo de demanda)' : '') + ', contando só o expediente (' + textoExpediente() + ').';
+      $('#tPrazo', m).textContent = 'Prazo para resposta: ' + horasUteis(h) + (c && c.prazo_horas ? ' (definido para este tipo de demanda)' : '') + ', contando só o expediente (' + textoExpediente() + ').';
     }
+    function origem() { var r = $('input[name=tOrigem]:checked', m); return r ? r.value : ''; }
+    function condominio() { return porRotulo[normal($('#tCond', m).value.trim())] || null; }
+    // para onde o ticket vai: pessoa da carteira ou líder do setor
+    function destino() {
+      var s = setor(), o = origem(), el = $('#tDestino', m), c = condominio();
+      $('#tCondBloco', m).hidden = o !== 'condominio';
+      el.hidden = !o || !s;
+      if (el.hidden) return;
+      if (o === 'interna') { el.innerHTML = 'Demanda interna: vai para o líder de <b>' + esc(s.nome) + '</b>, que distribui.'; return; }
+      if (!conds.length) { el.innerHTML = '<span style="color:var(--red)">A carteira de condomínios ainda está vazia. Use "Interna" ou peça à administração para importar a carteira.</span>'; return; }
+      if (!$('#tCond', m).value.trim()) { el.textContent = 'Escolha o condomínio da lista.'; return; }
+      if (!c) { el.innerHTML = '<span style="color:var(--red)">Condomínio não encontrado na carteira. Escolha um nome da lista.</span>'; return; }
+      var r = c.resp[s.id];
+      el.innerHTML = r ? 'Vai direto para <b>' + esc(r) + '</b>, responsável por este condomínio em ' + esc(s.nome) + '.' :
+        r === null ? 'O responsável deste condomínio na carteira ainda não está na equipe de ' + esc(s.nome) + ' no portal: vai para o líder do setor.' :
+        'Vai para o líder de <b>' + esc(s.nome) + '</b>, que distribui.';
+    }
+    $$('input[name=tOrigem]', m).forEach(function (r) { r.onchange = function () { destino(); if (origem() === 'condominio') $('#tCond', m).focus(); }; });
+    $('#tCond', m).oninput = destino;
     $('#tSetor', m).onchange = function () {
+      destino();
       var s = setor();
       var sel = $('#tCat', m);
       sel.disabled = !s || !s.categorias.length;
@@ -1084,17 +1135,21 @@
       var bt = this;
       var msg = $('#tMsg', m);
       if (!$('#tSetor', m).value) { msg.textContent = 'Escolha o setor que vai atender.'; msg.hidden = false; return; }
+      if (!origem()) { msg.textContent = 'Diga se a demanda é de um condomínio ou interna.'; msg.hidden = false; return; }
+      var cond = origem() === 'condominio' ? condominio() : null;
+      if (origem() === 'condominio' && !cond) { msg.textContent = 'Escolha o condomínio da lista.'; msg.hidden = false; return; }
       if (!$('#tTitulo', m).value.trim()) { msg.textContent = 'Informe o assunto.'; msg.hidden = false; return; }
       bt.disabled = true;
       try {
         var r = await api('POST', '/api/tickets', {
           setor_id: Number($('#tSetor', m).value), categoria_id: $('#tCat', m).value ? Number($('#tCat', m).value) : null,
           prioridade: $('#tPrio', m).value, titulo: $('#tTitulo', m).value, descricao: $('#tDesc', m).value,
+          interno: !cond, condominio_id: cond ? cond.id : null,
         });
         var arqs = Array.prototype.slice.call($('#tArq', m).files);
         if (arqs.length) await enviarAnexos(r.id, arqs, false);
         m.fechar();
-        toast('Ticket ' + numTicket(r.id) + ' aberto.', 'ok');
+        toast('Ticket ' + numTicket(r.id) + ' aberto' + (r.responsavel ? ' e enviado para ' + r.responsavel.nome : '') + '.', 'ok');
         location.hash = '#/tickets/' + r.id;
       } catch (e) { msg.textContent = e.message; msg.hidden = false; bt.disabled = false; }
     };
@@ -1148,7 +1203,7 @@
       $('#tbT').innerHTML = r.tickets.map(function (t) {
         var pessoa = visao === 'minha' ? esc(t.solicitante_nome || '—') : t.responsavel_nome ? esc(t.responsavel_nome) : '<span class="etiqueta ambar">sem responsável</span>';
         return '<tr class="clicavel" data-id="' + t.id + '"><td class="num" style="text-align:left;white-space:nowrap"><b>' + numTicket(t.id) + '</b></td>' +
-          '<td><b>' + esc(t.titulo) + '</b><span class="sec">' + (t.categoria_nome ? esc(t.categoria_nome) + ' · ' : '') + 'aberto por ' + esc(t.solicitante_nome || '—') + ' em ' + quando(t.criado_em) +
+          '<td><b>' + esc(t.titulo) + '</b><span class="sec">' + (t.condominio_nome ? esc(t.condominio_nome) + ' · ' : t.demanda_interna ? 'Interna · ' : '') + (t.categoria_nome ? esc(t.categoria_nome) + ' · ' : '') + 'aberto por ' + esc(t.solicitante_nome || '—') + ' em ' + quando(t.criado_em) +
           (t.comentarios ? ' · ' + t.comentarios + ' comentário' + (t.comentarios === 1 ? '' : 's') : '') + '</span></td>' +
           '<td>' + esc(t.setor_nome) + '</td><td>' + etqPrio(t.prioridade) + '</td><td>' + etqStatus(t.status) + '</td><td>' + pessoa + '</td><td style="white-space:nowrap">' + prazoTxt(t) + '</td></tr>';
       }).join('') || '<tr><td colspan="7"><div class="vazio" style="border:0;padding:34px">' +
@@ -1166,12 +1221,14 @@
   function textoEvento(e) {
     var d = e.detalhe || {};
     switch (e.tipo) {
-      case 'criado': return 'abriu o ticket para <b>' + esc(d.setor || '') + '</b>';
+      case 'criado': return 'abriu o ticket para <b>' + esc(d.setor || '') + '</b>' + (d.condominio ? ' · ' + esc(d.condominio) : d.interna ? ' · demanda interna' : '');
       case 'status': return 'mudou a situação de ' + etqStatus(d.de) + ' para ' + etqStatus(d.para);
-      case 'atribuicao': return d.para ? 'atribuiu a <b>' + esc(d.para) + '</b>' : 'devolveu o ticket para a fila do setor';
+      case 'atribuicao': return d.para ? (d.automatico ? 'enviou para <b>' + esc(d.para) + '</b>, responsável pelo condomínio na carteira' : 'atribuiu a <b>' + esc(d.para) + '</b>') : 'devolveu o ticket para a fila do setor';
+      case 'carteira_sem_cadastro': return 'não achou <b>' + esc(pessoaCarteira(d.carteira).nome) + '</b> (responsável pelo condomínio na carteira) na equipe do setor: o ticket ficou com o líder';
+      case 'prazo_conclusao': return (d.de ? 'mudou a previsão de conclusão para <b>' : 'iniciou o atendimento com previsão de conclusão para <b>') + quando(d.para) + '</b>';
       case 'transferencia': return 'transferiu de <b>' + esc(d.de || '') + '</b> para <b>' + esc(d.para || '') + '</b>' + (d.categoria ? ' (' + esc(d.categoria) + ')' : '');
       case 'prioridade': return 'mudou a prioridade de ' + etqPrio(d.de) + ' para ' + etqPrio(d.para);
-      case 'prazo': return 'mudou o prazo para <b>' + (d.para ? quando(d.para) : 'sem prazo') + '</b>';
+      case 'prazo': return 'mudou o prazo para resposta para <b>' + (d.para ? quando(d.para) : 'sem prazo') + '</b>';
       case 'anexo': return 'anexou <b>' + esc(d.nome || 'arquivo') + '</b>';
       default: return esc(e.tipo);
     }
@@ -1240,11 +1297,16 @@
       (pode.equipe ? '<select class="campo" id="dStatus">' + Object.keys(ST_TICKET).map(function (k) { return '<option value="' + k + '"' + (k === t.status ? ' selected' : '') + '>' + ST_TICKET[k][0] + '</option>'; }).join('') + '</select>' +
         '<div class="ajuda" id="dStatusAjuda">' + esc(ROTULO_STATUS_AJUDA[t.status]) + '</div>' : etqStatus(t.status)) + '</div>' +
       '<div class="campo-lado"><label class="rot">Responsável</label>' + (opcoesResp || '<div style="font-weight:700">' + (t.responsavel_nome ? esc(t.responsavel_nome) : '<span class="etiqueta ambar">sem responsável</span>') + '</div>') +
-      '<div class="linha" style="margin-top:8px">' + (pode.assumir ? '<button class="btn ghost sm" id="btAssumir">Assumir para mim</button>' : '') +
-      (t.responsavel_id === eu.id && aberto && !pode.atribuir ? '<button class="btn ghost sm" id="btDevolver">Devolver à fila</button>' : '') + '</div></div>' +
-      '<div class="campo-lado"><label class="rot">Prioridade</label>' + (pode.equipe ? '<select class="campo" id="dPrio">' + ['baixa', 'media', 'alta', 'urgente'].map(function (p) { return '<option value="' + p + '"' + (p === t.prioridade ? ' selected' : '') + '>' + PRIO[p][0] + '</option>'; }).join('') + '</select>' : etqPrio(t.prioridade)) + '</div>' +
-      '<div class="campo-lado"><label class="rot">Prazo</label>' + (pode.equipe ? '<input class="campo" type="datetime-local" id="dPrazo" value="' + localInput(t.prazo) + '">' : '') + '<div style="margin-top:6px">' + prazoTxt(t) + '</div></div>' +
-      (pode.equipe ? '<div class="linha"><button class="btn primary" id="btSalvarT" style="flex:1">Salvar alterações</button></div>' : '') +
+      (pode.assumir ? '<div class="linha" style="margin-top:8px"><button class="btn ghost sm" id="btAssumir">Assumir para mim</button></div>' : '') +
+      (pode.equipe && !pode.atribuir ? '<div class="ajuda">Só o líder do setor muda o responsável.</div>' : '') + '</div>' +
+      '<div class="campo-lado"><label class="rot">Prioridade</label>' + (pode.prazos ? '<select class="campo" id="dPrio">' + ['baixa', 'media', 'alta', 'urgente'].map(function (p) { return '<option value="' + p + '"' + (p === t.prioridade ? ' selected' : '') + '>' + PRIO[p][0] + '</option>'; }).join('') + '</select>' : etqPrio(t.prioridade)) + '</div>' +
+      '<div class="campo-lado"><label class="rot">Prazo para resposta</label>' + (pode.prazos ? '<input class="campo" type="datetime-local" id="dPrazo" value="' + localInput(t.prazo) + '">' : '<div style="font-weight:700">' + quando(t.prazo) + '</div>') +
+      '<div style="margin-top:6px">' + prazoRespostaTxt(t) + '</div></div>' +
+      '<div class="campo-lado"><label class="rot">Prazo para conclusão</label>' + (pode.prazo_conclusao && t.prazo_conclusao ? '<input class="campo" type="datetime-local" id="dConclusao" value="' + localInput(t.prazo_conclusao) + '">' : '') +
+      '<div style="margin-top:6px">' + prazoConclusaoTxt(t, !(pode.prazo_conclusao && t.prazo_conclusao)) + '</div>' +
+      (pode.prazo_conclusao && !t.prazo_conclusao ? '<div class="ajuda">Definido por quem atende ao iniciar o atendimento.</div>' : '') + '</div>' +
+      (pode.prazo_conclusao && t.status === 'novo' && t.responsavel_id ? '<div class="linha" style="margin-bottom:8px"><button class="btn primary" id="btIniciar" style="flex:1">Iniciar atendimento</button></div>' : '') +
+      (pode.equipe ? '<div class="linha"><button class="btn ' + (pode.prazo_conclusao && t.status === 'novo' && t.responsavel_id ? 'ghost' : 'primary') + '" id="btSalvarT" style="flex:1">Salvar alterações</button></div>' : '') +
       '</div>' +
       '<div class="painel" style="padding:16px"><div class="pilha" style="gap:8px">' +
       (pode.equipe && aberto ? '<button class="btn ghost" id="btTransferir">Transferir para outro setor</button>' : '') +
@@ -1252,6 +1314,7 @@
       (!pode.equipe && pode.cancelar ? '<button class="btn danger" id="btCancelarT">Cancelar meu pedido</button>' : '') +
       (pode.reabrir ? '<button class="btn ghost" id="btReabrir">Reabrir ticket</button>' : '') +
       '<dl class="info-ticket"><dt>Setor</dt><dd>' + esc(t.setor_nome) + '</dd><dt>Tipo</dt><dd>' + esc(t.categoria_nome || '—') + '</dd>' +
+      '<dt>Condomínio</dt><dd>' + (t.condominio_nome ? esc(t.condominio_nome) + (t.condominio_comarca ? ' · ' + esc(t.condominio_comarca) : '') : t.demanda_interna ? 'Interna' : '—') + '</dd>' +
       '<dt>Aberto por</dt><dd>' + esc(t.solicitante_nome || '—') + '</dd><dt>Aberto em</dt><dd>' + quando(t.criado_em) + '</dd>' +
       '<dt>1ª resposta</dt><dd>' + (t.primeira_resposta_em ? quando(t.primeira_resposta_em) : '—') + '</dd>' +
       (t.resolvido_em ? '<dt>Resolvido em</dt><dd>' + quando(t.resolvido_em) + '</dd>' : '') + '</dl></div></div>' +
@@ -1297,8 +1360,21 @@
       $('#btSalvarT').onclick = async function () {
         var corpo = {};
         if ($('#dStatus').value !== t.status) corpo.status = $('#dStatus').value;
-        if ($('#dPrio').value !== t.prioridade) corpo.prioridade = $('#dPrio').value;
-        if ($('#dPrazo').value !== localInput(t.prazo)) corpo.prazo = $('#dPrazo').value ? new Date($('#dPrazo').value).toISOString() : null;
+        if ($('#dPrio') && $('#dPrio').value !== t.prioridade) corpo.prioridade = $('#dPrio').value;
+        if ($('#dPrazo') && $('#dPrazo').value !== localInput(t.prazo)) corpo.prazo = $('#dPrazo').value ? new Date($('#dPrazo').value).toISOString() : null;
+        if ($('#dConclusao') && $('#dConclusao').value !== localInput(t.prazo_conclusao)) {
+          if (!$('#dConclusao').value) { toast('Informe a data do prazo para conclusão.', 'erro'); return; }
+          corpo.prazo_conclusao = new Date($('#dConclusao').value).toISOString();
+          var mc = await pedirMotivo('Mudar prazo para conclusão', 'Por que o prazo mudou? (aparece para quem abriu)', true, 'Salvar');
+          if (mc === null) return;
+          corpo.motivo = mc;
+        }
+        // começar a tratar exige o prazo para conclusão
+        if (t.status === 'novo' && (corpo.status === 'em_andamento' || corpo.status === 'aguardando') && !t.prazo_conclusao) {
+          var pc = await pedirConclusao();
+          if (!pc) return;
+          corpo.prazo_conclusao = pc;
+        }
         if ($('#dResp')) { var rsp = $('#dResp').value ? Number($('#dResp').value) : null; if (rsp !== t.responsavel_id) corpo.responsavel_id = rsp; }
         if (!Object.keys(corpo).length) { toast('Nada foi alterado.'); return; }
         if (corpo.status === 'resolvido' || corpo.status === 'cancelado') {
@@ -1310,7 +1386,31 @@
       };
     }
     if ($('#btAssumir')) $('#btAssumir').onclick = function () { mudar({ responsavel_id: eu.id }, 'Ticket assumido.'); };
-    if ($('#btDevolver')) $('#btDevolver').onclick = function () { mudar({ responsavel_id: null }, 'Ticket devolvido para a fila do setor.'); };
+    /* pede a data de conclusão (padrão: o prazo para resposta, se ainda estiver no futuro) */
+    function pedirConclusao() {
+      return new Promise(function (resolve) {
+        var valor = null;
+        var sugestao = t.prazo && new Date(t.prazo) > new Date() ? localInput(t.prazo) : '';
+        var mm = modal({
+          titulo: 'Iniciar atendimento',
+          corpo: '<div class="pilha"><p style="margin:0;font-weight:600;color:var(--ink-2)">Até quando você conclui esta demanda? Quem abriu o ticket vê essa previsão.</p>' +
+            '<div><label class="rot" for="mConc">Prazo para conclusão</label><input class="campo" type="datetime-local" id="mConc" value="' + sugestao + '"></div><div id="mMsgC" class="msg erro" hidden></div></div>',
+          pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mOkC">Iniciar</button>',
+          aoFechar: function () { resolve(valor); },
+        });
+        $('#mOkC', mm).onclick = function () {
+          var v = $('#mConc', mm).value;
+          var msg = $('#mMsgC', mm);
+          if (!v) { msg.textContent = 'Informe a data e a hora.'; msg.hidden = false; return; }
+          if (new Date(v) <= new Date()) { msg.textContent = 'O prazo precisa ser uma data futura.'; msg.hidden = false; return; }
+          valor = new Date(v).toISOString(); mm.fechar();
+        };
+      });
+    }
+    if ($('#btIniciar')) $('#btIniciar').onclick = async function () {
+      var pc = await pedirConclusao();
+      if (pc) mudar({ status: 'em_andamento', prazo_conclusao: pc }, 'Atendimento iniciado.');
+    };
     if ($('#btResolver')) {
       $('#btResolver').onclick = async function () {
         var mot = await pedirMotivo('Resolver ticket', 'O que foi feito? (aparece para quem abriu)', false, 'Marcar como resolvido');
@@ -1392,9 +1492,10 @@
       $('#pCorpo').innerHTML =
         '<div class="tiles">' +
         tile('Em aberto', g.abertos, g.sem_responsavel + ' sem responsável') +
-        tile('Atrasados', g.atrasados ? '⚠ ' + g.atrasados : '0', 'prazo vencido, ainda em aberto', g.atrasados > 0) +
+        tile('Atrasados', g.atrasados ? '⚠ ' + g.atrasados : '0', 'sem resposta no prazo ou conclusão vencida', g.atrasados > 0) +
+        tile('Respondidos no prazo', g.respondidos ? Math.round(g.respondidos_no_prazo / g.respondidos * 100) + '%' : '—', g.respondidos ? g.respondidos_no_prazo + ' de ' + g.respondidos + ' no período' : 'prazo para resposta') +
         tile('Abertos no período', g.criados, '') +
-        tile('Resolvidos no período', g.resolvidos, g.resolvidos ? pct + ' dentro do prazo' : '') +
+        tile('Resolvidos no período', g.resolvidos, g.resolvidos ? pct + ' dentro do prazo para conclusão' : '') +
         tile('Tempo médio de resolução', horas(g.horas_resolucao), 'da abertura até resolver') +
         tile('Tempo médio de 1ª resposta', horas(g.horas_primeira_resposta), 'até o primeiro retorno da equipe') +
         '</div>' +

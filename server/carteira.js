@@ -6,11 +6,12 @@
  * Os dados da carteira não ficam no repositório: entram pela aba Carteira do portal.
  */
 
-// pessoas que cuidam de cada condomínio (coluna da planilha → campo no banco)
+// pessoas que cuidam de cada condomínio (coluna da planilha → campo no banco).
+// setor: o ticket aberto para esse setor sobre o condomínio vai direto para essa pessoa
 const FUNCOES = [
-  { campo: 'analista_cobranca', rotulo: 'Analista de cobrança', coluna: 'ANALISTA ADMINISTRATIVA' },
-  { campo: 'analista_extrajudicial', rotulo: 'Analista extrajudicial (ApoioCob)', coluna: 'ANALISTA EXTRAJUDICIAL' },
-  { campo: 'assistente_credito', rotulo: 'Assistente de crédito', coluna: 'ASSISTENTE CRÉDITO' },
+  { campo: 'analista_cobranca', rotulo: 'Analista de cobrança', coluna: 'ANALISTA ADMINISTRATIVA', setor: 'Cobrança' },
+  { campo: 'analista_extrajudicial', rotulo: 'Analista extrajudicial (ApoioCob)', coluna: 'ANALISTA EXTRAJUDICIAL', setor: null },
+  { campo: 'assistente_credito', rotulo: 'Assistente de crédito', coluna: 'ASSISTENTE CRÉDITO', setor: 'Crédito' },
 ];
 
 // todos os campos editáveis, na ordem das colunas da planilha
@@ -151,4 +152,52 @@ function exportar(linhas) {
   return '﻿' + [cab, ...corpo].join('\r\n') + '\r\n';
 }
 
-module.exports = { FUNCOES, CAMPOS, SITUACOES, interpretar, normalizar, exportar, lerCsv };
+/* ===================== responsável do condomínio nos tickets ===================== */
+// "CHAYANNE FREITAS - 4624" → "chayanne freitas" (sem acento e sem o ramal)
+const chavePessoa = (s) => semAcento(s).toLowerCase().replace(/\s*-\s*\d+\s*$/, '').replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim();
+
+/* Acha, entre as pessoas da equipe do setor, quem corresponde ao nome da carteira. Precisa ser uma só:
+   nome igual, todas as palavras da carteira no nome do portal, ou primeiro + último nome iguais. */
+function acharPessoa(nomeCarteira, membros) {
+  const alvo = chavePessoa(nomeCarteira);
+  if (!alvo) return null;
+  const pal = alvo.split(' ');
+  const lista = membros.map((m) => ({ ...m, chave: chavePessoa(m.nome), palavras: chavePessoa(m.nome).split(' ') }));
+  const regras = [
+    (m) => m.chave === alvo,
+    (m) => pal.every((p) => m.palavras.includes(p)),
+    (m) => pal.length > 1 && m.palavras[0] === pal[0] && m.palavras[m.palavras.length - 1] === pal[pal.length - 1],
+  ];
+  for (const regra of regras) {
+    const achados = lista.filter(regra);
+    if (achados.length === 1) return achados[0];
+    if (achados.length > 1) return null; // ambíguo: fica com o líder
+  }
+  return null;
+}
+
+/* Responsável pela carteira em cada setor: Map setor_id → função. */
+async function funcoesPorSetor(db) {
+  const setores = (await db.q('SELECT id, nome FROM setores')).rows;
+  const m = new Map();
+  for (const f of FUNCOES) {
+    const s = f.setor && setores.find((x) => x.nome === f.setor);
+    if (s) m.set(s.id, f);
+  }
+  return m;
+}
+
+/* Quem recebe o ticket deste condomínio neste setor.
+   → { id, nome, carteira } se a pessoa da carteira está na equipe; { id: null, carteira } se não achou; null se o setor não usa carteira. */
+async function responsavelDoCondominio(db, condominioId, setorId) {
+  if (!condominioId) return null;
+  const f = (await funcoesPorSetor(db)).get(setorId);
+  if (!f) return null;
+  const c = await db.um(`SELECT ${f.campo} AS pessoa FROM condominios WHERE id = $1`, [condominioId]);
+  if (!c || !c.pessoa) return null;
+  const membros = (await db.q('SELECT u.id, u.nome FROM setor_membros sm JOIN usuarios u ON u.id = sm.usuario_id WHERE sm.setor_id = $1 AND u.ativo', [setorId])).rows;
+  const achado = acharPessoa(c.pessoa, membros);
+  return achado ? { id: achado.id, nome: achado.nome, carteira: c.pessoa } : { id: null, carteira: c.pessoa };
+}
+
+module.exports = { acharPessoa, funcoesPorSetor, responsavelDoCondominio, FUNCOES, CAMPOS, SITUACOES, interpretar, normalizar, exportar, lerCsv };

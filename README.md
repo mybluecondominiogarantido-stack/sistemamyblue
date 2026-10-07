@@ -121,7 +121,7 @@ Menu **Carteira → Carteira de condomínios**. Reúne os condomínios atendidos
 - **Importar / exportar:** a carga inicial vem do CSV da planilha *Carteira de Condomínios* (no Excel: *Salvar como → CSV separado por ponto e vírgula*). Cada condomínio é reconhecido pelo **ID**: os existentes são atualizados, os novos incluídos e os que não estão no arquivo ficam como estão. O *Exportar CSV* gera o mesmo formato, que abre no Excel e pode ser importado de volta.
 - Os dados da carteira **não vão para o Git** (o repositório é público): entram só pelo portal. Arquivos `.csv` ficam fora do Git.
 
-Próximo passo previsto: usar a carteira na Central de Tickets (escolher o condomínio no ticket e mandar direto para o responsável do setor).
+Na Central de Tickets, a carteira define para quem vai o ticket de um condomínio (veja *Central de Tickets → Fluxo*).
 
 ## Central de Tickets
 
@@ -129,19 +129,31 @@ Demandas internas entre os setores: quem precisa de algo de outro setor abre um 
 
 **Fluxo**
 
-1. **Abrir:** qualquer pessoa logada escolhe o setor, o tipo de demanda, a prioridade, descreve e pode anexar arquivos.
-2. **Fila do setor:** o ticket entra como *Novo*, sem responsável. Os líderes do setor recebem aviso (sino, som e e-mail). Se o setor não tiver líder, a equipe inteira recebe.
-3. **Distribuir:** o líder atribui a alguém da equipe. Qualquer pessoa do setor também pode **assumir** um ticket da fila, ou devolver para a fila um que esteja com ela.
-4. **Tratar:** o responsável muda a situação (*Em andamento*, *Aguardando*), conversa com quem abriu e registra **notas internas** (quem abriu não vê). Também pode transferir para outro setor, e aí o ticket volta para a fila do novo setor.
-5. **Resolver:** quem abriu é avisado e pode **reabrir** se não ficou resolvido. Também pode cancelar o próprio pedido.
+1. **Abrir:** qualquer pessoa logada escolhe o setor, o tipo de demanda (opcional) e diz se a demanda é de **um condomínio** (escolhido na Carteira de condomínios) ou **interna**. Depois descreve, define a prioridade e pode anexar arquivos.
+2. **Para quem vai:**
+   - **Condomínio, setor Cobrança ou Crédito:** vai direto para a pessoa da carteira do condomínio (Cobrança → *analista de cobrança*, Crédito → *assistente de crédito*), que recebe o aviso por e-mail. A pessoa é encontrada pelo nome (sem acento e sem o ramal) entre a equipe do setor no portal; se não estiver cadastrada, o ticket vai para o líder e a equipe vê o aviso interno.
+   - **Interna, ou setor que não usa a carteira:** entra na fila do setor sem responsável e os líderes recebem o aviso (sino, som e e-mail). Se o setor não tiver líder, a equipe inteira recebe.
+3. **Distribuir:** só o **líder do setor** (ou a gestão/supervisão) escolhe ou troca o responsável, a prioridade e o prazo para resposta.
+4. **Iniciar:** o responsável clica em **Iniciar atendimento** e informa o **prazo para conclusão**. Sem ele o ticket não sai de *Novo*. Quem abriu é avisado e vê a previsão. Mudar a data depois exige o motivo, e quem abriu é avisado por e-mail.
+5. **Tratar:** o responsável muda a situação (*Em andamento*, *Aguardando*), conversa com quem abriu e registra **notas internas** (quem abriu não vê). Ao transferir para outro setor, o ticket vai para a pessoa da carteira de lá (se houver) ou para a fila, e a equipe nova define o próprio prazo para conclusão.
+6. **Resolver:** quem abriu é avisado e pode **reabrir** se não ficou resolvido. Também pode cancelar o próprio pedido.
+
+**Prazos**
+
+| Prazo | Quem define | Até quando conta |
+|---|---|---|
+| Para resposta | Automático pelo tipo de demanda ou prioridade (em horas de expediente). Só o líder altera | Até o 1º retorno da equipe: comentário, mudança de situação ou definição do prazo para conclusão |
+| Para conclusão | Quem está com o ticket, ao iniciar o atendimento | Até resolver |
+
+O ticket fica **atrasado** quando passa do prazo para resposta sem nenhum retorno, ou quando passa do prazo para conclusão ainda em aberto.
 
 **Quem faz o quê**
 
 | Perfil | O que pode |
 |---|---|
 | Qualquer pessoa | Abrir tickets, acompanhar os que abriu, comentar, anexar, cancelar ou reabrir os seus |
-| Equipe do setor | Ver a fila do setor, assumir, tratar, mudar situação, prioridade e prazo, transferir, notas internas |
-| Líder do setor (coordenação do setor) | Tudo da equipe, mais distribuir tickets para qualquer pessoa do setor |
+| Equipe do setor | Ver a fila do setor, tratar os tickets, definir o prazo para conclusão dos que estão com ela, mudar a situação, transferir, notas internas |
+| Líder do setor (coordenação do setor) | Tudo da equipe, mais escolher e trocar o responsável, a prioridade e o prazo para resposta |
 | Supervisão / Coordenação | Ver e direcionar os tickets de **todos** os setores, com painel geral. Não dá acesso à administração do portal |
 | Administrador | Tudo, mais montar equipes e tipos de demanda |
 
