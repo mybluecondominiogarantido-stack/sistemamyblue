@@ -162,7 +162,7 @@ function rotasLinks({ db, seg, cfg }) {
   }
 
   r.post('/api/links/gestao/campanhas', json, async (req, res) => {
-    const d = dadosCampanha({ escurecer: 0, ...req.body });
+    const d = dadosCampanha({ escurecer: 35, ...req.body });
     if (d.erro) return erro(res, 400, d.erro);
     const { id } = await db.um('INSERT INTO links_campanhas (nome, inicio, escurecer, criado_por) VALUES ($1, $2, $3, $4) RETURNING id',
       [d.nome, d.inicio, d.escurecer, req.usuario.id]);

@@ -1633,7 +1633,7 @@
       porNome[g].itens.push(l);
     });
     var html = '<div class="central-links' + (c && c.fundo_url ? ' com-fundo' : '') + '" style="' + estilo + '"><div class="cl-coluna">' +
-      '<div class="cl-cab"><h1>' + esc(j.pagina.titulo) + '</h1>' +
+      '<div class="cl-cab"><img src="/img/logo.png" alt="MyBlue" class="cl-logo"><h1>' + esc(j.pagina.titulo) + '</h1>' +
       (j.pagina.subtitulo ? '<p>' + esc(j.pagina.subtitulo) + '</p>' : '') +
       (previa ? '<span class="cl-campanha">' + IC.olho + 'Pré-visualização: ' + esc(c ? c.nome : 'campanha não encontrada') + '</span>' : '') + '</div>';
     if (!j.links.length) {
@@ -1642,7 +1642,8 @@
     grupos.forEach(function (g) {
       html += '<section class="cl-grupo">' + (g.nome ? '<h2>' + esc(g.nome) + '</h2>' : '') + g.itens.map(function (l) {
         return '<a class="cl-link" href="' + esc(l.url) + '" target="_blank" rel="noopener noreferrer">' +
-          '<b>' + esc(l.titulo) + '</b>' + (l.descricao ? '<span>' + esc(l.descricao) + '</span>' : '') + '</a>';
+          '<span class="cl-icone">' + (IC[l.icone] || IC.link) + '</span><span class="cl-texto"><b>' + esc(l.titulo) + '</b>' +
+          (l.descricao ? '<span>' + esc(l.descricao) + '</span>' : '') + '</span>' + IC.novaAba + '</a>';
       }).join('') + '</section>';
     });
     html += '</div></div>';
@@ -1714,7 +1715,7 @@
     var hoje = new Date();
     var proxMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1);
     var p2 = function (n) { return String(n).padStart(2, '0'); };
-    c = c || { nome: '', inicio: proxMes.getFullYear() + '-' + p2(proxMes.getMonth() + 1) + '-01', escurecer: 0 };
+    c = c || { nome: '', inicio: proxMes.getFullYear() + '-' + p2(proxMes.getMonth() + 1) + '-01', escurecer: 35 };
     var arquivos = { fundo: null, 'fundo-celular': null };
     function zonaImg(qual, rotulo, ajuda, url) {
       return '<div><label class="rot">' + rotulo + '</label><div class="zona-img" id="z-' + qual + '">' +
@@ -1727,12 +1728,12 @@
         '<div><label class="rot" for="cNome">Nome da campanha</label><input class="campo" id="cNome" maxlength="100" placeholder="Ex.: Outubro Rosa" value="' + esc(c.nome) + '"></div>' +
         '<div><label class="rot" for="cInicio">Entra no ar em</label><input class="campo" id="cInicio" type="date" value="' + esc(c.inicio) + '"><div class="ajuda">Fica no ar até a data de início da próxima campanha.</div></div></div>' +
         '<div class="grade-2">' +
-        zonaImg('fundo', 'Fundo — computador', 'Clique ou arraste a imagem (JPG, PNG ou WEBP, até ' + j.limite_fundo_mb + ' MB). Sugestão: 1920 × 1080 px, deitada, com o centro livre para os botões.', c.fundo_url) +
+        zonaImg('fundo', 'Fundo — computador', 'Clique ou arraste a imagem (JPG, PNG ou WEBP, até ' + j.limite_fundo_mb + ' MB). Sugestão: 1920 × 1080 px, deitada.', c.fundo_url) +
         zonaImg('fundo-celular', 'Fundo — celular (opcional)', 'Sugestão: 1080 × 1920 px, em pé. Sem ela, o celular usa a do computador.', c.fundo_celular_url) +
         '</div>' +
         (!novo && c.tem_fundo_celular ? '<label class="linha" style="font-weight:700;font-size:13px"><input type="checkbox" id="cTirarCel"> remover a versão para celular</label>' : '') +
         '<div><label class="rot" for="cEsc">Escurecer o fundo: <span id="cEscV">' + c.escurecer + '%</span></label><input id="cEsc" type="range" min="0" max="85" step="5" value="' + c.escurecer + '" style="width:100%;accent-color:var(--teal)">' +
-        '<div class="ajuda">A arte aparece como foi enviada (0%). Aumente só se o título ou os botões ficarem difíceis de ler sobre a imagem.</div></div>' +
+        '<div class="ajuda">Escurece a imagem para os botões e o título continuarem legíveis. Use 0% se a arte já tiver espaço limpo no meio.</div></div>' +
         '<div id="cMsg" class="msg erro" hidden></div></div>',
       pe: (novo ? '' : '<button class="btn danger" id="btApagarCamp" style="margin-right:auto">Excluir</button>') +
         '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="btSalvarCamp">' + (novo ? 'Criar campanha' : 'Salvar') + '</button>',
@@ -1796,7 +1797,8 @@
         return '<tr class="clicavel" data-link="' + l.id + '"><td style="white-space:nowrap">' +
           '<button class="btn icon ghost" data-mover="-1" title="Subir" aria-label="Subir"' + (i === 0 ? ' disabled' : '') + '>' + IC.cima + '</button> ' +
           '<button class="btn icon ghost" data-mover="1" title="Descer" aria-label="Descer"' + (i === j.links.length - 1 ? ' disabled' : '') + '>' + IC.baixo + '</button></td>' +
-          '<td><b>' + esc(l.titulo) + '</b><span class="sec" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:460px">' + esc(l.url) + '</span></td>' +
+          '<td><div class="linha" style="gap:8px;flex-wrap:nowrap"><span class="icone-mod" style="width:32px;height:32px;border-radius:9px">' + (IC[l.icone] || IC.link) + '</span><div style="min-width:0"><b>' + esc(l.titulo) + '</b>' +
+          '<span class="sec" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:420px">' + esc(l.url) + '</span></div></div></td>' +
           '<td>' + (l.grupo ? esc(l.grupo) : '<span class="sec">—</span>') + '</td>' +
           '<td>' + (l.ativo ? etq(['publicado', 'verde']) : etq(['oculto', 'cinza'])) + '</td></tr>';
       }).join('') + '</tbody></table></div></div>';
@@ -1832,8 +1834,9 @@
       corpo: '<form class="pilha" id="fLink" novalidate>' +
         '<div><label class="rot" for="lTit">Nome do botão</label><input class="campo" id="lTit" maxlength="120" value="' + esc(l.titulo) + '"></div>' +
         '<div><label class="rot" for="lUrl">Endereço (link)</label><input class="campo" id="lUrl" type="url" maxlength="2000" value="' + esc(l.url) + '"><div class="ajuda">Link completo, começando com https://. Também aceita mailto: e tel:.</div></div>' +
-        '<div><label class="rot" for="lGrupo">Grupo (opcional)</label><input class="campo" id="lGrupo" maxlength="80" list="lGrupos" value="' + esc(l.grupo) + '" placeholder="Deixe em branco para uma lista única">' +
-        '<datalist id="lGrupos">' + grupos.map(function (g) { return '<option value="' + esc(g) + '">'; }).join('') + '</datalist><div class="ajuda">Links com o mesmo grupo aparecem juntos, sob o nome do grupo.</div></div>' +
+        '<div class="grade-2"><div><label class="rot" for="lGrupo">Grupo (opcional)</label><input class="campo" id="lGrupo" maxlength="80" list="lGrupos" value="' + esc(l.grupo) + '" placeholder="Ex.: Formulários">' +
+        '<datalist id="lGrupos">' + grupos.map(function (g) { return '<option value="' + esc(g) + '">'; }).join('') + '</datalist></div>' +
+        '<div><label class="rot" for="lIcone">Ícone</label><select class="campo" id="lIcone">' + j.icones.map(function (i) { return '<option value="' + i + '"' + (i === l.icone ? ' selected' : '') + '>' + esc(ROTULO_ICONE[i] || i) + '</option>'; }).join('') + '</select></div></div>' +
         '<div><label class="rot" for="lDesc">Descrição curta (opcional)</label><input class="campo" id="lDesc" maxlength="300" value="' + esc(l.descricao) + '"></div>' +
         '<label class="linha" style="font-weight:700"><input type="checkbox" id="lAtivo"' + (l.ativo ? ' checked' : '') + '> Publicado (desmarque para esconder sem apagar)</label>' +
         '<div id="lMsg" class="msg erro" hidden></div></form>',
@@ -1841,7 +1844,7 @@
         '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="btSalvarLink">' + (novo ? 'Incluir' : 'Salvar') + '</button>',
     });
     $('#btSalvarLink', m).onclick = async function () {
-      var corpo = { titulo: $('#lTit', m).value, url: $('#lUrl', m).value, grupo: $('#lGrupo', m).value, descricao: $('#lDesc', m).value, ativo: $('#lAtivo', m).checked };
+      var corpo = { titulo: $('#lTit', m).value, url: $('#lUrl', m).value, grupo: $('#lGrupo', m).value, descricao: $('#lDesc', m).value, icone: $('#lIcone', m).value, ativo: $('#lAtivo', m).checked };
       try {
         if (novo) await api('POST', '/api/links/gestao/links', corpo); else await api('PATCH', '/api/links/gestao/links/' + l.id, corpo);
         m.fechar(); toast(novo ? 'Link incluído.' : 'Link atualizado.', 'ok'); paginaGestaoLinks('links');
