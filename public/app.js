@@ -1168,14 +1168,16 @@
     var visoes = VISOES.filter(function (v) { return (v[0] !== 'todos' || gestorTickets()) && (v[0] !== 'setor' || souEquipe()) && (v[0] !== 'minha' || souEquipe()); });
     if (!visoes.some(function (v) { return v[0] === visao; })) visao = visoes[0][0];
     guardar('tickets.visao', visao);
-    var filtros = lembrar('tickets.filtros.' + visao, { status: 'abertos', setor: '', q: '', atrasados: false, semResp: false });
+    var filtros = lembrar('tickets.filtros.' + visao, { status: 'todos', setor: '', q: '', atrasados: false, semResp: false });
+    // a situação sempre abre em "Todas as situações" (os em aberto vêm primeiro na lista)
+    filtros.status = 'todos';
     definirBarra('<span class="setor">Central de Tickets</span><span class="sep">/</span><span class="nome">' + esc(visoes.find(function (v) { return v[0] === visao; })[1]) + '</span>');
     var setoresFiltro = visao === 'setor' && !gestorTickets() ? meusSetores() : (metaTickets ? metaTickets.setores : []);
     $('#conteudo').innerHTML = '<div class="pagina"><h1>Central de Tickets</h1><p class="sub">Demandas entre os setores: abra, acompanhe e trate tudo em um só lugar.</p>' +
       '<nav class="abas">' + visoes.map(function (v) { return '<a href="#/tickets/fila/' + v[0] + '" class="' + (v[0] === visao ? 'on' : '') + '" title="' + esc(v[2]) + '">' + esc(v[1]) + '</a>'; }).join('') + '</nav>' +
       '<div class="painel"><div class="cab-painel">' +
       '<input class="campo" id="fTq" type="search" placeholder="Buscar por nº ou assunto…" style="max-width:260px" value="' + esc(filtros.q) + '">' +
-      '<select class="campo" id="fTst" style="max-width:170px"><option value="abertos">Em aberto</option><option value="todos">Todas as situações</option>' +
+      '<select class="campo" id="fTst" style="max-width:170px"><option value="todos">Todas as situações</option><option value="abertos">Em aberto</option>' +
       Object.keys(ST_TICKET).map(function (k) { return '<option value="' + k + '">' + ST_TICKET[k][0] + '</option>'; }).join('') + '</select>' +
       (visao === 'minha' ? '' : '<select class="campo" id="fTse" style="max-width:200px"><option value="">Todos os setores</option>' +
         setoresFiltro.map(function (s) { return '<option value="' + s.id + '">' + esc(s.nome) + '</option>'; }).join('') + '</select>') +
