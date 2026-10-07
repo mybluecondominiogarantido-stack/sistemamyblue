@@ -277,7 +277,10 @@ ALTER TABLE condominios ADD COLUMN IF NOT EXISTS observacoes TEXT NOT NULL DEFAU
 ALTER TABLE condominios ADD COLUMN IF NOT EXISTS criado_em TIMESTAMPTZ NOT NULL DEFAULT now();
 ALTER TABLE condominios ADD COLUMN IF NOT EXISTS atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL;
 ALTER TABLE modulos DROP CONSTRAINT IF EXISTS modulos_adaptador_check;
-ALTER TABLE modulos ADD CONSTRAINT modulos_adaptador_check CHECK (adaptador IS NULL OR adaptador IN ('gas-linhas','gas-objetos','gas-posicional'))
+ALTER TABLE modulos ADD CONSTRAINT modulos_adaptador_check CHECK (adaptador IS NULL OR adaptador IN ('gas-linhas','gas-objetos','gas-posicional'));
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto BYTEA;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto_tipo TEXT;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto_em TIMESTAMPTZ
 `;
 
 async function abrir(cfg) {

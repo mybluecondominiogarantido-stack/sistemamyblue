@@ -388,6 +388,37 @@ test('backup do banco (JSON, sem hashes de senha)', async () => {
   assert.equal(typeof r.json.tabelas.modulo_versoes[0].conteudo, 'string');
 });
 
+test('foto de perfil: enviar, ver, recusar arquivo inválido e remover', async () => {
+  const { c } = await logar('admin@teste.com', 'Admin1234');
+  // PNG 1x1 válido
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  let r = await c('PUT', '/api/auth/foto', png, { headers: { 'content-type': 'image/png' } });
+  assert.equal(r.status, 200);
+  assert.ok(r.json.foto_v);
+  const eu = (await c('GET', '/api/auth/eu')).json.usuario;
+  assert.equal(eu.foto_v, r.json.foto_v);
+  // outra pessoa logada consegue ver a foto
+  await c('POST', '/api/admin/usuarios', { nome: 'Dani', email: 'dani@teste.com', senha: 'Dani12345' });
+  const { c: dani } = await logar('dani@teste.com', 'Dani12345');
+  const img = await dani('GET', `/api/usuarios/${eu.id}/foto?v=${eu.foto_v}`, undefined, { bruto: true });
+  assert.equal(img.status, 200);
+  assert.equal(img.headers.get('content-type'), 'image/png');
+  assert.ok(img.buffer.equals(png));
+  // sem login, não
+  assert.equal((await cliente()('GET', `/api/usuarios/${eu.id}/foto`)).status, 401);
+  // arquivo que não é imagem (mesmo dizendo que é) é recusado
+  r = await c('PUT', '/api/auth/foto', '<script>alert(1)</script>', { headers: { 'content-type': 'image/png' } });
+  assert.equal(r.status, 400);
+  // lista de usuários mostra quem tem foto
+  const lista = (await c('GET', '/api/admin/usuarios')).json.usuarios;
+  assert.ok(lista.find((u) => u.id === eu.id).foto_v);
+  assert.ok(!('foto' in lista[0]));
+  // remover
+  assert.equal((await c('DELETE', '/api/auth/foto')).status, 200);
+  assert.equal((await dani('GET', `/api/usuarios/${eu.id}/foto`)).status, 404);
+  assert.equal((await c('GET', '/api/auth/eu')).json.usuario.foto_v, null);
+});
+
 test('saúde informa o banco', async () => {
   const r = await fetch(base + '/saude');
   assert.equal(r.status, 200);

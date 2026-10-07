@@ -72,6 +72,7 @@ Em *Usuários e acessos*:
 - **Administrador:** acessa todas as ferramentas e a administração.
 - Ao criar um usuário (ou redefinir a senha), o portal mostra uma senha temporária. A pessoa cria a própria senha no primeiro acesso.
 - Desativar um usuário encerra na hora as sessões abertas dele.
+- Cada pessoa pode pôr uma **foto de perfil** em *Minha conta* (recortada e reduzida no navegador; fica no banco). Ela aparece no menu e na lista de usuários.
 
 O acesso é conferido no servidor: quem não tem permissão não recebe o HTML da ferramenta nem consegue ler ou gravar os dados dela.
 

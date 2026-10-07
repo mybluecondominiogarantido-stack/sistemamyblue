@@ -27,8 +27,8 @@ function rotasAdmin({ db, seg, modulos, registros, cfg }) {
   r.get('/api/admin/usuarios', async (req, res) => {
     const perms = {};
     for (const p of (await db.q('SELECT usuario_id, modulo_slug FROM permissoes')).rows) (perms[p.usuario_id] ||= []).push(p.modulo_slug);
-    const { rows } = await db.q('SELECT id, nome, email, papel, ativo, trocar_senha, supervisor_tickets, editor_links, criado_em, ultimo_login FROM usuarios ORDER BY ativo DESC, nome');
-    res.json({ usuarios: rows.map((u) => ({ ...u, modulos: perms[u.id] || [] })) });
+    const { rows } = await db.q('SELECT id, nome, email, papel, ativo, trocar_senha, supervisor_tickets, editor_links, criado_em, ultimo_login, foto_em FROM usuarios ORDER BY ativo DESC, nome');
+    res.json({ usuarios: rows.map(({ foto_em, ...u }) => ({ ...u, foto_v: foto_em ? new Date(foto_em).getTime() : null, modulos: perms[u.id] || [] })) });
   });
 
   async function dadosUsuario(body) {
@@ -361,7 +361,7 @@ function rotasAdmin({ db, seg, modulos, registros, cfg }) {
       // arquivos (HTMLs, anexos, fundos de campanha) em base64; hashes de senha ficam fora do backup por segurança
       saida.tabelas[t] = rows.map((l) => {
         const c = { ...l };
-        for (const k of Object.keys(c)) if (Buffer.isBuffer(c[k])) c[k] = c[k].toString('base64');
+        for (const k of Object.keys(c)) if (Buffer.isBuffer(c[k])) c[k] = c[k].toString('base64'); // HTMLs e fotos
         delete c.senha_hash;
         return c;
       });
