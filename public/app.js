@@ -1837,7 +1837,7 @@
       porNome[g].itens.push(l);
     });
     var html = '<div class="central-links' + (c && c.fundo_url ? ' com-fundo' : '') + '" style="' + estilo + '"><div class="cl-coluna">' +
-      '<div class="cl-cab"><h1>' + esc(j.pagina.titulo) + '</h1>' +
+      '<div class="cl-cab"><img src="/img/logo.png" alt="MyBlue" class="cl-logo"><h1>' + esc(j.pagina.titulo) + '</h1>' +
       (j.pagina.subtitulo ? '<p>' + esc(j.pagina.subtitulo) + '</p>' : '') +
       (previa ? '<span class="cl-campanha">' + IC.olho + 'Pré-visualização: ' + esc(c ? c.nome : 'campanha não encontrada') + '</span>' : '') + '</div>';
     if (!j.links.length) {
@@ -1846,7 +1846,8 @@
     grupos.forEach(function (g) {
       html += '<section class="cl-grupo">' + (g.nome ? '<h2>' + esc(g.nome) + '</h2>' : '') + g.itens.map(function (l) {
         return '<a class="cl-link" href="' + esc(l.url) + '" target="_blank" rel="noopener noreferrer">' +
-          '<b>' + esc(l.titulo) + '</b>' + (l.descricao ? '<span>' + esc(l.descricao) + '</span>' : '') + '</a>';
+          '<span class="cl-icone">' + (IC[l.icone] || IC.link) + '</span><span class="cl-texto"><b>' + esc(l.titulo) + '</b>' +
+          (l.descricao ? '<span>' + esc(l.descricao) + '</span>' : '') + '</span>' + IC.novaAba + '</a>';
       }).join('') + '</section>';
     });
     html += '</div></div>';
@@ -1918,7 +1919,7 @@
     var hoje = new Date();
     var proxMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1);
     var p2 = function (n) { return String(n).padStart(2, '0'); };
-    c = c || { nome: '', inicio: proxMes.getFullYear() + '-' + p2(proxMes.getMonth() + 1) + '-01', escurecer: 0 };
+    c = c || { nome: '', inicio: proxMes.getFullYear() + '-' + p2(proxMes.getMonth() + 1) + '-01', escurecer: 35 };
     var arquivos = { fundo: null, 'fundo-celular': null };
     function zonaImg(qual, rotulo, ajuda, url) {
       return '<div><label class="rot">' + rotulo + '</label><div class="zona-img" id="z-' + qual + '">' +
@@ -1931,12 +1932,12 @@
         '<div><label class="rot" for="cNome">Nome da campanha</label><input class="campo" id="cNome" maxlength="100" placeholder="Ex.: Outubro Rosa" value="' + esc(c.nome) + '"></div>' +
         '<div><label class="rot" for="cInicio">Entra no ar em</label><input class="campo" id="cInicio" type="date" value="' + esc(c.inicio) + '"><div class="ajuda">Fica no ar até a data de início da próxima campanha.</div></div></div>' +
         '<div class="grade-2">' +
-        zonaImg('fundo', 'Fundo — computador', 'Clique ou arraste a imagem (JPG, PNG ou WEBP, até ' + j.limite_fundo_mb + ' MB). Sugestão: 1920 × 1080 px, deitada, com o centro livre para os botões.', c.fundo_url) +
+        zonaImg('fundo', 'Fundo — computador', 'Clique ou arraste a imagem (JPG, PNG ou WEBP, até ' + j.limite_fundo_mb + ' MB). Sugestão: 1920 × 1080 px, deitada.', c.fundo_url) +
         zonaImg('fundo-celular', 'Fundo — celular (opcional)', 'Sugestão: 1080 × 1920 px, em pé. Sem ela, o celular usa a do computador.', c.fundo_celular_url) +
         '</div>' +
         (!novo && c.tem_fundo_celular ? '<label class="linha" style="font-weight:700;font-size:13px"><input type="checkbox" id="cTirarCel"> remover a versão para celular</label>' : '') +
         '<div><label class="rot" for="cEsc">Escurecer o fundo: <span id="cEscV">' + c.escurecer + '%</span></label><input id="cEsc" type="range" min="0" max="85" step="5" value="' + c.escurecer + '" style="width:100%;accent-color:var(--teal)">' +
-        '<div class="ajuda">A arte aparece como foi enviada (0%). Aumente só se o título ou os botões ficarem difíceis de ler sobre a imagem.</div></div>' +
+        '<div class="ajuda">Escurece a imagem para os botões e o título continuarem legíveis. Use 0% se a arte já tiver espaço limpo no meio.</div></div>' +
         '<div id="cMsg" class="msg erro" hidden></div></div>',
       pe: (novo ? '' : '<button class="btn danger" id="btApagarCamp" style="margin-right:auto">Excluir</button>') +
         '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="btSalvarCamp">' + (novo ? 'Criar campanha' : 'Salvar') + '</button>',
@@ -1993,6 +1994,7 @@
   function htmlLinksGestao(j) {
     var html = '<div class="painel"><div class="cab-painel"><div style="flex:1;min-width:220px"><b style="font-family:var(--display)">Links</b>' +
       '<span class="ajuda" style="display:block;margin:2px 0 0">Use as setas para mudar a ordem. Links com o mesmo grupo aparecem juntos, sob o nome do grupo.</span></div>' +
+      '<button class="btn ghost sm" id="btColarLinks">' + IC.documento + 'Colar lista de links</button>' +
       '<button class="btn primary sm" id="btNovoLink">' + IC.mais + 'Novo link</button></div>';
     if (!j.links.length) return html + '<div style="padding:30px;text-align:center;color:var(--muted);font-weight:700">Nenhum link cadastrado.</div></div>';
     html += '<div class="tabela-wrap"><table><thead><tr><th style="width:70px">Ordem</th><th>Link</th><th>Grupo</th><th>Situação</th></tr></thead><tbody>' +
@@ -2000,7 +2002,8 @@
         return '<tr class="clicavel" data-link="' + l.id + '"><td style="white-space:nowrap">' +
           '<button class="btn icon ghost" data-mover="-1" title="Subir" aria-label="Subir"' + (i === 0 ? ' disabled' : '') + '>' + IC.cima + '</button> ' +
           '<button class="btn icon ghost" data-mover="1" title="Descer" aria-label="Descer"' + (i === j.links.length - 1 ? ' disabled' : '') + '>' + IC.baixo + '</button></td>' +
-          '<td><b>' + esc(l.titulo) + '</b><span class="sec" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:460px">' + esc(l.url) + '</span></td>' +
+          '<td><div class="linha" style="gap:8px;flex-wrap:nowrap"><span class="icone-mod" style="width:32px;height:32px;border-radius:9px">' + (IC[l.icone] || IC.link) + '</span><div style="min-width:0"><b>' + esc(l.titulo) + '</b>' +
+          '<span class="sec" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:420px">' + esc(l.url) + '</span></div></div></td>' +
           '<td>' + (l.grupo ? esc(l.grupo) : '<span class="sec">—</span>') + '</td>' +
           '<td>' + (l.ativo ? etq(['publicado', 'verde']) : etq(['oculto', 'cinza'])) + '</td></tr>';
       }).join('') + '</tbody></table></div></div>';
@@ -2009,6 +2012,7 @@
 
   function ligarLinksGestao(j) {
     $('#btNovoLink').onclick = function () { editarLink(j, null); };
+    $('#btColarLinks').onclick = colarLinks;
     $$('tr[data-link]').forEach(function (tr) {
       var id = Number(tr.getAttribute('data-link'));
       tr.onclick = function () { editarLink(j, j.links.find(function (l) { return l.id === id; })); };
@@ -2026,6 +2030,29 @@
     });
   }
 
+  function colarLinks() {
+    var m = modal({
+      titulo: 'Colar lista de links', largo: true,
+      corpo: '<div class="pilha"><div><label class="rot" for="cLista">Uma linha por link: nome, um traço e o endereço</label>' +
+        '<textarea class="campo" id="cLista" style="min-height:260px;font-size:13px" placeholder="Lista de Ramais — https://…&#10;Solicitação de Motoboy — https://…"></textarea>' +
+        '<div class="ajuda">Pode colar com marcadores (*, -, •). Os links entram no fim da lista, com ícone sugerido pelo nome; links que já existem (mesmo nome e endereço) são pulados. Depois dá para editar cada um.</div></div>' +
+        '<div><label class="rot" for="cGrupo">Grupo (opcional)</label><input class="campo" id="cGrupo" maxlength="80" placeholder="Deixe em branco para uma lista única"></div>' +
+        '<div id="cRes" class="msg" hidden></div></div>',
+      pe: '<button class="btn ghost" data-fechar>Fechar</button><button class="btn primary" id="btImportarLinks">Incluir links</button>',
+      aoFechar: function () { paginaGestaoLinks('links'); },
+    });
+    $('#btImportarLinks', m).onclick = async function () {
+      var res = $('#cRes', m);
+      try {
+        var r = await api('POST', '/api/links/gestao/importar', { texto: $('#cLista', m).value, grupo: $('#cGrupo', m).value });
+        res.className = 'msg ' + (r.erros.length ? 'aviso' : 'ok');
+        res.innerHTML = r.incluidos + ' link(s) incluído(s)' + (r.repetidos ? ', ' + r.repetidos + ' já existiam' : '') + '.' +
+          (r.erros.length ? '<br>Não entendi ' + r.erros.length + ' linha(s): ' + r.erros.map(function (e) { return esc(e.texto) + (e.motivo ? ' (' + esc(e.motivo) + ')' : ''); }).join('; ') : '');
+        res.hidden = false;
+      } catch (e) { res.className = 'msg erro'; res.textContent = e.message; res.hidden = false; }
+    };
+  }
+
   function editarLink(j, l) {
     var novo = !l;
     l = l || { titulo: '', url: 'https://', grupo: '', descricao: '', icone: 'link', ativo: true };
@@ -2036,8 +2063,9 @@
       corpo: '<form class="pilha" id="fLink" novalidate>' +
         '<div><label class="rot" for="lTit">Nome do botão</label><input class="campo" id="lTit" maxlength="120" value="' + esc(l.titulo) + '"></div>' +
         '<div><label class="rot" for="lUrl">Endereço (link)</label><input class="campo" id="lUrl" type="url" maxlength="2000" value="' + esc(l.url) + '"><div class="ajuda">Link completo, começando com https://. Também aceita mailto: e tel:.</div></div>' +
-        '<div><label class="rot" for="lGrupo">Grupo (opcional)</label><input class="campo" id="lGrupo" maxlength="80" list="lGrupos" value="' + esc(l.grupo) + '" placeholder="Deixe em branco para uma lista única">' +
-        '<datalist id="lGrupos">' + grupos.map(function (g) { return '<option value="' + esc(g) + '">'; }).join('') + '</datalist><div class="ajuda">Links com o mesmo grupo aparecem juntos, sob o nome do grupo.</div></div>' +
+        '<div class="grade-2"><div><label class="rot" for="lGrupo">Grupo (opcional)</label><input class="campo" id="lGrupo" maxlength="80" list="lGrupos" value="' + esc(l.grupo) + '" placeholder="Ex.: Formulários">' +
+        '<datalist id="lGrupos">' + grupos.map(function (g) { return '<option value="' + esc(g) + '">'; }).join('') + '</datalist></div>' +
+        '<div><label class="rot" for="lIcone">Ícone</label><select class="campo" id="lIcone">' + j.icones.map(function (i) { return '<option value="' + i + '"' + (i === l.icone ? ' selected' : '') + '>' + esc(ROTULO_ICONE[i] || i) + '</option>'; }).join('') + '</select></div></div>' +
         '<div><label class="rot" for="lDesc">Descrição curta (opcional)</label><input class="campo" id="lDesc" maxlength="300" value="' + esc(l.descricao) + '"></div>' +
         '<label class="linha" style="font-weight:700"><input type="checkbox" id="lAtivo"' + (l.ativo ? ' checked' : '') + '> Publicado (desmarque para esconder sem apagar)</label>' +
         '<div id="lMsg" class="msg erro" hidden></div></form>',
@@ -2045,7 +2073,7 @@
         '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="btSalvarLink">' + (novo ? 'Incluir' : 'Salvar') + '</button>',
     });
     $('#btSalvarLink', m).onclick = async function () {
-      var corpo = { titulo: $('#lTit', m).value, url: $('#lUrl', m).value, grupo: $('#lGrupo', m).value, descricao: $('#lDesc', m).value, ativo: $('#lAtivo', m).checked };
+      var corpo = { titulo: $('#lTit', m).value, url: $('#lUrl', m).value, grupo: $('#lGrupo', m).value, descricao: $('#lDesc', m).value, icone: $('#lIcone', m).value, ativo: $('#lAtivo', m).checked };
       try {
         if (novo) await api('POST', '/api/links/gestao/links', corpo); else await api('PATCH', '/api/links/gestao/links/' + l.id, corpo);
         m.fechar(); toast(novo ? 'Link incluído.' : 'Link atualizado.', 'ok'); paginaGestaoLinks('links');
@@ -2070,7 +2098,7 @@
     setores_oficiais: 'Setores oficiais cadastrados', ticket_criado: 'Abriu ticket', ticket_atribuicao: 'Atribuiu ticket', ticket_transferencia: 'Transferiu ticket',
     ticket_status: 'Mudou situação de ticket', equipe_editada: 'Editou equipe do setor', categoria_criada: 'Criou tipo de demanda', categoria_editada: 'Editou tipo de demanda', categoria_removida: 'Removeu tipo de demanda',
     links_pagina: 'Editou a Central de Links', link_criado: 'Incluiu link', link_editado: 'Editou link', link_removido: 'Removeu link',
-    campanha_criada: 'Criou campanha (Central de Links)', campanha_editada: 'Editou campanha (Central de Links)', campanha_removida: 'Removeu campanha (Central de Links)', campanha_fundo: 'Trocou fundo de campanha',
+    campanha_criada: 'Criou campanha (Central de Links)', campanha_editada: 'Editou campanha (Central de Links)', campanha_removida: 'Removeu campanha (Central de Links)', campanha_fundo: 'Trocou fundo de campanha', links_importados: 'Colou lista de links',
   };
 
   async function paginaAuditoria() {
