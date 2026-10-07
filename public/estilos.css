@@ -289,3 +289,10 @@ input[type=checkbox],input[type=radio]{accent-color:var(--teal);width:16px;heigh
 .zona-img:hover,.zona-img.arrastando{border-color:var(--teal);background:var(--teal-bg)}
 .previa-img{height:150px}
 .previa-img svg{width:30px;height:30px}
+
+/* Carteira de condomínios: tabela que cabe na largura da tela */
+.tabela-carteira{table-layout:fixed}
+.tabela-carteira th,.tabela-carteira td{padding:10px 12px;overflow-wrap:anywhere}
+.tabela-carteira th{white-space:normal}
+.tabela-carteira .corta{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:760px){.tabela-carteira{table-layout:auto;min-width:720px}}

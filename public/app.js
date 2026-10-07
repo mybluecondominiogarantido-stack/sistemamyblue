@@ -1477,9 +1477,10 @@
           return '<option value="' + esc(fn.campo + '|' + p) + '">' + esc(pessoaCarteira(p).nome) + '</option>';
         }).join('') + '</optgroup>';
       }).join('');
-      var cols = [['codigo', 'ID'], ['nome', 'Condomínio'], ['comarca', 'UF'], ['vencimento', 'Venc.']]
-        .concat(funcoes.map(function (fn) { return [fn.campo, fn.rotulo.replace(' (ApoioCob)', '')]; }))
-        .concat([['administradora', 'Administradora'], ['situacao', 'Situação']]);
+      // 5 colunas de largura fixa: cabe na tela sem rolar para o lado (ID, UF, vencimento e situação vão junto do nome)
+      var cols = [['nome', 'Condomínio', '30%']]
+        .concat(funcoes.map(function (fn) { return [fn.campo, fn.rotulo.replace(' (ApoioCob)', ''), '18%']; }))
+        .concat([['administradora', 'Administradora', '16%']]);
       $('#cCorpo').innerHTML = '<div class="painel"><div class="cab-painel">' +
         '<input class="campo" id="cfQ" type="search" placeholder="Buscar nome, razão social, CNPJ ou ID…" style="max-width:280px">' +
         '<select class="campo" id="cfSit" style="max-width:150px"><option value="ATIVO">Ativos</option><option value="DISTRATADO">Distratados</option><option value="">Todas as situações</option></select>' +
@@ -1488,7 +1489,7 @@
         '<select class="campo" id="cfPes" style="max-width:220px"><option value="">Todos os responsáveis</option>' + pessoas + '</select>' +
         '<label class="linha" style="font-weight:700;font-size:13px;color:var(--muted)"><input type="checkbox" id="cfSem"> sem responsável</label>' +
         '<span class="espaco"></span>' + acoes + '</div>' +
-        '<div class="tabela-wrap"><table><thead><tr>' + cols.map(function (c) {
+        '<div class="tabela-wrap"><table class="tabela-carteira"><colgroup>' + cols.map(function (c) { return '<col style="width:' + c[2] + '">'; }).join('') + '</colgroup><thead><tr>' + cols.map(function (c) {
           return '<th data-ordem="' + c[0] + '" style="cursor:pointer" title="Ordenar">' + esc(c[1]) + ' <span data-seta="' + c[0] + '"></span></th>';
         }).join('') + '</tr></thead><tbody id="tbC"></tbody></table></div>' +
         '<div class="ajuda" id="cTotal" style="padding:10px 16px;border-top:1px solid var(--border)"></div></div>';
@@ -1514,13 +1515,11 @@
         });
         $$('[data-seta]').forEach(function (s) { s.textContent = s.getAttribute('data-seta') === f.ordem ? (f.desc ? '↓' : '↑') : ''; });
         $('#tbC').innerHTML = lista.map(function (c) {
-          return '<tr class="clicavel" data-id="' + c.id + '"><td class="sec" style="white-space:nowrap">' + esc(c.codigo) + '</td>' +
-            '<td style="min-width:220px;max-width:320px"><b>' + esc(c.nome) + '</b><span class="sec" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + esc(c.razao_social || '') + '">' +
-              esc(c.cnpj || '') + (c.cnpj && c.razao_social ? ' · ' : '') + esc(c.razao_social || '') + '</span></td>' +
-            '<td>' + esc(c.comarca || '—') + '</td><td style="white-space:nowrap">' + esc(c.vencimento || '—') + '</td>' +
+          return '<tr class="clicavel" data-id="' + c.id + '"><td><b>' + esc(c.nome) + '</b>' + (c.situacao !== 'ATIVO' ? ' ' + etqSituacao(c.situacao) : '') +
+            '<span class="sec">ID ' + esc(c.codigo) + (c.comarca ? ' · ' + esc(c.comarca) : '') + (c.vencimento ? ' · venc. ' + esc(c.vencimento) : '') + '</span>' +
+            (c.razao_social ? '<span class="sec corta" title="' + esc(c.razao_social + (c.cnpj ? ' · ' + c.cnpj : '')) + '">' + esc(c.razao_social) + '</span>' : '') + '</td>' +
             funcoes.map(function (fn) { return '<td>' + celPessoa(c[fn.campo]) + '</td>'; }).join('') +
-            '<td>' + esc(c.administradora && c.administradora !== '-' ? c.administradora : '—') + (c.forma_envio ? '<span class="sec">' + esc(c.forma_envio) + '</span>' : '') + '</td>' +
-            '<td>' + etqSituacao(c.situacao) + '</td></tr>';
+            '<td>' + esc(c.administradora && c.administradora !== '-' ? c.administradora : '—') + (c.forma_envio ? '<span class="sec">' + esc(c.forma_envio) + '</span>' : '') + '</td></tr>';
         }).join('') || '<tr><td colspan="' + cols.length + '"><div class="vazio" style="border:0;padding:34px">Nenhum condomínio com estes filtros.</div></td></tr>';
         $('#cTotal').textContent = lista.length + ' de ' + conds.length + ' condomínio' + (conds.length === 1 ? '' : 's');
         $$('#tbC tr[data-id]').forEach(function (tr) { tr.onclick = function () { verCondominio(Number(tr.getAttribute('data-id'))); }; });
