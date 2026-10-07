@@ -5,3 +5,7 @@ data/
 *.db-*
 # Os HTMLs originais das ferramentas contêm dados de negócio: ficam fora do Git.
 modulos-originais/
+# Carteira de condomínios (CSV): dados de negócio, entra só pelo portal.
+*.csv
+# banco embutido criado ao rodar com DATA_DIR=:memoria: fora dos testes
+:memoria:/

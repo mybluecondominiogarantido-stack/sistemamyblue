@@ -27,7 +27,7 @@ function rotasAdmin({ db, seg, modulos, registros, cfg }) {
   r.get('/api/admin/usuarios', async (req, res) => {
     const perms = {};
     for (const p of (await db.q('SELECT usuario_id, modulo_slug FROM permissoes')).rows) (perms[p.usuario_id] ||= []).push(p.modulo_slug);
-    const { rows } = await db.q('SELECT id, nome, email, papel, ativo, trocar_senha, supervisor_tickets, criado_em, ultimo_login, foto_em FROM usuarios ORDER BY ativo DESC, nome');
+    const { rows } = await db.q('SELECT id, nome, email, papel, ativo, trocar_senha, supervisor_tickets, editor_links, criado_em, ultimo_login, foto_em FROM usuarios ORDER BY ativo DESC, nome');
     res.json({ usuarios: rows.map(({ foto_em, ...u }) => ({ ...u, foto_v: foto_em ? new Date(foto_em).getTime() : null, modulos: perms[u.id] || [] })) });
   });
 
@@ -39,7 +39,7 @@ function rotasAdmin({ db, seg, modulos, registros, cfg }) {
     if (!EMAIL_RE.test(email) || email.length > 200) return { erro: 'E-mail inválido.' };
     const lista = Array.isArray(body.modulos) ? body.modulos.map(String) : [];
     const existentes = new Set((await db.q('SELECT slug FROM modulos')).rows.map((m) => m.slug));
-    return { nome, email, papel, supervisor_tickets: !!body.supervisor_tickets, modulos: lista.filter((s) => existentes.has(s)) };
+    return { nome, email, papel, supervisor_tickets: !!body.supervisor_tickets, editor_links: !!body.editor_links, modulos: lista.filter((s) => existentes.has(s)) };
   }
 
   const salvarPermissoes = (id, lista) => db.tx(async (t) => {
@@ -54,20 +54,20 @@ function rotasAdmin({ db, seg, modulos, registros, cfg }) {
     if (senha) { const e = validarNovaSenha(senha); if (e) return erro(res, 400, e); } else senha = senhaAleatoria();
     let id;
     try {
-      id = (await db.um("INSERT INTO usuarios (nome, email, senha_hash, papel, trocar_senha, supervisor_tickets) VALUES ($1, $2, $3, $4, TRUE, $5) RETURNING id",
-        [d.nome, d.email, hashSenha(senha), d.papel, d.supervisor_tickets])).id;
+      id = (await db.um("INSERT INTO usuarios (nome, email, senha_hash, papel, trocar_senha, supervisor_tickets, editor_links) VALUES ($1, $2, $3, $4, TRUE, $5, $6) RETURNING id",
+        [d.nome, d.email, hashSenha(senha), d.papel, d.supervisor_tickets, d.editor_links])).id;
     } catch (e) {
       if (ehDuplicado(e)) return erro(res, 409, 'Já existe um usuário com este e-mail.');
       throw e;
     }
     await salvarPermissoes(id, d.modulos);
-    await seg.auditar(req, 'usuario_criado', null, { id, email: d.email, papel: d.papel, supervisor_tickets: d.supervisor_tickets, modulos: d.modulos });
+    await seg.auditar(req, 'usuario_criado', null, { id, email: d.email, papel: d.papel, supervisor_tickets: d.supervisor_tickets, editor_links: d.editor_links, modulos: d.modulos });
     res.status(201).json({ id, senha_temporaria: senha });
   });
 
   r.patch('/api/admin/usuarios/:id', json, async (req, res) => {
     const id = Number(req.params.id);
-    const atual = await db.um('SELECT id, nome, email, papel, ativo, supervisor_tickets FROM usuarios WHERE id = $1', [id]);
+    const atual = await db.um('SELECT id, nome, email, papel, ativo, supervisor_tickets, editor_links FROM usuarios WHERE id = $1', [id]);
     if (!atual) return erro(res, 404, 'Usuário não encontrado.');
     const d = await dadosUsuario({ ...atual, ...req.body });
     if (d.erro) return erro(res, 400, d.erro);
@@ -77,14 +77,14 @@ function rotasAdmin({ db, seg, modulos, registros, cfg }) {
       if (outros.n === 0) return erro(res, 400, 'Não é possível remover o último administrador ativo.');
     }
     try {
-      await db.q('UPDATE usuarios SET nome = $1, email = $2, papel = $3, ativo = $4, supervisor_tickets = $5, atualizado_em = now() WHERE id = $6', [d.nome, d.email, d.papel, ativo, d.supervisor_tickets, id]);
+      await db.q('UPDATE usuarios SET nome = $1, email = $2, papel = $3, ativo = $4, supervisor_tickets = $5, editor_links = $6, atualizado_em = now() WHERE id = $7', [d.nome, d.email, d.papel, ativo, d.supervisor_tickets, d.editor_links, id]);
     } catch (e) {
       if (ehDuplicado(e)) return erro(res, 409, 'Já existe um usuário com este e-mail.');
       throw e;
     }
     if (Array.isArray(req.body.modulos)) await salvarPermissoes(id, d.modulos);
     if (!ativo) await db.q('DELETE FROM sessoes WHERE usuario_id = $1', [id]);
-    await seg.auditar(req, 'usuario_editado', null, { id, email: d.email, papel: d.papel, ativo, supervisor_tickets: d.supervisor_tickets, modulos: Array.isArray(req.body.modulos) ? d.modulos : undefined });
+    await seg.auditar(req, 'usuario_editado', null, { id, email: d.email, papel: d.papel, ativo, supervisor_tickets: d.supervisor_tickets, editor_links: d.editor_links, modulos: Array.isArray(req.body.modulos) ? d.modulos : undefined });
     res.json({ ok: true });
   });
 
@@ -353,11 +353,12 @@ function rotasAdmin({ db, seg, modulos, registros, cfg }) {
   /* ===================== backup (JSON com todas as tabelas) ===================== */
   r.get('/api/admin/backup', async (req, res) => {
     const tabelas = ['setores', 'usuarios', 'modulos', 'permissoes', 'modulo_versoes', 'armazenamento', 'colecoes', 'registros', 'auditoria',
-      'setor_membros', 'ticket_categorias', 'tickets', 'ticket_eventos', 'ticket_anexos', 'notificacoes'];
-    const saida = { sistema: 'portal-myblue', versao_backup: 3, gerado_em: new Date().toISOString(), tabelas: {} };
+      'setor_membros', 'ticket_categorias', 'tickets', 'ticket_eventos', 'ticket_anexos', 'notificacoes',
+      'condominios', 'links_pagina', 'links', 'links_campanhas'];
+    const saida = { sistema: 'portal-myblue', versao_backup: 4, gerado_em: new Date().toISOString(), tabelas: {} };
     for (const t of tabelas) {
       const { rows } = await db.q(`SELECT * FROM ${t}`);
-      // HTMLs em base64; hashes de senha ficam fora do backup por segurança
+      // arquivos (HTMLs, anexos, fundos de campanha) em base64; hashes de senha ficam fora do backup por segurança
       saida.tabelas[t] = rows.map((l) => {
         const c = { ...l };
         for (const k of Object.keys(c)) if (Buffer.isBuffer(c[k])) c[k] = c[k].toString('base64'); // HTMLs e fotos
