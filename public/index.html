@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Portal MyBlue</title>
+<link rel="icon" type="image/png" href="/img/icone.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/estilos.css?v=7">
+</head>
+<body>
+<div class="casca" id="casca">
+  <div class="cortina" id="cortina"></div>
+  <aside class="lateral" id="lateral" aria-label="Menu">
+    <div class="topo">
+      <a href="#/" title="Início"><img src="/img/logo.png" alt="MyBlue"></a>
+      <button class="btn icon ghost so-movel" id="btFecharMenu" title="Fechar menu" aria-label="Fechar menu"></button>
+    </div>
+    <div class="busca">
+      <span id="icBusca"></span>
+      <input class="campo" id="busca" type="search" placeholder="Buscar ferramenta…" aria-label="Buscar ferramenta">
+    </div>
+    <nav class="nav" id="nav"></nav>
+    <div class="pe">
+      <div class="avatar" id="avatar"></div>
+      <div class="quem"><b id="quemNome"></b><span id="quemEmail"></span></div>
+      <a class="btn icon ghost" href="#/conta" title="Minha conta" aria-label="Minha conta" id="btConta"></a>
+      <button class="btn icon ghost" id="btSair" title="Sair" aria-label="Sair"></button>
+    </div>
+  </aside>
+
+  <main class="principal">
+    <header class="barra">
+      <button class="btn icon ghost so-movel" id="btMenu" title="Abrir menu" aria-label="Abrir menu"></button>
+      <button class="btn icon ghost so-desktop" id="btRecolher" title="Recolher/mostrar menu" aria-label="Recolher menu"></button>
+      <div class="trilha" id="trilha"></div>
+      <div class="espaco"></div>
+      <span id="statusSync"></span>
+      <button class="btn icon ghost sino" id="btSino" title="Avisos" aria-label="Avisos"></button>
+      <div class="linha" id="acoesBarra"></div>
+    </header>
+    <div class="palco" id="palco">
+      <div class="conteudo" id="conteudo"></div>
+    </div>
+  </main>
+</div>
+<script src="/app.js?v=11"></script>
+</body>
+</html>
