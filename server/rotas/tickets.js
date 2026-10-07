@@ -246,8 +246,9 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
         ur.nome AS responsavel_nome, cd.nome AS condominio_nome, cd.comarca AS condominio_comarca, cd.codigo AS condominio_codigo
         FROM tickets t JOIN setores s ON s.id = t.setor_id LEFT JOIN ticket_categorias c ON c.id = t.categoria_id LEFT JOIN condominios cd ON cd.id = t.condominio_id
         LEFT JOIN usuarios us ON us.id = t.solicitante_id LEFT JOIN usuarios ur ON ur.id = t.responsavel_id WHERE t.id = $1`, [t.id]);
-    const eventos = (await db.q(`SELECT e.id, e.tipo, e.texto, e.interno, e.detalhe, e.criado_em, e.usuario_id, u.nome AS usuario_nome
-      FROM ticket_eventos e LEFT JOIN usuarios u ON u.id = e.usuario_id WHERE e.ticket_id = $1 ${p.interno ? '' : 'AND NOT e.interno'} ORDER BY e.id`, [t.id])).rows;
+    const eventos = (await db.q(`SELECT e.id, e.tipo, e.texto, e.interno, e.detalhe, e.criado_em, e.usuario_id, u.nome AS usuario_nome, u.foto_em
+      FROM ticket_eventos e LEFT JOIN usuarios u ON u.id = e.usuario_id WHERE e.ticket_id = $1 ${p.interno ? '' : 'AND NOT e.interno'} ORDER BY e.id`, [t.id]))
+      .rows.map(({ foto_em, ...e }) => ({ ...e, usuario_foto_v: foto_em ? new Date(foto_em).getTime() : null }));
     const anexos = (await db.q(`SELECT a.id, a.nome, a.tipo, a.tamanho, a.interno, a.enviado_em, u.nome AS enviado_por_nome
       FROM ticket_anexos a LEFT JOIN usuarios u ON u.id = a.enviado_por WHERE a.ticket_id = $1 ${p.interno ? '' : 'AND NOT a.interno'} ORDER BY a.id`, [t.id])).rows;
     await db.q('UPDATE notificacoes SET lida = TRUE WHERE usuario_id = $1 AND ticket_id = $2 AND NOT lida', [req.usuario.id, t.id]);

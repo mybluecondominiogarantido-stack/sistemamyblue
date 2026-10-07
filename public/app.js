@@ -1327,7 +1327,7 @@
     var linhaTempo = d.eventos.map(function (e) {
       var quem = '<b>' + esc(e.usuario_nome || 'Sistema') + '</b>';
       if (e.tipo === 'comentario') {
-        return '<div class="evento comentario' + (e.interno ? ' interno' : '') + '"><div class="avatar mini">' + esc(iniciais(e.usuario_nome)) + '</div><div class="balao">' +
+        return '<div class="evento comentario' + (e.interno ? ' interno' : '') + '">' + avatarHtml({ id: e.usuario_id, nome: e.usuario_nome, foto_v: e.usuario_foto_v }, 30) + '<div class="balao">' +
           '<div class="cab-ev">' + quem + (e.interno ? ' <span class="etiqueta ambar">nota interna · só a equipe vê</span>' : '') + '<span class="espaco"></span><span class="sec">' + quando(e.criado_em) + '</span></div>' +
           '<div class="texto-livre">' + esc(e.texto) + '</div></div></div>';
       }
