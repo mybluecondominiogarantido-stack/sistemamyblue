@@ -15,6 +15,12 @@
   }
   function tamanho(b) { if (b == null) return '—'; return b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB'; }
   function iniciais(nome) { return String(nome || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(function (p) { return p[0].toUpperCase(); }).join(''); }
+  /* avatar: foto (se houver) ou iniciais */
+  function avatarHtml(u, tam) {
+    var estilo = tam ? ' style="width:' + tam + 'px;height:' + tam + 'px;font-size:' + Math.round(tam * 0.38) + 'px"' : '';
+    if (u && u.foto_v) return '<span class="avatar"' + estilo + '><img src="/api/usuarios/' + u.id + '/foto?v=' + u.foto_v + '" alt=""></span>';
+    return '<span class="avatar"' + estilo + '>' + esc(iniciais(u && u.nome)) + '</span>';
+  }
   function normal(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
   function guardar(k, v) { try { localStorage.setItem('portal.' + k, JSON.stringify(v)); } catch (e) { /* sem armazenamento */ } }
   function lembrar(k, padrao) { try { var v = localStorage.getItem('portal.' + k); return v == null ? padrao : JSON.parse(v); } catch (e) { return padrao; } }
@@ -127,7 +133,7 @@
     $('#btRecolher').innerHTML = IC.recolher;
     $('#btConta').innerHTML = IC.conta;
     $('#btSair').innerHTML = IC.sair;
-    $('#avatar').textContent = iniciais(eu.nome);
+    desenharAvatar();
     $('#quemNome').textContent = eu.nome;
     $('#quemEmail').textContent = eu.email;
     if (lembrar('recolhido', false)) $('#casca').classList.add('recolhida');
@@ -157,6 +163,11 @@
     });
     // confere a sessão de tempos em tempos
     setInterval(function () { fetch('/api/auth/eu', { credentials: 'same-origin' }).then(function (r) { if (r.status === 401) sessaoExpirada(); }).catch(function () {}); }, 5 * 60 * 1000);
+  }
+
+  function desenharAvatar() {
+    var a = $('#avatar');
+    a.innerHTML = eu.foto_v ? '<img src="/api/usuarios/' + eu.id + '/foto?v=' + eu.foto_v + '" alt="">' : esc(iniciais(eu.nome));
   }
 
   var avisouSessao = false;
@@ -323,6 +334,12 @@
   function paginaConta() {
     definirBarra('<span class="nome">Minha conta</span>');
     $('#conteudo').innerHTML = '<div class="pagina" style="max-width:640px"><h1>Minha conta</h1><p class="sub">' + esc(eu.nome) + ' · ' + esc(eu.email) + ' · ' + (eu.papel === 'admin' ? 'Administrador' : 'Usuário') + '</p>' +
+      '<div class="painel" style="padding:20px;margin-bottom:16px"><h3 style="margin:0 0 14px;font-family:var(--display)">Foto de perfil</h3>' +
+      '<div class="linha" style="gap:18px;flex-wrap:nowrap"><div id="fotoPrevia">' + avatarHtml(eu, 84) + '</div>' +
+      '<div class="pilha" style="gap:8px"><div class="linha"><label class="btn primary sm" for="inFoto" style="cursor:pointer">' + IC.enviar + 'Escolher foto</label>' +
+      '<button class="btn ghost sm" id="btTirarFoto"' + (eu.foto_v ? '' : ' hidden') + '>Remover</button></div>' +
+      '<input type="file" id="inFoto" accept="image/*" hidden><div class="ajuda" style="margin:0">JPG ou PNG. A foto é recortada em quadrado e reduzida automaticamente.</div>' +
+      '<div id="msgFoto" class="msg" hidden></div></div></div></div>' +
       '<div class="painel" style="padding:20px"><form id="fSenha" class="pilha"><h3 style="margin:0;font-family:var(--display)">Trocar senha</h3>' +
       '<div id="msgSenha" class="msg" hidden></div>' +
       '<div><label class="rot" for="sAtual">Senha atual</label><input class="campo" id="sAtual" type="password" autocomplete="current-password" required></div>' +
@@ -330,6 +347,29 @@
       '<div><label class="rot" for="sNova2">Repita a nova senha</label><input class="campo" id="sNova2" type="password" autocomplete="new-password" required></div></div>' +
       '<div class="ajuda" style="margin-top:-6px">Pelo menos 8 caracteres, com letras e números. Ao trocar, as sessões em outros aparelhos são encerradas.</div>' +
       '<div><button class="btn primary" type="submit">Salvar nova senha</button></div></form></div></div>';
+    function msgFoto(tipo, texto) { var m = $('#msgFoto'); m.className = 'msg ' + tipo; m.textContent = texto; m.hidden = !texto; }
+    function atualizarFoto(v) {
+      eu.foto_v = v;
+      $('#fotoPrevia').innerHTML = avatarHtml(eu, 84);
+      $('#btTirarFoto').hidden = !v;
+      desenharAvatar();
+    }
+    $('#inFoto').onchange = async function () {
+      var f = this.files[0]; this.value = '';
+      if (!f) return;
+      if (!/^image\//.test(f.type)) { msgFoto('erro', 'Escolha um arquivo de imagem.'); return; }
+      msgFoto('aviso', 'Enviando…');
+      try {
+        var blob = await reduzirFoto(f, 320);
+        var r = await fetch('/api/auth/foto', { method: 'PUT', headers: { 'Content-Type': blob.type }, body: blob, credentials: 'same-origin' });
+        var j = await r.json().catch(function () { return {}; });
+        if (!r.ok) throw new Error(j.erro || 'Não foi possível enviar a foto.');
+        atualizarFoto(j.foto_v); msgFoto('ok', 'Foto atualizada.');
+      } catch (err) { msgFoto('erro', err.message); }
+    };
+    $('#btTirarFoto').onclick = async function () {
+      try { await api('DELETE', '/api/auth/foto'); atualizarFoto(null); msgFoto('ok', 'Foto removida.'); } catch (err) { msgFoto('erro', err.message); }
+    };
     $('#fSenha').addEventListener('submit', async function (e) {
       e.preventDefault();
       var msg = $('#msgSenha');
@@ -414,7 +454,7 @@
       $('#tbUsu').innerHTML = lista.map(function (u) {
         var ferr = u.papel === 'admin' ? '<span class="etiqueta azul">todas</span>' :
           u.modulos.length ? '<span title="' + esc(u.modulos.map(function (s) { return nomeMod[s] || s; }).join('\n')) + '">' + u.modulos.length + ' de ' + mods.length + '</span>' : '<span class="etiqueta ambar">nenhuma</span>';
-        return '<tr class="clicavel" data-id="' + u.id + '"><td><b>' + esc(u.nome) + '</b><span class="sec">' + esc(u.email) + '</span></td>' +
+        return '<tr class="clicavel" data-id="' + u.id + '"><td><div class="linha" style="flex-wrap:nowrap;gap:10px">' + avatarHtml(u, 34) + '<div><b>' + esc(u.nome) + '</b><span class="sec">' + esc(u.email) + '</span></div></div></td>' +
           '<td>' + (u.papel === 'admin' ? 'Administrador' : 'Usuário') + '</td><td>' + ferr + '</td><td>' + quando(u.ultimo_login) + '</td>' +
           '<td>' + (!u.ativo ? '<span class="etiqueta cinza">desativado</span>' : u.trocar_senha ? '<span class="etiqueta ambar">aguardando 1º acesso</span>' : '<span class="etiqueta verde">ativo</span>') + '</td></tr>';
       }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);font-weight:700;padding:30px">Nenhum usuário encontrado.</td></tr>';
@@ -785,6 +825,25 @@
         } catch (e) { var x = $('#mMsg', m); x.textContent = e.message; x.hidden = false; }
       };
     }
+  }
+
+  /* recorta no centro em quadrado e reduz (a foto sai com poucos KB) */
+  function reduzirFoto(arquivo, lado) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(arquivo);
+      var img = new Image();
+      img.onload = function () {
+        var m = Math.min(img.naturalWidth, img.naturalHeight);
+        var c = document.createElement('canvas'); c.width = c.height = lado;
+        var ctx = c.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, lado, lado);
+        ctx.drawImage(img, (img.naturalWidth - m) / 2, (img.naturalHeight - m) / 2, m, m, 0, 0, lado, lado);
+        URL.revokeObjectURL(url);
+        c.toBlob(function (b) { b ? resolve(b) : reject(new Error('Não foi possível processar a imagem.')); }, 'image/jpeg', 0.86);
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('Não consegui abrir essa imagem.')); };
+      img.src = url;
+    });
   }
 
   function ligarZona(zona, input, aoEscolher) {

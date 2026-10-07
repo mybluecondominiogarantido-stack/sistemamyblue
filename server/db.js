@@ -122,7 +122,10 @@ const RLS = TABELAS.map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`).joi
 /* Ajustes em bancos já existentes (rodam a cada início e não fazem nada se já estiverem aplicados). */
 const AJUSTES = `
 ALTER TABLE modulos DROP CONSTRAINT IF EXISTS modulos_adaptador_check;
-ALTER TABLE modulos ADD CONSTRAINT modulos_adaptador_check CHECK (adaptador IS NULL OR adaptador IN ('gas-linhas','gas-objetos','gas-posicional'))
+ALTER TABLE modulos ADD CONSTRAINT modulos_adaptador_check CHECK (adaptador IS NULL OR adaptador IN ('gas-linhas','gas-objetos','gas-posicional'));
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto BYTEA;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto_tipo TEXT;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto_em TIMESTAMPTZ
 `;
 
 async function abrir(cfg) {
