@@ -2,18 +2,23 @@
 /*
  * Central de Tickets: demandas internas entre setores.
  *
- * Fluxo: quem abre escolhe o setor (e o tipo de demanda); o ticket cai na fila do setor;
- * o líder distribui para uma pessoa (ou alguém do setor assume); o responsável trata,
+ * Fluxo: quem abre escolhe o setor, o tipo de demanda e se é de um condomínio ou interna.
+ * Condomínio: se o setor usa a carteira (Cobrança, Crédito), o ticket vai direto para a pessoa
+ * da carteira; interna (ou sem pessoa na carteira): cai na fila do setor e o líder distribui para uma pessoa (ou alguém do setor assume); o responsável trata,
  * comenta e resolve. Pode ser transferido para outro setor.
  *
  * Quem vê um ticket: quem abriu, o responsável, as pessoas do setor dele e a administração.
  * Notas internas e anexos internos: só o setor, o responsável e a administração.
  */
 const express = require('express');
+const carteira = require('../carteira');
 
 const PRIORIDADES = ['baixa', 'media', 'alta', 'urgente'];
 const STATUS = ['novo', 'em_andamento', 'aguardando', 'resolvido', 'cancelado'];
 const EM_ABERTO = "('novo','em_andamento','aguardando')";
+// dois prazos: para a resposta (até o 1º retorno da equipe) e para a conclusão (definido por quem atende)
+const ATRASADO = `(t.status IN ${EM_ABERTO} AND ((t.primeira_resposta_em IS NULL AND t.prazo < now()) OR t.prazo_conclusao < now()))`;
+const PROXIMO_PRAZO = 'CASE WHEN t.primeira_resposta_em IS NULL THEN t.prazo ELSE t.prazo_conclusao END';
 // prazo usado quando o tipo de demanda não define um, em horas de expediente
 // (dia útil de 9 h: urgente 4 h, alta 1 dia útil, média 3 dias úteis, baixa 5 dias úteis)
 const PRAZO_PADRAO_HORAS = { urgente: 4, alta: 9, media: 27, baixa: 45 };
@@ -48,8 +53,12 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
       ver: equipe || solicitante,
       equipe,
       lider,
-      atribuir: lider, // escolhe qualquer pessoa do setor
-      assumir: (admin || membro) && !responsavel && aberto,
+      // responsável, prioridade e prazo para resposta: só líder do setor e gestão
+      atribuir: lider,
+      assumir: lider && !responsavel && aberto,
+      prazos: lider,
+      // prazo para conclusão: quem está com o ticket (ou o líder)
+      prazo_conclusao: (responsavel || lider) && aberto,
       interno: equipe,
       cancelar: (equipe || solicitante) && aberto,
       reabrir: (equipe || solicitante) && !aberto,
@@ -83,7 +92,25 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
     const membros = (await db.q(`SELECT sm.setor_id, sm.lider, u.id, u.nome FROM setor_membros sm JOIN usuarios u ON u.id = sm.usuario_id
       WHERE u.ativo ORDER BY u.nome`)).rows;
     const admin = ehGestor(req.usuario);
+    // carteira: para cada condomínio, quem recebe direto em cada setor que usa a carteira
+    const funcoes = await carteira.funcoesPorSetor(db);
+    const conds = (await db.q(`SELECT id, nome, comarca, situacao, ${carteira.FUNCOES.map((f) => f.campo).join(', ')} FROM condominios ORDER BY nome, comarca`)).rows;
+    const cache = new Map();
+    const resp = (setorId, pessoa) => {
+      const k = setorId + '|' + pessoa;
+      if (!cache.has(k)) cache.set(k, carteira.acharPessoa(pessoa, membros.filter((m) => m.setor_id === setorId)));
+      return cache.get(k);
+    };
     res.json({
+      condominios: conds.map((c) => {
+        const r = {};
+        for (const [setorId, f] of funcoes) {
+          if (!c[f.campo]) continue;
+          const m = resp(setorId, c[f.campo]);
+          r[setorId] = m ? m.nome : null; // null: está na carteira, mas sem cadastro na equipe
+        }
+        return { id: c.id, nome: c.nome, comarca: c.comarca, distratado: c.situacao !== 'ATIVO', resp: r };
+      }),
       setores: setores.map((s) => ({
         ...s,
         categorias: cats.filter((c) => c.setor_id === s.id),
@@ -101,8 +128,8 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
     const u = req.usuario;
     const equipes = await equipesDe(u);
     const lider = [...equipes].filter(([, e]) => e.lider).map(([id]) => id);
-    const meus = await db.um(`SELECT COUNT(*)::int AS n, COUNT(*) FILTER (WHERE prazo < now())::int AS atrasados
-      FROM tickets WHERE responsavel_id = $1 AND status IN ${EM_ABERTO}`, [u.id]);
+    const meus = await db.um(`SELECT COUNT(*)::int AS n, COUNT(*) FILTER (WHERE ${ATRASADO})::int AS atrasados
+      FROM tickets t WHERE t.responsavel_id = $1 AND t.status IN ${EM_ABERTO}`, [u.id]);
     const setores = ehGestor(u) ? null : [...equipes.keys()];
     const fila = await db.um(`SELECT COUNT(*)::int AS n FROM tickets WHERE responsavel_id IS NULL AND status IN ${EM_ABERTO}
       ${setores ? 'AND setor_id = ANY($1::int[])' : ''}`, setores ? [setores] : []);
@@ -134,25 +161,27 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
     if (req.query.responsavel === 'nenhum') where.push('t.responsavel_id IS NULL');
     else if (req.query.responsavel) where.push('t.responsavel_id = ' + p(Number(req.query.responsavel)));
     if (req.query.prioridade && PRIORIDADES.includes(req.query.prioridade)) where.push('t.prioridade = ' + p(req.query.prioridade));
-    if (req.query.atrasados === '1') where.push(`t.prazo < now() AND t.status IN ${EM_ABERTO}`);
+    if (req.query.atrasados === '1') where.push(ATRASADO);
+    if (req.query.condominio === 'interno') where.push('t.demanda_interna');
+    else if (req.query.condominio) where.push('t.condominio_id = ' + p(Number(req.query.condominio)));
     const busca = texto(req.query.q, 100);
     if (busca) {
       const n = Number(busca.replace(/^#/, ''));
-      where.push(`(t.titulo ILIKE ${p('%' + busca + '%')} OR t.descricao ILIKE $${args.length}${Number.isInteger(n) && n > 0 ? ' OR t.id = ' + p(n) : ''})`);
+      where.push(`(t.titulo ILIKE ${p('%' + busca + '%')} OR t.descricao ILIKE $${args.length} OR cd.nome ILIKE $${args.length}${Number.isInteger(n) && n > 0 ? ' OR t.id = ' + p(n) : ''})`);
     }
     const limite = Math.min(Number(req.query.limite) || 200, 500);
-    const { rows } = await db.q(`SELECT t.id, t.titulo, t.status, t.prioridade, t.prazo, t.criado_em, t.atualizado_em, t.resolvido_em,
-        t.setor_id, s.nome AS setor_nome, c.nome AS categoria_nome,
+    const { rows } = await db.q(`SELECT t.id, t.titulo, t.status, t.prioridade, t.prazo, t.prazo_conclusao, t.primeira_resposta_em, t.criado_em, t.atualizado_em, t.resolvido_em,
+        t.setor_id, s.nome AS setor_nome, c.nome AS categoria_nome, t.condominio_id, cd.nome AS condominio_nome, t.demanda_interna,
         t.solicitante_id, us.nome AS solicitante_nome, t.responsavel_id, ur.nome AS responsavel_nome,
-        (t.prazo < now() AND t.status IN ${EM_ABERTO}) AS atrasado,
+        ${ATRASADO} AS atrasado,
         (SELECT COUNT(*)::int FROM ticket_eventos e WHERE e.ticket_id = t.id AND e.tipo = 'comentario') AS comentarios
       FROM tickets t JOIN setores s ON s.id = t.setor_id
-      LEFT JOIN ticket_categorias c ON c.id = t.categoria_id
+      LEFT JOIN ticket_categorias c ON c.id = t.categoria_id LEFT JOIN condominios cd ON cd.id = t.condominio_id
       LEFT JOIN usuarios us ON us.id = t.solicitante_id LEFT JOIN usuarios ur ON ur.id = t.responsavel_id
       ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
       ORDER BY (t.status IN ${EM_ABERTO}) DESC,
         CASE t.prioridade WHEN 'urgente' THEN 0 WHEN 'alta' THEN 1 WHEN 'media' THEN 2 ELSE 3 END,
-        t.prazo NULLS LAST, t.id DESC
+        ${PROXIMO_PRAZO} NULLS LAST, t.id DESC
       LIMIT ${p(limite)}`, args);
     res.json({ tickets: rows });
   });
@@ -170,21 +199,42 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
       cat = await db.um('SELECT * FROM ticket_categorias WHERE id = $1 AND setor_id = $2 AND ativo', [Number(b.categoria_id), setor.id]);
       if (!cat) return erro(res, 400, 'Tipo de demanda inválido para este setor.');
     }
+    // de um condomínio da carteira ou interna (não é de condomínio)
+    const interna = b.interno === true;
+    let cond = null;
+    if (!interna) {
+      cond = await db.um('SELECT id, nome FROM condominios WHERE id = $1', [Number(b.condominio_id) || 0]);
+      if (!cond) return erro(res, 400, 'Escolha o condomínio da carteira ou marque a demanda como interna.');
+    }
     const prioridade = PRIORIDADES.includes(b.prioridade) ? b.prioridade : cat ? cat.prioridade : 'media';
     const horas = cat && cat.prazo_horas ? cat.prazo_horas : PRAZO_PADRAO_HORAS[prioridade];
     const prazo = expediente.somarHorasUteis(new Date(), horas);
+    // condomínio: a pessoa da carteira no setor (analista de cobrança, assistente de crédito) já fica responsável
+    const r0 = cond ? await carteira.responsavelDoCondominio(db, cond.id, setor.id) : null;
+    const auto = r0 && r0.id ? r0 : null;
     const id = await db.tx(async (t) => {
-      const { id: novo } = await t.um(`INSERT INTO tickets (titulo, descricao, setor_id, categoria_id, prioridade, solicitante_id, prazo)
-        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`, [titulo, descricao, setor.id, cat ? cat.id : null, prioridade, req.usuario.id, prazo]);
-      await registrar(t, novo, req.usuario.id, 'criado', null, false, { setor: setor.nome, prioridade });
+      const { id: novo } = await t.um(`INSERT INTO tickets (titulo, descricao, setor_id, categoria_id, prioridade, solicitante_id, prazo, condominio_id, demanda_interna, responsavel_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+      [titulo, descricao, setor.id, cat ? cat.id : null, prioridade, req.usuario.id, prazo, cond ? cond.id : null, interna, auto ? auto.id : null]);
+      await registrar(t, novo, req.usuario.id, 'criado', null, false, { setor: setor.nome, prioridade, condominio: cond ? cond.nome : null, interna });
+      if (auto) await registrar(t, novo, null, 'atribuicao', null, false, { para: auto.nome, para_id: auto.id, automatico: true });
+      else if (r0) await registrar(t, novo, null, 'carteira_sem_cadastro', null, true, { carteira: r0.carteira });
       return novo;
     });
-    await seg.auditar(req, 'ticket_criado', null, { ticket: id, setor: setor.nome, titulo });
-    await avisos.notificar(await avisos.triagemDoSetor(setor.id), {
-      ticket_id: id, autor_id: req.usuario.id, tipo: 'novo', email: true,
-      titulo: `Novo ticket para ${setor.nome}`, texto: `${req.usuario.nome} abriu o ticket #${id} para ${setor.nome}: ${titulo}`,
-    });
-    res.status(201).json({ id });
+    await seg.auditar(req, 'ticket_criado', null, { ticket: id, setor: setor.nome, titulo, condominio: cond ? cond.nome : 'interna', responsavel: auto ? auto.nome : null });
+    const sobre = cond ? ` (${cond.nome})` : ' (interna)';
+    if (auto) {
+      await avisos.notificar([auto.id], {
+        ticket_id: id, autor_id: req.usuario.id, tipo: 'atribuido', email: true,
+        titulo: `Novo ticket #${id} para você`, texto: `${req.usuario.nome} abriu o ticket #${id} para ${setor.nome}${sobre}: ${titulo}. Veio direto para você por ser condomínio da sua carteira.`,
+      });
+    } else {
+      await avisos.notificar(await avisos.triagemDoSetor(setor.id), {
+        ticket_id: id, autor_id: req.usuario.id, tipo: 'novo', email: true,
+        titulo: `Novo ticket para ${setor.nome}`, texto: `${req.usuario.nome} abriu o ticket #${id} para ${setor.nome}${sobre}: ${titulo}`,
+      });
+    }
+    res.status(201).json({ id, responsavel: auto ? { id: auto.id, nome: auto.nome } : null });
   });
 
   /* ===================== detalhe ===================== */
@@ -193,14 +243,17 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
     if (!v) return;
     const { t, p } = v;
     const info = await db.um(`SELECT s.nome AS setor_nome, c.nome AS categoria_nome, us.nome AS solicitante_nome, us.email AS solicitante_email,
-        ur.nome AS responsavel_nome FROM tickets t JOIN setores s ON s.id = t.setor_id LEFT JOIN ticket_categorias c ON c.id = t.categoria_id
+        ur.nome AS responsavel_nome, cd.nome AS condominio_nome, cd.comarca AS condominio_comarca, cd.codigo AS condominio_codigo
+        FROM tickets t JOIN setores s ON s.id = t.setor_id LEFT JOIN ticket_categorias c ON c.id = t.categoria_id LEFT JOIN condominios cd ON cd.id = t.condominio_id
         LEFT JOIN usuarios us ON us.id = t.solicitante_id LEFT JOIN usuarios ur ON ur.id = t.responsavel_id WHERE t.id = $1`, [t.id]);
     const eventos = (await db.q(`SELECT e.id, e.tipo, e.texto, e.interno, e.detalhe, e.criado_em, e.usuario_id, u.nome AS usuario_nome
       FROM ticket_eventos e LEFT JOIN usuarios u ON u.id = e.usuario_id WHERE e.ticket_id = $1 ${p.interno ? '' : 'AND NOT e.interno'} ORDER BY e.id`, [t.id])).rows;
     const anexos = (await db.q(`SELECT a.id, a.nome, a.tipo, a.tamanho, a.interno, a.enviado_em, u.nome AS enviado_por_nome
       FROM ticket_anexos a LEFT JOIN usuarios u ON u.id = a.enviado_por WHERE a.ticket_id = $1 ${p.interno ? '' : 'AND NOT a.interno'} ORDER BY a.id`, [t.id])).rows;
     await db.q('UPDATE notificacoes SET lida = TRUE WHERE usuario_id = $1 AND ticket_id = $2 AND NOT lida', [req.usuario.id, t.id]);
-    const atrasado = !!(t.prazo && new Date(t.prazo) < new Date() && ['novo', 'em_andamento', 'aguardando'].includes(t.status));
+    const agora = new Date();
+    const emAberto = ['novo', 'em_andamento', 'aguardando'].includes(t.status);
+    const atrasado = emAberto && ((!t.primeira_resposta_em && t.prazo && new Date(t.prazo) < agora) || (t.prazo_conclusao && new Date(t.prazo_conclusao) < agora));
     res.json({ ticket: { ...t, ...info, atrasado }, eventos, anexos, pode: p });
   });
 
@@ -236,7 +289,9 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
           titulo: `Ticket #${t.id} passado para você`, texto: `${u.nome} passou para você o ticket #${t.id}: ${t.titulo}${motivo ? ` (${motivo})` : ''}` });
       } else if (tipo === 'transferencia') {
         const novo = await db.um('SELECT setor_id FROM tickets WHERE id = $1', [t.id]);
-        await avisos.notificar(await avisos.triagemDoSetor(novo.setor_id), { ...base, tipo: 'novo', email: true,
+        // foi direto para a pessoa da carteira do condomínio: ela é avisada pela atribuição
+        const direto = eventos.some(([tp, , d]) => tp === 'atribuicao' && d.automatico);
+        if (!direto) await avisos.notificar(await avisos.triagemDoSetor(novo.setor_id), { ...base, tipo: 'novo', email: true,
           titulo: `Ticket #${t.id} transferido para ${det.para}`, texto: `${u.nome} transferiu de ${det.de} para ${det.para} o ticket #${t.id}: ${t.titulo}${motivo ? ` (${motivo})` : ''}` });
         await avisos.notificar([t.solicitante_id], { ...base, tipo: 'transferido', email: false,
           titulo: `Seu ticket #${t.id} foi para ${det.para}`, texto: `${u.nome} transferiu seu ticket de ${det.de} para ${det.para}.` });
@@ -247,9 +302,15 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
         const quem = t.responsavel_id ? [t.responsavel_id] : await avisos.triagemDoSetor(t.setor_id);
         await avisos.notificar([...quem, t.solicitante_id], { ...base, tipo: 'reaberto', email: true,
           titulo: `Ticket #${t.id} reaberto`, texto: `${u.nome} reabriu o ticket #${t.id}: ${t.titulo}${motivo ? `. Motivo: ${motivo}` : ''}` });
+      } else if (tipo === 'prazo_conclusao') {
+        const data = new Date(det.para).toLocaleString('pt-BR', { timeZone: expediente.config.fuso, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        await avisos.notificar([t.solicitante_id], { ...base, tipo: 'prazo', email: !!det.de,
+          titulo: det.de ? `Prazo do ticket #${t.id} mudou` : `Ticket #${t.id} em atendimento`,
+          texto: det.de ? `${u.nome} mudou a previsão de conclusão do ticket #${t.id} para ${data}${motivo ? `. Motivo: ${motivo}` : ''}`
+            : `${u.nome} começou a tratar o ticket #${t.id} (${t.titulo}). Previsão de conclusão: ${data}.` });
       } else if (tipo === 'status' || tipo === 'prazo' || tipo === 'prioridade') {
         await avisos.notificar([t.solicitante_id, t.responsavel_id], { ...base, tipo, email: false,
-          titulo: `Ticket #${t.id} atualizado`, texto: `${u.nome} alterou ${tipo === 'status' ? 'a situação' : tipo === 'prazo' ? 'o prazo' : 'a prioridade'} do ticket #${t.id}.` });
+          titulo: `Ticket #${t.id} atualizado`, texto: `${u.nome} alterou ${tipo === 'status' ? 'a situação' : tipo === 'prazo' ? 'o prazo para resposta' : 'a prioridade'} do ticket #${t.id}.` });
       }
     }
   }
@@ -271,6 +332,11 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
       if (!STATUS.includes(b.status)) return erro(res, 400, 'Status inválido.');
       const permitido = p.equipe || (b.status === 'cancelado' && p.cancelar) || (b.status === 'em_andamento' && p.reabrir);
       if (!permitido) return erro(res, 403, 'Você não pode mudar a situação deste ticket.');
+      // começar a tratar (sair de "novo") exige o prazo para conclusão
+      const temConclusao = t.prazo_conclusao || (b.prazo_conclusao !== undefined && b.prazo_conclusao);
+      if (p.equipe && t.status === 'novo' && ['em_andamento', 'aguardando'].includes(b.status) && !temConclusao) {
+        return erro(res, 400, 'Informe o prazo para conclusão antes de iniciar o atendimento.');
+      }
       set('status', b.status);
       if (b.status === 'resolvido') sets.push('resolvido_em = now()');
       else if (t.resolvido_em) sets.push('resolvido_em = NULL');
@@ -290,16 +356,19 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
       const antigo = await db.um('SELECT nome FROM setores WHERE id = $1', [t.setor_id]);
       set('setor_id', novo.id);
       set('categoria_id', cat ? cat.id : null);
-      // volta para a fila do novo setor, sem responsável
-      sets.push('responsavel_id = NULL');
+      // vai para a pessoa da carteira do condomínio no novo setor, se houver; senão para a fila, sem responsável.
+      // o prazo para conclusão é da equipe nova
+      const r0 = await carteira.responsavelDoCondominio(db, t.condominio_id, novo.id);
+      const auto = r0 && r0.id ? r0 : null;
+      set('responsavel_id', auto ? auto.id : null);
+      sets.push('prazo_conclusao = NULL');
       if (b.status === undefined && t.status !== 'novo' && ['em_andamento', 'aguardando'].includes(t.status)) sets.push("status = 'novo'");
       eventos.push(['transferencia', motivo, { de: antigo && antigo.nome, para: novo.nome, categoria: cat ? cat.nome : null }]);
+      if (auto) eventos.push(['atribuicao', null, { para: auto.nome, para_id: auto.id, automatico: true }]);
     } else if (b.responsavel_id !== undefined) {
       const alvo = b.responsavel_id === null || b.responsavel_id === '' ? null : Number(b.responsavel_id);
       if (alvo !== t.responsavel_id) {
-        // sem ser líder: só assumir para si ou devolver à fila o que está com você
-        const proprio = (alvo === u.id && p.assumir) || (alvo === null && t.responsavel_id === u.id);
-        if (!p.atribuir && !proprio) return erro(res, 403, 'Só o líder do setor distribui tickets para outras pessoas.');
+        if (!p.atribuir) return erro(res, 403, 'Só o líder do setor (ou a gestão) muda o responsável.');
         let nome = null;
         if (alvo !== null) {
           const pessoa = await db.um('SELECT id, nome FROM usuarios WHERE id = $1 AND ativo', [alvo]);
@@ -308,25 +377,43 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
           nome = pessoa.nome;
         }
         set('responsavel_id', alvo);
-        if (alvo !== null && t.status === 'novo' && b.status === undefined) sets.push("status = 'em_andamento'");
+        // a pessoa nova define o próprio prazo para conclusão ao iniciar
+        if (t.prazo_conclusao && b.prazo_conclusao === undefined) sets.push('prazo_conclusao = NULL');
+        if (b.status === undefined && ['em_andamento', 'aguardando'].includes(t.status) && b.prazo_conclusao === undefined) sets.push("status = 'novo'");
         eventos.push(['atribuicao', motivo, { para: nome, para_id: alvo }]);
       }
     }
 
     if (b.prioridade !== undefined && b.prioridade !== t.prioridade) {
-      if (!p.equipe) return erro(res, 403, 'Só a equipe que atende muda a prioridade.');
+      if (!p.prazos) return erro(res, 403, 'Só o líder do setor (ou a gestão) muda a prioridade.');
       if (!PRIORIDADES.includes(b.prioridade)) return erro(res, 400, 'Prioridade inválida.');
       set('prioridade', b.prioridade);
       eventos.push(['prioridade', null, { de: t.prioridade, para: b.prioridade }]);
     }
 
     if (b.prazo !== undefined) {
-      if (!p.equipe) return erro(res, 403, 'Só a equipe que atende muda o prazo.');
+      if (!p.prazos) return erro(res, 403, 'Só o líder do setor (ou a gestão) muda o prazo para resposta.');
       const novo = b.prazo ? new Date(b.prazo) : null;
-      if (novo && isNaN(novo)) return erro(res, 400, 'Prazo inválido.');
+      if (novo && isNaN(novo)) return erro(res, 400, 'Prazo para resposta inválido.');
       if (String(novo && novo.toISOString()) !== String(t.prazo && new Date(t.prazo).toISOString())) {
         set('prazo', novo);
         eventos.push(['prazo', motivo, { de: t.prazo, para: novo }]);
+      }
+    }
+
+    // prazo para conclusão: definido por quem está com o ticket; mudar depois exige o motivo
+    if (b.prazo_conclusao !== undefined) {
+      if (!p.prazo_conclusao) return erro(res, 403, 'Só quem está com o ticket (ou o líder) define o prazo para conclusão.');
+      const novo = b.prazo_conclusao ? new Date(b.prazo_conclusao) : null;
+      if (!novo || isNaN(novo)) return erro(res, 400, 'Informe uma data válida para a conclusão.');
+      const antes = t.prazo_conclusao ? new Date(t.prazo_conclusao) : null;
+      if (!antes || antes.getTime() !== novo.getTime()) {
+        if (novo < new Date()) return erro(res, 400, 'O prazo para conclusão precisa ser uma data futura.');
+        if (antes && !motivo) return erro(res, 400, 'Informe o motivo da mudança do prazo para conclusão.');
+        set('prazo_conclusao', novo);
+        // definir o prazo de conclusão já é um retorno para quem abriu
+        if (u.id !== t.solicitante_id && !t.primeira_resposta_em && !sets.includes('primeira_resposta_em = now()')) sets.push('primeira_resposta_em = now()');
+        eventos.push(['prazo_conclusao', motivo, { de: antes, para: novo }]);
       }
     }
 
@@ -395,9 +482,11 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
     const periodo = "t.resolvido_em >= now() - ($1::int * interval '1 day')";
     const metricas = `COUNT(*) FILTER (WHERE t.status IN ${EM_ABERTO})::int AS abertos,
       COUNT(*) FILTER (WHERE t.status IN ${EM_ABERTO} AND t.responsavel_id IS NULL)::int AS sem_responsavel,
-      COUNT(*) FILTER (WHERE t.status IN ${EM_ABERTO} AND t.prazo < now())::int AS atrasados,
+      COUNT(*) FILTER (WHERE ${ATRASADO})::int AS atrasados,
       COUNT(*) FILTER (WHERE t.status = 'resolvido' AND ${periodo})::int AS resolvidos,
-      COUNT(*) FILTER (WHERE t.status = 'resolvido' AND ${periodo} AND (t.prazo IS NULL OR t.resolvido_em <= t.prazo))::int AS no_prazo,
+      COUNT(*) FILTER (WHERE t.status = 'resolvido' AND ${periodo} AND (t.prazo_conclusao IS NULL OR t.resolvido_em <= t.prazo_conclusao))::int AS no_prazo,
+      COUNT(*) FILTER (WHERE t.criado_em >= now() - ($1::int * interval '1 day') AND t.primeira_resposta_em IS NOT NULL)::int AS respondidos,
+      COUNT(*) FILTER (WHERE t.criado_em >= now() - ($1::int * interval '1 day') AND t.primeira_resposta_em IS NOT NULL AND (t.prazo IS NULL OR t.primeira_resposta_em <= t.prazo))::int AS respondidos_no_prazo,
       ROUND(AVG(EXTRACT(EPOCH FROM (t.resolvido_em - t.criado_em)) / 3600) FILTER (WHERE t.status = 'resolvido' AND ${periodo})::numeric, 1)::float AS horas_resolucao,
       ROUND(AVG(EXTRACT(EPOCH FROM (t.primeira_resposta_em - t.criado_em)) / 3600) FILTER (WHERE t.criado_em >= now() - ($1::int * interval '1 day') AND t.primeira_resposta_em IS NOT NULL)::numeric, 1)::float AS horas_primeira_resposta,
       COUNT(*) FILTER (WHERE t.criado_em >= now() - ($1::int * interval '1 day'))::int AS criados`;
