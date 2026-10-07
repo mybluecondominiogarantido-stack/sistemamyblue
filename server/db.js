@@ -180,25 +180,26 @@ CREATE TABLE IF NOT EXISTS ticket_anexos (
 );
 CREATE INDEX IF NOT EXISTS idx_ticket_anexos_ticket ON ticket_anexos(ticket_id);
 
--- carteira de condomínios (importada do CSV da planilha) e quem cuida de cada um
+-- carteira de condomínios (aba Carteira, a 1ª carga vem do CSV da planilha)
 CREATE TABLE IF NOT EXISTS condominios (
   id SERIAL PRIMARY KEY,
   codigo TEXT NOT NULL UNIQUE,
   nome TEXT NOT NULL,
   situacao TEXT NOT NULL DEFAULT 'ATIVO',
   comarca TEXT NOT NULL DEFAULT '',
+  vencimento TEXT NOT NULL DEFAULT '',
+  analista_cobranca TEXT NOT NULL DEFAULT '',
+  analista_extrajudicial TEXT NOT NULL DEFAULT '',
+  assistente_credito TEXT NOT NULL DEFAULT '',
+  administradora TEXT NOT NULL DEFAULT '',
+  forma_envio TEXT NOT NULL DEFAULT '',
+  inicio_contrato DATE,
   razao_social TEXT NOT NULL DEFAULT '',
   cnpj TEXT NOT NULL DEFAULT '',
-  administradora TEXT NOT NULL DEFAULT '',
-  pessoas JSONB NOT NULL DEFAULT '{}'::jsonb,
-  na_carteira BOOLEAN NOT NULL DEFAULT TRUE,
-  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- coluna de pessoas da carteira → setor em que essa pessoa recebe os tickets do condomínio
-CREATE TABLE IF NOT EXISTS condominio_colunas (
-  coluna TEXT PRIMARY KEY,
-  setor_id INTEGER REFERENCES setores(id) ON DELETE SET NULL
+  observacoes TEXT NOT NULL DEFAULT '',
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
 );
 
 -- avisos para cada pessoa (sino do portal)
@@ -218,14 +219,12 @@ CREATE INDEX IF NOT EXISTS idx_notificacoes_usuario ON notificacoes(usuario_id, 
 /* Supabase publica o schema "public" pela API dele (PostgREST). Com RLS ligado e sem
    políticas, ninguém lê nem grava por lá; o portal conecta como dono das tabelas e não é afetado. */
 const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 'permissoes', 'armazenamento', 'colecoes', 'registros', 'auditoria',
-  'setor_membros', 'ticket_categorias', 'tickets', 'ticket_eventos', 'ticket_anexos', 'notificacoes', 'condominios', 'condominio_colunas'];
+  'setor_membros', 'ticket_categorias', 'tickets', 'ticket_eventos', 'ticket_anexos', 'notificacoes', 'condominios'];
 const RLS = TABELAS.map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`).join(';\n');
 
 /* Ajustes em bancos já existentes (rodam a cada início e não fazem nada se já estiverem aplicados). */
 const AJUSTES = `
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS supervisor_tickets BOOLEAN NOT NULL DEFAULT FALSE;
-ALTER TABLE tickets ADD COLUMN IF NOT EXISTS condominio_id INTEGER REFERENCES condominios(id) ON DELETE SET NULL;
-ALTER TABLE tickets ADD COLUMN IF NOT EXISTS demanda_interna BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE modulos DROP CONSTRAINT IF EXISTS modulos_adaptador_check;
 ALTER TABLE modulos ADD CONSTRAINT modulos_adaptador_check CHECK (adaptador IS NULL OR adaptador IN ('gas-linhas','gas-objetos','gas-posicional'))
 `;
