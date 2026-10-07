@@ -405,3 +405,19 @@ test('demanda de condomínio vai direto para a pessoa da carteira; interna vai p
   // busca pelo nome do condomínio
   assert.ok((await admin('GET', '/api/tickets?vis=todos&q=jardim%20azul')).json.tickets.length >= 2);
 });
+
+test('mudar a prioridade recalcula o prazo para resposta', async () => {
+  const r = await solicitante('POST', '/api/tickets', { interno: true, titulo: 'Prioridade muda', setor_id: setorCobranca, prioridade: 'media' });
+  const id = r.json.id;
+  let d = (await lider('GET', `/api/tickets/${id}`)).json.ticket;
+  const { criarExpediente } = require('../server/expediente');
+  const exp = criarExpediente();
+  assert.equal((await lider('PATCH', `/api/tickets/${id}`, { prioridade: 'urgente' })).status, 200);
+  const depois = (await lider('GET', `/api/tickets/${id}`)).json.ticket;
+  assert.ok(Math.abs(new Date(depois.prazo) - exp.somarHorasUteis(new Date(d.criado_em), 4)) < 5000, 'urgente: 4 h úteis da abertura');
+  // depois do 1º retorno o prazo para resposta não muda mais
+  await lider('POST', `/api/tickets/${id}/comentarios`, { texto: 'Visto' });
+  assert.equal((await lider('PATCH', `/api/tickets/${id}`, { prioridade: 'baixa' })).status, 200);
+  d = (await lider('GET', `/api/tickets/${id}`)).json.ticket;
+  assert.equal(new Date(d.prazo).getTime(), new Date(depois.prazo).getTime());
+});
