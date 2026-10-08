@@ -732,7 +732,9 @@
             return '<div class="linha" style="padding:9px 12px;border-bottom:1px solid var(--border)"><b style="min-width:130px">' + esc(c) + '</b><span class="ajuda" style="margin:0">' + r.total + ' documento(s) · atualizado ' + quando(r.ultima) + '</span><span class="espaco"></span>' +
               (c.indexOf('/') < 0 ? '<a class="btn ghost sm" href="/api/admin/modulos/' + esc(mod.slug) + '/dados/' + esc(c) + '.csv">' + IC.baixar + 'CSV</a>' : '') + '</div>';
           }).join('') : '<div class="ajuda" style="padding:9px 12px;margin:0">Ainda não há dados gravados.</div>') + '</div>' +
-          '<div class="linha" style="margin-top:8px"><a class="btn ghost sm" href="/api/admin/modulos/' + esc(mod.slug) + '/dados">' + IC.baixar + 'Baixar tudo (JSON)</a></div>';
+          '<div class="linha" style="margin-top:8px"><a class="btn ghost sm" href="/api/admin/modulos/' + esc(mod.slug) + '/dados">' + IC.baixar + 'Baixar tudo (JSON)</a>' +
+          '<label class="btn ghost sm" style="cursor:pointer">' + IC.enviar + 'Importar dados (JSON)<input type="file" accept=".json,application/json" hidden id="inDocs"></label></div>' +
+          '<div class="ajuda">A importação <b>substitui</b> todos os dados desta ferramenta pelos do arquivo. Use o arquivo de dados exportado do Claude.</div><div id="resDocs"></div>';
       } else if (planilha) {
         secPlanilha = '<h4 class="titulo-sec">Planilha da ferramenta</h4>' +
           '<p class="ajuda" style="margin-top:-4px">Esta ferramenta foi feita para gravar numa planilha Google (Apps Script). O portal tem uma planilha equivalente dentro do próprio banco.</p>' +
@@ -768,13 +770,15 @@
           '<label class="zona-envio" id="zArq">' + IC.enviar + '<div>Clique para escolher ou arraste o arquivo .html desta ferramenta</div><input type="file" accept=".html,.htm,text/html" hidden id="inArq"></label>' +
           '<div id="resArq"></div><details style="margin-top:4px"><summary style="cursor:pointer;font-weight:700;color:var(--ink-2)">Versões anteriores</summary><div id="listaVersoes" class="ajuda">Carregando…</div></details>' +
 
+          // ferramentas do Claude guardam tudo no banco de documentos: esta escolha não se aplica a elas
+          '<div' + (mod.adaptador === 'claude-db' ? ' hidden' : '') + '>' +
           '<h4 class="titulo-sec">Onde ficam os dados salvos pela ferramenta</h4>' +
           ['navegador', 'usuario', 'compartilhado'].map(function (k) {
             return '<label class="opcao-radio"><input type="radio" name="mArm" value="' + k + '"' + (mod.armazenamento === k ? ' checked' : '') + '><div><b>' + ROTULO_ARM[k][0] + '</b><span>' + ROTULO_ARM[k][1] + '</span></div></label>';
           }).join('') +
           (armRes.length ? '<div class="ajuda">No banco agora: ' + armRes.map(function (a) { return (a.escopo === '*' ? 'equipe' : 'usuário #' + a.escopo.slice(2)) + ' — ' + a.chaves + ' chave(s), ' + tamanho(a.bytes); }).join(' · ') + '</div>' : '') +
           '<details><summary style="cursor:pointer;font-weight:700;color:var(--ink-2)">Avançado: chaves que ficam só no navegador</summary><input class="campo" id="mLocais" style="margin-top:8px" value="' + esc(((mod.config && mod.config.chaves_locais) || []).join(', ')) + '" placeholder="^staticrypt, rascunho_">' +
-          '<div class="ajuda">Expressões separadas por vírgula. Chaves que combinarem continuam apenas no navegador de cada pessoa.</div></details>' +
+          '<div class="ajuda">Expressões separadas por vírgula. Chaves que combinarem continuam apenas no navegador de cada pessoa.</div></details></div>' +
           secPlanilha +
 
           '<h4 class="titulo-sec">Quem pode abrir</h4>' +
@@ -829,6 +833,26 @@
           recarregarModulosUsuario();
         } catch (e) { res.innerHTML = '<div class="msg erro" style="margin-top:8px">' + esc(e.message) + '</div>'; }
       });
+
+      // importação dos dados de uma ferramenta do Claude
+      if (mod.adaptador === 'claude-db') {
+        $('#inDocs', m).onchange = async function (e) {
+          var arq = e.target.files[0]; e.target.value = '';
+          if (!arq) return;
+          var res = $('#resDocs', m);
+          var corpo;
+          try { corpo = JSON.parse(await arq.text()); } catch (x) { corpo = null; }
+          if (!corpo || !corpo.documentos || typeof corpo.documentos !== 'object') { res.innerHTML = '<div class="msg erro" style="margin-top:8px">Este arquivo não é um arquivo de dados do portal.</div>'; return; }
+          var n = Object.keys(corpo.documentos).length;
+          if (!(await confirmar('Importar dados', 'Os dados atuais de <b>' + esc(mod.nome) + '</b> serão <b>substituídos</b> pelos ' + n + ' documento(s) do arquivo. Quem estiver com a ferramenta aberta passa a ver os dados novos em alguns segundos.', 'Importar'))) return;
+          try {
+            var r = await api('POST', '/api/admin/modulos/' + mod.slug + '/documentos', corpo);
+            res.innerHTML = '<div class="msg ok" style="margin-top:8px">' + r.total + ' documento(s) importado(s).</div>';
+            toast('Dados importados.', 'ok');
+            paginaModulos();
+          } catch (x) { res.innerHTML = '<div class="msg erro" style="margin-top:8px">' + esc(x.message) + '</div>'; }
+        };
+      }
 
       // importação da planilha Google
       if (planilha) {

@@ -146,7 +146,26 @@ function criarDocumentos(db) {
     return { acquired: true, version: seq, expiresAt: new Date(expira).toISOString(), holder };
   }
 
-  return { mudancas, gravar, ler, resumo, listar, adquirir };
+  /* Troca todos os documentos do módulo pelos do arquivo { "colecao/id": {...} } (importação do Claude).
+     O que não está no arquivo é apagado, e quem está com a tela aberta recebe tudo na próxima busca. */
+  async function substituirTudo(slug, mapa, usuarioId) {
+    if (!ehObjeto(mapa)) throw new ErroDoc('invalid_argument', 'Arquivo sem documentos.');
+    const itens = Object.entries(mapa).map(([caminho, dados]) => { const p = separarCaminho(caminho); conferirCorpo(dados); return { ...p, dados }; });
+    if (itens.length > LIMITE_DOCS) throw new ErroDoc('quota_exceeded', 'Documentos demais no arquivo.');
+    return db.tx(async (t) => {
+      await t.q('SELECT pg_advisory_xact_lock(hashtext($1))', ['documentos:' + slug]);
+      await t.q(`UPDATE documentos SET dados = NULL, seq = nextval('documentos_seq'), atualizado_em = now(), atualizado_por = $2
+        WHERE modulo_slug = $1 AND dados IS NOT NULL`, [slug, usuarioId || null]);
+      for (const x of itens) {
+        await t.q(`INSERT INTO documentos (modulo_slug, colecao, doc_id, dados, seq, atualizado_por) VALUES ($1, $2, $3, $4::jsonb, nextval('documentos_seq'), $5)
+          ON CONFLICT (modulo_slug, colecao, doc_id) DO UPDATE SET dados = excluded.dados, seq = excluded.seq, atualizado_em = now(), atualizado_por = excluded.atualizado_por`,
+        [slug, x.colecao, x.id, JSON.stringify(x.dados), usuarioId || null]);
+      }
+      return { total: itens.length };
+    });
+  }
+
+  return { mudancas, gravar, ler, resumo, listar, adquirir, substituirTudo };
 }
 
 module.exports = { criarDocumentos, separarCaminho, mesclar, ErroDoc };
