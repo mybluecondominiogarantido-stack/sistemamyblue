@@ -11,7 +11,11 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
   const ehDocs = (m) => m && m.adaptador === 'claude-db';
   const r = express.Router();
   const json = express.json({ limit: '2mb' });
-  r.use('/api/admin', seg.exigirLogin, seg.exigirAdmin);
+  // o coordenador entra só na parte de usuários (com os limites de escopoDe); o resto é do administrador
+  r.use('/api/admin', seg.exigirLogin, (req, res, next) => {
+    if (req.usuario.papel === 'coordenador' && /^\/usuarios(\/|$)/.test(req.path)) return next();
+    return seg.exigirAdmin(req, res, next);
+  });
 
   const erro = (res, status, msg) => res.status(status).json({ erro: msg });
 
@@ -25,17 +29,39 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
   }
 
   /* ===================== usuários ===================== */
+  const PAPEIS = ['admin', 'coordenador', 'supervisor', 'usuario'];
+
+  /* O que quem está logado pode fazer com usuários. Administrador: tudo (null).
+     Coordenador: só usuários comuns que ele criou ou que estão numa equipe dele, e só libera as ferramentas que ele mesmo tem. */
+  const GERENCIAVEIS = `SELECT u.id FROM usuarios u WHERE u.papel = 'usuario' AND u.id <> $1 AND (u.criado_por = $1 OR EXISTS (
+    SELECT 1 FROM setor_membros a JOIN setor_membros b ON b.setor_id = a.setor_id WHERE a.usuario_id = $1 AND b.usuario_id = u.id))`;
+  async function escopoDe(req) {
+    if (req.usuario.papel === 'admin') return null;
+    const modulosProprios = await seg.modulosDoUsuario(req.usuario);
+    const ids = new Set((await db.q(GERENCIAVEIS, [req.usuario.id])).rows.map((x) => x.id));
+    return { modulos: modulosProprios, gerencia: (id) => ids.has(Number(id)), ids };
+  }
+
   r.get('/api/admin/usuarios', async (req, res) => {
+    const esc = await escopoDe(req);
     const perms = {};
     for (const p of (await db.q('SELECT usuario_id, modulo_slug FROM permissoes')).rows) (perms[p.usuario_id] ||= []).push(p.modulo_slug);
-    const { rows } = await db.q('SELECT id, nome, email, papel, ativo, trocar_senha, supervisor_tickets, editor_links, criado_em, ultimo_login, foto_em FROM usuarios ORDER BY ativo DESC, nome');
-    res.json({ usuarios: rows.map(({ foto_em, ...u }) => ({ ...u, foto_v: foto_em ? new Date(foto_em).getTime() : null, modulos: perms[u.id] || [] })) });
+    let { rows } = await db.q('SELECT id, nome, email, papel, ativo, trocar_senha, supervisor_tickets, editor_links, criado_em, ultimo_login, foto_em FROM usuarios ORDER BY ativo DESC, nome');
+    if (esc) rows = rows.filter((u) => esc.gerencia(u.id));
+    const saida = { usuarios: rows.map(({ foto_em, ...u }) => ({ ...u, foto_v: foto_em ? new Date(foto_em).getTime() : null, modulos: perms[u.id] || [] })) };
+    if (esc) {
+      // o coordenador não abre Módulos e dados: recebe aqui só as ferramentas que pode liberar
+      saida.modulos_disponiveis = (await modulos.listar()).filter((m) => esc.modulos.has(m.slug))
+        .map((m) => ({ slug: m.slug, nome: m.nome, ativo: m.ativo, setor_nome: m.setor_nome, setor_ordem: m.setor_ordem }));
+      saida.nomes_modulos = Object.fromEntries((await modulos.listar()).map((m) => [m.slug, m.nome]));
+    }
+    res.json(saida);
   });
 
   async function dadosUsuario(body) {
     const nome = String(body.nome || '').trim();
     const email = String(body.email || '').trim().toLowerCase();
-    const papel = body.papel === 'admin' ? 'admin' : 'usuario';
+    const papel = PAPEIS.includes(body.papel) ? body.papel : 'usuario';
     if (!nome || nome.length > 120) return { erro: 'Informe o nome (até 120 caracteres).' };
     if (!EMAIL_RE.test(email) || email.length > 200) return { erro: 'E-mail inválido.' };
     const lista = Array.isArray(body.modulos) ? body.modulos.map(String) : [];
@@ -49,14 +75,20 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
   });
 
   r.post('/api/admin/usuarios', json, async (req, res) => {
+    const esc = await escopoDe(req);
     const d = await dadosUsuario(req.body || {});
     if (d.erro) return erro(res, 400, d.erro);
+    if (esc) {
+      // coordenador cria só usuário comum, sem permissões extras, com as ferramentas que ele mesmo tem
+      if (d.papel !== 'usuario') return erro(res, 403, 'Coordenador cria apenas usuários comuns. Peça à administração para criar coordenadores e supervisores.');
+      Object.assign(d, { supervisor_tickets: false, editor_links: false, modulos: d.modulos.filter((s) => esc.modulos.has(s)) });
+    }
     let senha = req.body.senha ? String(req.body.senha) : '';
     if (senha) { const e = validarNovaSenha(senha); if (e) return erro(res, 400, e); } else senha = senhaAleatoria();
     let id;
     try {
-      id = (await db.um("INSERT INTO usuarios (nome, email, senha_hash, papel, trocar_senha, supervisor_tickets, editor_links) VALUES ($1, $2, $3, $4, TRUE, $5, $6) RETURNING id",
-        [d.nome, d.email, hashSenha(senha), d.papel, d.supervisor_tickets, d.editor_links])).id;
+      id = (await db.um("INSERT INTO usuarios (nome, email, senha_hash, papel, trocar_senha, supervisor_tickets, editor_links, criado_por) VALUES ($1, $2, $3, $4, TRUE, $5, $6, $7) RETURNING id",
+        [d.nome, d.email, hashSenha(senha), d.papel, d.supervisor_tickets, d.editor_links, req.usuario.id])).id;
     } catch (e) {
       if (ehDuplicado(e)) return erro(res, 409, 'Já existe um usuário com este e-mail.');
       throw e;
@@ -68,9 +100,20 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
 
   r.patch('/api/admin/usuarios/:id', json, async (req, res) => {
     const id = Number(req.params.id);
+    const esc = await escopoDe(req);
+    if (esc && !esc.gerencia(id)) return erro(res, 404, 'Usuário não encontrado.');
     const atual = await db.um('SELECT id, nome, email, papel, ativo, supervisor_tickets, editor_links FROM usuarios WHERE id = $1', [id]);
     if (!atual) return erro(res, 404, 'Usuário não encontrado.');
-    const d = await dadosUsuario({ ...atual, ...req.body });
+    const pedido = { ...req.body };
+    if (esc) {
+      // coordenador não muda perfil nem permissões extras; nas ferramentas, só mexe nas que ele mesmo tem
+      for (const k of ['papel', 'supervisor_tickets', 'editor_links']) delete pedido[k];
+      if (Array.isArray(pedido.modulos)) {
+        const atuais = (await db.q('SELECT modulo_slug FROM permissoes WHERE usuario_id = $1', [id])).rows.map((x) => x.modulo_slug);
+        pedido.modulos = [...atuais.filter((s) => !esc.modulos.has(s)), ...pedido.modulos.map(String).filter((s) => esc.modulos.has(s))];
+      }
+    }
+    const d = await dadosUsuario({ ...atual, ...pedido });
     if (d.erro) return erro(res, 400, d.erro);
     const ativo = req.body.ativo === undefined ? !!atual.ativo : !!req.body.ativo;
     if (atual.papel === 'admin' && (d.papel !== 'admin' || !ativo)) {
@@ -83,15 +126,16 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
       if (ehDuplicado(e)) return erro(res, 409, 'Já existe um usuário com este e-mail.');
       throw e;
     }
-    if (Array.isArray(req.body.modulos)) await salvarPermissoes(id, d.modulos);
+    if (Array.isArray(pedido.modulos)) await salvarPermissoes(id, d.modulos);
     if (!ativo) await db.q('DELETE FROM sessoes WHERE usuario_id = $1', [id]);
-    await seg.auditar(req, 'usuario_editado', null, { id, email: d.email, papel: d.papel, ativo, supervisor_tickets: d.supervisor_tickets, editor_links: d.editor_links, modulos: Array.isArray(req.body.modulos) ? d.modulos : undefined });
+    await seg.auditar(req, 'usuario_editado', null, { id, email: d.email, papel: d.papel, ativo, supervisor_tickets: d.supervisor_tickets, editor_links: d.editor_links, modulos: Array.isArray(pedido.modulos) ? d.modulos : undefined });
     res.json({ ok: true });
   });
 
   r.post('/api/admin/usuarios/:id/senha', json, async (req, res) => {
     const id = Number(req.params.id);
-    if (!(await db.um('SELECT 1 FROM usuarios WHERE id = $1', [id]))) return erro(res, 404, 'Usuário não encontrado.');
+    const esc = await escopoDe(req);
+    if ((esc && !esc.gerencia(id)) || !(await db.um('SELECT 1 FROM usuarios WHERE id = $1', [id]))) return erro(res, 404, 'Usuário não encontrado.');
     let senha = req.body && req.body.senha ? String(req.body.senha) : '';
     if (senha) { const e = validarNovaSenha(senha); if (e) return erro(res, 400, e); } else senha = senhaAleatoria();
     await db.q('UPDATE usuarios SET senha_hash = $1, trocar_senha = TRUE, atualizado_em = now() WHERE id = $2', [hashSenha(senha), id]);

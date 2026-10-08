@@ -69,6 +69,12 @@ Para publicar uma ferramenta nova, use **Novo módulo**, escolha nome, setor e �
 Em *Usuários e acessos*:
 
 - **Usuário:** vê e abre só as ferramentas marcadas no cadastro dele. Dá para marcar o setor inteiro de uma vez.
+- **Supervisor:** como o usuário, e acompanha os tickets de todos os setores (a mesma "Supervisão da Central de Tickets", já incluída). Não cria usuários.
+- **Coordenador:** como o usuário, e ganha o menu *Usuários da equipe*. Lá ele:
+  - cria **usuários comuns** (nunca administrador, coordenador ou supervisor);
+  - libera só as ferramentas que **ele mesmo** tem; o que a administração liberou para a pessoa continua como está;
+  - edita, desativa e redefine a senha de quem **ele criou** e de quem está numa **equipe dele** (definida em *Equipes e tipos de demanda*).
+  Não vê *Módulos e dados*, *Equipes* nem o histórico.
 - **Administrador:** acessa todas as ferramentas e a administração.
 - Ao criar um usuário (ou redefinir a senha), o portal mostra uma senha temporária. A pessoa cria a própria senha no primeiro acesso.
 - Desativar um usuário encerra na hora as sessões abertas dele.

@@ -25,7 +25,7 @@ const PRAZO_PADRAO_HORAS = { urgente: 4, alta: 9, media: 27, baixa: 45 };
 
 const texto = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
 // administração e supervisão: veem e direcionam os tickets de todos os setores
-const ehGestor = (u) => u.papel === 'admin' || !!u.supervisor_tickets;
+const ehGestor = (u) => u.papel === 'admin' || u.papel === 'supervisor' || !!u.supervisor_tickets;
 
 function rotasTickets({ db, seg, cfg, avisos, expediente }) {
   const r = express.Router();

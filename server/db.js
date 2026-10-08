@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   nome TEXT NOT NULL,
   email TEXT NOT NULL UNIQUE,
   senha_hash TEXT NOT NULL,
-  papel TEXT NOT NULL DEFAULT 'usuario' CHECK (papel IN ('admin','usuario')),
+  papel TEXT NOT NULL DEFAULT 'usuario' CHECK (papel IN ('admin','coordenador','supervisor','usuario')),
   ativo BOOLEAN NOT NULL DEFAULT TRUE,
   trocar_senha BOOLEAN NOT NULL DEFAULT FALSE,
   criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -294,7 +294,10 @@ ALTER TABLE modulos DROP CONSTRAINT IF EXISTS modulos_adaptador_check;
 ALTER TABLE modulos ADD CONSTRAINT modulos_adaptador_check CHECK (adaptador IS NULL OR adaptador IN ('gas-linhas','gas-objetos','gas-posicional','claude-db'));
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto BYTEA;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto_tipo TEXT;
-ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto_em TIMESTAMPTZ
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto_em TIMESTAMPTZ;
+ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_papel_check;
+ALTER TABLE usuarios ADD CONSTRAINT usuarios_papel_check CHECK (papel IN ('admin','coordenador','supervisor','usuario'));
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS criado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
 `;
 
 async function abrir(cfg) {
