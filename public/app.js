@@ -232,10 +232,11 @@
         '<a href="#/admin/modulos" class="' + (rota.indexOf('#/admin/modulos') === 0 ? 'on' : '') + '">' + IC.camadas + 'Módulos e dados</a>' +
         '<a href="#/admin/equipes" class="' + (rota.indexOf('#/admin/equipes') === 0 ? 'on' : '') + '">' + IC.pessoas + 'Equipes e tipos de demanda</a>' +
         '<a href="#/admin/auditoria" class="' + (rota.indexOf('#/admin/auditoria') === 0 ? 'on' : '') + '">' + IC.historico + 'Histórico de atividades</a>';
-    } else if (eu.papel === 'coordenador' && !termo) {
-      html += '<div class="grupo">Coordenação</div>' +
-        '<a href="#/admin/usuarios" class="' + (rota.indexOf('#/admin/usuarios') === 0 ? 'on' : '') + '">' + IC.usuarios + 'Usuários da equipe</a>' +
-        '<a href="#/admin/modulos" class="' + (rota.indexOf('#/admin/modulos') === 0 ? 'on' : '') + '">' + IC.camadas + 'Módulos do setor</a>';
+    } else if (gestorSetor() && !termo) {
+      html += '<div class="grupo">Gestão do setor</div>' +
+        '<a href="#/admin/usuarios" class="' + (rota.indexOf('#/admin/usuarios') === 0 ? 'on' : '') + '">' + IC.usuarios + 'Usuários do setor</a>' +
+        '<a href="#/admin/modulos" class="' + (rota.indexOf('#/admin/modulos') === 0 ? 'on' : '') + '">' + IC.camadas + 'Ferramentas do setor</a>' +
+        '<a href="#/admin/equipes" class="' + (rota.indexOf('#/admin/equipes') === 0 ? 'on' : '') + '">' + IC.pessoas + 'Equipe e tipos de demanda</a>';
     }
     $('#nav').innerHTML = html;
     if (resumoTickets) { var bc = $('#nav [data-contador=fila]'); if (bc) { bc.textContent = resumoTickets.minha_fila; bc.hidden = !resumoTickets.minha_fila; if (resumoTickets.minha_fila_atrasados) bc.classList.add('alerta'); } }
@@ -275,8 +276,11 @@
       if (partes[1] === 'previa' && editorLinks()) return paginaLinks(Number(partes[2]) || null);
       return paginaLinks(null);
     }
-    if (partes[0] === 'admin' && eu.papel === 'coordenador' && partes[1] === 'usuarios') return paginaUsuarios();
-    if (partes[0] === 'admin' && eu.papel === 'coordenador' && partes[1] === 'modulos') return paginaModulosCoord();
+    if (partes[0] === 'admin' && gestorSetor()) {
+      if (partes[1] === 'usuarios') return paginaUsuarios();
+      if (partes[1] === 'modulos') return paginaModulosCoord();
+      if (partes[1] === 'equipes') return paginaEquipes();
+    }
     if (partes[0] === 'admin' && eu.papel === 'admin') {
       if (partes[1] === 'equipes') return paginaEquipes();
       if (partes[1] === 'usuarios') return paginaUsuarios();
@@ -439,6 +443,8 @@
   }
 
   var PAPEL = { admin: 'Administrador', coordenador: 'Coordenador', supervisor: 'Supervisor', usuario: 'Usuário' };
+  /* coordenador e supervisor gerenciam os setores do cadastro deles */
+  function gestorSetor() { return eu && (eu.papel === 'coordenador' || eu.papel === 'supervisor'); }
 
   function seletorModulos(listaMods, marcados, nomeCampo) {
     var html = '<div class="caixa-opcoes">';
@@ -485,15 +491,17 @@
   }
 
   async function paginaUsuarios() {
-    var coord = eu.papel === 'coordenador';
-    definirBarra('<span class="setor">' + (coord ? 'Coordenação' : 'Administração') + '</span><span class="sep">/</span><span class="nome">' + (coord ? 'Usuários da equipe' : 'Usuários e acessos') + '</span>');
+    var coord = gestorSetor();
+    definirBarra('<span class="setor">' + (coord ? 'Gestão do setor' : 'Administração') + '</span><span class="sep">/</span><span class="nome">' + (coord ? 'Usuários do setor' : 'Usuários e acessos') + '</span>');
     $('#conteudo').innerHTML = '<div class="pagina"><div class="carregando" style="position:static;background:none"><div><div class="giro"></div>Carregando…</div></div></div>';
     var dados, mods;
     try { dados = await api('GET', '/api/admin/usuarios'); mods = coord ? dados.modulos_disponiveis : (await carregarModulosAdmin()).modulos; } catch (e) { toast(e.message, 'erro'); return; }
     var nomeMod = coord ? (dados.nomes_modulos || {}) : {}; mods.forEach(function (m) { nomeMod[m.slug] = m.nome; });
 
-    $('#conteudo').innerHTML = '<div class="pagina"><h1>' + (coord ? 'Usuários da equipe' : 'Usuários e acessos') + '</h1><p class="sub">' +
-      (coord ? 'Cadastre as pessoas da sua equipe e libere as ferramentas que você usa. Aparecem aqui os usuários que você criou e os que estão nas suas equipes.' : 'Cadastre as pessoas da equipe e escolha quais ferramentas cada uma pode abrir.') + '</p>' +
+    var nomeSetor = {}; (dados.setores || []).forEach(function (x) { nomeSetor[x.id] = x.nome; });
+    Object.keys(dados.nomes_setores || {}).forEach(function (k) { nomeSetor[k] = dados.nomes_setores[k]; });
+    $('#conteudo').innerHTML = '<div class="pagina"><h1>' + (coord ? 'Usuários do setor' : 'Usuários e acessos') + '</h1><p class="sub">' +
+      (coord ? 'Cadastre as pessoas do seu setor e libere as ferramentas do setor. Aparecem aqui os usuários dos seus setores e os que você criou.' : 'Cadastre as pessoas, escolha o perfil, o setor e quais ferramentas cada uma pode abrir.') + '</p>' +
       '<div class="painel"><div class="cab-painel"><input class="campo" id="fUsu" placeholder="Buscar por nome ou e-mail…" style="max-width:320px">' +
       '<label class="linha" style="font-weight:700;font-size:13px;color:var(--muted)"><input type="checkbox" id="fInativos"> mostrar desativados</label><span class="espaco"></span>' +
       '<button class="btn primary" id="btNovoUsu">' + IC.mais + 'Novo usuário</button></div>' +
@@ -507,7 +515,7 @@
         var ferr = u.papel === 'admin' ? '<span class="etiqueta azul">todas</span>' :
           u.modulos.length ? '<span title="' + esc(u.modulos.map(function (s) { return nomeMod[s] || s; }).join('\n')) + '">' + u.modulos.length + (coord ? ' ferramenta(s)' : ' de ' + mods.length) + '</span>' : '<span class="etiqueta ambar">nenhuma</span>';
         return '<tr class="clicavel" data-id="' + u.id + '"><td><div class="linha" style="flex-wrap:nowrap;gap:10px">' + avatarHtml(u, 34) + '<div><b>' + esc(u.nome) + '</b><span class="sec">' + esc(u.email) + '</span></div></div></td>' +
-          '<td>' + (PAPEL[u.papel] || 'Usuário') + (u.supervisor_tickets ? ' <span class="etiqueta azul">supervisão tickets</span>' : '') + (u.editor_links ? ' <span class="etiqueta azul">central de links</span>' : '') + '</td><td>' + ferr + '</td><td>' + quando(u.ultimo_login) + '</td>' +
+          '<td>' + (PAPEL[u.papel] || 'Usuário') + (u.setores && u.setores.length ? '<span class="sec">' + esc(u.setores.map(function (x) { return nomeSetor[x] || ''; }).filter(Boolean).join(', ')) + '</span>' : '') + (u.supervisor_tickets ? ' <span class="etiqueta azul">supervisão tickets</span>' : '') + (u.editor_links ? ' <span class="etiqueta azul">central de links</span>' : '') + '</td><td>' + ferr + '</td><td>' + quando(u.ultimo_login) + '</td>' +
           '<td>' + (!u.ativo ? '<span class="etiqueta cinza">desativado</span>' : u.trocar_senha ? '<span class="etiqueta ambar">aguardando 1º acesso</span>' : '<span class="etiqueta verde">ativo</span>') + '</td></tr>';
       }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);font-weight:700;padding:30px">Nenhum usuário encontrado.</td></tr>';
       $$('#tbUsu tr[data-id]').forEach(function (tr) {
@@ -521,7 +529,11 @@
 
     function editarUsuario(u) {
       var novo = !u;
-      u = u || { nome: '', email: '', papel: 'usuario', ativo: true, modulos: [] };
+      u = u || { nome: '', email: '', papel: 'usuario', ativo: true, modulos: [], setores: coord && dados.setores.length === 1 ? [dados.setores[0].id] : [] };
+      var setoresU = u.setores || [];
+      var blocoSetores = '<div><label class="rot">Setor' + (dados.setores.length > 1 ? '(es)' : '') + '</label><div class="caixa-opcoes" style="max-height:170px">' +
+        dados.setores.map(function (x) { return '<label><input type="checkbox" name="uSetor" value="' + x.id + '"' + (setoresU.indexOf(x.id) >= 0 ? ' checked' : '') + '><span>' + esc(x.nome) + '</span></label>'; }).join('') + '</div>' +
+        '<div class="ajuda">' + (coord ? 'A pessoa entra na equipe do setor na Central de Tickets.' : 'É o setor da pessoa: forma a equipe do setor na Central de Tickets e, para coordenador e supervisor, define o que eles gerenciam.') + '</div></div>';
       var m = modal({
         titulo: novo ? 'Novo usuário' : 'Editar usuário', largo: true,
         corpo: '<form id="fU" class="pilha" novalidate><div class="grade-2">' +
@@ -530,15 +542,17 @@
           (coord ? '' :
           '<div><label class="rot">Perfil</label><div class="grade-2">' +
           '<label class="opcao-radio"><input type="radio" name="uPapel" value="usuario"' + (u.papel === 'usuario' || !PAPEL[u.papel] ? ' checked' : '') + '><div><b>Usuário</b><span>Abre só as ferramentas marcadas abaixo.</span></div></label>' +
-          '<label class="opcao-radio"><input type="radio" name="uPapel" value="supervisor"' + (u.papel === 'supervisor' ? ' checked' : '') + '><div><b>Supervisor</b><span>Abre as ferramentas marcadas e acompanha os tickets de todos os setores. Não cria usuários.</span></div></label>' +
-          '<label class="opcao-radio"><input type="radio" name="uPapel" value="coordenador"' + (u.papel === 'coordenador' ? ' checked' : '') + '><div><b>Coordenador</b><span>Abre as ferramentas marcadas e cria usuários comuns da equipe dele, liberando só essas mesmas ferramentas.</span></div></label>' +
+          '<label class="opcao-radio"><input type="radio" name="uPapel" value="supervisor"' + (u.papel === 'supervisor' ? ' checked' : '') + '><div><b>Supervisor</b><span>Gerencia o(s) setor(es) dele: usuários comuns, ferramentas, equipe, tipos de demanda e carteira. Mesmos poderes do coordenador.</span></div></label>' +
+          '<label class="opcao-radio"><input type="radio" name="uPapel" value="coordenador"' + (u.papel === 'coordenador' ? ' checked' : '') + '><div><b>Coordenador</b><span>Gerencia o(s) setor(es) dele: usuários comuns, ferramentas, equipe, tipos de demanda e carteira.</span></div></label>' +
           '<label class="opcao-radio"><input type="radio" name="uPapel" value="admin"' + (u.papel === 'admin' ? ' checked' : '') + '><div><b>Administrador</b><span>Acessa tudo e gerencia usuários, módulos e dados.</span></div></label></div></div>' +
           '<label class="opcao-radio" style="margin:0"><input type="checkbox" id="uSup"' + (u.supervisor_tickets ? ' checked' : '') + '><div><b>Supervisão da Central de Tickets</b>' +
-          '<span>Vê os tickets de todos os setores e direciona: troca o responsável, transfere, muda situação, prioridade e prazo. O perfil Supervisor já inclui isto.</span></div></label>' +
+          '<span>Vê os tickets de todos os setores e direciona: troca o responsável, transfere, muda situação, prioridade e prazo. Para quem acompanha a empresa toda (ex.: Gerência).</span></div></label>' +
           '<label class="opcao-radio" style="margin:0"><input type="checkbox" id="uLinks"' + (u.editor_links ? ' checked' : '') + '><div><b>Marketing — Central de Links</b>' +
           '<span>Troca o fundo da campanha do mês e edita os links da Central de Links. Não dá acesso à administração do portal.</span></div></label>') +
+          blocoSetores +
           '<div id="blocoMods"><label class="rot">Ferramentas liberadas</label>' + (mods.length ? seletorModulos(mods, u.modulos, 'uMod') : '<div class="ajuda">Você ainda não tem ferramentas para liberar. Peça à administração.</div>') +
-          (coord && u.modulos.some(function (s) { return !mods.some(function (x) { return x.slug === s; }); }) ? '<div class="ajuda">Esta pessoa também tem ferramentas liberadas pela administração, que continuam como estão.</div>' : '') + '</div>' +
+          (coord && u.modulos.some(function (s) { return !mods.some(function (x) { return x.slug === s; }); }) ? '<div class="ajuda">Esta pessoa também tem ferramentas de outros setores, liberadas pela administração, que continuam como estão.</div>' : '') +
+          (coord ? '' : '<div class="ajuda" id="ajudaGestor" hidden>Coordenador e supervisor já abrem todas as ferramentas dos setores dele. Marque aqui só as de outros setores.</div>') + '</div>' +
           (novo ? '<div><label class="rot" for="uSenha">Senha inicial (opcional)</label><input class="campo" id="uSenha" type="text" autocomplete="off" placeholder="Deixe em branco para gerar uma automaticamente"><div class="ajuda">A pessoa precisará trocar a senha no primeiro acesso.</div></div>' :
             '<label class="linha" style="font-weight:700"><input type="checkbox" id="uAtivo"' + (u.ativo ? ' checked' : '') + '> Usuário ativo (desmarque para bloquear o acesso)</label>') +
           '<div id="uMsg" class="msg erro" hidden></div></form>',
@@ -546,13 +560,18 @@
           '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="btSalvarU">' + (novo ? 'Criar usuário' : 'Salvar') + '</button>',
       });
       ligarGrupos(m);
-      function papelMudou() { var r = $('input[name=uPapel]:checked', m); $('#blocoMods', m).hidden = !!r && r.value === 'admin'; }
+      function papelMudou() {
+        var r = $('input[name=uPapel]:checked', m);
+        $('#blocoMods', m).hidden = !!r && r.value === 'admin';
+        if ($('#ajudaGestor', m)) $('#ajudaGestor', m).hidden = !r || (r.value !== 'coordenador' && r.value !== 'supervisor');
+      }
       $$('input[name=uPapel]', m).forEach(function (r) { r.onchange = papelMudou; });
       papelMudou();
       $('#btSalvarU', m).onclick = async function () {
         var corpo = {
           nome: $('#uNome', m).value, email: $('#uEmail', m).value,
           modulos: $$('input[name=uMod]:checked', m).map(function (i) { return i.value; }),
+          setores: $$('input[name=uSetor]:checked', m).map(function (i) { return Number(i.value); }),
         };
         if (!coord) {
           corpo.papel = $('input[name=uPapel]:checked', m).value;
@@ -642,37 +661,48 @@
     });
   }
 
-  /* Coordenador: só o HTML dos módulos dos setores das equipes dele (enviar versão nova e voltar uma anterior) */
+  /* Coordenador e supervisor: as ferramentas dos setores dele (HTML, versões e quem pode abrir) */
   async function paginaModulosCoord() {
-    definirBarra('<span class="setor">Coordenação</span><span class="sep">/</span><span class="nome">Módulos do setor</span>');
+    definirBarra('<span class="setor">Gestão do setor</span><span class="sep">/</span><span class="nome">Ferramentas do setor</span>');
     $('#conteudo').innerHTML = '<div class="pagina"><div class="carregando" style="position:static;background:none"><div><div class="giro"></div>Carregando…</div></div></div>';
-    var mods;
-    try { mods = (await api('GET', '/api/admin/modulos')).modulos; } catch (e) { toast(e.message, 'erro'); return; }
-    $('#conteudo').innerHTML = '<div class="pagina"><h1>Módulos do setor</h1><p class="sub">As ferramentas dos setores das suas equipes. Aqui você envia uma versão nova do HTML ou volta para uma versão anterior.</p>' +
+    var mods, pessoas;
+    try { mods = (await api('GET', '/api/admin/modulos')).modulos; pessoas = (await api('GET', '/api/admin/usuarios')).usuarios; } catch (e) { toast(e.message, 'erro'); return; }
+    if (location.hash.indexOf('#/admin/modulos') !== 0) return; // a pessoa já foi para outra tela
+    $('#conteudo').innerHTML = '<div class="pagina"><h1>Ferramentas do setor</h1><p class="sub">As ferramentas dos seus setores. Envie uma versão nova do HTML, volte para uma anterior e escolha quem do setor pode abrir cada uma.</p>' +
       '<div class="painel"><div class="tabela-wrap"><table><thead><tr><th>Módulo</th><th>Setor</th><th>Arquivo em uso</th></tr></thead><tbody>' +
       (mods.map(function (x) {
         return '<tr class="clicavel" data-slug="' + esc(x.slug) + '"><td><div class="linha" style="flex-wrap:nowrap"><div class="icone-mod" style="width:34px;height:34px">' + (IC[x.icone] || IC.app) + '</div><div><b>' + esc(x.nome) + '</b>' + (x.ativo ? '' : ' <span class="etiqueta cinza">desativado</span>') + '</div></div></td>' +
           '<td>' + esc(x.setor_nome || '—') + '</td>' +
           '<td>' + (x.tem_arquivo ? quando(x.versao_em) + '<span class="sec">' + tamanho(x.tamanho) + (x.nome_original ? ' · ' + esc(x.nome_original) : '') + '</span>' : '<span class="etiqueta vermelha">sem arquivo</span>') + '</td></tr>';
-      }).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--muted);font-weight:700;padding:30px">Nenhum módulo nos setores das suas equipes. Peça à administração para incluir você na equipe do setor.</td></tr>') +
+      }).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--muted);font-weight:700;padding:30px">Nenhuma ferramenta nos seus setores. Peça à administração para conferir o setor no seu cadastro.</td></tr>') +
       '</tbody></table></div></div></div>';
     $$('tr[data-slug]').forEach(function (tr) {
       tr.onclick = function () {
         var mod = mods.find(function (x) { return x.slug === tr.getAttribute('data-slug'); });
         var m = modal({
           titulo: mod.nome, largo: true,
-          corpo: '<style>.titulo-sec{font-family:var(--display);font-size:15px;margin:0 0 10px}</style><div class="pilha">' + htmlArquivoModulo(mod) + '</div>',
-          pe: '<a class="btn ghost" href="#/m/' + esc(mod.slug) + '" id="btAbrirMod" style="margin-right:auto">' + IC.novaAba + 'Abrir</a><button class="btn primary" data-fechar>Fechar</button>',
-          aoFechar: function () { paginaModulosCoord(); },
+          corpo: '<style>.titulo-sec{font-family:var(--display);font-size:15px;margin:22px 0 10px;padding-top:18px;border-top:1px solid var(--border)}.titulo-sec:first-child{margin-top:0;padding-top:0;border-top:0}</style><div class="pilha">' + htmlArquivoModulo(mod) +
+            '<h4 class="titulo-sec">Quem pode abrir</h4><p class="ajuda" style="margin-top:-4px">Pessoas do seu setor. Coordenadores, supervisores e administradores do setor já abrem todas as ferramentas dele.</p>' +
+            (pessoas.length ? '<div class="caixa-opcoes">' + pessoas.map(function (u) {
+              return '<label><input type="checkbox" name="mUsu" value="' + u.id + '"' + ((mod.usuarios || []).indexOf(u.id) >= 0 ? ' checked' : '') + '><span>' + esc(u.nome) + ' <span class="sec" style="display:inline;color:var(--muted)">· ' + esc(u.email) + (u.ativo ? '' : ' · desativado') + '</span></span></label>';
+            }).join('') + '</div><div class="linha" style="margin-top:8px"><button class="btn primary sm" id="btSalvarAcesso" type="button">Salvar quem pode abrir</button></div>' : '<div class="ajuda">Nenhum usuário no seu setor ainda. Cadastre em Usuários do setor.</div>') + '</div>',
+          pe: '<a class="btn ghost" href="#/m/' + esc(mod.slug) + '" id="btAbrirMod" style="margin-right:auto">' + IC.novaAba + 'Abrir</a><button class="btn ghost" data-fechar>Fechar</button>',
+          aoFechar: function () { if (location.hash.indexOf('#/admin/modulos') === 0) paginaModulosCoord(); },
         });
         $('#btAbrirMod', m).onclick = function () { m.fechar(); };
         ligarArquivoEVersoes(m, mod);
+        if ($('#btSalvarAcesso', m)) $('#btSalvarAcesso', m).onclick = async function () {
+          try {
+            await api('PUT', '/api/admin/modulos/' + mod.slug + '/acesso', { usuarios: $$('input[name=mUsu]:checked', m).map(function (i) { return Number(i.value); }) });
+            toast('Acesso salvo.', 'ok');
+          } catch (e) { toast(e.message, 'erro'); }
+        };
       };
     });
   }
 
   async function paginaModulos() {
-    if (eu.papel === 'coordenador') return paginaModulosCoord();
+    if (gestorSetor()) return paginaModulosCoord();
     definirBarra('<span class="setor">Administração</span><span class="sep">/</span><span class="nome">Módulos e dados</span>');
     $('#conteudo').innerHTML = '<div class="pagina"><div class="carregando" style="position:static;background:none"><div><div class="giro"></div>Carregando…</div></div></div>';
     var j, setores, usuarios;
@@ -1103,7 +1133,7 @@
     return metaTickets;
   }
   function meusSetores() { return (metaTickets ? metaTickets.setores : []).filter(function (s) { return s.meu; }); }
-  function gestorTickets() { return eu.papel === 'admin' || eu.papel === 'supervisor' || !!eu.supervisor_tickets; }
+  function gestorTickets() { return eu.papel === 'admin' || !!eu.supervisor_tickets; }
   function souEquipe() { return gestorTickets() || meusSetores().length > 0; }
 
   /* ---------- avisos: sino, som e alerta do navegador ---------- */
@@ -1700,6 +1730,9 @@
     var j;
     try { j = await api('GET', '/api/carteira'); } catch (e) { toast(e.message, 'erro'); return; }
     var conds = j.condominios, funcoes = j.funcoes, admin = j.pode_editar;
+    // colunas de responsável que esta pessoa altera e transfere (coordenador/supervisor: as do setor dele)
+    var editaveis = j.funcoes_editaveis || [];
+    function editavel(campo) { return admin || editaveis.indexOf(campo) >= 0; }
     var ativos = conds.filter(function (c) { return c.situacao === 'ATIVO'; });
     var porUf = {};
     ativos.forEach(function (c) { porUf[c.comarca || '—'] = (porUf[c.comarca || '—'] || 0) + 1; });
@@ -1801,7 +1834,7 @@
 
     function desenharResponsaveis() {
       $('#cCorpo').innerHTML = '<div class="linha" style="margin-bottom:14px"><span class="ajuda" style="flex:1;min-width:240px">Quantos condomínios cada pessoa tem na carteira. Clique no número para ver a lista' +
-        (admin ? '; use <b>Transferir</b> quando alguém sair ou a carteira for redistribuída.' : '.') + '</span>' + acoes + '</div>' +
+        (editaveis.length ? '; use <b>Transferir</b> quando alguém sair ou a carteira for redistribuída.' : '.') + '</span>' + acoes + '</div>' +
         funcoes.map(function (fn) {
           var nomes = unicos(conds.map(function (c) { return c[fn.campo]; }));
           var sem = ativos.filter(function (c) { return !c[fn.campo]; }).length;
@@ -1815,12 +1848,12 @@
               '<td class="num"><a href="#" data-ver="' + esc(fn.campo + '|' + p) + '"><b>' + at.length + '</b></a></td>' +
               '<td class="sec">' + Object.keys(porU).sort(function (a, b) { return porU[b] - porU[a]; }).map(function (u) { return esc(u) + ' ' + porU[u]; }).join(' · ') + '</td>' +
               '<td class="num">' + (deles.length - at.length) + '</td>' +
-              (admin ? '<td style="text-align:right"><button class="btn ghost sm" data-transferir="' + esc(fn.campo + '|' + p) + '">Transferir</button></td>' : '') + '</tr>', n: at.length };
+              (editaveis.length ? '<td style="text-align:right">' + (editavel(fn.campo) ? '<button class="btn ghost sm" data-transferir="' + esc(fn.campo + '|' + p) + '">Transferir</button>' : '') + '</td>' : '') + '</tr>', n: at.length };
           }).sort(function (a, b) { return b.n - a.n; });
           return '<div class="painel" style="margin-bottom:18px"><div class="cab-painel"><b style="font-family:var(--display)">' + esc(fn.rotulo) + '</b>' +
             '<span class="sec" style="color:var(--muted);font-weight:600;font-size:13px">' + nomes.length + ' pessoa' + (nomes.length === 1 ? '' : 's') + '</span><span class="espaco"></span>' +
             (sem ? '<a href="#" class="etiqueta ambar" data-sem="1">' + sem + ' ativo' + (sem === 1 ? '' : 's') + ' sem responsável</a>' : '') + '</div>' +
-            '<div class="tabela-wrap"><table><thead><tr><th>Pessoa</th><th>Ramal</th><th class="num">Ativos</th><th>Por UF</th><th class="num">Distratados</th>' + (admin ? '<th></th>' : '') + '</tr></thead><tbody>' +
+            '<div class="tabela-wrap"><table><thead><tr><th>Pessoa</th><th>Ramal</th><th class="num">Ativos</th><th>Por UF</th><th class="num">Distratados</th>' + (editaveis.length ? '<th></th>' : '') + '</tr></thead><tbody>' +
             (linhas.map(function (l) { return l.html; }).join('') || '<tr><td colspan="6" class="sec" style="text-align:center;padding:20px">Ninguém nesta função.</td></tr>') + '</tbody></table></div></div>';
         }).join('');
       $$('[data-ver]').forEach(function (a) {
@@ -1909,8 +1942,10 @@
       var novo = !c;
       c = c || { situacao: 'ATIVO' };
       var ro = !admin;
-      function campo(id, rotulo, valor, extra) {
-        return '<div><label class="rot" for="' + id + '">' + rotulo + '</label><input class="campo" id="' + id + '" value="' + esc(valor || '') + '"' + (ro ? ' readonly' : '') + (extra || '') + '></div>';
+      // coordenador/supervisor: altera só o responsável do setor dele
+      var parcial = !admin && !novo && editaveis.length > 0;
+      function campo(id, rotulo, valor, extra, liberado) {
+        return '<div><label class="rot" for="' + id + '">' + rotulo + '</label><input class="campo" id="' + id + '" value="' + esc(valor || '') + '"' + (ro && !liberado ? ' readonly' : '') + (extra || '') + '></div>';
       }
       function lista(id, valores) { return '<datalist id="' + id + '">' + unicos(valores).map(function (v) { return '<option value="' + esc(v) + '"></option>'; }).join('') + '</datalist>'; }
       var hist = (historico || []).map(function (h) {
@@ -1933,7 +1968,8 @@
           '<div class="grade-2">' + campo('cdRazao', 'Razão social', c.razao_social, ' maxlength="200"') + campo('cdCnpj', 'CNPJ', c.cnpj, ' maxlength="20" inputmode="numeric"') + '</div>' +
           '<div class="grade-3">' + campo('cdVenc', 'Vencimento', c.vencimento, ' maxlength="40" placeholder="10 ou 5º DIA ÚTIL" list="cdVencs"') +
           campo('cdAdm', 'Administradora', c.administradora, ' maxlength="120" list="cdAdms"') + campo('cdEnvio', 'Forma de envio', c.forma_envio, ' maxlength="60" list="cdEnvios"') + '</div>' +
-          '<div class="grade-3">' + funcoes.map(function (fn) { return campo('cd_' + fn.campo, esc(fn.rotulo), c[fn.campo], ' maxlength="120" list="cdl_' + fn.campo + '" placeholder="NOME - RAMAL"'); }).join('') + '</div>' +
+          '<div class="grade-3">' + funcoes.map(function (fn) { return campo('cd_' + fn.campo, esc(fn.rotulo), c[fn.campo], ' maxlength="120" list="cdl_' + fn.campo + '" placeholder="NOME - RAMAL"', parcial && editavel(fn.campo)); }).join('') + '</div>' +
+          (parcial ? '<div class="ajuda">Você altera o responsável do seu setor. Os demais dados do condomínio são da administração.</div>' : '') +
           '<div class="grade-3">' + campo('cdInicio', 'Início do contrato', c.inicio_contrato, ' type="date"') + '</div>' +
           '<div><label class="rot" for="cdObs">Observações</label><textarea class="campo" id="cdObs" rows="3" maxlength="4000"' + (ro ? ' readonly' : '') + '>' + esc(c.observacoes || '') + '</textarea></div>' +
           lista('cdUfs', conds.map(function (x) { return x.comarca; })) + lista('cdVencs', conds.map(function (x) { return x.vencimento; })) +
@@ -1943,8 +1979,18 @@
           (novo ? '' : '<div class="ajuda">Atualizado em ' + quando(c.atualizado_em) + (c.atualizado_por_nome ? ' por ' + esc(c.atualizado_por_nome) : '') + '.</div>') +
           (hist ? '<hr style="border:0;border-top:1px solid var(--border);margin:4px 0"><div><label class="rot">Histórico</label><div class="linha-tempo">' + hist + '</div></div>' : '') + '</form>',
         pe: (admin && !novo ? '<button class="btn danger" id="btCdApagar" style="margin-right:auto">Remover</button>' : '') +
-          '<button class="btn ghost" data-fechar>' + (admin ? 'Cancelar' : 'Fechar') + '</button>' + (admin ? '<button class="btn primary" id="btCdOk">' + (novo ? 'Cadastrar' : 'Salvar') + '</button>' : ''),
+          '<button class="btn ghost" data-fechar>' + (admin || parcial ? 'Cancelar' : 'Fechar') + '</button>' + (admin || parcial ? '<button class="btn primary" id="btCdOk">' + (novo ? 'Cadastrar' : 'Salvar') + '</button>' : ''),
       });
+      if (parcial) {
+        $('#btCdOk', m).onclick = async function () {
+          var corpo = {};
+          funcoes.forEach(function (fn) { if (editavel(fn.campo)) corpo[fn.campo] = $('#cd_' + fn.campo, m).value; });
+          var bt = this; bt.disabled = true;
+          try { await api('PATCH', '/api/carteira/' + c.id, corpo); m.fechar(); toast('Responsável atualizado.', 'ok'); paginaCarteira(aba); }
+          catch (e) { var msg = $('#cdMsg', m); msg.textContent = e.message; msg.hidden = false; bt.disabled = false; }
+        };
+        return;
+      }
       if (!admin) return;
       $('#btCdOk', m).onclick = async function () {
         var corpo = {
@@ -1973,18 +2019,20 @@
 
   /* ---------- admin: equipes e tipos de demanda ---------- */
   async function paginaEquipes() {
-    definirBarra('<span class="setor">Administração</span><span class="sep">/</span><span class="nome">Equipes e tipos de demanda</span>');
+    var restrito = gestorSetor();
+    definirBarra('<span class="setor">' + (restrito ? 'Gestão do setor' : 'Administração') + '</span><span class="sep">/</span><span class="nome">' + (restrito ? 'Equipe e tipos de demanda' : 'Equipes e tipos de demanda') + '</span>');
     $('#conteudo').innerHTML = carregandoHtml();
     var j;
     try { j = await api('GET', '/api/admin/equipes'); await carregarMeta(); } catch (e) { toast(e.message, 'erro'); return; }
+    restrito = !!j.restrito;
     var nomeU = {};
     j.usuarios.forEach(function (u) { nomeU[u.id] = u.nome; });
     var em = j.email || {};
-    $('#conteudo').innerHTML = '<div class="pagina"><h1>Equipes e tipos de demanda</h1><p class="sub">Para cada setor, quem atende os tickets (e quem é líder, que distribui) e os tipos de demanda com o prazo de atendimento.</p>' +
-      '<div class="atalho-tickets"><div class="icone-mod">' + IC.sino + '</div><div style="flex:1;min-width:220px"><b style="font-family:var(--display)">Avisos por e-mail</b>' +
+    $('#conteudo').innerHTML = '<div class="pagina"><h1>' + (restrito ? 'Equipe e tipos de demanda' : 'Equipes e tipos de demanda') + '</h1><p class="sub">Para cada setor, quem atende os tickets (e quem é líder, que distribui) e os tipos de demanda com o prazo de atendimento. Quem é de cada setor vem do cadastro da pessoa.</p>' +
+      (restrito ? '' : '<div class="atalho-tickets"><div class="icone-mod">' + IC.sino + '</div><div style="flex:1;min-width:220px"><b style="font-family:var(--display)">Avisos por e-mail</b>' +
       '<span class="sec" style="display:block;color:var(--muted);font-weight:600;font-size:13px">' +
       (em.ativo ? 'Enviando ' + (em.tipo === 'microsoft365' ? 'pelo Microsoft 365' : 'por SMTP') + ' como <b>' + esc(em.remetente || '') + '</b>.' : 'Não configurado: por enquanto os avisos aparecem só no portal (veja o README, seção Central de Tickets).') +
-      '</span></div>' + (em.ativo ? '<button class="btn ghost sm" id="btEmailTeste">Enviar e-mail de teste para mim</button>' : '<span class="etiqueta ambar">sem e-mail</span>') + '</div>' +
+      '</span></div>' + (em.ativo ? '<button class="btn ghost sm" id="btEmailTeste">Enviar e-mail de teste para mim</button>' : '<span class="etiqueta ambar">sem e-mail</span>') + '</div>') +
       '<div class="cartoes">' + j.setores.map(function (s) {
         var lideres = s.membros.filter(function (m) { return m.lider; }).map(function (m) { return nomeU[m.usuario_id]; });
         var ativos = s.categorias.filter(function (c) { return c.ativo; });
@@ -1993,7 +2041,7 @@
           (!s.membros.length ? '<span class="etiqueta ambar">sem equipe</span>' : !lideres.length ? '<span class="etiqueta ambar">sem líder</span>' : '') + '</div>' +
           '<p>' + (lideres.length ? 'Líder: ' + esc(lideres.join(', ')) : 'Defina quem distribui os tickets deste setor.') + '</p>' +
           '<div class="acoes"><span class="btn ghost sm">Configurar</span></div></div>';
-      }).join('') + '</div><p class="ajuda" style="margin-top:14px">Para criar, renomear ou remover setores use <a href="#/admin/modulos">Módulos e dados → Setores</a>.</p></div>';
+      }).join('') + '</div>' + (restrito ? '' : '<p class="ajuda" style="margin-top:14px">Para criar, renomear ou remover setores use <a href="#/admin/modulos">Módulos e dados → Setores</a>.</p>') + '</div>';
     if ($('#btEmailTeste')) $('#btEmailTeste').onclick = async function () {
       var bt = this; bt.disabled = true;
       try { var r = await api('POST', '/api/admin/equipes/email-teste'); toast('E-mail de teste enviado para ' + r.para + '. Confira a caixa de entrada (e o lixo eletrônico).', 'ok'); }
@@ -2009,13 +2057,14 @@
         titulo: s.nome, largo: true,
         corpo: '<div class="pilha"><div><label class="rot">Equipe que atende os tickets do setor</label>' +
           '<input class="campo" id="eBusca" placeholder="Filtrar pessoas…" style="margin-bottom:8px">' +
-          '<div class="caixa-opcoes" id="eLista">' + j.usuarios.filter(function (u) { return u.ativo || membros[u.id] !== undefined; }).map(function (u) {
+          '<div class="caixa-opcoes" id="eLista">' + j.usuarios.filter(function (u) { return restrito ? membros[u.id] !== undefined : (u.ativo || membros[u.id] !== undefined); }).map(function (u) {
             var dentro = membros[u.id] !== undefined;
-            return '<label data-nome="' + esc(normal(u.nome + ' ' + u.email)) + '"><input type="checkbox" name="eMembro" value="' + u.id + '"' + (dentro ? ' checked' : '') + '>' +
+            return '<label data-nome="' + esc(normal(u.nome + ' ' + u.email)) + '"><input type="checkbox" name="eMembro" value="' + u.id + '"' + (dentro ? ' checked' : '') + (restrito ? ' disabled' : '') + '>' +
               '<span style="flex:1">' + esc(u.nome) + ' <span class="sec" style="display:inline">' + esc(u.email) + '</span></span>' +
               '<span class="linha" style="font-size:12.5px;font-weight:700;color:var(--muted)"><input type="checkbox" name="eLider" value="' + u.id + '"' + (membros[u.id] ? ' checked' : '') + (dentro ? '' : ' disabled') + '> líder</span></label>';
-          }).join('') + '</div><div class="ajuda">Líder: vê a fila do setor e distribui para qualquer pessoa da equipe. Demais pessoas: veem a fila, assumem tickets e tratam os que estão com elas.</div></div>' +
-          '<div class="linha"><button class="btn primary" id="btSalvarEquipe">Salvar equipe</button></div>' +
+          }).join('') + '</div><div class="ajuda">Líder: vê a fila do setor e distribui para qualquer pessoa da equipe. Demais pessoas: veem a fila, assumem tickets e tratam os que estão com elas. Coordenador e supervisor do setor já distribuem.' +
+          (restrito ? ' Para incluir ou tirar alguém do setor, use <b>Usuários do setor</b>.' : ' Também dá para definir o setor no cadastro da pessoa (Usuários e acessos).') + '</div></div>' +
+          '<div class="linha"><button class="btn primary" id="btSalvarEquipe">' + (restrito ? 'Salvar líderes' : 'Salvar equipe') + '</button></div>' +
           '<hr style="border:0;border-top:1px solid var(--border);margin:6px 0">' +
           '<div><label class="rot">Tipos de demanda</label><div class="caixa-opcoes" style="max-height:none">' +
           (s.categorias.map(function (c) {

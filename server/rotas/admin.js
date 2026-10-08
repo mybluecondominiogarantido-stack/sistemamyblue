@@ -11,23 +11,25 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
   const ehDocs = (m) => m && m.adaptador === 'claude-db';
   const r = express.Router();
   const json = express.json({ limit: '2mb' });
-  /* setores das equipes de uma pessoa (Equipes e tipos de demanda) */
-  const setoresDe = async (uid) => new Set((await db.q('SELECT setor_id FROM setor_membros WHERE usuario_id = $1', [uid])).rows.map((x) => x.setor_id));
+  const gestorDeSetor = (u) => seg.GESTORES_DE_SETOR.includes(u.papel);
 
-  // o coordenador entra na parte de usuários (com os limites de escopoDe) e no HTML dos módulos dos setores das equipes dele;
-  // o resto é do administrador
-  const HTML_COORD = /^\/modulos\/([a-z0-9][a-z0-9-]{1,40})\/(arquivo|versoes|versoes\/\d+\/usar)$/;
+  // Coordenador e supervisor gerenciam o(s) setor(es) do cadastro deles: usuários, ferramentas (HTML e quem abre),
+  // equipe e tipos de demanda (rotas da Central de Tickets). O resto da administração é só do administrador.
+  const FERRAMENTA_SETOR = /^\/modulos\/([a-z0-9][a-z0-9-]{1,40})\/(arquivo|versoes|versoes\/\d+\/usar|acesso)$/;
+  const METODO = { arquivo: 'PUT', versoes: 'GET', acesso: 'PUT' };
   r.use('/api/admin', seg.exigirLogin, async (req, res, next) => {
     try {
-      if (req.usuario.papel !== 'coordenador') return seg.exigirAdmin(req, res, next);
+      if (req.usuario.papel === 'admin') return next();
+      if (!gestorDeSetor(req.usuario)) return seg.exigirAdmin(req, res, next);
+      req.setoresGeridos = await seg.setoresGeridos(req.usuario);
       if (/^\/usuarios(\/|$)/.test(req.path)) return next();
-      if (req.path === '/modulos' && req.method === 'GET') { req.setoresCoord = await setoresDe(req.usuario.id); return next(); }
-      const x = HTML_COORD.exec(req.path);
-      const metodoOk = x && ((x[2] === 'arquivo' && req.method === 'PUT') || (x[2] === 'versoes' && req.method === 'GET') || (x[2] !== 'arquivo' && x[2] !== 'versoes' && req.method === 'POST'));
-      if (metodoOk) {
+      if (/^\/(equipes|categorias)(\/|$)/.test(req.path) && req.path !== '/equipes/email-teste') return next(); // o escopo é conferido lá
+      if (req.path === '/modulos' && req.method === 'GET') return next();
+      const x = FERRAMENTA_SETOR.exec(req.path);
+      if (x && req.method === (METODO[x[2]] || 'POST')) {
         const m = await modulos.obter(x[1]);
-        if (m && m.setor_id && (await setoresDe(req.usuario.id)).has(m.setor_id)) return next();
-        return erro(res, 403, 'Este módulo não é de um setor da sua equipe.');
+        if (m && m.setor_id && req.setoresGeridos.has(m.setor_id)) { req.moduloSetor = m; return next(); }
+        return erro(res, 403, 'Esta ferramenta não é de um setor seu.');
       }
       return seg.exigirAdmin(req, res, next);
     } catch (e) { return next(e); }
@@ -48,28 +50,43 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
   const PAPEIS = ['admin', 'coordenador', 'supervisor', 'usuario'];
 
   /* O que quem está logado pode fazer com usuários. Administrador: tudo (null).
-     Coordenador: só usuários comuns que ele criou ou que estão numa equipe dele, e só libera as ferramentas que ele mesmo tem. */
-  const GERENCIAVEIS = `SELECT u.id FROM usuarios u WHERE u.papel = 'usuario' AND u.id <> $1 AND (u.criado_por = $1 OR EXISTS (
-    SELECT 1 FROM setor_membros a JOIN setor_membros b ON b.setor_id = a.setor_id WHERE a.usuario_id = $1 AND b.usuario_id = u.id))`;
+     Coordenador e supervisor: usuários comuns dos setores dele (ou que ele criou), com as ferramentas e os setores dele. */
+  const GERENCIAVEIS = `SELECT u.id FROM usuarios u WHERE u.papel = 'usuario' AND (u.criado_por = $1 OR EXISTS (
+    SELECT 1 FROM setor_membros b WHERE b.usuario_id = u.id AND b.setor_id = ANY($2::int[])))`;
   async function escopoDe(req) {
     if (req.usuario.papel === 'admin') return null;
-    const modulosProprios = await seg.modulosDoUsuario(req.usuario);
-    const ids = new Set((await db.q(GERENCIAVEIS, [req.usuario.id])).rows.map((x) => x.id));
-    return { modulos: modulosProprios, gerencia: (id) => ids.has(Number(id)), ids };
+    const setores = req.setoresGeridos || await seg.setoresGeridos(req.usuario);
+    const lista = [...setores];
+    const mods = new Set((await modulos.listar()).filter((m) => m.setor_id && setores.has(m.setor_id)).map((m) => m.slug));
+    const ids = new Set((await db.q(GERENCIAVEIS, [req.usuario.id, lista])).rows.map((x) => x.id));
+    return { setores, modulos: mods, gerencia: (id) => ids.has(Number(id)), ids };
   }
+
+  const setoresDosUsuarios = async () => {
+    const m = {};
+    for (const x of (await db.q('SELECT usuario_id, setor_id FROM setor_membros ORDER BY setor_id')).rows) (m[x.usuario_id] ||= []).push(x.setor_id);
+    return m;
+  };
 
   r.get('/api/admin/usuarios', async (req, res) => {
     const esc = await escopoDe(req);
     const perms = {};
     for (const p of (await db.q('SELECT usuario_id, modulo_slug FROM permissoes')).rows) (perms[p.usuario_id] ||= []).push(p.modulo_slug);
+    const setoresU = await setoresDosUsuarios();
     let { rows } = await db.q('SELECT id, nome, email, papel, ativo, trocar_senha, supervisor_tickets, editor_links, criado_em, ultimo_login, foto_em FROM usuarios ORDER BY ativo DESC, nome');
     if (esc) rows = rows.filter((u) => esc.gerencia(u.id));
-    const saida = { usuarios: rows.map(({ foto_em, ...u }) => ({ ...u, foto_v: foto_em ? new Date(foto_em).getTime() : null, modulos: perms[u.id] || [] })) };
+    const todosSetores = (await db.q('SELECT id, nome, ordem FROM setores ORDER BY ordem, nome')).rows;
+    const saida = {
+      usuarios: rows.map(({ foto_em, ...u }) => ({ ...u, foto_v: foto_em ? new Date(foto_em).getTime() : null, modulos: perms[u.id] || [], setores: setoresU[u.id] || [] })),
+      setores: esc ? todosSetores.filter((x) => esc.setores.has(x.id)) : todosSetores,
+    };
     if (esc) {
-      // o coordenador não abre Módulos e dados: recebe aqui só as ferramentas que pode liberar
-      saida.modulos_disponiveis = (await modulos.listar()).filter((m) => esc.modulos.has(m.slug))
+      // coordenador e supervisor não abrem Módulos e dados: recebem aqui só as ferramentas dos setores deles
+      const todos = await modulos.listar();
+      saida.modulos_disponiveis = todos.filter((m) => esc.modulos.has(m.slug))
         .map((m) => ({ slug: m.slug, nome: m.nome, ativo: m.ativo, setor_nome: m.setor_nome, setor_ordem: m.setor_ordem }));
-      saida.nomes_modulos = Object.fromEntries((await modulos.listar()).map((m) => [m.slug, m.nome]));
+      saida.nomes_modulos = Object.fromEntries(todos.map((m) => [m.slug, m.nome]));
+      saida.nomes_setores = Object.fromEntries(todosSetores.map((x) => [x.id, x.nome]));
     }
     res.json(saida);
   });
@@ -82,7 +99,10 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
     if (!EMAIL_RE.test(email) || email.length > 200) return { erro: 'E-mail inválido.' };
     const lista = Array.isArray(body.modulos) ? body.modulos.map(String) : [];
     const existentes = new Set((await db.q('SELECT slug FROM modulos')).rows.map((m) => m.slug));
-    return { nome, email, papel, supervisor_tickets: !!body.supervisor_tickets, editor_links: !!body.editor_links, modulos: lista.filter((s) => existentes.has(s)) };
+    const setoresValidos = new Set((await db.q('SELECT id FROM setores')).rows.map((x) => x.id));
+    const setores = Array.isArray(body.setores) ? [...new Set(body.setores.map(Number))].filter((x) => setoresValidos.has(x)) : null;
+    if (setores && ['coordenador', 'supervisor'].includes(papel) && !setores.length) return { erro: 'Escolha o setor que esta pessoa coordena ou supervisiona.' };
+    return { nome, email, papel, supervisor_tickets: !!body.supervisor_tickets, editor_links: !!body.editor_links, modulos: lista.filter((s) => existentes.has(s)), setores };
   }
 
   const salvarPermissoes = (id, lista) => db.tx(async (t) => {
@@ -90,14 +110,22 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
     for (const s of lista) await t.q('INSERT INTO permissoes (usuario_id, modulo_slug) VALUES ($1, $2) ON CONFLICT DO NOTHING', [id, s]);
   });
 
+  /* setores da pessoa (= equipes da Central de Tickets); quem continua no setor mantém a marcação de líder */
+  const salvarSetores = (id, lista) => db.tx(async (t) => {
+    await t.q('DELETE FROM setor_membros WHERE usuario_id = $1 AND NOT (setor_id = ANY($2::int[]))', [id, lista]);
+    for (const s of lista) await t.q('INSERT INTO setor_membros (setor_id, usuario_id, lider) VALUES ($1, $2, FALSE) ON CONFLICT DO NOTHING', [s, id]);
+  });
+
   r.post('/api/admin/usuarios', json, async (req, res) => {
     const esc = await escopoDe(req);
     const d = await dadosUsuario(req.body || {});
     if (d.erro) return erro(res, 400, d.erro);
     if (esc) {
-      // coordenador cria só usuário comum, sem permissões extras, com as ferramentas que ele mesmo tem
-      if (d.papel !== 'usuario') return erro(res, 403, 'Coordenador cria apenas usuários comuns. Peça à administração para criar coordenadores e supervisores.');
-      Object.assign(d, { supervisor_tickets: false, editor_links: false, modulos: d.modulos.filter((s) => esc.modulos.has(s)) });
+      // coordenador e supervisor criam só usuário comum, sem permissões extras, nos setores e com as ferramentas deles
+      if (d.papel !== 'usuario') return erro(res, 403, 'Coordenador e supervisor criam apenas usuários comuns. Coordenadores, supervisores e administradores são criados pela administração.');
+      const setores = (d.setores || []).filter((x) => esc.setores.has(x));
+      if (!setores.length) return erro(res, 400, 'Escolha o setor da pessoa.');
+      Object.assign(d, { supervisor_tickets: false, editor_links: false, setores, modulos: d.modulos.filter((s) => esc.modulos.has(s)) });
     }
     let senha = req.body.senha ? String(req.body.senha) : '';
     if (senha) { const e = validarNovaSenha(senha); if (e) return erro(res, 400, e); } else senha = senhaAleatoria();
@@ -110,7 +138,8 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
       throw e;
     }
     await salvarPermissoes(id, d.modulos);
-    await seg.auditar(req, 'usuario_criado', null, { id, email: d.email, papel: d.papel, supervisor_tickets: d.supervisor_tickets, editor_links: d.editor_links, modulos: d.modulos });
+    if (d.setores) await salvarSetores(id, d.setores);
+    await seg.auditar(req, 'usuario_criado', null, { id, email: d.email, papel: d.papel, supervisor_tickets: d.supervisor_tickets, editor_links: d.editor_links, modulos: d.modulos, setores: d.setores || [] });
     res.status(201).json({ id, senha_temporaria: senha });
   });
 
@@ -122,11 +151,15 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
     if (!atual) return erro(res, 404, 'Usuário não encontrado.');
     const pedido = { ...req.body };
     if (esc) {
-      // coordenador não muda perfil nem permissões extras; nas ferramentas, só mexe nas que ele mesmo tem
+      // não muda perfil nem permissões extras; nas ferramentas e nos setores, só mexe nos dele (o resto continua como está)
       for (const k of ['papel', 'supervisor_tickets', 'editor_links']) delete pedido[k];
       if (Array.isArray(pedido.modulos)) {
         const atuais = (await db.q('SELECT modulo_slug FROM permissoes WHERE usuario_id = $1', [id])).rows.map((x) => x.modulo_slug);
         pedido.modulos = [...atuais.filter((s) => !esc.modulos.has(s)), ...pedido.modulos.map(String).filter((s) => esc.modulos.has(s))];
+      }
+      if (Array.isArray(pedido.setores)) {
+        const atuais = (await db.q('SELECT setor_id FROM setor_membros WHERE usuario_id = $1', [id])).rows.map((x) => x.setor_id);
+        pedido.setores = [...atuais.filter((x) => !esc.setores.has(x)), ...pedido.setores.map(Number).filter((x) => esc.setores.has(x))];
       }
     }
     const d = await dadosUsuario({ ...atual, ...pedido });
@@ -143,8 +176,10 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
       throw e;
     }
     if (Array.isArray(pedido.modulos)) await salvarPermissoes(id, d.modulos);
+    if (d.setores) await salvarSetores(id, d.setores);
     if (!ativo) await db.q('DELETE FROM sessoes WHERE usuario_id = $1', [id]);
-    await seg.auditar(req, 'usuario_editado', null, { id, email: d.email, papel: d.papel, ativo, supervisor_tickets: d.supervisor_tickets, editor_links: d.editor_links, modulos: Array.isArray(pedido.modulos) ? d.modulos : undefined });
+    await seg.auditar(req, 'usuario_editado', null, { id, email: d.email, papel: d.papel, ativo, supervisor_tickets: d.supervisor_tickets, editor_links: d.editor_links,
+      modulos: Array.isArray(pedido.modulos) ? d.modulos : undefined, setores: d.setores || undefined });
     res.json({ ok: true });
   });
 
@@ -204,11 +239,14 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
 
   /* ===================== módulos ===================== */
   r.get('/api/admin/modulos', async (req, res) => {
-    if (req.setoresCoord) {
-      // coordenador: só os módulos dos setores das equipes dele, sem dados de acesso nem de armazenamento
-      const meus = (await modulos.listar()).filter((m) => m.setor_id && req.setoresCoord.has(m.setor_id));
+    if (req.setoresGeridos) {
+      // coordenador e supervisor: só as ferramentas dos setores deles; em "quem pode abrir", só as pessoas que eles gerenciam
+      const esc = await escopoDe(req);
+      const meus = (await modulos.listar()).filter((m) => m.setor_id && req.setoresGeridos.has(m.setor_id));
+      const perms = (await db.q('SELECT usuario_id, modulo_slug FROM permissoes')).rows;
       return res.json({ modulos: meus.map((m) => ({ slug: m.slug, nome: m.nome, icone: m.icone, ativo: m.ativo, setor_nome: m.setor_nome, setor_ordem: m.setor_ordem,
-        tem_arquivo: m.tem_arquivo, versao_id: m.versao_id, versao_em: m.versao_em, tamanho: m.tamanho, nome_original: m.nome_original })) });
+        tem_arquivo: m.tem_arquivo, versao_id: m.versao_id, versao_em: m.versao_em, tamanho: m.tamanho, nome_original: m.nome_original,
+        usuarios: perms.filter((p) => p.modulo_slug === m.slug && esc.gerencia(p.usuario_id)).map((p) => p.usuario_id) })) });
     }
     const lista = [];
     for (const m of await modulos.listar()) {
@@ -314,6 +352,24 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
     const problema = modulos.validarHtml(buf);
     if (problema) return erro(res, 400, problema);
     res.json({ slug: await modulos.reconhecer(buf) });
+  });
+
+  /* quem pode abrir a ferramenta: o coordenador/supervisor marca e desmarca só as pessoas que gerencia */
+  r.put('/api/admin/modulos/:slug/acesso', json, async (req, res) => {
+    const m = req.moduloSetor || await modulos.obter(req.params.slug);
+    if (!m) return erro(res, 404, 'Módulo não encontrado.');
+    const lista = Array.isArray(req.body && req.body.usuarios) ? new Set(req.body.usuarios.map(Number)) : null;
+    if (!lista) return erro(res, 400, 'Lista de pessoas inválida.');
+    const esc = await escopoDe(req);
+    const alvo = esc ? [...esc.ids] : (await db.q('SELECT id FROM usuarios')).rows.map((x) => x.id);
+    await db.tx(async (t) => {
+      for (const uid of alvo) {
+        if (lista.has(uid)) await t.q('INSERT INTO permissoes (usuario_id, modulo_slug) VALUES ($1, $2) ON CONFLICT DO NOTHING', [uid, m.slug]);
+        else await t.q('DELETE FROM permissoes WHERE usuario_id = $1 AND modulo_slug = $2', [uid, m.slug]);
+      }
+    });
+    await seg.auditar(req, 'modulo_acesso', m.slug, { usuarios: [...lista].filter((x) => alvo.includes(x)) });
+    res.json({ ok: true });
   });
 
   r.get('/api/admin/modulos/:slug/versoes', async (req, res) => res.json({ versoes: await modulos.listarVersoes(req.params.slug) }));

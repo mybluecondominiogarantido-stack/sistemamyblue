@@ -2,6 +2,8 @@
 /*
  * Aba Carteira de condomínios.
  * Todos que entram no portal consultam; a administração cadastra, edita, importa e transfere carteiras.
+ * Coordenador e supervisor editam e transferem só a coluna de responsável do setor deles
+ * (Cobrança → analista de cobrança, Crédito → assistente de crédito).
  * Cada alteração fica no histórico (auditoria) com o que mudou, quem mudou e quando.
  */
 const express = require('express');
@@ -18,6 +20,15 @@ function rotasCarteira({ db, seg }) {
   const json = express.json({ limit: '1mb' });
   r.use('/api/carteira', seg.exigirLogin);
   const soAdmin = (req, res, next) => (req.usuario.papel === 'admin' ? next() : res.status(403).json({ erro: 'Só a administração altera a carteira.' }));
+
+  /* colunas de responsável que a pessoa pode alterar: todas (administrador) ou as dos setores dela (coordenador/supervisor) */
+  async function funcoesEditaveis(u) {
+    if (u.papel === 'admin') return FUNCOES.map((f) => f.campo);
+    const setores = await seg.setoresGeridos(u);
+    if (!setores || !setores.size) return [];
+    const nomes = new Set((await db.q('SELECT nome FROM setores WHERE id = ANY($1::int[])', [[...setores]])).rows.map((x) => x.nome));
+    return FUNCOES.filter((f) => f.setor && nomes.has(f.setor)).map((f) => f.campo);
+  }
   const erro = (res, status, msg) => res.status(status).json({ erro: msg });
   const ehDuplicado = (e) => e && (e.code === '23505' || /duplicate key|unique/i.test(String(e.message)));
 
@@ -42,7 +53,8 @@ function rotasCarteira({ db, seg }) {
   /* ===================== consulta ===================== */
   r.get('/api/carteira', async (req, res) => {
     const { rows } = await db.q(`${SELECT} ORDER BY c.nome, c.comarca`);
-    res.json({ condominios: rows, funcoes: FUNCOES.map((f) => ({ campo: f.campo, rotulo: f.rotulo })), situacoes: SITUACOES, pode_editar: req.usuario.papel === 'admin' });
+    res.json({ condominios: rows, funcoes: FUNCOES.map((f) => ({ campo: f.campo, rotulo: f.rotulo })), situacoes: SITUACOES, pode_editar: req.usuario.papel === 'admin',
+      funcoes_editaveis: await funcoesEditaveis(req.usuario) });
   });
 
   r.get('/api/carteira/exportar', async (req, res) => {
@@ -86,12 +98,18 @@ function rotasCarteira({ db, seg }) {
     }
   });
 
-  r.patch('/api/carteira/:id', soAdmin, json, async (req, res) => {
+  r.patch('/api/carteira/:id', json, async (req, res) => {
+    const editaveis = await funcoesEditaveis(req.usuario);
+    if (!editaveis.length) return erro(res, 403, 'Só a administração altera a carteira.');
     const atual = await db.um(`${SELECT} WHERE c.id = $1`, [Number(req.params.id) || 0]);
     if (!atual) return erro(res, 404, 'Condomínio não encontrado.');
     const v = normalizar(req.body || {});
     if (v.erro) return erro(res, 400, v.erro);
     const mudancas = diferencas(atual, v.dados);
+    if (req.usuario.papel !== 'admin') {
+      const fora = Object.keys(mudancas).filter((k) => !editaveis.includes(k));
+      if (fora.length) return erro(res, 403, 'Você altera só o responsável do seu setor neste condomínio.');
+    }
     if (!Object.keys(mudancas).length) return res.json({ ok: true, sem_mudanca: true });
     const dados = {};
     for (const k of Object.keys(mudancas)) dados[k] = v.dados[k];
@@ -148,10 +166,11 @@ function rotasCarteira({ db, seg }) {
   });
 
   /* ===================== transferir a carteira de uma pessoa ===================== */
-  r.post('/api/carteira/transferir', soAdmin, json, async (req, res) => {
+  r.post('/api/carteira/transferir', json, async (req, res) => {
     const b = req.body || {};
     const f = FUNCOES.find((x) => x.campo === b.funcao);
     if (!f) return erro(res, 400, 'Função inválida.');
+    if (!(await funcoesEditaveis(req.usuario)).includes(f.campo)) return erro(res, 403, 'Você transfere só a carteira do seu setor.');
     const de = String(b.de || '').trim().toUpperCase();
     const pessoa = normalizar({ [f.campo]: b.para }).dados[f.campo];
     if (!de) return erro(res, 400, 'Informe de quem é a carteira.');

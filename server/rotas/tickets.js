@@ -25,7 +25,9 @@ const PRAZO_PADRAO_HORAS = { urgente: 4, alta: 9, media: 27, baixa: 45 };
 
 const texto = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
 // administração e supervisão: veem e direcionam os tickets de todos os setores
-const ehGestor = (u) => u.papel === 'admin' || u.papel === 'supervisor' || !!u.supervisor_tickets;
+const ehGestor = (u) => u.papel === 'admin' || !!u.supervisor_tickets;
+// coordenador e supervisor têm, no setor deles, os poderes do líder
+const gestorDeSetor = (u) => u.papel === 'coordenador' || u.papel === 'supervisor';
 
 function rotasTickets({ db, seg, cfg, avisos, expediente }) {
   const r = express.Router();
@@ -37,7 +39,7 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
   /* setores de que a pessoa faz parte: Map setor_id → { lider } */
   async function equipesDe(u) {
     const { rows } = await db.q('SELECT setor_id, lider FROM setor_membros WHERE usuario_id = $1', [u.id]);
-    return new Map(rows.map((x) => [x.setor_id, { lider: !!x.lider }]));
+    return new Map(rows.map((x) => [x.setor_id, { lider: !!x.lider || gestorDeSetor(u) }]));
   }
 
   /* o que a pessoa pode fazer neste ticket */
@@ -533,8 +535,19 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
 function rotasAdminTickets({ db, seg, avisos }) {
   const r = express.Router();
   const json = express.json({ limit: '1mb' });
-  r.use('/api/admin/equipes', seg.exigirLogin, seg.exigirAdmin);
-  r.use('/api/admin/categorias', seg.exigirLogin, seg.exigirAdmin);
+  // administrador: todos os setores; coordenador e supervisor: os setores do cadastro deles
+  const gestaoDeSetor = async (req, res, next) => {
+    try {
+      if (req.usuario.papel === 'admin') return next();
+      if (!seg.GESTORES_DE_SETOR.includes(req.usuario.papel)) return seg.exigirAdmin(req, res, next);
+      req.setoresGeridos = req.setoresGeridos || await seg.setoresGeridos(req.usuario);
+      return next();
+    } catch (e) { return next(e); }
+  };
+  r.use('/api/admin/equipes/email-teste', seg.exigirLogin, seg.exigirAdmin);
+  r.use('/api/admin/equipes', seg.exigirLogin, gestaoDeSetor);
+  r.use('/api/admin/categorias', seg.exigirLogin, gestaoDeSetor);
+  const doSetor = (req, setorId) => !req.setoresGeridos || req.setoresGeridos.has(Number(setorId));
   const erro = (res, status, msg) => res.status(status).json({ erro: msg });
   const ehDuplicado = (e) => e && (e.code === '23505' || /duplicate key|unique/i.test(String(e.message)));
 
@@ -549,12 +562,17 @@ function rotasAdminTickets({ db, seg, avisos }) {
   });
 
   r.get('/api/admin/equipes', async (req, res) => {
-    const setores = (await db.q('SELECT id, nome, ordem FROM setores ORDER BY ordem, nome')).rows;
+    const setores = (await db.q('SELECT id, nome, ordem FROM setores ORDER BY ordem, nome')).rows.filter((x) => doSetor(req, x.id));
     const membros = (await db.q('SELECT setor_id, usuario_id, lider FROM setor_membros')).rows;
     const cats = (await db.q(`SELECT c.*, (SELECT COUNT(*)::int FROM tickets t WHERE t.categoria_id = c.id) AS tickets
       FROM ticket_categorias c ORDER BY c.ativo DESC, c.nome`)).rows;
-    const usuarios = (await db.q('SELECT id, nome, email, ativo FROM usuarios ORDER BY ativo DESC, nome')).rows;
+    let usuarios = (await db.q('SELECT id, nome, email, ativo, papel FROM usuarios ORDER BY ativo DESC, nome')).rows;
+    if (req.setoresGeridos) {
+      const ids = new Set(membros.filter((m) => req.setoresGeridos.has(m.setor_id)).map((m) => m.usuario_id));
+      usuarios = usuarios.filter((u) => ids.has(u.id));
+    }
     res.json({
+      restrito: !!req.setoresGeridos,
       setores: setores.map((s) => ({
         ...s,
         membros: membros.filter((m) => m.setor_id === s.id).map((m) => ({ usuario_id: m.usuario_id, lider: !!m.lider })),
@@ -568,9 +586,16 @@ function rotasAdminTickets({ db, seg, avisos }) {
   r.put('/api/admin/equipes/:setor/membros', json, async (req, res) => {
     const setorId = Number(req.params.setor);
     const setor = await db.um('SELECT id, nome FROM setores WHERE id = $1', [setorId]);
-    if (!setor) return erro(res, 404, 'Setor não encontrado.');
+    if (!setor || !doSetor(req, setorId)) return erro(res, 404, 'Setor não encontrado.');
     const lista = Array.isArray(req.body && req.body.membros) ? req.body.membros : null;
     if (!lista) return erro(res, 400, 'Lista de pessoas inválida.');
+    if (req.setoresGeridos) {
+      // coordenador/supervisor: quem é do setor vem do cadastro; aqui só escolhe os líderes
+      const lideres = new Set(lista.filter((m) => m && m.lider).map((m) => Number(m.usuario_id)));
+      await db.q('UPDATE setor_membros SET lider = (usuario_id = ANY($2::int[])) WHERE setor_id = $1', [setorId, [...lideres]]);
+      await seg.auditar(req, 'equipe_editada', null, { setor: setor.nome, lideres: lideres.size });
+      return res.json({ ok: true });
+    }
     const validos = new Set((await db.q('SELECT id FROM usuarios')).rows.map((x) => x.id));
     const membros = new Map();
     for (const m of lista) if (m && validos.has(Number(m.usuario_id))) membros.set(Number(m.usuario_id), !!m.lider);
@@ -592,7 +617,7 @@ function rotasAdminTickets({ db, seg, avisos }) {
 
   r.post('/api/admin/equipes/:setor/categorias', json, async (req, res) => {
     const setor = await db.um('SELECT id, nome FROM setores WHERE id = $1', [Number(req.params.setor)]);
-    if (!setor) return erro(res, 404, 'Setor não encontrado.');
+    if (!setor || !doSetor(req, setor.id)) return erro(res, 404, 'Setor não encontrado.');
     const d = dadosCategoria(req.body || {});
     if (d.erro) return erro(res, 400, d.erro);
     try {
@@ -608,7 +633,7 @@ function rotasAdminTickets({ db, seg, avisos }) {
 
   r.patch('/api/admin/categorias/:id', json, async (req, res) => {
     const atual = await db.um('SELECT * FROM ticket_categorias WHERE id = $1', [Number(req.params.id)]);
-    if (!atual) return erro(res, 404, 'Tipo de demanda não encontrado.');
+    if (!atual || !doSetor(req, atual.setor_id)) return erro(res, 404, 'Tipo de demanda não encontrado.');
     const d = dadosCategoria({ ...atual, ...req.body });
     if (d.erro) return erro(res, 400, d.erro);
     const ativo = req.body.ativo === undefined ? atual.ativo : !!req.body.ativo;
@@ -624,6 +649,8 @@ function rotasAdminTickets({ db, seg, avisos }) {
 
   r.delete('/api/admin/categorias/:id', async (req, res) => {
     // tickets antigos continuam existindo, só ficam "sem tipo"
+    const atual = await db.um('SELECT setor_id FROM ticket_categorias WHERE id = $1', [Number(req.params.id)]);
+    if (!atual || !doSetor(req, atual.setor_id)) return erro(res, 404, 'Tipo de demanda não encontrado.');
     await db.q('DELETE FROM ticket_categorias WHERE id = $1', [Number(req.params.id)]);
     await seg.auditar(req, 'categoria_removida', null, { id: Number(req.params.id) });
     res.json({ ok: true });

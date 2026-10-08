@@ -66,17 +66,21 @@ Para publicar uma ferramenta nova, use **Novo módulo**, escolha nome, setor e �
 
 ## Usuários e permissões
 
-Em *Usuários e acessos*:
+Tudo sai do **cadastro da pessoa** (*Usuários e acessos*): **perfil**, **setor(es)** e ferramentas liberadas. O setor também forma a equipe do setor na Central de Tickets.
 
-- **Usuário:** vê e abre só as ferramentas marcadas no cadastro dele. Dá para marcar o setor inteiro de uma vez.
-- **Supervisor:** como o usuário, e acompanha os tickets de todos os setores (a mesma "Supervisão da Central de Tickets", já incluída). Não cria usuários.
-- **Coordenador:** como o usuário, e ganha o menu *Usuários da equipe*. Lá ele:
-  - cria **usuários comuns** (nunca administrador, coordenador ou supervisor);
-  - libera só as ferramentas que **ele mesmo** tem; o que a administração liberou para a pessoa continua como está;
-  - edita, desativa e redefine a senha de quem **ele criou** e de quem está numa **equipe dele** (definida em *Equipes e tipos de demanda*).
-  Ganha também *Módulos do setor*: para os módulos dos setores das equipes dele, envia versão nova do HTML e volta para uma versão anterior.
-  O resto de *Módulos e dados* (nome, setor, dados, importação, quem pode abrir, remover), *Equipes* e o histórico continuam só com o administrador.
-- **Administrador:** acessa todas as ferramentas e a administração.
+| | Usuário | Coordenador | Supervisor | Administrador |
+|---|---|---|---|---|
+| Ferramentas | as liberadas | todas dos setores dele + as liberadas | todas dos setores dele + as liberadas | todas |
+| Usuários | — | usuários comuns dos setores dele | usuários comuns dos setores dele | todos, todos os perfis |
+| Ferramentas do setor (HTML, versões, quem abre) | — | setores dele | setores dele | todas, mais *Módulos e dados* completo |
+| Equipe e tipos de demanda | — | líderes e tipos dos setores dele | líderes e tipos dos setores dele | todos os setores |
+| Tickets | conforme a equipe | líder nos setores dele | líder nos setores dele | todos |
+| Carteira | consulta | responsável do setor dele (editar e transferir) | responsável do setor dele (editar e transferir) | tudo |
+| Histórico, backup, setores, Central de Links | — | — | — | sim |
+
+- **Coordenador e supervisor** têm os mesmos poderes, cada um nos setores do seu cadastro. Nenhum fica acima do outro: coordenadores, supervisores e administradores só o administrador cria e edita. Eles cuidam de **usuários comuns** que estão nos setores deles (ou que eles criaram), e o que a administração liberou de outros setores para a pessoa continua como está.
+- Na Carteira, o responsável de cada setor é: Cobrança → *analista de cobrança*; Crédito → *assistente de crédito*. O analista extrajudicial e os demais dados do condomínio ficam com a administração.
+- Marcações à parte, no cadastro: **Supervisão da Central de Tickets** (vê e direciona os tickets de **todos** os setores, ex.: Gerência) e **Marketing — Central de Links** (edita a Central de Links).
 - Ao criar um usuário (ou redefinir a senha), o portal mostra uma senha temporária. A pessoa cria a própria senha no primeiro acesso.
 - Desativar um usuário encerra na hora as sessões abertas dele.
 - Cada pessoa pode pôr uma **foto de perfil** em *Minha conta* (recortada e reduzida no navegador; fica no banco). Ela aparece no menu e na lista de usuários.
