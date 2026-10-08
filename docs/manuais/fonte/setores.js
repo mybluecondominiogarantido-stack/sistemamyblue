@@ -60,8 +60,40 @@ const FERRAMENTAS = {
 const SETORES = [
   {
     nome: 'Administrativa/Financeira', arquivo: 'administrativa-financeira',
-    papel: 'Cuida das rotinas administrativas e financeiras da MyBlue: pagamentos, notas fiscais, reembolsos e contas da empresa.',
+    papel: 'Cuida das rotinas administrativas e financeiras da MyBlue: pagamentos, notas fiscais, reembolsos e contas da empresa. É responsável também por Suprimentos, Parceiros e Comissões de Novos Condomínios.',
     ferramentas: [],
+    // subáreas sob a responsabilidade da Administrativa/Financeira (no portal, Suprimentos e Parceiros recebem tickets como setores próprios)
+    subareas: [
+      {
+        nome: 'Suprimentos', setorPortal: 'Suprimentos',
+        papel: 'Compras de materiais e serviços: cotações, pedidos, parcelas e vencimentos.',
+        ferramentas: ['suprimentos'],
+        recebe: [
+          ['Pedido de compra', 18, 'media', 'Item, quantidade, especificação e para quando precisa.'],
+          ['Cotação', 27, 'media', 'Item/serviço e quantos orçamentos são necessários.'],
+          ['Compra urgente', 4, 'urgente', 'Explique a urgência; informe o item e o local de entrega.'],
+          ['Material de escritório', 27, 'baixa', 'Lista de itens e quantidades.'],
+        ],
+      },
+      {
+        nome: 'Parceiros', setorPortal: 'Parceiros',
+        papel: 'Relacionamento com parceiros e prestação de contas das comissões dos parceiros.',
+        ferramentas: ['parceiros'],
+        recebe: [
+          ['Dúvida sobre comissão', 18, 'media', 'Parceiro, mês de referência e o valor em dúvida.'],
+          ['Cadastro de parceiro', 18, 'media', 'Dados do parceiro e dados bancários (anexe documentos).'],
+          ['Prestação de contas do mês', 27, 'media', 'Parceiro e mês.'],
+        ],
+      },
+      {
+        nome: 'Comissões de Novos Condomínios',
+        papel: 'Controle e pagamento das comissões sobre os novos condomínios fechados.',
+        ferramentas: ['comissoes'],
+        recebe: [
+          ['Comissão de novo condomínio', 27, 'media', 'Condomínio, data de fechamento e quem indicou ou vendeu.'],
+        ],
+      },
+    ],
     recebe: [
       ['Pagamento a fornecedor', 18, 'media', 'Anexe a nota/boleto e informe vencimento e centro de custo.'],
       ['Emissão de nota fiscal', 9, 'alta', 'Cliente, CNPJ, valor, competência e descrição do serviço.'],
@@ -70,7 +102,6 @@ const SETORES = [
       ['Dúvida financeira / conciliação', 27, 'baixa', 'Período, conta e o lançamento em questão.'],
     ],
     abre: [
-      ['Suprimentos', 'compras de materiais e serviços'],
       ['Jurídico', 'análise de contratos com fornecedores'],
       ['Crédito', 'informações de prestação de contas dos condomínios'],
     ],
@@ -95,7 +126,7 @@ const SETORES = [
   {
     nome: 'Comercial', arquivo: 'comercial',
     papel: 'Prospecta e fecha novos condomínios clientes e cuida das propostas comerciais.',
-    ferramentas: ['comissoes', 'partnerchip'],
+    ferramentas: ['partnerchip'],
     recebe: [
       ['Proposta comercial', 18, 'media', 'Condomínio, nº de unidades, taxa atual e contato do síndico.'],
       ['Visita / reunião com síndico', 27, 'media', 'Endereço, data sugerida e quem acompanha.'],
@@ -106,6 +137,7 @@ const SETORES = [
       ['Jurídico', 'minuta e revisão de contrato'],
       ['Marketing', 'apresentações e materiais comerciais'],
       ['Crédito', 'análise de crédito do condomínio'],
+      ['Administrativa/Financeira', 'comissões de novos condomínios fechados'],
     ],
   },
   {
@@ -226,35 +258,6 @@ const SETORES = [
     ],
     abre: [
       ['Qualquer setor', 'pedidos, relatórios e acompanhamento'],
-    ],
-  },
-  {
-    nome: 'Suprimentos', arquivo: 'suprimentos',
-    papel: 'Compras de materiais e serviços: cotações, pedidos, parcelas e vencimentos.',
-    ferramentas: ['suprimentos'],
-    recebe: [
-      ['Pedido de compra', 18, 'media', 'Item, quantidade, especificação e para quando precisa.'],
-      ['Cotação', 27, 'media', 'Item/serviço e quantos orçamentos são necessários.'],
-      ['Compra urgente', 4, 'urgente', 'Explique a urgência; informe o item e o local de entrega.'],
-      ['Material de escritório', 27, 'baixa', 'Lista de itens e quantidades.'],
-    ],
-    abre: [
-      ['Administrativa/Financeira', 'pagamento de pedidos e notas'],
-      ['Jurídico', 'contratos com fornecedores'],
-    ],
-  },
-  {
-    nome: 'Parceiros', arquivo: 'parceiros',
-    papel: 'Relacionamento com parceiros e prestação de contas das comissões.',
-    ferramentas: ['parceiros'],
-    recebe: [
-      ['Dúvida sobre comissão', 18, 'media', 'Parceiro, mês de referência e o valor em dúvida.'],
-      ['Cadastro de parceiro', 18, 'media', 'Dados do parceiro e dados bancários (anexe documentos).'],
-      ['Prestação de contas do mês', 27, 'media', 'Parceiro e mês.'],
-    ],
-    abre: [
-      ['Administrativa/Financeira', 'pagamento das comissões'],
-      ['Comercial', 'indicações de parceiros que viraram clientes'],
     ],
   },
 ];
