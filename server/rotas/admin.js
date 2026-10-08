@@ -300,6 +300,22 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
     res.type('text/csv').send(csv);
   });
 
+  /* importa os documentos de uma ferramenta do Claude (arquivo { documentos: { "colecao/id": {...} } }) */
+  r.post('/api/admin/modulos/:slug/documentos', express.json({ limit: `${cfg.limiteDadosMb}mb` }), async (req, res) => {
+    const m = await modulos.obter(req.params.slug);
+    if (!ehDocs(m)) return erro(res, 404, 'Este módulo não usa o banco de documentos.');
+    const b = req.body || {};
+    if (b.modulo && b.modulo !== m.slug) return erro(res, 400, `Este arquivo é do módulo "${b.modulo}", não de "${m.slug}".`);
+    try {
+      const r2 = await documentos.substituirTudo(m.slug, b.documentos, req.usuario.id);
+      await seg.auditar(req, 'documentos_importados', m.slug, { total: r2.total, origem: b.origem || null });
+      res.json({ ok: true, total: r2.total });
+    } catch (e) {
+      if (e && e.status) return erro(res, e.status, e.message);
+      throw e;
+    }
+  });
+
   /* importa os dados lidos da planilha Google (o navegador do admin lê a planilha e envia para cá) */
   r.post('/api/admin/modulos/:slug/importar', express.json({ limit: `${cfg.limiteDadosMb}mb` }), async (req, res) => {
     const m = await modulos.obter(req.params.slug);

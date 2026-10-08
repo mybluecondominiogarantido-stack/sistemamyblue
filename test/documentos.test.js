@@ -161,3 +161,17 @@ test('admin vê a contagem, baixa CSV e o JSON; a página recebe window.claude',
   assert.match(pagina.texto, /"claudeDb":true/);
   assert.match(pagina.texto, /window, 'claude'/);
 });
+
+test('importar arquivo de dados do Claude substitui tudo e avisa quem está com a tela aberta', async () => {
+  const antes = (await beto.c('GET', '/api/db/sindicos')).json.seq;
+  const r = await admin('POST', '/api/admin/modulos/sindicos/documentos', { modulo: 'sindicos', documentos: { 'contatos/c900': { cond: 'Novo' }, 'meta/estado': { origem: 'teste' } } });
+  assert.equal(r.status, 200, r.texto);
+  assert.equal(r.json.total, 2);
+  const tudo = (await beto.c('GET', '/api/db/sindicos')).json.docs.map((d) => `${d.c}/${d.id}`).sort();
+  assert.deepEqual(tudo, ['contatos/c900', 'meta/estado']);
+  const mud = (await beto.c('GET', `/api/db/sindicos?desde=${antes}`)).json.docs;
+  assert.ok(mud.some((d) => d.id === 'c001' && d.d === null), 'o que saiu chega como exclusão');
+  assert.equal((await admin('POST', '/api/admin/modulos/boletos/documentos', { modulo: 'sindicos', documentos: {} })).status, 400);
+  assert.equal((await admin('POST', '/api/admin/modulos/renegociacoes/documentos', { documentos: {} })).status, 404);
+  assert.equal((await beto.c('POST', '/api/admin/modulos/sindicos/documentos', { documentos: {} })).status, 403);
+});
