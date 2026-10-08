@@ -84,6 +84,15 @@ tbody tr:nth-child(even) td { background: #f6fafb; }
 .cartao-rapido h3 { margin-top: 0; }
 .grade2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm 8mm; }
 .grade2 > div { break-inside: avoid; }
+.segue { margin-top: 10mm; break-inside: avoid; }
+pre { word-break: normal !important; overflow-wrap: normal !important; }
+pre { background: #13323a; color: #e3f4f7; border-radius: 2.5mm; padding: 3.5mm 4mm; font-family: "Consolas", "DejaVu Sans Mono", monospace; font-size: 8.6pt; line-height: 1.5; white-space: pre-wrap; word-break: break-all; margin: 2mm 0 4mm; break-inside: avoid; }
+pre .c { color: #9db3bc; }
+code { font-family: "Consolas", "DejaVu Sans Mono", monospace; font-size: 9pt; background: #eef4f7; padding: .2mm 1.2mm; border-radius: 1mm; }
+.quem { display: inline-block; font-size: 8.6pt; font-weight: 800; letter-spacing: .3mm; text-transform: uppercase; color: #fff; background: var(--blue); border-radius: 99px; padding: .6mm 3mm; margin-bottom: 2mm; }
+.campo-anotar { border: 1.5px dashed var(--border); border-radius: 2mm; padding: 2.5mm 3.5mm; margin: 1.5mm 0; display: flex; justify-content: space-between; gap: 4mm; break-inside: avoid; }
+.campo-anotar b { white-space: nowrap; }
+.campo-anotar span { color: var(--muted); font-size: 9pt; }
 
 /* capa */
 .capa { page: capa; height: 297mm; position: relative; overflow: hidden; break-after: page; }
@@ -541,4 +550,4 @@ async function gerar() {
 }
 
 if (require.main === module) gerar().catch((e) => { console.error(e); process.exit(1); });
-module.exports = { manualGeral, manualSetor };
+module.exports = { manualGeral, manualSetor, documento, capa, passos, dica, atencao, tabela, etq, esc };
