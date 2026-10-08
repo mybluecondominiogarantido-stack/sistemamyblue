@@ -72,6 +72,7 @@ tr { break-inside: avoid; }
 th { background: var(--teal-d); color: #fff; text-align: left; padding: 2mm 2.6mm; font-weight: 700; font-size: 9pt; }
 td { padding: 2mm 2.6mm; border-bottom: 1px solid var(--border); vertical-align: top; }
 tbody tr:nth-child(even) td { background: #f6fafb; }
+table.abas td:first-child { width: 30%; }
 .etq { display: inline-block; font-size: 8.4pt; font-weight: 800; border-radius: 99px; padding: .3mm 2.4mm; white-space: nowrap; }
 .etq.azul { background: var(--teal-bg); color: var(--teal-d); } .etq.ambar { background: var(--amber-bg); color: var(--amber); }
 .etq.cinza { background: #f1f5f7; color: var(--muted); border: 1px solid var(--border); } .etq.verde { background: var(--green-bg); color: var(--green); }
@@ -557,10 +558,13 @@ function manualSetor(s) {
   ${subs.some((a) => a.setorPortal) ? dica(`Na Central de Tickets, ${subs.filter((a) => a.setorPortal).map((a) => `<b>${esc(a.setorPortal)}</b>`).join(' e ')} ${subs.filter((a) => a.setorPortal).length > 1 ? 'aparecem como setores próprios' : 'aparece como setor próprio'}: quem pede escolhe ${subs.filter((a) => a.setorPortal).length > 1 ? 'esses setores' : 'esse setor'} em <i>Para qual setor?</i>. A equipe de cada um é formada por quem tem esse setor no cadastro.`) : ''}
   ${atencao(`Para o coordenador ou supervisor ${art.do} ${esc(s.nome)} cuidar também ${subs.filter((a) => a.setorPortal).map((a) => `de ${esc(a.setorPortal)}`).join(' e ')} (usuários, ferramentas, equipe e tipos de demanda), esses setores precisam estar marcados no cadastro dele, junto com ${esc(s.nome)}.`)}`) : '') +
 
-  (ferr.length ? cap(ferr.length === 1 ? 'Ferramenta do setor' : 'Ferramentas do setor', ferr.map((f) => `
-  <h2>${f.nome}</h2>
+  (ferr.length ? cap(ferr.length === 1 ? 'Ferramenta do setor' : 'Ferramentas do setor', ferr.map((f, i) => `
+  <h2${i && f.abas ? ' style="break-before:page"' : ''}>${f.nome}</h2>
   ${f.area ? `<p style="color:var(--teal-d);font-weight:700;margin-top:-1mm">Subárea: ${esc(f.area)}</p>` : ''}
   <p>${f.descricao}</p>
+  ${f.abas && f.abas.length ? `<h3>${f.tituloAbas || 'Abas da ferramenta'}</h3>${tabela([f.tituloAbas ? 'Parte' : 'Aba', 'O que faz'], f.abas.map(([a, d]) => [`<b>${a}</b>`, d]), 'abas')}` : ''}
+  ${f.rotina ? `<h3>Rotina do mês</h3>${passos(f.rotina)}` : ''}
+  <h3>No portal</h3>
   <ul>
     <li><b>Como abrir:</b> no menu (ou digite parte do nome na busca) e no cartão da tela inicial. <b>Nova aba</b> abre em tela cheia.</li>
     <li><b>Os dados:</b> ${f.dados}</li>
