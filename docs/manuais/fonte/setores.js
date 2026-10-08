@@ -32,6 +32,28 @@ const FERRAMENTAS = {
     descricao: 'Lançamento e prestação de contas das comissões de parceiros, organizado por ano e mês.',
     dados: 'Os lançamentos ficam na planilha da ferramenta e são compartilhados pela equipe.',
   },
+  boletos: {
+    nome: 'Controle de Emissão de Boletos',
+    descricao: 'Supervisão de Crédito: acompanhamento da emissão dos boletos de cada condomínio, com meta de 10 dias antes do vencimento. Painel, comparativo entre meses, controle, cadastro, feriados e histórico.',
+    dados: 'Fica no banco do portal e é compartilhado por toda a equipe, ao vivo: o que uma pessoa marca aparece para as outras em poucos segundos. O histórico mostra quem fez cada alteração.',
+    obs: 'Faça o <b>fechamento da competência</b> todo mês: ele bloqueia os registros do mês e gera o Excel de arquivo. Use <b>Salvar backup</b> no fechamento.',
+  },
+  sindicos: {
+    nome: 'Controle de Síndicos',
+    descricao: 'Compara a extração do Vouch com a base de contatos dos síndicos e gera a lista do Marketing.',
+    dados: 'A base de contatos fica no banco do portal e é compartilhada pela equipe, ao vivo. Cada edição fica no histórico da ferramenta.',
+  },
+  comissoes: {
+    nome: 'Comissões de Novos Condomínios',
+    descricao: 'Controle das comissões sobre os novos condomínios fechados.',
+    dados: 'Os dados ficam no banco do portal e são compartilhados por quem tem acesso à ferramenta.',
+    obs: 'Esta ferramenta tem regras próprias de quem pode o quê, dentro dela.',
+  },
+  partnerchip: {
+    nome: 'PartnerChip — Resultados',
+    descricao: 'Painel de resultados dos parceiros.',
+    dados: 'Os dados ficam no banco do portal e são compartilhados por quem tem acesso à ferramenta.',
+  },
 };
 
 // p: prioridade sugerida; h: prazo em horas de expediente
@@ -56,7 +78,7 @@ const SETORES = [
   {
     nome: 'Cobrança', arquivo: 'cobranca',
     papel: 'Recupera os valores em atraso dos condomínios: boletos, acordos, negativações e acompanhamento da inadimplência.',
-    ferramentas: ['cobranca'],
+    ferramentas: ['cobranca'], carteira: 'analista de cobrança',
     recebe: [
       ['2ª via de boleto', 4, 'alta', 'Condomínio, unidade, mês de referência e para quem enviar.'],
       ['Proposta de acordo', 18, 'media', 'Unidade, meses em atraso e a proposta do condômino.'],
@@ -73,7 +95,7 @@ const SETORES = [
   {
     nome: 'Comercial', arquivo: 'comercial',
     papel: 'Prospecta e fecha novos condomínios clientes e cuida das propostas comerciais.',
-    ferramentas: [],
+    ferramentas: ['comissoes', 'partnerchip'],
     recebe: [
       ['Proposta comercial', 18, 'media', 'Condomínio, nº de unidades, taxa atual e contato do síndico.'],
       ['Visita / reunião com síndico', 27, 'media', 'Endereço, data sugerida e quem acompanha.'],
@@ -89,7 +111,7 @@ const SETORES = [
   {
     nome: 'Crédito', arquivo: 'credito',
     papel: 'Prepara prestações de contas, balancetes, recibos e controles de consumo dos condomínios.',
-    ferramentas: ['credito'],
+    ferramentas: ['credito', 'boletos', 'sindicos'], carteira: 'assistente de crédito',
     recebe: [
       ['Prestação de contas', 27, 'media', 'Condomínio e mês de referência.'],
       ['Balancete', 27, 'media', 'Condomínio e período.'],

@@ -117,24 +117,27 @@ const CONCEITOS = `
 <h2>Os termos da Central de Tickets</h2>
 ${tabela(['Termo', 'O que significa'], [
   ['<b>Ticket</b>', 'Uma demanda registrada: o que precisa ser feito, por quem pediu e para qual setor. Cada ticket tem um número (ex.: #128).'],
-  ['<b>Setor</b>', 'Quem vai atender. O ticket cai na <b>fila do setor</b> escolhido.'],
+  ['<b>Setor</b>', 'Quem vai atender. A equipe do setor é formada por quem tem aquele setor no cadastro.'],
+  ['<b>Demanda de condomínio ou interna</b>', 'De condomínio: escolhida na Carteira de condomínios. Em Cobrança e Crédito, vai direto para a pessoa responsável pelo condomínio. Interna: vai para o líder do setor, que distribui.'],
   ['<b>Tipo de demanda</b>', 'Assuntos padronizados de cada setor (ex.: "2ª via de boleto"). Cada tipo já tem prazo e prioridade sugeridos.'],
-  ['<b>Responsável</b>', 'A pessoa do setor que está cuidando do ticket. Sem responsável = está na fila esperando alguém.'],
+  ['<b>Responsável</b>', 'A pessoa do setor que está cuidando do ticket. Sem responsável = está na fila esperando o líder distribuir.'],
   ['<b>Prioridade</b>', `${etq('Urgente', 'vermelha')} ${etq('Alta', 'ambar')} ${etq('Média', 'azul')} ${etq('Baixa', 'cinza')}`],
-  ['<b>Prazo</b>', 'Até quando o ticket deve ser resolvido. Conta <b>só o expediente: segunda a sexta, das 8h às 17h</b> (9 h = 1 dia útil).'],
+  ['<b>Prazo para resposta</b>', 'Até quando a equipe deve dar o 1º retorno. Sai sozinho do tipo de demanda ou da prioridade. Só o líder muda.'],
+  ['<b>Prazo para conclusão</b>', 'Até quando a demanda será concluída. Quem atende define ao <b>iniciar o atendimento</b>, e quem abriu vê essa previsão.'],
   ['<b>Nota interna</b>', 'Comentário que só a equipe do setor vê. Quem abriu o ticket não vê.'],
 ])}
+<p>Os prazos contam <b>só o expediente: segunda a sexta, das 8h às 17h</b> (9 h = 1 dia útil). O ticket fica ${etq('⚠ atrasado', 'vermelha')} quando passa do prazo para resposta sem nenhum retorno, ou quando passa do prazo para conclusão ainda em aberto.</p>
 <h3>Situações de um ticket</h3>
 ${tabela(['Situação', 'Quando usar'], [
-  [etq('Novo', 'azul'), 'Acabou de chegar na fila do setor, ninguém começou.'],
-  [etq('Em andamento', 'ambar'), 'Alguém do setor está tratando.'],
+  [etq('Novo', 'azul'), 'Acabou de chegar, o atendimento ainda não foi iniciado.'],
+  [etq('Em andamento', 'ambar'), 'Quem atende iniciou o atendimento e definiu o prazo para conclusão.'],
   [etq('Aguardando', 'cinza'), 'Parado esperando resposta de quem abriu ou de terceiros (banco, síndico, fornecedor).'],
   [etq('Resolvido', 'verde'), 'Demanda atendida. Quem abriu é avisado e pode reabrir se não ficou resolvido.'],
   [etq('Cancelado', 'cinza'), 'Não será atendido (pedido duplicado, desistência etc.). Sempre com motivo.'],
 ])}
-<h3>Prazos padrão</h3>
-<p>Quando o tipo de demanda não tem prazo próprio, vale o prazo da prioridade:</p>
-${tabela(['Prioridade', 'Prazo', 'Exemplo'], [
+<h3>Prazo para resposta padrão</h3>
+<p>Quando o tipo de demanda não tem prazo próprio, vale o da prioridade:</p>
+${tabela(['Prioridade', 'Prazo para resposta', 'Exemplo'], [
   [etq('Urgente', 'vermelha'), '4 horas úteis', 'Aberto na sexta às 16h30, vence na segunda às 11h30.'],
   [etq('Alta', 'ambar'), '1 dia útil', 'Aberto na terça às 10h, vence na quarta às 10h.'],
   [etq('Média', 'azul'), '3 dias úteis', 'Aberto na quarta às 10h, vence na segunda às 10h.'],
@@ -145,61 +148,64 @@ const ABRIR = `
 <p>Use a Central sempre que precisar de algo de <b>outro setor</b>. Assim nada se perde em conversas soltas, o setor sabe o prazo e você acompanha tudo num lugar só.</p>
 ${passos([
   'Clique em <b>Novo ticket</b> (na tela inicial ou em <b>Tickets</b>).',
-  'Em <b>Para qual setor?</b>, escolha quem vai atender.',
-  'Em <b>Tipo de demanda</b>, escolha o assunto. Se nenhum servir, deixe <i>Outro / não sei</i>.',
-  'Escreva um <b>Assunto</b> curto e claro, por exemplo: "2ª via — Ed. Aurora, apto 51".',
-  'Na <b>Descrição</b>, coloque tudo o que o setor precisa: condomínio, unidade, valores, datas, contatos.',
-  'Confira a <b>Prioridade</b>. Abaixo dela aparece o prazo de atendimento.',
+  'Em <b>Para qual setor?</b>, escolha quem vai atender e, em <b>Tipo de demanda</b>, o assunto. Se nenhum servir, deixe <i>Outro / não sei</i>.',
+  'Em <b>A demanda é de</b>, marque <b>Um condomínio</b> (e escolha o condomínio da lista) ou <b>Interna</b>. Logo abaixo o portal mostra para quem o ticket vai.',
+  'Escreva um <b>Assunto</b> curto e claro, por exemplo: "2ª via — apto 51".',
+  'Na <b>Descrição</b>, coloque tudo o que o setor precisa: unidade, valores, datas, contatos.',
+  'Confira a <b>Prioridade</b>. Abaixo dela aparece o prazo para resposta.',
   'Se tiver arquivos (boleto, print, planilha), anexe em <b>Anexos</b>.',
-  'Clique em <b>Abrir ticket</b>. Os líderes do setor recebem o aviso na hora.',
+  'Clique em <b>Abrir ticket</b>. Quem vai atender recebe o aviso na hora.',
 ])}
-${fig('04-novo-ticket', 'Abrindo um ticket: setor, tipo, assunto, descrição, prioridade e anexos.')}
-${dica('Quanto mais completa a descrição, mais rápido o atendimento. Escreva como se a pessoa não soubesse nada do caso.')}
+${fig('04-novo-ticket', 'Abrindo um ticket de condomínio: o portal mostra que ele vai direto para o responsável pelo condomínio no setor.')}
+${dica('Em <b>Cobrança</b> e <b>Crédito</b>, o ticket de condomínio vai direto para a pessoa da carteira (analista de cobrança ou assistente de crédito). Se essa pessoa ainda não estiver no setor no portal, o ticket vai para o líder.')}
 ${atencao('Use <b>Urgente</b> só quando realmente for para o mesmo dia. Se tudo for urgente, nada é urgente.')}`;
 
 const ACOMPANHAR = `
-<p>Em <b>Tickets → Abertos por mim</b> você vê tudo o que pediu, a situação, quem está cuidando e o prazo.</p>
+<p>Em <b>Tickets → Abertos por mim</b> você vê tudo o que pediu, a situação, quem está cuidando e o prazo (para resposta ou para conclusão).</p>
 ${fig('05-abertos-por-mim', 'Abertos por mim: seus pedidos com situação, responsável e prazo.')}
 <p>Clique num ticket para abrir. Você pode:</p>
 <ul>
   <li><b>Conversar</b> com quem está atendendo: escreva no campo de mensagem e clique em <b>Enviar</b>.</li>
+  <li><b>Ver a previsão de conclusão</b> que quem atende definiu ao iniciar. Se ela mudar, você é avisado, com o motivo.</li>
   <li><b>Anexar arquivos</b> que faltaram.</li>
   <li><b>Cancelar meu pedido</b>, se não precisar mais.</li>
   <li><b>Reabrir</b> o ticket depois de resolvido, se o problema continuar (o motivo é obrigatório).</li>
 </ul>
-${fig('06-detalhe-solicitante', 'O ticket visto por quem abriu: histórico, conversa e botão de cancelar.')}`;
+${fig('06-detalhe-solicitante', 'O ticket visto por quem abriu: histórico, conversa, prazos e botão de cancelar.')}`;
 
 const ATENDER = `
 <h3>Onde estão os tickets</h3>
 ${tabela(['Aba', 'O que mostra'], [
   ['<b>Minha fila</b>', 'Tickets em que <b>você</b> é o responsável. É a sua lista de trabalho.'],
-  ['<b>Fila do setor</b>', 'Tudo o que chegou para o seu setor, inclusive o que ainda está <b>sem responsável</b>.'],
+  ['<b>Fila do setor</b>', 'Tudo o que chegou para os seus setores, inclusive o que ainda está <b>sem responsável</b>.'],
   ['<b>Abertos por mim</b>', 'O que você pediu para outros setores.'],
 ])}
-<p>Os filtros ficam guardados: <b>Em aberto / Todas as situações</b>, setor, <b>só atrasados</b> e <b>sem responsável</b>. A busca aceita o número (#128) ou parte do assunto. A lista vem ordenada por prioridade e prazo: o que vence primeiro fica em cima.</p>
+<p>Filtros: situação (a lista abre em <b>Todas as situações</b>, com os em aberto primeiro), setor, <b>só atrasados</b> e <b>sem responsável</b>. A busca aceita o número (#128) ou parte do assunto.</p>
 ${fig('07-minha-fila', 'Minha fila: o contador ao lado de “Tickets” no menu mostra quantos estão com você.')}
 <h3>Tratando um ticket</h3>
 ${passos([
-  'Abra o ticket. Se estiver sem responsável, clique em <b>Assumir para mim</b>.',
-  'Mude a <b>Situação</b> para <i>Em andamento</i> e clique em <b>Salvar alterações</b>.',
+  'Abra o ticket. Se ele está com você e ainda é <i>Novo</i>, clique em <b>Iniciar atendimento</b>.',
+  'Informe o <b>prazo para conclusão</b>: até quando você conclui a demanda. Quem abriu vê essa previsão.',
   'Converse com quem abriu pelo campo de mensagem. Para algo só da equipe, marque <b>nota interna</b>.',
-  'Se depender de alguém de fora, use <i>Aguardando</i> e registre do que depende.',
+  'Se depender de alguém de fora, mude a situação para <i>Aguardando</i> e clique em <b>Salvar alterações</b>.',
+  'Se o prazo para conclusão mudar, ajuste a data e explique o motivo (quem abriu é avisado).',
   'Ao terminar, clique em <b>Marcar como resolvido</b> e escreva o que foi feito (quem abriu vê esse texto).',
 ])}
+${fig('09b-iniciar', 'Iniciar atendimento: quem atende informa até quando conclui.')}
 ${fig('09-detalhe-equipe', 'O ticket visto pela equipe: nota interna (fundo amarelo), comentários e o painel de ações à direita.')}
-<div class="grade2"><div>${fig('10-resolver', 'Ao resolver, conte o que foi feito.')}</div><div>${fig('11-transferir', 'Transferir: o ticket vai para a fila do outro setor.')}</div></div>
+<div class="grade2"><div>${fig('10-resolver', 'Ao resolver, conte o que foi feito.')}</div><div>${fig('11-transferir', 'Transferir: o ticket vai para o outro setor.')}</div></div>
 <h3>Não é do seu setor? Transfira</h3>
-<p>Clique em <b>Transferir para outro setor</b>, escolha o setor (e o tipo, se souber) e explique o motivo. O ticket volta para a fila do novo setor, sem responsável, e os líderes de lá são avisados.</p>
-<h3>Não vai conseguir tratar? Devolva</h3>
-<p>Se o ticket está com você e não dá para continuar (férias, outra prioridade), clique em <b>Devolver à fila</b>. Ele volta para a fila do setor para o líder redistribuir.</p>
+<p>Clique em <b>Transferir para outro setor</b>, escolha o setor (e o tipo, se souber) e explique o motivo. O ticket vai para a pessoa da carteira do novo setor (se houver) ou para a fila dele, e a equipe nova define o próprio prazo para conclusão.</p>
+<h3>Não vai conseguir tratar?</h3>
+<p>Só o líder muda o responsável. Escreva uma nota interna explicando e avise o líder do setor para redistribuir.</p>
 ${dica('Mantenha a situação atualizada. Ela é o que quem abriu vê: um ticket parado em <i>Novo</i> passa a impressão de que ninguém olhou.')}`;
 
 const LIDER = `
-<p>O líder é o coordenador do setor na Central. Além de tudo o que a equipe faz, ele <b>distribui</b> os tickets.</p>
+<p>O líder <b>distribui</b> os tickets do setor. São líderes as pessoas marcadas como líder na equipe e também o <b>coordenador</b> e o <b>supervisor</b> do setor.</p>
 ${passos([
   'Abra <b>Tickets → Fila do setor</b> e marque <b>sem responsável</b> para ver o que está esperando.',
-  'Abra o ticket e escolha a pessoa no campo <b>Responsável</b>.',
-  'Ajuste a <b>prioridade</b> ou o <b>prazo</b> se precisar e clique em <b>Salvar alterações</b>.',
+  'Abra o ticket e escolha a pessoa no campo <b>Responsável</b> (ou clique em <b>Assumir para mim</b>).',
+  'Ajuste a <b>prioridade</b> ou o <b>prazo para resposta</b> se precisar e clique em <b>Salvar alterações</b>.',
   'A pessoa escolhida recebe o aviso na hora (sino e som; e-mail quando estiver ativado).',
 ])}
 <div class="lado"><div>
@@ -209,8 +215,8 @@ ${passos([
   <li><b>Ao longo do dia:</b> marcar <b>só atrasados</b> e agir neles (redistribuir, ajustar o prazo com justificativa, cobrar retorno).</li>
   <li><b>Toda semana:</b> olhar o <b>Painel de tickets</b>: atrasados, % no prazo e tempo médio por pessoa.</li>
 </ul>
-${dica('Novos tickets do setor avisam os líderes. Se o setor não tiver líder, toda a equipe recebe o aviso.')}
-</div>${fig('08b-lider-atribuir', 'O líder escolhe o responsável.')}</div>
+${dica('Tickets novos e transferidos para o setor avisam os líderes marcados na equipe. Se o setor não tiver líder marcado, toda a equipe recebe o aviso.')}
+</div>${fig('08b-lider-atribuir', 'O líder escolhe o responsável, a prioridade e o prazo para resposta.', 100, 'pequena')}</div>
 ${fig('08-fila-setor', 'Fila do setor vista pela líder: prioridade, situação, responsável e prazo.')}`;
 
 const AVISOS = `
@@ -219,11 +225,12 @@ ${tabela(['Você recebe aviso quando…', 'No portal', 'Por e-mail*'], [
   ['Um ticket é <b>passado para você</b>', '<span class="sim">✓</span>', '<span class="sim">✓</span>'],
   ['Chega um <b>ticket novo</b> ou transferido para o seu setor (líderes)', '<span class="sim">✓</span>', '<span class="sim">✓</span>'],
   ['Seu ticket foi <b>resolvido ou cancelado</b>', '<span class="sim">✓</span>', '<span class="sim">✓</span>'],
+  ['Mudou a <b>previsão de conclusão</b> de um ticket seu', '<span class="sim">✓</span>', '<span class="sim">✓</span>'],
   ['Um ticket seu foi <b>reaberto</b>', '<span class="sim">✓</span>', '<span class="sim">✓</span>'],
   ['Alguém <b>comentou</b> num ticket seu', '<span class="sim">✓</span>', '<span class="nao">—</span>'],
-  ['Mudaram situação, prazo ou prioridade de um ticket seu', '<span class="sim">✓</span>', '<span class="nao">—</span>'],
+  ['Mudaram situação ou prioridade de um ticket seu', '<span class="sim">✓</span>', '<span class="nao">—</span>'],
 ])}
-<p style="font-size:9pt;color:var(--muted)">* O envio por e-mail (Microsoft 365) será ativado em breve. Até lá, os avisos aparecem só no portal.</p>
+<p style="font-size:9pt;color:var(--muted)">* Quando o envio de e-mail (Microsoft 365) estiver configurado. Até lá, os avisos aparecem só no portal.</p>
 <div class="lado"><div>
 <h3>Receber alertas mesmo com o portal em outra aba</h3>
 ${passos([
@@ -236,10 +243,10 @@ ${atencao('O som e o alerta só funcionam com o portal <b>aberto</b> em alguma a
 </div>${fig('12-avisos', 'Avisos: lista, som e alertas do computador.')}</div>`;
 
 const PAINEL = `
-<p>O <b>Painel de tickets</b> mostra como está o atendimento. Cada pessoa vê os setores de que faz parte; Supervisão, Gerência e administração veem todos. Escolha o período (7, 30 ou 90 dias, ou 12 meses) e, se quiser, um setor.</p>
+<p>O <b>Painel de tickets</b> mostra como está o atendimento. Cada pessoa vê os setores de que faz parte; quem tem a <b>Supervisão da Central de Tickets</b> e a administração veem todos. Escolha o período (7, 30 ou 90 dias, ou 12 meses) e, se quiser, um setor.</p>
 ${tabela(['Número', 'O que significa'], [
   ['<b>Em aberto</b>', 'Tickets novos, em andamento ou aguardando, agora. Mostra também quantos estão sem responsável.'],
-  ['<b>Atrasados</b>', 'Em aberto com o prazo já vencido. É o número que mais pede ação.'],
+  ['<b>Atrasados</b>', 'Em aberto com prazo vencido (resposta ou conclusão). É o número que mais pede ação.'],
   ['<b>Abertos no período</b>', 'Quantas demandas chegaram no período escolhido.'],
   ['<b>Resolvidos no período</b>', 'Quantas foram resolvidas e qual % dentro do prazo.'],
   ['<b>Tempo médio de resolução</b>', 'Da abertura até resolver (em horas corridas).'],
@@ -247,30 +254,110 @@ ${tabela(['Número', 'O que significa'], [
 ])}
 ${fig('13-painel', 'Painel: números gerais, por setor, por responsável e tipos de demanda mais abertos.')}`;
 
+const PERFIS = `
+<p class="intro">O que cada pessoa vê e faz no portal sai de <b>um lugar só</b>: o cadastro dela, em <i>Usuários e acessos</i>. Ali ficam o <b>perfil</b>, o <b>setor</b> (ou setores) e as <b>ferramentas liberadas</b>.</p>
+${tabela(['Perfil', 'Para quem', 'O que faz'], [
+  ['<b>Usuário</b>', 'A equipe em geral', 'Usa as ferramentas liberadas, abre e acompanha tickets e trata os tickets do setor dele.'],
+  ['<b>Coordenador</b>', 'Quem coordena um setor', 'Tudo do usuário, mais a <b>gestão do setor</b>: usuários, ferramentas, equipe, tipos de demanda, líder nos tickets e carteira do setor.'],
+  ['<b>Supervisor</b>', 'Quem supervisiona um setor', 'Os <b>mesmos poderes do coordenador</b>, nos setores dele. Um não fica acima do outro.'],
+  ['<b>Administrador</b>', 'A administração do portal', 'Faz tudo, em todos os setores, e é o único que cria coordenadores, supervisores e administradores.'],
+])}
+<h2>O setor no cadastro</h2>
+<ul>
+  <li>O setor define a <b>equipe</b> de cada setor na Central de Tickets: quem é do setor vê a fila dele e trata os tickets.</li>
+  <li>Para <b>coordenador e supervisor</b>, define o que eles gerenciam. Eles também abrem <b>todas as ferramentas</b> dos setores deles, sem precisar marcar uma a uma.</li>
+  <li>Uma pessoa pode ter mais de um setor.</li>
+</ul>
+<h2>Marcações à parte</h2>
+${tabela(['Marcação', 'O que libera'], [
+  ['<b>Supervisão da Central de Tickets</b>', 'Ver e direcionar os tickets de <b>todos</b> os setores, e o painel de todos. Para quem acompanha a empresa toda (ex.: Gerência).'],
+  ['<b>Marketing — Central de Links</b>', 'Editar os links e o fundo da campanha da Central de Links.'],
+])}
+${fig('15b-usuario', 'Cadastro da pessoa: perfil, marcações, setor(es) e ferramentas liberadas.')}`;
+
+const GESTAO = `
+<p class="intro">Coordenadores e supervisores ganham no menu o grupo <b>Gestão do setor</b>. Tudo ali vale <b>só para os setores do cadastro deles</b>.</p>
+<h2>Usuários do setor</h2>
+${passos([
+  'Em <b>Gestão do setor → Usuários do setor</b>, clique em <b>Novo usuário</b>.',
+  'Preencha nome e e-mail, confira o <b>setor</b> e marque as <b>ferramentas</b> do setor que a pessoa vai usar.',
+  'Clique em <b>Criar usuário</b> e passe à pessoa a senha temporária que aparece na tela (ela não aparece de novo).',
+])}
+<ul>
+  <li>Aparecem na lista os <b>usuários comuns</b> dos seus setores e os que você criou. Clique na pessoa para editar, desativar ou <b>redefinir a senha</b>.</li>
+  <li>Você libera só ferramentas dos seus setores. O que a administração liberou de outros setores para a pessoa continua como está.</li>
+  <li>Coordenadores, supervisores e administradores são criados e editados só pela administração.</li>
+</ul>
+<div class="grade2"><div>${fig('20-coord-usuarios', 'Usuários do setor.')}</div><div>${fig('20b-coord-novo', 'Cadastro de usuário pelo coordenador.')}</div></div>
+<h2>Ferramentas do setor</h2>
+<p>Clique numa ferramenta para:</p>
+<ul>
+  <li><b>Enviar uma versão nova do HTML</b> quando a ferramenta for alterada. A versão anterior fica guardada.</li>
+  <li><b>Voltar para uma versão anterior</b>, em <i>Versões anteriores → Usar esta</i>, se algo der errado.</li>
+  <li>Escolher <b>quem pode abrir</b> a ferramenta, entre as pessoas do seu setor, e clicar em <b>Salvar quem pode abrir</b>.</li>
+</ul>
+${fig('21b-coord-html', 'Ferramenta do setor: HTML, versões anteriores e quem pode abrir.')}
+<h2>Equipe e tipos de demanda</h2>
+<ul>
+  <li>Marque os <b>líderes</b>: eles recebem os avisos de tickets novos e distribuem. Quem faz parte do setor vem do cadastro (para incluir alguém, use <i>Usuários do setor</i>).</li>
+  <li>Cadastre os <b>tipos de demanda</b> do setor, com prazo em horas úteis (9 h = 1 dia útil) e prioridade sugerida.</li>
+</ul>
+${fig('23-coord-equipe', 'Equipe do setor: líderes e tipos de demanda.')}
+<h2>Tickets do setor</h2>
+<p>Coordenador e supervisor têm, nos setores deles, os poderes do <b>líder</b>: escolhem e trocam o responsável, a prioridade e o prazo para resposta.</p>
+<h2>Carteira do setor</h2>
+<p>Na <b>Carteira de condomínios</b>, eles alteram e transferem o <b>responsável do setor</b> deles: Cobrança → <i>analista de cobrança</i>; Crédito → <i>assistente de crédito</i>. Os demais dados do condomínio são da administração.</p>
+${fig('24-coord-carteira', 'Carteira: o coordenador de Crédito altera só o assistente de crédito.')}`;
+
+const CARTEIRA = `
+<p class="intro">A <b>Carteira de condomínios</b> reúne os condomínios atendidos e quem cuida de cada um: <b>analista de cobrança</b>, <b>analista extrajudicial</b> (ApoioCob) e <b>assistente de crédito</b>.</p>
+<ul>
+  <li><b>Condomínios:</b> indicadores (ativos, comarcas, pessoas por função, ativos sem responsável), busca por nome, razão social, CNPJ ou ID, filtros por situação, UF, administradora e responsável. Clique no condomínio para ver a ficha completa e o histórico de alterações.</li>
+  <li><b>Responsáveis:</b> quantos condomínios ativos cada pessoa tem, por UF. Clique no número para ver a lista.</li>
+  <li><b>Exportar CSV:</b> baixa a carteira no formato da planilha, que abre no Excel.</li>
+</ul>
+${fig('18-carteira', 'Carteira de condomínios: indicadores, filtros e a lista com os responsáveis.')}
+${tabela(['Quem', 'O que pode'], [
+  ['Todos', 'Consultar e exportar.'],
+  ['Coordenador e supervisor de Cobrança ou Crédito', 'Alterar e <b>transferir</b> o responsável do setor deles (aba Responsáveis → Transferir).'],
+  ['Administração', 'Cadastrar, editar, remover, importar o CSV da planilha e transferir qualquer função.'],
+])}
+${dica('A carteira também decide para quem vai o ticket de condomínio em Cobrança e Crédito. Mantenha os responsáveis em dia.')}`;
+
+const LINKS = `
+<p class="intro">A <b>Central de Links</b> reúne os links úteis da equipe, por grupos. Fica no menu, logo abaixo de <i>Início</i>, e os links abrem em nova aba.</p>
+${fig('19-links', 'Central de Links.')}
+<p>Quem edita: a administração e quem tem a marcação <b>Marketing — Central de Links</b> no cadastro. Na página aparece o botão <b>Editar links e fundo</b>, com três abas:</p>
+<ul>
+  <li><b>Fundo da campanha:</b> nome, data em que entra no ar e a imagem de fundo (computador e, se quiser, celular). Dá para deixar o fundo do mês seguinte agendado. O botão <b>Ver</b> mostra como a página fica antes de entrar no ar.</li>
+  <li><b>Links:</b> incluir, mudar nome, endereço, grupo, ícone e descrição; mudar a ordem; ocultar sem apagar ou excluir.</li>
+  <li><b>Título da página:</b> título e subtítulo do topo.</li>
+</ul>`;
+
 /* ---------- Manual Geral ---------- */
 function manualGeral() {
   const caps = [
-    ['O que é o Portal MyBlue', 'portal'], ['Entrar e sair', 'acesso'], ['Tela inicial e menu', 'inicio'],
-    ['Central de Tickets: como funciona', 'conceitos'], ['Pedir algo para outro setor', 'abrir'], ['Acompanhar seus pedidos', 'acompanhar'],
-    ['Atender os tickets do seu setor', 'atender'], ['Líder do setor', 'lider'], ['Supervisão e Gerência', 'supervisao'],
-    ['Avisos: sino, som e e-mail', 'avisos'], ['Painel de indicadores', 'painel'], ['Administração', 'admin'],
-    ['Quem pode o quê', 'permissoes'], ['Perguntas frequentes', 'faq'],
+    ['O que é o Portal MyBlue'], ['Entrar, sair e sua conta'], ['Tela inicial e menu'], ['Perfis e acessos'],
+    ['Central de Tickets: como funciona'], ['Pedir algo para outro setor'], ['Acompanhar seus pedidos'],
+    ['Atender os tickets do seu setor'], ['Líder do setor'], ['Supervisão da Central de Tickets'],
+    ['Avisos: sino, som e e-mail'], ['Painel de indicadores'], ['Carteira de condomínios'], ['Central de Links'],
+    ['Gestão do setor: coordenador e supervisor'], ['Administração'], ['Quem pode o quê'], ['Perguntas frequentes'],
   ];
   let n = 0;
   const cap = (titulo, html) => `<section class="capitulo"><h1><span class="num">${++n}</span>${titulo}</h1>${html}</section>`;
   const corpo = capa('Manual de utilização', 'Portal MyBlue', 'Guia geral do portal e da Central de Tickets para todas as pessoas da equipe.', [
-    ['Ferramentas', 'Todas as centrais dos setores em um só endereço, com login.'],
-    ['Central de Tickets', 'Demandas entre setores com fila, responsável e prazo.'],
-    ['Avisos', 'Sino, som e alerta no computador quando algo chega para você.'],
+    ['Ferramentas', 'Todas as ferramentas dos setores em um só endereço, com login.'],
+    ['Central de Tickets', 'Demandas entre setores com responsável, prazo para resposta e para conclusão.'],
+    ['Gestão do setor', 'Coordenadores e supervisores cuidam do próprio setor.'],
   ]) +
   `<section><h1>Sumário</h1><ol class="sumario">${caps.map(([t], i) => `<li><span>${i + 1}</span>${t}</li>`).join('')}</ol>
   ${dica('Cada setor também tem o seu <b>manual do setor</b>, com as ferramentas, a rotina e os tipos de demanda que atende.')}</section>` +
 
   cap('O que é o Portal MyBlue', `
-  <p class="intro">O portal reúne em um único endereço as ferramentas que cada setor usa no dia a dia e a <b>Central de Tickets</b>, onde os setores pedem e acompanham demandas uns dos outros.</p>
+  <p class="intro">O portal reúne em um único endereço as ferramentas que cada setor usa no dia a dia, a <b>Central de Tickets</b>, a <b>Carteira de condomínios</b> e a <b>Central de Links</b>.</p>
   <ul>
-    <li><b>Um login por pessoa.</b> Cada um vê só as ferramentas liberadas para ele.</li>
-    <li><b>Ferramentas do setor.</b> As centrais que já existiam (Crédito, Cobrança, CS, Suprimentos, Parceiros) abrem dentro do portal, do mesmo jeito que antes.</li>
+    <li><b>Um login por pessoa.</b> Cada um vê só o que foi liberado para ele.</li>
+    <li><b>Ferramentas dos setores.</b> As centrais e controles de cada setor abrem dentro do portal, e os dados ficam guardados no banco do portal.</li>
     <li><b>Central de Tickets.</b> Qualquer pessoa abre um pedido para um setor; o setor recebe, distribui, trata e responde, com prazo.</li>
     <li><b>Histórico.</b> Tudo fica registrado: quem pediu, quem tratou, o que foi feito e quando.</li>
   </ul>
@@ -278,10 +365,10 @@ function manualGeral() {
   <p>O portal funciona no computador e no celular, direto no navegador (Chrome ou Edge recomendados).</p>
   <div class="grade2"><div>${fig('17-celular', 'No celular: sua fila de tickets.', 60)}</div><div>${fig('17b-celular-menu', 'No celular, o menu abre pelo botão ☰.', 60)}</div></div>`) +
 
-  cap('Entrar e sair', `
+  cap('Entrar, sair e sua conta', `
   <h2>Primeiro acesso</h2>
   ${passos([
-    'A administração cadastra você e envia o <b>endereço do portal</b>, seu <b>e-mail</b> e uma <b>senha temporária</b>.',
+    'A administração (ou o coordenador do seu setor) cadastra você e envia o <b>endereço do portal</b>, seu <b>e-mail</b> e uma <b>senha temporária</b>.',
     'Abra o endereço, digite o e-mail e a senha temporária e clique em <b>Entrar</b>.',
     'O portal pede uma <b>senha nova</b>: pelo menos 8 caracteres, com letras e números.',
   ])}
@@ -289,110 +376,132 @@ function manualGeral() {
   <h2>No dia a dia</h2>
   <ul>
     <li>A sessão dura <b>12 horas</b> e se renova sozinha enquanto você usa. Se expirar, o portal pede para entrar de novo.</li>
-    <li>Para <b>trocar a senha</b>, clique no ícone de pessoa no rodapé do menu (<b>Minha conta</b>).</li>
+    <li>Em <b>Minha conta</b> (ícone de pessoa no rodapé do menu) você troca a <b>senha</b> e coloca sua <b>foto de perfil</b>. A foto aparece no menu, na lista de usuários e nos comentários dos tickets.</li>
     <li>Para <b>sair</b>, use o ícone de saída ao lado. Em computador compartilhado, sempre saia.</li>
-    <li><b>Esqueceu a senha?</b> Peça à administração para redefinir. Você recebe uma nova senha temporária.</li>
+    <li><b>Esqueceu a senha?</b> Peça ao coordenador do seu setor ou à administração para redefinir. Você recebe uma nova senha temporária.</li>
   </ul>
   ${atencao('Depois de 8 tentativas erradas, o login fica bloqueado por 15 minutos. A senha é pessoal: não compartilhe.')}
-  ${fig('16-conta', 'Minha conta: troca de senha.', 80, 'pequena')}`) +
+  ${fig('16-conta', 'Minha conta: foto de perfil e troca de senha.', 80, 'pequena')}`) +
 
   cap('Tela inicial e menu', `
   <p>O <b>menu lateral</b> tem tudo o que você pode acessar:</p>
   ${tabela(['Item', 'Para que serve'], [
     ['<b>Busca</b>', 'Digite parte do nome para achar uma ferramenta. Enter abre a primeira.'],
     ['<b>Início</b>', 'Saudação, atalho da Central de Tickets e os cartões das suas ferramentas.'],
+    ['<b>Central de Links</b>', 'Os links úteis da equipe.'],
     ['<b>Central de Tickets → Tickets</b>', 'Suas filas. O número ao lado mostra quantos tickets estão com você (fica vermelho se algum está atrasado).'],
-    ['<b>Painel de tickets</b>', 'Indicadores do atendimento (para quem faz parte de algum setor).'],
-    ['<b>Ferramentas por setor</b>', 'As centrais liberadas para você, agrupadas por setor.'],
-    ['<b>Administração</b>', 'Só para administradores: usuários, equipes, módulos e histórico.'],
+    ['<b>Painel de tickets</b>', 'Indicadores do atendimento.'],
+    ['<b>Carteira → Carteira de condomínios</b>', 'Os condomínios atendidos e quem cuida de cada um.'],
+    ['<b>Ferramentas por setor</b>', 'As ferramentas liberadas para você, agrupadas por setor.'],
+    ['<b>Gestão do setor</b>', 'Só para coordenadores e supervisores: usuários, ferramentas e equipe do setor.'],
+    ['<b>Administração</b>', 'Só para administradores.'],
   ])}
   <h2>Usando uma ferramenta</h2>
   <ul>
     <li>Clique na ferramenta para abrir. Ela continua aberta em segundo plano quando você vai para outra tela (um ponto azul aparece no menu).</li>
     <li>Na barra de cima: <b>⟳ Recarregar</b>, <b>Abrir em nova aba</b> e <b>✕ Fechar</b> (libera memória).</li>
     <li>Quando a ferramenta salva dados no servidor, aparece <span class="etq verde">✓ salvo no servidor</span>. Se aparecer <span class="etq vermelha">⚠ falha ao salvar</span>, o portal tenta de novo sozinho: não feche a aba até sumir.</li>
-    <li>O botão de painel no alto à esquerda recolhe o menu para ganhar espaço.</li>
+    <li>Ferramentas compartilhadas (como o Controle de Emissão de Boletos) mostram o que os colegas fazem em poucos segundos, sem recarregar.</li>
   </ul>`) +
 
+  cap('Perfis e acessos', PERFIS) +
+
   cap('Central de Tickets: como funciona', `
-  <p class="intro">A Central de Tickets organiza as demandas entre os setores: <b>quem precisa pede</b>, o setor <b>recebe na fila</b>, o <b>líder distribui</b>, o <b>responsável trata</b> e <b>quem pediu é avisado</b>.</p>
+  <p class="intro">A Central de Tickets organiza as demandas entre os setores: <b>quem precisa pede</b>, o ticket vai <b>para o responsável</b> (ou para a fila do setor), quem atende <b>inicia o atendimento com um prazo</b>, trata e <b>quem pediu é avisado</b>.</p>
   ${tabela(['Etapa', 'Quem faz', 'O que acontece'], [
-    ['1. Abrir', 'Qualquer pessoa', 'Escolhe o setor e o tipo de demanda, descreve e anexa arquivos.'],
-    ['2. Fila', 'Sistema', 'O ticket entra como <i>Novo</i> na fila do setor. Os líderes são avisados.'],
-    ['3. Distribuir', 'Líder (ou alguém do setor assume)', 'Define o responsável. A pessoa é avisada.'],
-    ['4. Tratar', 'Responsável', 'Atualiza a situação, conversa, registra notas internas, transfere se não for do setor.'],
-    ['5. Resolver', 'Responsável', 'Marca como resolvido e diz o que foi feito. Quem abriu é avisado e pode reabrir.'],
+    ['1. Abrir', 'Qualquer pessoa', 'Escolhe o setor, o tipo, se é de um condomínio ou interna, descreve e anexa arquivos.'],
+    ['2. Para quem vai', 'Sistema', 'De condomínio, em Cobrança ou Crédito: direto para a pessoa da carteira. Interna ou outros setores: fila do setor, e os líderes são avisados.'],
+    ['3. Distribuir', 'Líder (ou coordenador/supervisor do setor)', 'Define ou troca o responsável. A pessoa é avisada.'],
+    ['4. Iniciar', 'Responsável', 'Clica em <b>Iniciar atendimento</b> e informa o prazo para conclusão.'],
+    ['5. Tratar', 'Responsável', 'Atualiza a situação, conversa, registra notas internas, transfere se não for do setor.'],
+    ['6. Resolver', 'Responsável', 'Marca como resolvido e diz o que foi feito. Quem abriu é avisado e pode reabrir.'],
   ])}
   ${CONCEITOS}`) +
 
   cap('Pedir algo para outro setor', ABRIR) +
   cap('Acompanhar seus pedidos', ACOMPANHAR) +
-  cap('Atender os tickets do seu setor', `<p class="intro">Se você faz parte da equipe de um setor, recebe e trata os tickets que chegam para ele. A administração define quem é de cada setor.</p>${ATENDER}`) +
+  cap('Atender os tickets do seu setor', `<p class="intro">Se você é de um setor (pelo seu cadastro), recebe e trata os tickets que chegam para ele.</p>${ATENDER}`) +
   cap('Líder do setor', LIDER) +
-  cap('Supervisão e Gerência', `
-  <p class="intro">Pessoas com o perfil <b>Supervisão / Coordenação</b> acompanham e direcionam os tickets de <b>todos os setores</b>, sem precisar ser administradoras do portal.</p>
+  cap('Supervisão da Central de Tickets', `
+  <p class="intro">Quem tem a marcação <b>Supervisão da Central de Tickets</b> no cadastro (ex.: Gerência) acompanha e direciona os tickets de <b>todos os setores</b>.</p>
   <ul>
-    <li>Veem a aba <b>Todos</b> em Tickets, com os tickets de todos os setores.</li>
-    <li>Trocam o <b>responsável</b> de qualquer ticket (escolhendo alguém da equipe do setor), <b>transferem</b> entre setores e mudam <b>situação, prioridade e prazo</b>.</li>
-    <li>Veem o <b>Painel</b> com todos os setores e podem filtrar por setor.</li>
-    <li>Não acessam a administração (usuários, módulos, backup).</li>
+    <li>Vê a aba <b>Todos</b> em Tickets, com os tickets de todos os setores.</li>
+    <li>Troca o <b>responsável</b> de qualquer ticket, <b>transfere</b> entre setores e muda <b>situação, prioridade e prazo</b>.</li>
+    <li>Vê o <b>Painel</b> com todos os setores e pode filtrar por setor.</li>
+    <li>A marcação não dá acesso à administração nem à gestão dos setores.</li>
   </ul>
-  ${fig('13b-todos', 'Aba “Todos”: visão geral de todos os setores para Supervisão e Gerência.')}
+  ${fig('13b-todos', 'Aba “Todos”: visão de todos os setores.')}
   ${dica('Use o filtro <b>só atrasados</b> na aba Todos para achar rapidamente o que precisa de intervenção.')}
-  <p>O perfil é marcado pela administração no cadastro da pessoa (<i>Usuários e acessos</i>).</p>`) +
+  <p>O <b>perfil</b> Supervisor é outra coisa: ele gerencia os setores do cadastro dele (veja <i>Gestão do setor</i>).</p>`) +
   cap('Avisos: sino, som e e-mail', AVISOS) +
   cap('Painel de indicadores', PAINEL) +
+  cap('Carteira de condomínios', CARTEIRA) +
+  cap('Central de Links', LINKS) +
+  cap('Gestão do setor: coordenador e supervisor', GESTAO) +
   cap('Administração', `
-  <p class="intro">Este capítulo é para os <b>administradores</b> do portal.</p>
+  <p class="intro">Este capítulo é para os <b>administradores</b> do portal, que fazem tudo, em todos os setores.</p>
   <h2>Usuários e acessos</h2>
   ${passos([
     'Em <b>Administração → Usuários e acessos</b>, clique em <b>Novo usuário</b>.',
-    'Preencha nome e e-mail e escolha o perfil: <b>Usuário</b> (só as ferramentas marcadas) ou <b>Administrador</b> (tudo).',
-    'Marque <b>Supervisão / Coordenação da Central de Tickets</b> para quem deve ver e direcionar todos os setores.',
-    'Marque as <b>ferramentas liberadas</b>. Dá para marcar um setor inteiro de uma vez.',
+    'Preencha nome e e-mail e escolha o <b>perfil</b>: Usuário, Coordenador, Supervisor ou Administrador.',
+    'Marque o <b>setor</b> (ou setores). Para coordenador e supervisor, ele é obrigatório: é o que eles vão gerenciar.',
+    'Se for o caso, marque <b>Supervisão da Central de Tickets</b> (todos os setores) ou <b>Marketing — Central de Links</b>.',
+    'Marque as <b>ferramentas liberadas</b>. Coordenador e supervisor já abrem todas as do setor deles; marque só as de outros setores.',
     'Clique em <b>Criar usuário</b> e envie à pessoa os dados mostrados (a senha temporária não aparece de novo).',
   ])}
-  ${fig('15b-usuario', 'Cadastro de usuário: perfil, Supervisão e ferramentas liberadas.')}
+  ${fig('15-usuarios', 'Usuários e acessos: perfil e setor de cada pessoa.')}
   <p>Para <b>bloquear</b> alguém, desmarque <i>Usuário ativo</i>: as sessões abertas são encerradas na hora. <b>Redefinir senha</b> gera uma nova senha temporária.</p>
   <h2>Equipes e tipos de demanda</h2>
-  <p>Em <b>Administração → Equipes e tipos de demanda</b>, cada setor tem um cartão. Clique para configurar:</p>
-  <ul>
-    <li><b>Equipe:</b> marque quem atende os tickets do setor e quem é <b>líder</b>.</li>
-    <li><b>Tipos de demanda:</b> nome, prazo em <b>horas úteis</b> (9 h = 1 dia útil) e prioridade sugerida. Tipos já usados não podem ser apagados, só desativados.</li>
-  </ul>
+  <p>Em <b>Administração → Equipes e tipos de demanda</b>, cada setor tem um cartão. A equipe vem do setor no cadastro de cada pessoa (dá para ajustar aqui também). Marque os <b>líderes</b> e cadastre os <b>tipos de demanda</b>, com prazo em horas úteis e prioridade sugerida. Tipos já usados não podem ser apagados, só desativados.</p>
   ${fig('14b-equipe-setor', 'Configurando o setor: equipe, líder e tipos de demanda com prazo.')}
-  ${atencao('Setor <b>sem equipe</b>: os tickets dele só aparecem para a administração e a supervisão. Setor <b>sem líder</b>: toda a equipe recebe os avisos de tickets novos.')}
-  <h2>Outras telas</h2>
-  ${tabela(['Tela', 'Para que serve'], [
-    ['<b>Módulos e dados</b>', 'Publicar e atualizar os HTMLs das ferramentas, versões anteriores, onde ficam os dados, setores, backup.'],
-    ['<b>Histórico de atividades</b>', 'Quem entrou, abriu ferramentas, alterou dados, abriu ou transferiu tickets.'],
-    ['<b>Backup do banco</b>', 'Baixa um arquivo com todas as tabelas (inclusive tickets e anexos).'],
-  ])}`) +
+  ${atencao('Setor <b>sem ninguém</b>: os tickets dele só aparecem para a administração e a supervisão. Setor <b>sem líder</b> marcado: toda a equipe recebe os avisos de tickets novos.')}
+  <h2>Módulos e dados</h2>
+  <ul>
+    <li>Cada ferramenta é um <b>módulo</b> (um arquivo HTML) com nome, setor, ícone e situação. Envie novas versões e volte versões anteriores.</li>
+    <li>Escolha <b>onde ficam os dados</b> e, nas ferramentas que usavam planilha Google, importe os dados e passe a usar o banco do portal.</li>
+    <li>Nas ferramentas que vieram do Claude (Boletos, Síndicos), use <b>Importar dados (JSON)</b> e <b>Baixar tudo (JSON)</b>.</li>
+    <li>Em <b>Setores</b>, crie, renomeie ou remova setores. Em <b>Backup do banco</b>, baixe um arquivo com todas as tabelas.</li>
+  </ul>
+  ${fig('22-modulos', 'Módulos e dados.')}
+  <h2>Histórico de atividades</h2>
+  <p>Quem entrou, abriu ferramentas, alterou dados, cadastrou usuários, abriu ou transferiu tickets e mexeu na carteira.</p>`) +
+
   cap('Quem pode o quê', `
-  ${tabela(['Ação', 'Qualquer pessoa', 'Equipe do setor', 'Líder', 'Supervisão', 'Admin'], [
+  <h2>Portal</h2>
+  ${tabela(['Ação', 'Usuário', 'Coordenador', 'Supervisor', 'Admin'], [
+    ['Abrir as ferramentas', 'liberadas', 'do setor + liberadas', 'do setor + liberadas', 'todas'],
+    ['Criar e editar usuários comuns', '—', 'do setor', 'do setor', 'todos'],
+    ['Criar coordenadores, supervisores e admins', '—', '—', '—', 'sim'],
+    ['Enviar HTML, voltar versão, quem pode abrir', '—', 'do setor', 'do setor', 'todos'],
+    ['Líderes e tipos de demanda', '—', 'do setor', 'do setor', 'todos'],
+    ['Carteira: consultar e exportar', 'sim', 'sim', 'sim', 'sim'],
+    ['Carteira: responsável do setor', '—', 'do setor', 'do setor', 'tudo'],
+    ['Módulos e dados, setores, backup, histórico', '—', '—', '—', 'sim'],
+    ['Central de Links: editar', 'com a marcação', 'com a marcação', 'com a marcação', 'sim'],
+  ].map((l) => l.map((c, i) => (i === 0 ? c : c === 'sim' ? '<span class="sim">✓</span>' : c === '—' ? '<span class="nao">—</span>' : c))))}
+  <h2>Central de Tickets</h2>
+  ${tabela(['Ação', 'Qualquer pessoa', 'Equipe do setor', 'Líder / coord. / superv.', 'Supervisão de tickets', 'Admin'], [
     ['Abrir ticket para qualquer setor', 'sim', 'sim', 'sim', 'sim', 'sim'],
     ['Ver, comentar e anexar nos seus tickets', 'sim', 'sim', 'sim', 'sim', 'sim'],
     ['Cancelar / reabrir o próprio pedido', 'sim', 'sim', 'sim', 'sim', 'sim'],
     ['Ver a fila do setor', '—', 'sim', 'sim', 'todos', 'todos'],
-    ['Assumir ticket / devolver à fila', '—', 'sim', 'sim', 'sim', 'sim'],
-    ['Mudar situação, prioridade e prazo', '—', 'sim', 'sim', 'sim', 'sim'],
-    ['Nota interna', '—', 'sim', 'sim', 'sim', 'sim'],
-    ['Transferir para outro setor', '—', 'sim', 'sim', 'sim', 'sim'],
-    ['Atribuir a outra pessoa', '—', '—', 'sim', 'sim', 'sim'],
+    ['Iniciar atendimento, mudar situação, resolver', '—', 'sim', 'sim', 'sim', 'sim'],
+    ['Nota interna e transferir', '—', 'sim', 'sim', 'sim', 'sim'],
+    ['Escolher responsável, prioridade e prazo para resposta', '—', '—', 'sim', 'sim', 'sim'],
     ['Painel de tickets', '—', 'seus setores', 'seus setores', 'todos', 'todos'],
-    ['Equipes, tipos de demanda, usuários', '—', '—', '—', '—', 'sim'],
-  ].map((l) => l.map((c, i) => (i === 0 ? c : c === 'sim' ? '<span class="sim">✓</span>' : c === '—' ? '<span class="nao">—</span>' : c))))}
-  <p style="font-size:9pt;color:var(--muted)">“Equipe do setor”, “Líder” e “Supervisão” valem só na Central de Tickets. O acesso às ferramentas de cada setor é liberado à parte, no cadastro da pessoa.</p>`) +
+  ].map((l) => l.map((c, i) => (i === 0 ? c : c === 'sim' ? '<span class="sim">✓</span>' : c === '—' ? '<span class="nao">—</span>' : c))))}`) +
   cap('Perguntas frequentes', `
   ${[
     ['Abri o ticket no setor errado. E agora?', 'Escreva um comentário pedindo a transferência. A equipe do setor transfere para o certo, ou cancele e abra de novo.'],
     ['O prazo venceu e o ticket não foi resolvido.', 'Ele aparece como <span class="etq vermelha">⚠ atrasado</span> para o setor e no painel. Comente no ticket para cobrar retorno.'],
     ['Por que o prazo do meu ticket vence só na segunda?', 'O prazo conta só o expediente (seg–sex, 8h–17h). Pedidos abertos no fim da sexta continuam a contar na segunda.'],
+    ['Meu ticket de condomínio foi para o líder, e não para a pessoa da carteira.', 'A pessoa da carteira ainda não está no setor no portal (ou o condomínio está sem responsável). Peça ao coordenador para conferir o cadastro e a carteira.'],
     ['Não estou ouvindo o som dos avisos.', 'O portal precisa estar aberto em alguma aba, e você precisa ter clicado pelo menos uma vez na página. Confira <b>tocar som</b> no sino e o volume do computador.'],
     ['Quem abriu o ticket vê as notas internas?', 'Não. Notas e anexos marcados como internos só aparecem para a equipe do setor, a supervisão e a administração.'],
     ['Posso apagar um ticket?', 'Não. Tickets ficam no histórico. Use <b>Cancelar</b> com o motivo.'],
-    ['Não aparece a Fila do setor para mim.', 'Você ainda não foi incluído na equipe de nenhum setor. Peça à administração.'],
-    ['Uma ferramenta não aparece no meu menu.', 'Ela não foi liberada no seu cadastro. Peça à administração.'],
+    ['Não aparece a Fila do setor para mim.', 'Seu cadastro ainda não tem setor. Peça ao coordenador do setor ou à administração.'],
+    ['Uma ferramenta não aparece no meu menu.', 'Ela não foi liberada para você. Peça ao coordenador do setor da ferramenta ou à administração.'],
+    ['A ferramenta mudou, mas eu ainda vejo a versão antiga.', 'Use <b>⟳ Recarregar</b> na barra de cima. Se a tela do portal parecer antiga, aperte <b>Ctrl + Shift + R</b>.'],
     ['Que tamanho de arquivo posso anexar?', 'Até 10 MB por arquivo. Imagens abrem no navegador; os demais arquivos são baixados.'],
   ].map(([q, r]) => `<h3>${q}</h3><p>${r}</p>`).join('')}`);
 
@@ -418,7 +527,9 @@ function manualSetor(s) {
   <ul>
     ${ferr.map((f) => `<li><b>${f.nome}</b>: ${f.descricao}</li>`).join('')}
     <li><b>Central de Tickets</b>: recebe as demandas que os outros setores pedem para o ${esc(s.nome)}, e é por ela que o ${esc(s.nome)} pede o que precisa dos outros setores.</li>
-    ${s.supervisao ? '<li><b>Perfil Supervisão / Coordenação</b>: visão e direcionamento dos tickets de <b>todos</b> os setores (veja o capítulo próprio).</li>' : ''}
+    ${s.carteira ? `<li><b>Carteira de condomínios</b>: o ${esc(s.nome)} é o responsável pela coluna <b>${s.carteira}</b>. Os tickets de condomínio para o ${esc(s.nome)} vão direto para essa pessoa.</li>` : ''}
+    <li><b>Gestão do setor</b>: o coordenador e o supervisor do ${esc(s.nome)} cuidam dos usuários, das ferramentas, da equipe e dos tipos de demanda do setor.</li>
+    ${s.supervisao ? '<li><b>Supervisão da Central de Tickets</b>: visão e direcionamento dos tickets de <b>todos</b> os setores (veja o capítulo próprio).</li>' : ''}
   </ul>
   ${fig('02-inicio', 'Tela inicial: atalho da Central de Tickets e as ferramentas liberadas para você.')}
   ${dica('O passo a passo de acesso, senha e menu está no <b>Manual Geral do Portal MyBlue</b>.')}`) +
@@ -429,7 +540,8 @@ function manualSetor(s) {
   <ul>
     <li><b>Como abrir:</b> no menu, em <b>${esc(s.nome)}</b>, ou no cartão da tela inicial. <b>Nova aba</b> abre em tela cheia.</li>
     <li><b>Os dados:</b> ${f.dados}</li>
-    <li><b>Acesso:</b> só quem tem a ferramenta liberada no cadastro (peça à administração).</li>
+    <li><b>Acesso:</b> quem tem a ferramenta liberada no cadastro, mais o coordenador e o supervisor do setor. Peça ao coordenador do setor ou à administração.</li>
+    <li><b>Atualizações:</b> quando a ferramenta mudar, o coordenador ou supervisor envia o HTML novo em <b>Gestão do setor → Ferramentas do setor</b>.</li>
   </ul>
   ${f.obs ? dica(f.obs) : ''}`).join('') + `
   <h3>Cuidados</h3>
@@ -442,9 +554,10 @@ function manualSetor(s) {
   cap('Como o setor recebe as demandas', `
   <p class="intro">Tudo o que outros setores pedem ao ${esc(s.nome)} chega pela <b>Central de Tickets</b>, na <b>Fila do setor</b>.</p>
   ${tabela(['Etapa', 'O que acontece'], [
-    ['Chegou', `O ticket entra como ${etq('Novo', 'azul')}, sem responsável. Os líderes do ${esc(s.nome)} recebem o aviso (sino e som).`],
-    ['Distribuído', 'O líder escolhe o responsável, ou alguém da equipe clica em <b>Assumir para mim</b>.'],
-    ['Em tratamento', `O responsável muda para ${etq('Em andamento', 'ambar')} ou ${etq('Aguardando', 'cinza')}, conversa e registra notas internas.`],
+    ['Chegou', `O ticket entra como ${etq('Novo', 'azul')}. ${s.carteira ? `Se for de um condomínio, vai direto para o ${s.carteira} da carteira; se for interno, fica` : 'Fica'} sem responsável, e os líderes do ${esc(s.nome)} recebem o aviso (sino e som).`],
+    ['Distribuído', 'O líder (ou o coordenador/supervisor do setor) escolhe o responsável.'],
+    ['Iniciado', `O responsável clica em <b>Iniciar atendimento</b> e informa o prazo para conclusão: o ticket passa para ${etq('Em andamento', 'ambar')}.`],
+    ['Em tratamento', `O responsável conversa, registra notas internas e usa ${etq('Aguardando', 'cinza')} quando depende de alguém de fora.`],
     ['Resolvido', `${etq('Resolvido', 'verde')} com o que foi feito. Quem pediu é avisado.`],
   ])}
   <p>O prazo de cada ticket conta só o expediente (<b>seg–sex, 8h–17h</b>). Ticket com prazo vencido aparece como ${etq('⚠ atrasado', 'vermelha')}.</p>
@@ -455,7 +568,7 @@ function manualSetor(s) {
     <div class="cartao-rapido"><h3>Equipe do ${esc(s.nome)}</h3><ul>
       <li>Manter <b>uma aba do portal aberta</b> no expediente, com alertas ativados no sino.</li>
       <li>Começar o dia pela <b>Minha fila</b>, do prazo mais curto para o mais longo.</li>
-      <li>Olhar a <b>Fila do setor</b> e assumir o que estiver sem responsável, se o líder liberar.</li>
+      <li>Ao receber um ticket, clicar em <b>Iniciar atendimento</b> e dar um prazo para conclusão realista.</li>
       <li>Atualizar a situação sempre que mudar algo e <b>responder no ticket</b>, não por fora.</li>
       <li>Resolver dizendo <b>o que foi feito</b>.</li>
     </ul></div>
@@ -464,19 +577,33 @@ function manualSetor(s) {
       <li>Duas vezes ao dia: filtrar <b>só atrasados</b> e agir.</li>
       <li>Equilibrar a fila entre as pessoas (Painel → Por responsável).</li>
       <li>Toda semana: conferir % no prazo e os <b>tipos mais pedidos</b> no Painel.</li>
-      <li>Pedir à administração para ajustar os tipos de demanda quando o prazo não fizer sentido.</li>
+      <li>Ajustar os tipos de demanda quando o prazo não fizer sentido (coordenador ou supervisor, em <b>Gestão do setor</b>).</li>
     </ul></div>
   </div>
   <h2>Distribuindo (líder)</h2>
   ${LIDER}`) +
 
   cap('Tipos de demanda que o setor atende', `
-  <p class="intro">Os tipos de demanda organizam a fila e já definem o prazo. Abaixo, uma <b>sugestão</b> para o ${esc(s.nome)}. A administração cadastra e ajusta em <i>Administração → Equipes e tipos de demanda</i>.</p>
+  <p class="intro">Os tipos de demanda organizam a fila e já definem o prazo para resposta. Abaixo, uma <b>sugestão</b> para o ${esc(s.nome)}. O coordenador ou supervisor do setor cadastra e ajusta em <i>Gestão do setor → Equipe e tipos de demanda</i> (a administração também).</p>
   ${tabela(['Tipo de demanda', 'Prazo sugerido', 'Prioridade', 'O que quem pede deve informar'], tipos.map(([nome, h, p, info]) => [
     `<b>${nome}</b>`, prazo(h), etq(PRIO[p], { urgente: 'vermelha', alta: 'ambar', media: 'azul', baixa: 'cinza' }[p]), info,
   ]))}
   ${atencao('Estes tipos e prazos são uma proposta inicial para o setor validar. Depois de cadastrados, quem abrir um ticket para o ' + esc(s.nome) + ' escolhe o tipo e o prazo é calculado sozinho.')}
-  ${fig('14b-equipe-setor', 'Exemplo de cadastro da equipe e dos tipos de demanda (setor Cobrança).')}`) +
+  ${fig('23-coord-equipe', 'Exemplo: equipe e tipos de demanda do setor, na tela do coordenador.')}`) +
+
+  cap('Gestão do setor: coordenador e supervisor', `
+  <p class="intro">Quem tem o perfil <b>Coordenador</b> ou <b>Supervisor</b> com o setor ${esc(s.nome)} no cadastro cuida do setor no portal. Os dois têm os mesmos poderes.</p>
+  ${tabela(['No menu Gestão do setor', 'O que faz'], [
+    ['<b>Usuários do setor</b>', 'Cria, edita, desativa e redefine a senha das pessoas do setor, liberando as ferramentas do setor.'],
+    ['<b>Ferramentas do setor</b>', 'Envia a versão nova do HTML, volta uma versão anterior e escolhe quem do setor abre cada ferramenta.'],
+    ['<b>Equipe e tipos de demanda</b>', 'Marca os líderes e cadastra os tipos de demanda com prazo.'],
+  ])}
+  <ul>
+    <li>Nos tickets do ${esc(s.nome)}, coordenador e supervisor têm os poderes do líder.</li>
+    ${s.carteira ? `<li>Na Carteira de condomínios, alteram e transferem o <b>${s.carteira}</b> de cada condomínio.</li>` : ''}
+    <li>Coordenadores, supervisores e administradores são cadastrados pela administração.</li>
+  </ul>
+  ${dica('O passo a passo completo está no <b>Manual Geral</b>, capítulo <i>Gestão do setor</i>.')}`) +
 
   cap('Quando o setor precisa de outro setor', `
   <p>Quando o ${esc(s.nome)} depende de outro setor, <b>abra um ticket</b> em vez de pedir por mensagem ou e-mail. Assim fica registrado, com prazo e responsável.</p>
@@ -484,8 +611,8 @@ function manualSetor(s) {
   ${ABRIR}
   ${ACOMPANHAR}`) +
 
-  (s.supervisao ? cap('Supervisão e visão de todos os setores', `
-  <p class="intro">Quem do ${esc(s.nome)} tiver o perfil <b>Supervisão / Coordenação</b> (marcado pela administração no cadastro) acompanha e direciona os tickets de <b>todos os setores</b>.</p>
+  (s.supervisao ? cap('Supervisão da Central de Tickets', `
+  <p class="intro">Quem do ${esc(s.nome)} tiver a marcação <b>Supervisão da Central de Tickets</b> (feita pela administração no cadastro) acompanha e direciona os tickets de <b>todos os setores</b>.</p>
   ${passos([
     'Em <b>Tickets → Todos</b>, veja os tickets de todos os setores. Use os filtros <b>só atrasados</b>, <b>sem responsável</b> e setor.',
     'Abra um ticket para trocar o <b>responsável</b> (alguém da equipe do setor do ticket), <b>transferir</b> para outro setor ou ajustar <b>prioridade e prazo</b>.',
@@ -501,15 +628,15 @@ function manualSetor(s) {
   cap('Consulta rápida', `
   <div class="grade2">
     <div class="cartao-rapido"><h3>Pedir algo a outro setor</h3><p><b>Novo ticket</b> → setor → tipo → assunto e descrição completos → anexos → <b>Abrir ticket</b>.</p></div>
-    <div class="cartao-rapido"><h3>Pegar um ticket da fila</h3><p><b>Tickets → Fila do setor</b> → abrir o ticket → <b>Assumir para mim</b>.</p></div>
+    <div class="cartao-rapido"><h3>Distribuir (líder)</h3><p><b>Tickets → Fila do setor</b> → <b>sem responsável</b> → abrir o ticket → escolher o <b>Responsável</b>.</p></div>
     <div class="cartao-rapido"><h3>Falar só com a equipe</h3><p>No ticket, marque <b>nota interna</b> antes de enviar.</p></div>
     <div class="cartao-rapido"><h3>Não é do ${esc(s.nome)}</h3><p><b>Transferir para outro setor</b> → setor → motivo.</p></div>
     <div class="cartao-rapido"><h3>Terminei</h3><p><b>Marcar como resolvido</b> → escreva o que foi feito.</p></div>
-    <div class="cartao-rapido"><h3>Não vou conseguir tratar</h3><p><b>Devolver à fila</b> para o líder redistribuir.</p></div>
+    <div class="cartao-rapido"><h3>Comecei a tratar</h3><p><b>Iniciar atendimento</b> → informe o <b>prazo para conclusão</b>.</p></div>
   </div>
-  <h2>Prazos (seg–sex, 8h–17h)</h2>
+  <h2>Prazo para resposta (seg–sex, 8h–17h)</h2>
   ${tabela(['Prioridade', 'Prazo padrão'], [[etq('Urgente', 'vermelha'), '4 h úteis'], [etq('Alta', 'ambar'), '1 dia útil'], [etq('Média', 'azul'), '3 dias úteis'], [etq('Baixa', 'cinza'), '5 dias úteis']])}
-  <p>Dúvidas sobre acesso, equipe ou tipos de demanda: fale com a administração do portal.</p>`);
+  <p>Dúvidas sobre acesso, equipe ou tipos de demanda: fale com o coordenador do setor ou com a administração do portal.</p>`);
 
   return documento(`Manual do setor ${s.nome} — Portal MyBlue`, corpo);
 }
