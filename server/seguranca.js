@@ -124,15 +124,28 @@ function criarSeguranca(db, cfg) {
     }
   }
 
+  /* Setores que a pessoa gerencia: o administrador, todos (null); coordenador e supervisor, os setores do cadastro dele;
+     os demais, nenhum. O setor de cada pessoa fica em setor_membros (é também a equipe dela na Central de Tickets). */
+  const GESTORES_DE_SETOR = ['coordenador', 'supervisor'];
+  async function setoresGeridos(usuario) {
+    if (!usuario) return new Set();
+    if (usuario.papel === 'admin') return null;
+    if (!GESTORES_DE_SETOR.includes(usuario.papel)) return new Set();
+    return new Set((await db.q('SELECT setor_id FROM setor_membros WHERE usuario_id = $1', [usuario.id])).rows.map((x) => x.setor_id));
+  }
+
+  /* ferramentas que a pessoa abre: as liberadas no cadastro e, para coordenador e supervisor, todas as dos setores dele */
   async function modulosDoUsuario(usuario) {
-    const { rows } = await db.q('SELECT modulo_slug FROM permissoes WHERE usuario_id = $1', [usuario.id]);
+    const { rows } = await db.q(`SELECT modulo_slug FROM permissoes WHERE usuario_id = $1
+      UNION SELECT m.slug FROM modulos m JOIN setor_membros sm ON sm.setor_id = m.setor_id
+        WHERE sm.usuario_id = $1 AND $2`, [usuario.id, GESTORES_DE_SETOR.includes(usuario.papel)]);
     return new Set(rows.map((r) => r.modulo_slug));
   }
 
   async function podeAcessar(usuario, slug) {
     if (!usuario) return false;
     if (usuario.papel === 'admin') return true;
-    return !!(await db.um('SELECT 1 FROM permissoes WHERE usuario_id = $1 AND modulo_slug = $2', [usuario.id, slug]));
+    return (await modulosDoUsuario(usuario)).has(slug);
   }
 
   const exigirLogin = (req, res, next) => {
@@ -183,7 +196,7 @@ function criarSeguranca(db, cfg) {
 
   return {
     auditar, iniciarSessao, encerrarSessao, identificar, exigirLogin, exigirAdmin, mesmaOrigem,
-    podeAcessar, modulosDoUsuario, bloqueado, registrarFalha, limparFalhas,
+    podeAcessar, modulosDoUsuario, setoresGeridos, GESTORES_DE_SETOR, bloqueado, registrarFalha, limparFalhas,
   };
 }
 

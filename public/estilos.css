@@ -39,6 +39,7 @@ svg{flex-shrink:0}
 
 label.rot{display:block;font-size:12px;font-weight:800;color:var(--ink-2);margin:0 0 6px;letter-spacing:.2px}
 .campo{width:100%;border:1px solid var(--border-2);background:var(--surface);border-radius:var(--r-sm);padding:10px 12px;font-size:14.5px;transition:border-color .15s,box-shadow .15s}
+.campo[readonly],select.campo:disabled{background:var(--bg);color:var(--ink-2)}
 .campo:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(25,156,177,.15)}
 textarea.campo{min-height:80px;resize:vertical}
 .campo-senha{position:relative}
