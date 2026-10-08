@@ -100,6 +100,20 @@ CREATE TABLE IF NOT EXISTS registros (
   UNIQUE (modulo_slug, colecao, item_id)
 );
 
+-- documentos das ferramentas feitas como artefato do Claude (dados NULL = apagado)
+CREATE SEQUENCE IF NOT EXISTS documentos_seq;
+CREATE TABLE IF NOT EXISTS documentos (
+  modulo_slug TEXT NOT NULL REFERENCES modulos(slug) ON DELETE CASCADE,
+  colecao TEXT NOT NULL,
+  doc_id TEXT NOT NULL,
+  dados JSONB,
+  seq BIGINT NOT NULL,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  PRIMARY KEY (modulo_slug, colecao, doc_id)
+);
+CREATE INDEX IF NOT EXISTS idx_documentos_seq ON documentos(modulo_slug, seq);
+
 CREATE TABLE IF NOT EXISTS auditoria (
   id SERIAL PRIMARY KEY,
   quando TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -255,7 +269,7 @@ CREATE INDEX IF NOT EXISTS idx_links_campanhas_inicio ON links_campanhas(inicio)
 
 /* Supabase publica o schema "public" pela API dele (PostgREST). Com RLS ligado e sem
    políticas, ninguém lê nem grava por lá; o portal conecta como dono das tabelas e não é afetado. */
-const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 'permissoes', 'armazenamento', 'colecoes', 'registros', 'auditoria',
+const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 'permissoes', 'armazenamento', 'colecoes', 'registros', 'documentos', 'auditoria',
   'setor_membros', 'ticket_categorias', 'tickets', 'ticket_eventos', 'ticket_anexos', 'notificacoes', 'condominios',
   'links_pagina', 'links', 'links_campanhas'];
 const RLS = TABELAS.map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`).join(';\n');
@@ -277,7 +291,7 @@ ALTER TABLE condominios ADD COLUMN IF NOT EXISTS observacoes TEXT NOT NULL DEFAU
 ALTER TABLE condominios ADD COLUMN IF NOT EXISTS criado_em TIMESTAMPTZ NOT NULL DEFAULT now();
 ALTER TABLE condominios ADD COLUMN IF NOT EXISTS atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL;
 ALTER TABLE modulos DROP CONSTRAINT IF EXISTS modulos_adaptador_check;
-ALTER TABLE modulos ADD CONSTRAINT modulos_adaptador_check CHECK (adaptador IS NULL OR adaptador IN ('gas-linhas','gas-objetos','gas-posicional'));
+ALTER TABLE modulos ADD CONSTRAINT modulos_adaptador_check CHECK (adaptador IS NULL OR adaptador IN ('gas-linhas','gas-objetos','gas-posicional','claude-db'));
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto BYTEA;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto_tipo TEXT;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto_em TIMESTAMPTZ
@@ -291,6 +305,7 @@ async function abrir(cfg) {
     for (const cmd of (SCHEMA + ';' + RLS + ';' + AJUSTES).split(';').map((s) => s.trim()).filter(Boolean)) await t.q(cmd);
     await semear(t);
     await semearSetores(t);
+    await semearNovosModulos(t);
     await sincronizarCatalogo(t);
     await migrarCarteira(t);
   });
@@ -310,6 +325,24 @@ async function semear(t) {
     ]);
   }
   await t.q("INSERT INTO auditoria (acao, detalhe) VALUES ('catalogo_semeado', $1::jsonb)", [JSON.stringify({ modulos: MODULOS.map((m) => m.slug) })]);
+}
+
+/* Módulos que entraram no catálogo depois da instalação: cria cada um uma única vez
+   (se o admin apagar depois, não volta). */
+async function semearNovosModulos(t) {
+  const sem = await t.um("SELECT detalhe FROM auditoria WHERE acao = 'catalogo_semeado' ORDER BY id LIMIT 1");
+  const iniciais = new Set((sem && sem.detalhe && sem.detalhe.modulos) || []);
+  for (const m of MODULOS) {
+    if (iniciais.has(m.slug)) continue;
+    if (await t.um("SELECT 1 FROM auditoria WHERE acao = 'modulo_semeado' AND modulo_slug = $1 LIMIT 1", [m.slug])) continue;
+    const setor = await t.um('SELECT id FROM setores WHERE nome = $1', [m.setor]);
+    await t.q(`INSERT INTO modulos (slug, nome, descricao, setor_id, icone, ordem, armazenamento, adaptador, fonte_dados, config)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb) ON CONFLICT (slug) DO NOTHING`, [
+      m.slug, m.nome, m.descricao || '', setor ? setor.id : null, m.icone || 'app', m.ordem || 0,
+      m.armazenamento || 'navegador', m.adaptador || null, m.fonte_dados || 'google', JSON.stringify(m.config || {}),
+    ]);
+    await t.q("INSERT INTO auditoria (acao, modulo_slug) VALUES ('modulo_semeado', $1)", [m.slug]);
+  }
 }
 
 /* Lista oficial de setores (Central de Tickets), aplicada uma única vez em bancos já instalados:

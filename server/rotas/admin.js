@@ -7,7 +7,8 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ICONES = ['app', 'calculadora', 'grafico', 'aperto', 'caixa', 'carteira', 'documento', 'pessoas', 'ticket', 'casa', 'calendario', 'escudo'];
 const ehDuplicado = (e) => e && (e.code === '23505' || /duplicate key|unique/i.test(String(e.message)));
 
-function rotasAdmin({ db, seg, modulos, registros, cfg }) {
+function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
+  const ehDocs = (m) => m && m.adaptador === 'claude-db';
   const r = express.Router();
   const json = express.json({ limit: '2mb' });
   r.use('/api/admin', seg.exigirLogin, seg.exigirAdmin);
@@ -148,10 +149,10 @@ function rotasAdmin({ db, seg, modulos, registros, cfg }) {
       lista.push({
         ...m,
         usuarios: (await db.q('SELECT usuario_id FROM permissoes WHERE modulo_slug = $1', [m.slug])).rows.map((x) => x.usuario_id),
-        dados_registros: m.adaptador ? await registros.resumo(m.slug) : [],
+        dados_registros: ehDocs(m) ? await documentos.resumo(m.slug) : m.adaptador ? await registros.resumo(m.slug) : [],
         dados_armazenamento: (await db.q(`SELECT escopo, COUNT(*)::int AS chaves, SUM(LENGTH(valor))::int AS bytes, MAX(atualizado_em) AS ultima
           FROM armazenamento WHERE modulo_slug = $1 GROUP BY escopo`, [m.slug])).rows,
-        google_url_detectada: m.adaptador ? await urlPlanilhaDoHtml(m) : null,
+        google_url_detectada: m.adaptador && !ehDocs(m) ? await urlPlanilhaDoHtml(m) : null,
       });
     }
     res.json({ modulos: lista, icones: ICONES });
@@ -260,7 +261,7 @@ function rotasAdmin({ db, seg, modulos, registros, cfg }) {
   /* ===================== dados dos módulos ===================== */
   async function colecoesDoModulo(m) {
     const nomes = new Set(Object.keys(m.config.colecoes || {}));
-    for (const x of await registros.resumo(m.slug)) nomes.add(x.colecao);
+    for (const x of await (ehDocs(m) ? documentos : registros).resumo(m.slug)) nomes.add(x.colecao);
     return [...nomes];
   }
   const cabecalhoDe = async (m, c) => (await modulos.cabecalhoDoHtml(m, (m.config.colecoes || {})[c])) || (await registros.cabecalho(m.slug, c)) || m.config.cabecalho_padrao || null;
@@ -270,7 +271,9 @@ function rotasAdmin({ db, seg, modulos, registros, cfg }) {
     if (!m) return erro(res, 404, 'Módulo não encontrado.');
     const armazenamento = (await db.q('SELECT escopo, chave, valor, atualizado_em FROM armazenamento WHERE modulo_slug = $1 ORDER BY escopo, chave', [m.slug])).rows;
     const saida = { modulo: m.slug, nome: m.nome, exportado_em: new Date().toISOString(), colecoes: {}, armazenamento };
-    for (const c of await colecoesDoModulo(m)) saida.colecoes[c] = { cabecalho: await cabecalhoDe(m, c), registros: await registros.listar(m.slug, c) };
+    for (const c of await colecoesDoModulo(m)) {
+      saida.colecoes[c] = ehDocs(m) ? { documentos: await documentos.listar(m.slug, c) } : { cabecalho: await cabecalhoDe(m, c), registros: await registros.listar(m.slug, c) };
+    }
     await seg.auditar(req, 'dados_exportados', m.slug, null);
     res.set('Content-Disposition', `attachment; filename="myblue-${m.slug}-${new Date().toISOString().slice(0, 10)}.json"`);
     res.json(saida);
@@ -280,9 +283,9 @@ function rotasAdmin({ db, seg, modulos, registros, cfg }) {
     const m = await modulos.obter(req.params.slug);
     if (!m || !m.adaptador) return erro(res, 404, 'Módulo sem planilha interna.');
     const c = req.params.colecao;
-    const linhas = await registros.listar(m.slug, c);
+    const linhas = ehDocs(m) ? await documentos.listar(m.slug, c) : await registros.listar(m.slug, c);
     let cab, matriz;
-    if (m.adaptador !== 'gas-objetos') {
+    if (m.adaptador !== 'gas-objetos' && !ehDocs(m)) {
       cab = (await cabecalhoDe(m, c)) || [];
       matriz = linhas;
     } else {
@@ -300,7 +303,7 @@ function rotasAdmin({ db, seg, modulos, registros, cfg }) {
   /* importa os dados lidos da planilha Google (o navegador do admin lê a planilha e envia para cá) */
   r.post('/api/admin/modulos/:slug/importar', express.json({ limit: `${cfg.limiteDadosMb}mb` }), async (req, res) => {
     const m = await modulos.obter(req.params.slug);
-    if (!m || !m.adaptador) return erro(res, 404, 'Módulo sem planilha interna.');
+    if (!m || !m.adaptador || ehDocs(m)) return erro(res, 404, 'Módulo sem planilha interna.');
     const colecao = String((req.body && req.body.colecao) || '');
     if (!/^[A-Za-z0-9_-]{1,40}$/.test(colecao)) return erro(res, 400, 'Coleção inválida.');
     const dados = req.body.dados;
@@ -352,7 +355,7 @@ function rotasAdmin({ db, seg, modulos, registros, cfg }) {
 
   /* ===================== backup (JSON com todas as tabelas) ===================== */
   r.get('/api/admin/backup', async (req, res) => {
-    const tabelas = ['setores', 'usuarios', 'modulos', 'permissoes', 'modulo_versoes', 'armazenamento', 'colecoes', 'registros', 'auditoria',
+    const tabelas = ['setores', 'usuarios', 'modulos', 'permissoes', 'modulo_versoes', 'armazenamento', 'colecoes', 'registros', 'documentos', 'auditoria',
       'setor_membros', 'ticket_categorias', 'tickets', 'ticket_eventos', 'ticket_anexos', 'notificacoes',
       'condominios', 'links_pagina', 'links', 'links_campanhas'];
     const saida = { sistema: 'portal-myblue', versao_backup: 4, gerado_em: new Date().toISOString(), tabelas: {} };

@@ -106,6 +106,14 @@ Para voltar atrás, marque **Planilha Google (como hoje)**. O que foi lançado n
 
 A versão publicada no portal é a do arquivo **sem** a senha própria (StatiCrypt): o acesso é controlado só pelo login e pelas permissões do portal. A planilha dessa ferramenta não tem coluna de ID (o nº do pedido se repete nas parcelas) e as alterações apontam a linha pela posição; na planilha interna, o portal confere o nº do pedido e o vencimento antes de alterar, para nunca mexer na linha errada. Excluir um pedido nessa ferramenta só remove da tela, como já acontecia com a planilha Google.
 
+### Ferramentas feitas como artefato do Claude (Boletos e Síndicos)
+
+O **Controle de Emissão de Boletos** (Crédito) e o **Controle de Síndicos** (CS) foram criados como artefatos publicados no claude.ai e gravam no banco do artefato (`window.claude.use('db')`). No portal eles rodam sem nenhuma alteração no HTML: o portal entrega o mesmo `window.claude` (banco de documentos, `user` e `downloads`), com os documentos guardados na tabela `documentos` do Supabase.
+
+- **Tempo real:** cada tela aberta busca o que mudou a cada 3 segundos (30 s com a aba em segundo plano). O que uma pessoa grava aparece para as outras sem recarregar.
+- **Quem fez:** o portal identifica cada pessoa como `mb-<id do usuário>`. Registros antigos, feitos ainda no Claude, guardam o id do Claude (`u_…`). Para mostrar o nome dessas pessoas, coloque no `config` do módulo `"pessoas_legadas": {"u_…": "Nome"}`.
+- **Dados:** em *Módulos e dados* aparecem as coleções com a contagem de documentos, o CSV de cada uma e o JSON completo.
+
 ## Carteira de condomínios
 
 Menu **Carteira → Carteira de condomínios**. Reúne os condomínios atendidos e quem cuida de cada um:

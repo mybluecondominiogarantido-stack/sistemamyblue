@@ -597,7 +597,8 @@
       '<div class="tabela-wrap"><table><thead><tr><th>Módulo</th><th>Setor</th><th>Arquivo</th><th>Onde ficam os dados</th><th>Situação</th></tr></thead><tbody>' +
       mods.map(function (m) {
         var dados = ROTULO_ARM[m.armazenamento][0];
-        if (m.adaptador) dados = (m.fonte_dados === 'interno' ? '<span class="etiqueta verde">' + IC.banco + ' planilha no banco do portal</span>' : '<span class="etiqueta ambar">planilha Google</span>') + (m.armazenamento !== 'navegador' ? '<span class="sec">+ ' + esc(dados) + '</span>' : '');
+        if (m.adaptador === 'claude-db') dados = '<span class="etiqueta verde">' + IC.banco + ' banco do portal</span>';
+        else if (m.adaptador) dados = (m.fonte_dados === 'interno' ? '<span class="etiqueta verde">' + IC.banco + ' planilha no banco do portal</span>' : '<span class="etiqueta ambar">planilha Google</span>') + (m.armazenamento !== 'navegador' ? '<span class="sec">+ ' + esc(dados) + '</span>' : '');
         else dados = '<span class="etiqueta ' + (m.armazenamento === 'navegador' ? 'cinza' : 'verde') + '">' + esc(dados) + '</span>';
         return '<tr class="clicavel" data-slug="' + esc(m.slug) + '"><td><div class="linha" style="flex-wrap:nowrap"><div class="icone-mod" style="width:34px;height:34px">' + (IC[m.icone] || IC.app) + '</div><div><b>' + esc(m.nome) + '</b><span class="sec">/' + esc(m.slug) + '</span></div></div></td>' +
           '<td>' + esc(m.setor_nome || '—') + '</td>' +
@@ -720,8 +721,19 @@
       var resumo = {}; (mod.dados_registros || []).forEach(function (r) { resumo[r.colecao] = r; });
       var armRes = mod.dados_armazenamento || [];
 
+      var planilha = !!mod.adaptador && mod.adaptador !== 'claude-db';
       var secPlanilha = '';
-      if (mod.adaptador) {
+      if (mod.adaptador === 'claude-db') {
+        var cols = Object.keys(resumo).sort();
+        secPlanilha = '<h4 class="titulo-sec">Dados da ferramenta</h4>' +
+          '<p class="ajuda" style="margin-top:-4px">Esta ferramenta foi feita como artefato do Claude. No portal, tudo o que ela grava fica no banco do MyBlue, compartilhado com quem tem acesso a ela.</p>' +
+          '<div class="caixa-opcoes" style="max-height:none;margin-top:4px">' + (cols.length ? cols.map(function (c) {
+            var r = resumo[c];
+            return '<div class="linha" style="padding:9px 12px;border-bottom:1px solid var(--border)"><b style="min-width:130px">' + esc(c) + '</b><span class="ajuda" style="margin:0">' + r.total + ' documento(s) · atualizado ' + quando(r.ultima) + '</span><span class="espaco"></span>' +
+              (c.indexOf('/') < 0 ? '<a class="btn ghost sm" href="/api/admin/modulos/' + esc(mod.slug) + '/dados/' + esc(c) + '.csv">' + IC.baixar + 'CSV</a>' : '') + '</div>';
+          }).join('') : '<div class="ajuda" style="padding:9px 12px;margin:0">Ainda não há dados gravados.</div>') + '</div>' +
+          '<div class="linha" style="margin-top:8px"><a class="btn ghost sm" href="/api/admin/modulos/' + esc(mod.slug) + '/dados">' + IC.baixar + 'Baixar tudo (JSON)</a></div>';
+      } else if (planilha) {
         secPlanilha = '<h4 class="titulo-sec">Planilha da ferramenta</h4>' +
           '<p class="ajuda" style="margin-top:-4px">Esta ferramenta foi feita para gravar numa planilha Google (Apps Script). O portal tem uma planilha equivalente dentro do próprio banco.</p>' +
           '<div class="grade-2">' +
@@ -819,7 +831,7 @@
       });
 
       // importação da planilha Google
-      if (mod.adaptador) {
+      if (planilha) {
         $('#btImportar', m).onclick = async function () {
           var url = $('#mGoogle', m).value.trim();
           if (!/^https:\/\/script\.google(usercontent)?\.com\/.+/.test(url)) { toast('Informe o link do Apps Script (https://script.google.com/…/exec).', 'erro'); return; }
@@ -854,7 +866,7 @@
 
       $('#btSalvarMod', m).onclick = async function () {
         var arm = $('input[name=mArm]:checked', m).value;
-        var fonte = mod.adaptador ? $('input[name=mFonte]:checked', m).value : undefined;
+        var fonte = planilha ? $('input[name=mFonte]:checked', m).value : undefined;
         var avisos = [];
         if (arm !== mod.armazenamento) avisos.push('Mudar onde os dados ficam faz a ferramenta começar a usar outro local: o que estava salvo no local anterior não é copiado automaticamente.');
         if (fonte && fonte !== mod.fonte_dados) avisos.push(fonte === 'interno' ? 'A ferramenta passará a gravar no banco do portal. Confira se os dados da planilha Google já foram importados.' : 'A ferramenta voltará a gravar na planilha Google. O que foi lançado no banco do portal não é enviado para a planilha.');
