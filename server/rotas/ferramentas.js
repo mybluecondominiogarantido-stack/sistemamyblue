@@ -9,7 +9,7 @@ const paginaSimples = (titulo, msg) => `<!doctype html><html lang="pt-BR"><head>
 <title>${titulo}</title><link rel="stylesheet" href="/estilos.css"></head><body class="pagina-aviso"><div class="aviso-card"><img src="/img/logo.png" alt="MyBlue" height="40">
 <h1>${titulo}</h1><p>${msg}</p><a class="btn primary" href="/" target="_top">Voltar ao início</a></div></body></html>`;
 
-function rotasFerramentas({ db, seg, modulos, registros, cfg }) {
+function rotasFerramentas({ db, seg, modulos, registros, documentos, cfg }) {
   const r = express.Router();
 
   /* ---------- lista de ferramentas do usuário ---------- */
@@ -78,6 +78,64 @@ function rotasFerramentas({ db, seg, modulos, registros, cfg }) {
     const chaves = Object.keys(corpo.set || {});
     await seg.auditar(req, 'dados_gravados', x.m.slug, { chaves: chaves.slice(0, 20), removidas: (corpo.del || []).slice(0, 20), limpar: !!corpo.limpar, escopo: x.escopo === '*' ? 'equipe' : 'usuario' });
     res.json({ ok: true });
+  });
+
+  /* ---------- banco de documentos das ferramentas feitas como artefato do Claude ---------- */
+  const pessoaDe = (u) => `mb-${u.id}`;
+  async function moduloComDocumentos(req, res) {
+    const m = await modulos.obter(req.params.slug);
+    if (!m || m.adaptador !== 'claude-db') { res.status(404).json({ code: 'not_granted', erro: 'Ferramenta sem banco de documentos.' }); return null; }
+    if (!(await seg.podeAcessar(req.usuario, m.slug))) { res.status(403).json({ code: 'not_granted', erro: 'Sem acesso a esta ferramenta.' }); return null; }
+    res.set('Cache-Control', 'no-store');
+    return m;
+  }
+  const falhaDoc = (res, e) => {
+    if (e && e.code && e.status) return res.status(e.status).json({ code: e.code, erro: e.message });
+    console.error('[documentos]', e);
+    return res.status(500).json({ code: 'unavailable', erro: 'Erro interno ao gravar.' });
+  };
+
+  r.get('/api/db/:slug', seg.exigirLogin, async (req, res) => {
+    const m = await moduloComDocumentos(req, res);
+    if (!m) return;
+    res.json(await documentos.mudancas(m.slug, req.query.desde, pessoaDe(req.usuario)));
+  });
+
+  r.post('/api/db/:slug', seg.exigirLogin, express.json({ limit: '2mb' }), async (req, res) => {
+    const m = await moduloComDocumentos(req, res);
+    if (!m) return;
+    try {
+      const ops = (req.body || {}).ops;
+      const r2 = await documentos.gravar(m.slug, ops, pessoaDe(req.usuario), req.usuario.id);
+      await seg.auditar(req, 'documento_gravado', m.slug, { ops: ops.slice(0, 10).map((o) => `${o.op} ${o.path}`) });
+      res.json(r2);
+    } catch (e) { falhaDoc(res, e); }
+  });
+
+  r.post('/api/db/:slug/trava', seg.exigirLogin, express.json({ limit: '300kb' }), async (req, res) => {
+    const m = await moduloComDocumentos(req, res);
+    if (!m) return;
+    try {
+      const b = req.body || {};
+      res.json(await documentos.adquirir(m.slug, b.path, b, pessoaDe(req.usuario), req.usuario.id));
+    } catch (e) { falhaDoc(res, e); }
+  });
+
+  /* nomes de quem aparece nos registros (ids "mb-<n>" do portal; ids antigos do Claude pelo config do módulo) */
+  r.get('/api/db/:slug/pessoas', seg.exigirLogin, async (req, res) => {
+    const m = await moduloComDocumentos(req, res);
+    if (!m) return;
+    const ids = String(req.query.ids || '').split(',').map((x) => x.trim()).filter(Boolean).slice(0, 200);
+    const numeros = ids.map((x) => /^mb-(\d{1,9})$/.exec(x)).filter(Boolean).map((x) => Number(x[1]));
+    const { rows } = numeros.length ? await db.q('SELECT id, nome, email, foto_em FROM usuarios WHERE id = ANY($1::int[])', [numeros]) : { rows: [] };
+    const legados = m.config.pessoas_legadas || {};
+    const saida = {};
+    for (const u of rows) {
+      const id = `mb-${u.id}`;
+      saida[id] = { id, name: u.nome, email: u.email, avatarUrl: u.foto_em ? `/api/usuarios/${u.id}/foto?v=${new Date(u.foto_em).getTime()}` : '', isMe: u.id === req.usuario.id, guest: false };
+    }
+    for (const id of ids) if (!saida[id] && typeof legados[id] === 'string') saida[id] = { id, name: legados[id], email: null, avatarUrl: '', isMe: false, guest: false };
+    res.json({ pessoas: saida });
   });
 
   /* ---------- endpoint compatível com o Apps Script (substitui a planilha Google) ---------- */

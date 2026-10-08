@@ -99,7 +99,7 @@ function criarServicoModulos(db, cfg) {
     if (html == null) return null;
     const avisos = [];
 
-    if (m.adaptador && m.fonte_dados === 'interno') {
+    if (m.adaptador && m.adaptador !== 'claude-db' && m.fonte_dados === 'interno') {
       const r = aplicarPatches(html, m.config.patches_interno, { GAS_URL: `/api/gas/${m.slug}` });
       if (r.falhas.length) {
         avisos.push('Não foi possível ligar esta ferramenta ao banco interno (o HTML mudou). Ela está usando a fonte original. Avise a administração.');
@@ -113,7 +113,8 @@ function criarServicoModulos(db, cfg) {
       modulo: m.slug,
       modo: m.armazenamento,
       locais: m.config.chaves_locais || [],
-      usuario: { id: usuario.id, nome: usuario.nome },
+      usuario: { id: usuario.id, nome: usuario.nome, email: usuario.email, admin: usuario.papel === 'admin', foto_v: usuario.foto_v || null },
+      claudeDb: m.adaptador === 'claude-db',
       avisos,
     };
     if (m.armazenamento !== 'navegador') {

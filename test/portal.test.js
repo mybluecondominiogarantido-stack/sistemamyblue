@@ -93,7 +93,7 @@ test('login: senha errada, certa e cookie seguro', async () => {
   assert.match(r.headers.get('set-cookie'), /HttpOnly; SameSite=Lax/);
   const lista = await c('GET', '/api/modulos');
   assert.equal(lista.status, 200);
-  assert.deepEqual(lista.json.modulos.map((m) => m.slug).sort(), ['cobranca', 'credito', 'parceiros', 'renegociacoes', 'suprimentos']);
+  assert.deepEqual(lista.json.modulos.map((m) => m.slug).sort(), ['boletos', 'cobranca', 'credito', 'parceiros', 'renegociacoes', 'sindicos', 'suprimentos']);
   const sair = await c('POST', '/api/auth/logout');
   assert.equal(sair.status, 200);
   assert.equal((await c('GET', '/api/modulos')).status, 401);
