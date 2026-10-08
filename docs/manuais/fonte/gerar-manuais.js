@@ -89,7 +89,8 @@ tbody tr:nth-child(even) td { background: #f6fafb; }
 .capa { page: capa; height: 297mm; position: relative; overflow: hidden; break-after: page; }
 .capa .faixa { position: absolute; inset: 0 0 auto 0; height: 168mm; background: linear-gradient(150deg, #0c77be 0%, #199cb1 70%, #4fc1cf 100%); color: #fff; padding: 46mm 22mm 0; }
 .capa .faixa .chapeu { font-size: 11pt; letter-spacing: .5mm; text-transform: uppercase; opacity: .85; font-weight: 800; }
-.capa .faixa h1 { color: #fff; font-size: 46pt; margin: 4mm 0 4mm; line-height: 1.08; }
+.capa .faixa h1 { color: #fff; font-size: 46pt; margin: 4mm 0 4mm; line-height: 1.08; overflow-wrap: break-word; }
+.capa .faixa h1.longo { font-size: 36pt; }
 .capa .faixa .sub { font-size: 14pt; opacity: .92; max-width: 150mm; }
 .capa .onda { position: absolute; left: 0; right: 0; top: 150mm; height: 40mm; background: #fff; border-radius: 50% 50% 0 0 / 100% 100% 0 0; transform: scaleX(1.4); }
 .capa .base { position: absolute; left: 22mm; right: 22mm; bottom: 26mm; }
@@ -107,7 +108,8 @@ function documento(titulo, corpo) {
 }
 
 function capa(chapeu, titulo, sub, destaques) {
-  return `<section class="capa"><div class="faixa"><div class="chapeu">${chapeu}</div><h1>${titulo}</h1><div class="sub">${sub}</div></div><div class="onda"></div>
+  const longo = titulo.replace(/<[^>]+>/g, '').length > 18;
+  return `<section class="capa"><div class="faixa"><div class="chapeu">${chapeu}</div><h1 class="${longo ? 'longo' : ''}">${titulo.replace(/\//g, '/<wbr>')}</h1><div class="sub">${sub}</div></div><div class="onda"></div>
   <div class="destaques">${destaques.map(([t, d]) => `<div><b>${t}</b>${d}</div>`).join('')}</div>
   <div class="base"><img src="${LOGO}"><div class="info"><span>Portal MyBlue · uso interno</span><span>${VERSAO}</span></div></div></section>`;
 }
@@ -510,10 +512,21 @@ function manualGeral() {
 
 /* ---------- Manual do setor ---------- */
 function manualSetor(s) {
+  // artigo certo para o nome do setor ("da Cobrança", "do Crédito")
+  const fem = ['Administrativa/Financeira', 'Cobrança', 'Implantação', 'Máquina de Vendas', 'Supervisão', 'Gerência'].includes(s.nome);
+  const art = { o: fem ? 'a' : 'o', O: fem ? 'A' : 'O', do: fem ? 'da' : 'do', ao: fem ? 'à' : 'ao' };
   let n = 0;
   const cap = (titulo, html) => `<section class="capitulo"><h1><span class="num">${++n}</span>${titulo}</h1>${html}</section>`;
-  const ferr = s.ferramentas.map((k) => FERRAMENTAS[k]);
-  const tipos = s.recebe;
+  const subs = s.subareas || [];
+  const ferr = s.ferramentas.map((k) => ({ ...FERRAMENTAS[k], area: null }))
+    .concat(...subs.map((a) => a.ferramentas.map((k) => ({ ...FERRAMENTAS[k], area: a.nome }))));
+  // tipos de demanda por setor da Central de Tickets (subárea sem setor próprio recebe pelo setor principal)
+  const grupos = [{ setor: s.nome, tipos: s.recebe.slice() }];
+  for (const a of subs) {
+    if (a.setorPortal) grupos.push({ setor: a.setorPortal, area: a.nome, tipos: a.recebe });
+    else grupos[0].tipos.push(...a.recebe.map((t) => [...t, a.nome]));
+  }
+  const tipos = [].concat(...grupos.map((g) => g.tipos));
 
   const corpo = capa('Manual do setor', esc(s.nome), `Como o setor ${esc(s.nome)} usa o Portal MyBlue e a Central de Tickets.`, [
     ['O setor no portal', ferr.length ? `${ferr.length === 1 ? 'Ferramenta' : 'Ferramentas'} do setor e a Central de Tickets.` : 'Central de Tickets para receber e pedir demandas.'],
@@ -523,22 +536,33 @@ function manualSetor(s) {
 
   cap(`O setor ${esc(s.nome)} no portal`, `
   <p class="intro">${s.papel}</p>
+  ${subs.length ? `<p>${art.O} ${esc(s.nome)} é responsável também por: ${subs.map((a) => `<b>${esc(a.nome)}</b>`).join(', ')} (veja o capítulo <i>Subáreas do setor</i>).</p>` : ''}
   <p>No portal, o setor ${esc(s.nome)} tem:</p>
   <ul>
-    ${ferr.map((f) => `<li><b>${f.nome}</b>: ${f.descricao}</li>`).join('')}
-    <li><b>Central de Tickets</b>: recebe as demandas que os outros setores pedem para o ${esc(s.nome)}, e é por ela que o ${esc(s.nome)} pede o que precisa dos outros setores.</li>
-    ${s.carteira ? `<li><b>Carteira de condomínios</b>: o ${esc(s.nome)} é o responsável pela coluna <b>${s.carteira}</b>. Os tickets de condomínio para o ${esc(s.nome)} vão direto para essa pessoa.</li>` : ''}
-    <li><b>Gestão do setor</b>: o coordenador e o supervisor do ${esc(s.nome)} cuidam dos usuários, das ferramentas, da equipe e dos tipos de demanda do setor.</li>
+    ${ferr.map((f) => `<li><b>${f.nome}</b>${f.area ? ` (${esc(f.area)})` : ''}: ${f.descricao}</li>`).join('')}
+    <li><b>Central de Tickets</b>: recebe as demandas que os outros setores pedem para ${art.o} ${esc(s.nome)}, e é por ela que ${art.o} ${esc(s.nome)} pede o que precisa dos outros setores.</li>
+    ${s.carteira ? `<li><b>Carteira de condomínios</b>: ${art.o} ${esc(s.nome)} é o responsável pela coluna <b>${s.carteira}</b>. Os tickets de condomínio para ${art.o} ${esc(s.nome)} vão direto para essa pessoa.</li>` : ''}
+    <li><b>Gestão do setor</b>: o coordenador e o supervisor ${art.do} ${esc(s.nome)} cuidam dos usuários, das ferramentas, da equipe e dos tipos de demanda do setor.</li>
     ${s.supervisao ? '<li><b>Supervisão da Central de Tickets</b>: visão e direcionamento dos tickets de <b>todos</b> os setores (veja o capítulo próprio).</li>' : ''}
   </ul>
   ${fig('02-inicio', 'Tela inicial: atalho da Central de Tickets e as ferramentas liberadas para você.')}
   ${dica('O passo a passo de acesso, senha e menu está no <b>Manual Geral do Portal MyBlue</b>.')}`) +
 
+  (subs.length ? cap('Subáreas do setor', `
+  <p class="intro">Ficam sob a responsabilidade ${art.do} ${esc(s.nome)}:</p>
+  ${tabela(['Subárea', 'O que faz', 'Ferramentas', 'Na Central de Tickets'], subs.map((a) => [
+    `<b>${esc(a.nome)}</b>`, a.papel, a.ferramentas.map((k) => FERRAMENTAS[k].nome).join('<br>'),
+    a.setorPortal ? `Recebe como o setor <b>${esc(a.setorPortal)}</b>` : `Recebe pelo setor <b>${esc(s.nome)}</b>`,
+  ]))}
+  ${subs.some((a) => a.setorPortal) ? dica(`Na Central de Tickets, ${subs.filter((a) => a.setorPortal).map((a) => `<b>${esc(a.setorPortal)}</b>`).join(' e ')} ${subs.filter((a) => a.setorPortal).length > 1 ? 'aparecem como setores próprios' : 'aparece como setor próprio'}: quem pede escolhe ${subs.filter((a) => a.setorPortal).length > 1 ? 'esses setores' : 'esse setor'} em <i>Para qual setor?</i>. A equipe de cada um é formada por quem tem esse setor no cadastro.`) : ''}
+  ${atencao(`Para o coordenador ou supervisor ${art.do} ${esc(s.nome)} cuidar também ${subs.filter((a) => a.setorPortal).map((a) => `de ${esc(a.setorPortal)}`).join(' e ')} (usuários, ferramentas, equipe e tipos de demanda), esses setores precisam estar marcados no cadastro dele, junto com ${esc(s.nome)}.`)}`) : '') +
+
   (ferr.length ? cap(ferr.length === 1 ? 'Ferramenta do setor' : 'Ferramentas do setor', ferr.map((f) => `
   <h2>${f.nome}</h2>
+  ${f.area ? `<p style="color:var(--teal-d);font-weight:700;margin-top:-1mm">Subárea: ${esc(f.area)}</p>` : ''}
   <p>${f.descricao}</p>
   <ul>
-    <li><b>Como abrir:</b> no menu, em <b>${esc(s.nome)}</b>, ou no cartão da tela inicial. <b>Nova aba</b> abre em tela cheia.</li>
+    <li><b>Como abrir:</b> no menu (ou digite parte do nome na busca) e no cartão da tela inicial. <b>Nova aba</b> abre em tela cheia.</li>
     <li><b>Os dados:</b> ${f.dados}</li>
     <li><b>Acesso:</b> quem tem a ferramenta liberada no cadastro, mais o coordenador e o supervisor do setor. Peça ao coordenador do setor ou à administração.</li>
     <li><b>Atualizações:</b> quando a ferramenta mudar, o coordenador ou supervisor envia o HTML novo em <b>Gestão do setor → Ferramentas do setor</b>.</li>
@@ -552,9 +576,9 @@ function manualSetor(s) {
   </ul>`) : '') +
 
   cap('Como o setor recebe as demandas', `
-  <p class="intro">Tudo o que outros setores pedem ao ${esc(s.nome)} chega pela <b>Central de Tickets</b>, na <b>Fila do setor</b>.</p>
+  <p class="intro">Tudo o que outros setores pedem ${art.ao} ${esc(s.nome)} chega pela <b>Central de Tickets</b>, na <b>Fila do setor</b>.</p>
   ${tabela(['Etapa', 'O que acontece'], [
-    ['Chegou', `O ticket entra como ${etq('Novo', 'azul')}. ${s.carteira ? `Se for de um condomínio, vai direto para o ${s.carteira} da carteira; se for interno, fica` : 'Fica'} sem responsável, e os líderes do ${esc(s.nome)} recebem o aviso (sino e som).`],
+    ['Chegou', `O ticket entra como ${etq('Novo', 'azul')}. ${s.carteira ? `Se for de um condomínio, vai direto para o ${s.carteira} da carteira; se for interno, fica` : 'Fica'} sem responsável, e os líderes ${art.do} ${esc(s.nome)} recebem o aviso (sino e som).`],
     ['Distribuído', 'O líder (ou o coordenador/supervisor do setor) escolhe o responsável.'],
     ['Iniciado', `O responsável clica em <b>Iniciar atendimento</b> e informa o prazo para conclusão: o ticket passa para ${etq('Em andamento', 'ambar')}.`],
     ['Em tratamento', `O responsável conversa, registra notas internas e usa ${etq('Aguardando', 'cinza')} quando depende de alguém de fora.`],
@@ -565,14 +589,14 @@ function manualSetor(s) {
 
   cap('Rotina sugerida', `
   <div class="grade2">
-    <div class="cartao-rapido"><h3>Equipe do ${esc(s.nome)}</h3><ul>
+    <div class="cartao-rapido"><h3>Equipe ${art.do} ${esc(s.nome)}</h3><ul>
       <li>Manter <b>uma aba do portal aberta</b> no expediente, com alertas ativados no sino.</li>
       <li>Começar o dia pela <b>Minha fila</b>, do prazo mais curto para o mais longo.</li>
       <li>Ao receber um ticket, clicar em <b>Iniciar atendimento</b> e dar um prazo para conclusão realista.</li>
       <li>Atualizar a situação sempre que mudar algo e <b>responder no ticket</b>, não por fora.</li>
       <li>Resolver dizendo <b>o que foi feito</b>.</li>
     </ul></div>
-    <div class="cartao-rapido"><h3>Líder do ${esc(s.nome)}</h3><ul>
+    <div class="cartao-rapido"><h3>Líder ${art.do} ${esc(s.nome)}</h3><ul>
       <li>No início do dia: <b>distribuir</b> tudo o que está sem responsável.</li>
       <li>Duas vezes ao dia: filtrar <b>só atrasados</b> e agir.</li>
       <li>Equilibrar a fila entre as pessoas (Painel → Por responsável).</li>
@@ -584,11 +608,12 @@ function manualSetor(s) {
   ${LIDER}`) +
 
   cap('Tipos de demanda que o setor atende', `
-  <p class="intro">Os tipos de demanda organizam a fila e já definem o prazo para resposta. Abaixo, uma <b>sugestão</b> para o ${esc(s.nome)}. O coordenador ou supervisor do setor cadastra e ajusta em <i>Gestão do setor → Equipe e tipos de demanda</i> (a administração também).</p>
-  ${tabela(['Tipo de demanda', 'Prazo sugerido', 'Prioridade', 'O que quem pede deve informar'], tipos.map(([nome, h, p, info]) => [
-    `<b>${nome}</b>`, prazo(h), etq(PRIO[p], { urgente: 'vermelha', alta: 'ambar', media: 'azul', baixa: 'cinza' }[p]), info,
-  ]))}
-  ${atencao('Estes tipos e prazos são uma proposta inicial para o setor validar. Depois de cadastrados, quem abrir um ticket para o ' + esc(s.nome) + ' escolhe o tipo e o prazo é calculado sozinho.')}
+  <p class="intro">Os tipos de demanda organizam a fila e já definem o prazo para resposta. Abaixo, uma <b>sugestão</b> para ${art.o} ${esc(s.nome)}. O coordenador ou supervisor do setor cadastra e ajusta em <i>Gestão do setor → Equipe e tipos de demanda</i> (a administração também).</p>
+  ${grupos.map((g) => `${grupos.length > 1 ? `<h3>Setor ${esc(g.setor)} na Central de Tickets</h3>` : ''}
+  ${tabela(['Tipo de demanda', 'Prazo sugerido', 'Prioridade', 'O que quem pede deve informar'], g.tipos.map(([nome, h, p, info, area]) => [
+    `<b>${nome}</b>${area ? `<br><span style="color:var(--muted);font-size:8.6pt">${esc(area)}</span>` : ''}`, prazo(h), etq(PRIO[p], { urgente: 'vermelha', alta: 'ambar', media: 'azul', baixa: 'cinza' }[p]), info,
+  ]))}`).join('')}
+  ${atencao('Estes tipos e prazos são uma proposta inicial para o setor validar. Depois de cadastrados, quem abrir um ticket para ' + art.o + ' ' + esc(s.nome) + ' escolhe o tipo e o prazo é calculado sozinho.')}
   ${fig('23-coord-equipe', 'Exemplo: equipe e tipos de demanda do setor, na tela do coordenador.')}`) +
 
   cap('Gestão do setor: coordenador e supervisor', `
@@ -599,20 +624,20 @@ function manualSetor(s) {
     ['<b>Equipe e tipos de demanda</b>', 'Marca os líderes e cadastra os tipos de demanda com prazo.'],
   ])}
   <ul>
-    <li>Nos tickets do ${esc(s.nome)}, coordenador e supervisor têm os poderes do líder.</li>
+    <li>Nos tickets ${art.do} ${esc(s.nome)}, coordenador e supervisor têm os poderes do líder.</li>
     ${s.carteira ? `<li>Na Carteira de condomínios, alteram e transferem o <b>${s.carteira}</b> de cada condomínio.</li>` : ''}
     <li>Coordenadores, supervisores e administradores são cadastrados pela administração.</li>
   </ul>
   ${dica('O passo a passo completo está no <b>Manual Geral</b>, capítulo <i>Gestão do setor</i>.')}`) +
 
   cap('Quando o setor precisa de outro setor', `
-  <p>Quando o ${esc(s.nome)} depende de outro setor, <b>abra um ticket</b> em vez de pedir por mensagem ou e-mail. Assim fica registrado, com prazo e responsável.</p>
+  <p>Quando ${art.o} ${esc(s.nome)} depende de outro setor, <b>abra um ticket</b> em vez de pedir por mensagem ou e-mail. Assim fica registrado, com prazo e responsável.</p>
   ${tabela(['Para o setor', 'Quando'], s.abre.map(([para, quando]) => [`<b>${para}</b>`, quando]))}
   ${ABRIR}
   ${ACOMPANHAR}`) +
 
   (s.supervisao ? cap('Supervisão da Central de Tickets', `
-  <p class="intro">Quem do ${esc(s.nome)} tiver a marcação <b>Supervisão da Central de Tickets</b> (feita pela administração no cadastro) acompanha e direciona os tickets de <b>todos os setores</b>.</p>
+  <p class="intro">Quem ${art.do} ${esc(s.nome)} tiver a marcação <b>Supervisão da Central de Tickets</b> (feita pela administração no cadastro) acompanha e direciona os tickets de <b>todos os setores</b>.</p>
   ${passos([
     'Em <b>Tickets → Todos</b>, veja os tickets de todos os setores. Use os filtros <b>só atrasados</b>, <b>sem responsável</b> e setor.',
     'Abra um ticket para trocar o <b>responsável</b> (alguém da equipe do setor do ticket), <b>transferir</b> para outro setor ou ajustar <b>prioridade e prazo</b>.',
@@ -630,7 +655,7 @@ function manualSetor(s) {
     <div class="cartao-rapido"><h3>Pedir algo a outro setor</h3><p><b>Novo ticket</b> → setor → tipo → assunto e descrição completos → anexos → <b>Abrir ticket</b>.</p></div>
     <div class="cartao-rapido"><h3>Distribuir (líder)</h3><p><b>Tickets → Fila do setor</b> → <b>sem responsável</b> → abrir o ticket → escolher o <b>Responsável</b>.</p></div>
     <div class="cartao-rapido"><h3>Falar só com a equipe</h3><p>No ticket, marque <b>nota interna</b> antes de enviar.</p></div>
-    <div class="cartao-rapido"><h3>Não é do ${esc(s.nome)}</h3><p><b>Transferir para outro setor</b> → setor → motivo.</p></div>
+    <div class="cartao-rapido"><h3>Não é ${art.do} ${esc(s.nome)}</h3><p><b>Transferir para outro setor</b> → setor → motivo.</p></div>
     <div class="cartao-rapido"><h3>Terminei</h3><p><b>Marcar como resolvido</b> → escreva o que foi feito.</p></div>
     <div class="cartao-rapido"><h3>Comecei a tratar</h3><p><b>Iniciar atendimento</b> → informe o <b>prazo para conclusão</b>.</p></div>
   </div>
