@@ -232,6 +232,9 @@
         '<a href="#/admin/modulos" class="' + (rota.indexOf('#/admin/modulos') === 0 ? 'on' : '') + '">' + IC.camadas + 'Módulos e dados</a>' +
         '<a href="#/admin/equipes" class="' + (rota.indexOf('#/admin/equipes') === 0 ? 'on' : '') + '">' + IC.pessoas + 'Equipes e tipos de demanda</a>' +
         '<a href="#/admin/auditoria" class="' + (rota.indexOf('#/admin/auditoria') === 0 ? 'on' : '') + '">' + IC.historico + 'Histórico de atividades</a>';
+    } else if (eu.papel === 'coordenador' && !termo) {
+      html += '<div class="grupo">Coordenação</div>' +
+        '<a href="#/admin/usuarios" class="' + (rota.indexOf('#/admin/usuarios') === 0 ? 'on' : '') + '">' + IC.usuarios + 'Usuários da equipe</a>';
     }
     $('#nav').innerHTML = html;
     if (resumoTickets) { var bc = $('#nav [data-contador=fila]'); if (bc) { bc.textContent = resumoTickets.minha_fila; bc.hidden = !resumoTickets.minha_fila; if (resumoTickets.minha_fila_atrasados) bc.classList.add('alerta'); } }
@@ -271,6 +274,7 @@
       if (partes[1] === 'previa' && editorLinks()) return paginaLinks(Number(partes[2]) || null);
       return paginaLinks(null);
     }
+    if (partes[0] === 'admin' && eu.papel === 'coordenador' && partes[1] === 'usuarios') return paginaUsuarios();
     if (partes[0] === 'admin' && eu.papel === 'admin') {
       if (partes[1] === 'equipes') return paginaEquipes();
       if (partes[1] === 'usuarios') return paginaUsuarios();
@@ -375,7 +379,7 @@
   /* ======================= minha conta ======================= */
   function paginaConta() {
     definirBarra('<span class="nome">Minha conta</span>');
-    $('#conteudo').innerHTML = '<div class="pagina" style="max-width:640px"><h1>Minha conta</h1><p class="sub">' + esc(eu.nome) + ' · ' + esc(eu.email) + ' · ' + (eu.papel === 'admin' ? 'Administrador' : 'Usuário') + '</p>' +
+    $('#conteudo').innerHTML = '<div class="pagina" style="max-width:640px"><h1>Minha conta</h1><p class="sub">' + esc(eu.nome) + ' · ' + esc(eu.email) + ' · ' + (PAPEL[eu.papel] || 'Usuário') + '</p>' +
       '<div class="painel" style="padding:20px;margin-bottom:16px"><h3 style="margin:0 0 14px;font-family:var(--display)">Foto de perfil</h3>' +
       '<div class="linha" style="gap:18px;flex-wrap:nowrap"><div id="fotoPrevia">' + avatarHtml(eu, 84) + '</div>' +
       '<div class="pilha" style="gap:8px"><div class="linha"><label class="btn primary sm" for="inFoto" style="cursor:pointer">' + IC.enviar + 'Escolher foto</label>' +
@@ -432,6 +436,8 @@
     return j;
   }
 
+  var PAPEL = { admin: 'Administrador', coordenador: 'Coordenador', supervisor: 'Supervisor', usuario: 'Usuário' };
+
   function seletorModulos(listaMods, marcados, nomeCampo) {
     var html = '<div class="caixa-opcoes">';
     porSetor(listaMods.map(function (m) { return Object.assign({}, m, { setor: m.setor_nome || 'Outros', setor_ordem: m.setor_ordem == null ? 999 : m.setor_ordem }); })).forEach(function (g) {
@@ -477,13 +483,15 @@
   }
 
   async function paginaUsuarios() {
-    definirBarra('<span class="setor">Administração</span><span class="sep">/</span><span class="nome">Usuários e acessos</span>');
+    var coord = eu.papel === 'coordenador';
+    definirBarra('<span class="setor">' + (coord ? 'Coordenação' : 'Administração') + '</span><span class="sep">/</span><span class="nome">' + (coord ? 'Usuários da equipe' : 'Usuários e acessos') + '</span>');
     $('#conteudo').innerHTML = '<div class="pagina"><div class="carregando" style="position:static;background:none"><div><div class="giro"></div>Carregando…</div></div></div>';
     var dados, mods;
-    try { dados = await api('GET', '/api/admin/usuarios'); mods = (await carregarModulosAdmin()).modulos; } catch (e) { toast(e.message, 'erro'); return; }
-    var nomeMod = {}; mods.forEach(function (m) { nomeMod[m.slug] = m.nome; });
+    try { dados = await api('GET', '/api/admin/usuarios'); mods = coord ? dados.modulos_disponiveis : (await carregarModulosAdmin()).modulos; } catch (e) { toast(e.message, 'erro'); return; }
+    var nomeMod = coord ? (dados.nomes_modulos || {}) : {}; mods.forEach(function (m) { nomeMod[m.slug] = m.nome; });
 
-    $('#conteudo').innerHTML = '<div class="pagina"><h1>Usuários e acessos</h1><p class="sub">Cadastre as pessoas da equipe e escolha quais ferramentas cada uma pode abrir.</p>' +
+    $('#conteudo').innerHTML = '<div class="pagina"><h1>' + (coord ? 'Usuários da equipe' : 'Usuários e acessos') + '</h1><p class="sub">' +
+      (coord ? 'Cadastre as pessoas da sua equipe e libere as ferramentas que você usa. Aparecem aqui os usuários que você criou e os que estão nas suas equipes.' : 'Cadastre as pessoas da equipe e escolha quais ferramentas cada uma pode abrir.') + '</p>' +
       '<div class="painel"><div class="cab-painel"><input class="campo" id="fUsu" placeholder="Buscar por nome ou e-mail…" style="max-width:320px">' +
       '<label class="linha" style="font-weight:700;font-size:13px;color:var(--muted)"><input type="checkbox" id="fInativos"> mostrar desativados</label><span class="espaco"></span>' +
       '<button class="btn primary" id="btNovoUsu">' + IC.mais + 'Novo usuário</button></div>' +
@@ -495,9 +503,9 @@
       var lista = dados.usuarios.filter(function (u) { return (inativos || u.ativo) && (!t || normal(u.nome + ' ' + u.email).indexOf(t) >= 0); });
       $('#tbUsu').innerHTML = lista.map(function (u) {
         var ferr = u.papel === 'admin' ? '<span class="etiqueta azul">todas</span>' :
-          u.modulos.length ? '<span title="' + esc(u.modulos.map(function (s) { return nomeMod[s] || s; }).join('\n')) + '">' + u.modulos.length + ' de ' + mods.length + '</span>' : '<span class="etiqueta ambar">nenhuma</span>';
+          u.modulos.length ? '<span title="' + esc(u.modulos.map(function (s) { return nomeMod[s] || s; }).join('\n')) + '">' + u.modulos.length + (coord ? ' ferramenta(s)' : ' de ' + mods.length) + '</span>' : '<span class="etiqueta ambar">nenhuma</span>';
         return '<tr class="clicavel" data-id="' + u.id + '"><td><div class="linha" style="flex-wrap:nowrap;gap:10px">' + avatarHtml(u, 34) + '<div><b>' + esc(u.nome) + '</b><span class="sec">' + esc(u.email) + '</span></div></div></td>' +
-          '<td>' + (u.papel === 'admin' ? 'Administrador' : 'Usuário') + (u.supervisor_tickets ? ' <span class="etiqueta azul">supervisão tickets</span>' : '') + (u.editor_links ? ' <span class="etiqueta azul">central de links</span>' : '') + '</td><td>' + ferr + '</td><td>' + quando(u.ultimo_login) + '</td>' +
+          '<td>' + (PAPEL[u.papel] || 'Usuário') + (u.supervisor_tickets ? ' <span class="etiqueta azul">supervisão tickets</span>' : '') + (u.editor_links ? ' <span class="etiqueta azul">central de links</span>' : '') + '</td><td>' + ferr + '</td><td>' + quando(u.ultimo_login) + '</td>' +
           '<td>' + (!u.ativo ? '<span class="etiqueta cinza">desativado</span>' : u.trocar_senha ? '<span class="etiqueta ambar">aguardando 1º acesso</span>' : '<span class="etiqueta verde">ativo</span>') + '</td></tr>';
       }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);font-weight:700;padding:30px">Nenhum usuário encontrado.</td></tr>';
       $$('#tbUsu tr[data-id]').forEach(function (tr) {
@@ -517,14 +525,18 @@
         corpo: '<form id="fU" class="pilha" novalidate><div class="grade-2">' +
           '<div><label class="rot" for="uNome">Nome</label><input class="campo" id="uNome" value="' + esc(u.nome) + '" required></div>' +
           '<div><label class="rot" for="uEmail">E-mail (login)</label><input class="campo" id="uEmail" type="email" value="' + esc(u.email) + '" required></div></div>' +
+          (coord ? '' :
           '<div><label class="rot">Perfil</label><div class="grade-2">' +
-          '<label class="opcao-radio"><input type="radio" name="uPapel" value="usuario"' + (u.papel !== 'admin' ? ' checked' : '') + '><div><b>Usuário</b><span>Abre só as ferramentas marcadas abaixo.</span></div></label>' +
+          '<label class="opcao-radio"><input type="radio" name="uPapel" value="usuario"' + (u.papel === 'usuario' || !PAPEL[u.papel] ? ' checked' : '') + '><div><b>Usuário</b><span>Abre só as ferramentas marcadas abaixo.</span></div></label>' +
+          '<label class="opcao-radio"><input type="radio" name="uPapel" value="supervisor"' + (u.papel === 'supervisor' ? ' checked' : '') + '><div><b>Supervisor</b><span>Abre as ferramentas marcadas e acompanha os tickets de todos os setores. Não cria usuários.</span></div></label>' +
+          '<label class="opcao-radio"><input type="radio" name="uPapel" value="coordenador"' + (u.papel === 'coordenador' ? ' checked' : '') + '><div><b>Coordenador</b><span>Abre as ferramentas marcadas e cria usuários comuns da equipe dele, liberando só essas mesmas ferramentas.</span></div></label>' +
           '<label class="opcao-radio"><input type="radio" name="uPapel" value="admin"' + (u.papel === 'admin' ? ' checked' : '') + '><div><b>Administrador</b><span>Acessa tudo e gerencia usuários, módulos e dados.</span></div></label></div></div>' +
-          '<label class="opcao-radio" style="margin:0"><input type="checkbox" id="uSup"' + (u.supervisor_tickets ? ' checked' : '') + '><div><b>Supervisão / Coordenação da Central de Tickets</b>' +
-          '<span>Vê os tickets de todos os setores e direciona: troca o responsável, transfere, muda situação, prioridade e prazo. Não dá acesso à administração do portal.</span></div></label>' +
+          '<label class="opcao-radio" style="margin:0"><input type="checkbox" id="uSup"' + (u.supervisor_tickets ? ' checked' : '') + '><div><b>Supervisão da Central de Tickets</b>' +
+          '<span>Vê os tickets de todos os setores e direciona: troca o responsável, transfere, muda situação, prioridade e prazo. O perfil Supervisor já inclui isto.</span></div></label>' +
           '<label class="opcao-radio" style="margin:0"><input type="checkbox" id="uLinks"' + (u.editor_links ? ' checked' : '') + '><div><b>Marketing — Central de Links</b>' +
-          '<span>Troca o fundo da campanha do mês e edita os links da Central de Links. Não dá acesso à administração do portal.</span></div></label>' +
-          '<div id="blocoMods"><label class="rot">Ferramentas liberadas</label>' + seletorModulos(mods, u.modulos, 'uMod') + '</div>' +
+          '<span>Troca o fundo da campanha do mês e edita os links da Central de Links. Não dá acesso à administração do portal.</span></div></label>') +
+          '<div id="blocoMods"><label class="rot">Ferramentas liberadas</label>' + (mods.length ? seletorModulos(mods, u.modulos, 'uMod') : '<div class="ajuda">Você ainda não tem ferramentas para liberar. Peça à administração.</div>') +
+          (coord && u.modulos.some(function (s) { return !mods.some(function (x) { return x.slug === s; }); }) ? '<div class="ajuda">Esta pessoa também tem ferramentas liberadas pela administração, que continuam como estão.</div>' : '') + '</div>' +
           (novo ? '<div><label class="rot" for="uSenha">Senha inicial (opcional)</label><input class="campo" id="uSenha" type="text" autocomplete="off" placeholder="Deixe em branco para gerar uma automaticamente"><div class="ajuda">A pessoa precisará trocar a senha no primeiro acesso.</div></div>' :
             '<label class="linha" style="font-weight:700"><input type="checkbox" id="uAtivo"' + (u.ativo ? ' checked' : '') + '> Usuário ativo (desmarque para bloquear o acesso)</label>') +
           '<div id="uMsg" class="msg erro" hidden></div></form>',
@@ -532,16 +544,19 @@
           '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="btSalvarU">' + (novo ? 'Criar usuário' : 'Salvar') + '</button>',
       });
       ligarGrupos(m);
-      function papelMudou() { $('#blocoMods', m).hidden = $('input[name=uPapel]:checked', m).value === 'admin'; }
+      function papelMudou() { var r = $('input[name=uPapel]:checked', m); $('#blocoMods', m).hidden = !!r && r.value === 'admin'; }
       $$('input[name=uPapel]', m).forEach(function (r) { r.onchange = papelMudou; });
       papelMudou();
       $('#btSalvarU', m).onclick = async function () {
         var corpo = {
-          nome: $('#uNome', m).value, email: $('#uEmail', m).value, papel: $('input[name=uPapel]:checked', m).value,
+          nome: $('#uNome', m).value, email: $('#uEmail', m).value,
           modulos: $$('input[name=uMod]:checked', m).map(function (i) { return i.value; }),
-          supervisor_tickets: $('#uSup', m).checked,
-          editor_links: $('#uLinks', m).checked,
         };
+        if (!coord) {
+          corpo.papel = $('input[name=uPapel]:checked', m).value;
+          corpo.supervisor_tickets = $('#uSup', m).checked;
+          corpo.editor_links = $('#uLinks', m).checked;
+        }
         try {
           if (novo) {
             corpo.senha = $('#uSenha', m).value;
@@ -1048,7 +1063,7 @@
     return metaTickets;
   }
   function meusSetores() { return (metaTickets ? metaTickets.setores : []).filter(function (s) { return s.meu; }); }
-  function gestorTickets() { return eu.papel === 'admin' || !!eu.supervisor_tickets; }
+  function gestorTickets() { return eu.papel === 'admin' || eu.papel === 'supervisor' || !!eu.supervisor_tickets; }
   function souEquipe() { return gestorTickets() || meusSetores().length > 0; }
 
   /* ---------- avisos: sino, som e alerta do navegador ---------- */
