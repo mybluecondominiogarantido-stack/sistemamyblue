@@ -14,7 +14,8 @@ function cliente() {
     const headers = {};
     if (cookie) headers.cookie = cookie;
     let body;
-    if (corpo !== undefined) { body = JSON.stringify(corpo); headers['content-type'] = 'application/json'; }
+    if (typeof corpo === 'string') { body = corpo; headers['content-type'] = 'text/html'; }
+    else if (corpo !== undefined) { body = JSON.stringify(corpo); headers['content-type'] = 'application/json'; }
     const r = await fetch(base + url, { method: metodo, headers, body, redirect: 'manual' });
     const sc = r.headers.get('set-cookie');
     if (sc) cookie = sc.split(';')[0].endsWith('=') ? '' : sc.split(';')[0];
@@ -104,7 +105,7 @@ test('coordenador não mexe em quem é de fora, nem em admin/supervisor, nem no 
     assert.equal((await coord('POST', `/api/admin/usuarios/${id}/senha`, {})).status, 404, email);
   }
   assert.equal((await coord('PATCH', `/api/admin/usuarios/${coordId}`, { papel: 'admin' })).status, 404, 'nem em si mesma');
-  for (const url of ['/api/admin/modulos', '/api/admin/equipes', '/api/admin/backup', '/api/admin/auditoria']) {
+  for (const url of ['/api/admin/setores', '/api/admin/equipes', '/api/admin/backup', '/api/admin/auditoria']) {
     assert.equal((await coord('GET', url)).status, 403, url);
   }
 });
@@ -126,4 +127,31 @@ test('admin cria e edita os quatro perfis', async () => {
     assert.equal((await admin('PATCH', `/api/admin/usuarios/${id}`, { papel })).status, 200);
     assert.equal((await ctx.db.um('SELECT papel FROM usuarios WHERE id = $1', [id])).papel, papel);
   }
+});
+
+test('coordenador envia e restaura o HTML só dos módulos dos setores das equipes dele', async () => {
+  const html = (t) => `<!doctype html><html><head><title>${t}</title></head><body>ok</body></html>`;
+  // Cora está na equipe de Crédito: vê os módulos de Crédito e nenhum outro
+  const lista = await coord('GET', '/api/admin/modulos');
+  assert.equal(lista.status, 200, lista.texto);
+  const slugs = lista.json.modulos.map((m) => m.slug).sort();
+  assert.ok(slugs.includes('credito') && slugs.includes('boletos'), slugs.join(','));
+  assert.ok(!slugs.includes('cobranca') && !slugs.includes('parceiros'));
+  assert.equal(lista.json.modulos[0].usuarios, undefined, 'não recebe quem tem acesso');
+
+  const envia = async (cli, slug, corpo) => (await cli('PUT', `/api/admin/modulos/${slug}/arquivo`, corpo)).status;
+  assert.equal(await envia(coord, 'boletos', html('Boletos v1')), 200);
+  assert.equal(await envia(coord, 'boletos', html('Boletos v2')), 200);
+  assert.equal(await envia(coord, 'cobranca', html('Cobrança')), 403, 'outro setor');
+  const v = await coord('GET', '/api/admin/modulos/boletos/versoes');
+  assert.equal(v.status, 200);
+  assert.equal(v.json.versoes.length, 2);
+  assert.equal((await coord('POST', `/api/admin/modulos/boletos/versoes/${v.json.versoes[1].id}/usar`)).status, 200);
+  assert.equal((await coord('GET', '/api/admin/modulos/cobranca/versoes')).status, 403);
+  // o resto da administração do módulo continua só com o administrador
+  assert.equal((await coord('PATCH', '/api/admin/modulos/boletos', { nome: 'X' })).status, 403);
+  assert.equal((await coord('DELETE', '/api/admin/modulos/boletos?confirmar=boletos')).status, 403);
+  assert.equal((await coord('GET', '/api/admin/modulos/boletos/dados')).status, 403);
+  assert.equal((await coord('POST', '/api/admin/modulos/boletos/documentos', { documentos: {} })).status, 403);
+  assert.equal((await sup('PUT', '/api/admin/modulos/boletos/arquivo', html('x'))).status, 403, 'supervisor não envia HTML');
 });

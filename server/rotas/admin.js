@@ -11,10 +11,26 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
   const ehDocs = (m) => m && m.adaptador === 'claude-db';
   const r = express.Router();
   const json = express.json({ limit: '2mb' });
-  // o coordenador entra só na parte de usuários (com os limites de escopoDe); o resto é do administrador
-  r.use('/api/admin', seg.exigirLogin, (req, res, next) => {
-    if (req.usuario.papel === 'coordenador' && /^\/usuarios(\/|$)/.test(req.path)) return next();
-    return seg.exigirAdmin(req, res, next);
+  /* setores das equipes de uma pessoa (Equipes e tipos de demanda) */
+  const setoresDe = async (uid) => new Set((await db.q('SELECT setor_id FROM setor_membros WHERE usuario_id = $1', [uid])).rows.map((x) => x.setor_id));
+
+  // o coordenador entra na parte de usuários (com os limites de escopoDe) e no HTML dos módulos dos setores das equipes dele;
+  // o resto é do administrador
+  const HTML_COORD = /^\/modulos\/([a-z0-9][a-z0-9-]{1,40})\/(arquivo|versoes|versoes\/\d+\/usar)$/;
+  r.use('/api/admin', seg.exigirLogin, async (req, res, next) => {
+    try {
+      if (req.usuario.papel !== 'coordenador') return seg.exigirAdmin(req, res, next);
+      if (/^\/usuarios(\/|$)/.test(req.path)) return next();
+      if (req.path === '/modulos' && req.method === 'GET') { req.setoresCoord = await setoresDe(req.usuario.id); return next(); }
+      const x = HTML_COORD.exec(req.path);
+      const metodoOk = x && ((x[2] === 'arquivo' && req.method === 'PUT') || (x[2] === 'versoes' && req.method === 'GET') || (x[2] !== 'arquivo' && x[2] !== 'versoes' && req.method === 'POST'));
+      if (metodoOk) {
+        const m = await modulos.obter(x[1]);
+        if (m && m.setor_id && (await setoresDe(req.usuario.id)).has(m.setor_id)) return next();
+        return erro(res, 403, 'Este módulo não é de um setor da sua equipe.');
+      }
+      return seg.exigirAdmin(req, res, next);
+    } catch (e) { return next(e); }
   });
 
   const erro = (res, status, msg) => res.status(status).json({ erro: msg });
@@ -188,6 +204,12 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
 
   /* ===================== módulos ===================== */
   r.get('/api/admin/modulos', async (req, res) => {
+    if (req.setoresCoord) {
+      // coordenador: só os módulos dos setores das equipes dele, sem dados de acesso nem de armazenamento
+      const meus = (await modulos.listar()).filter((m) => m.setor_id && req.setoresCoord.has(m.setor_id));
+      return res.json({ modulos: meus.map((m) => ({ slug: m.slug, nome: m.nome, icone: m.icone, ativo: m.ativo, setor_nome: m.setor_nome, setor_ordem: m.setor_ordem,
+        tem_arquivo: m.tem_arquivo, versao_id: m.versao_id, versao_em: m.versao_em, tamanho: m.tamanho, nome_original: m.nome_original })) });
+    }
     const lista = [];
     for (const m of await modulos.listar()) {
       lista.push({

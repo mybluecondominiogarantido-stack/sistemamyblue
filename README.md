@@ -74,7 +74,8 @@ Em *Usuários e acessos*:
   - cria **usuários comuns** (nunca administrador, coordenador ou supervisor);
   - libera só as ferramentas que **ele mesmo** tem; o que a administração liberou para a pessoa continua como está;
   - edita, desativa e redefine a senha de quem **ele criou** e de quem está numa **equipe dele** (definida em *Equipes e tipos de demanda*).
-  Não vê *Módulos e dados*, *Equipes* nem o histórico.
+  Ganha também *Módulos do setor*: para os módulos dos setores das equipes dele, envia versão nova do HTML e volta para uma versão anterior.
+  O resto de *Módulos e dados* (nome, setor, dados, importação, quem pode abrir, remover), *Equipes* e o histórico continuam só com o administrador.
 - **Administrador:** acessa todas as ferramentas e a administração.
 - Ao criar um usuário (ou redefinir a senha), o portal mostra uma senha temporária. A pessoa cria a própria senha no primeiro acesso.
 - Desativar um usuário encerra na hora as sessões abertas dele.

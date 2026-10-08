@@ -234,7 +234,8 @@
         '<a href="#/admin/auditoria" class="' + (rota.indexOf('#/admin/auditoria') === 0 ? 'on' : '') + '">' + IC.historico + 'Histórico de atividades</a>';
     } else if (eu.papel === 'coordenador' && !termo) {
       html += '<div class="grupo">Coordenação</div>' +
-        '<a href="#/admin/usuarios" class="' + (rota.indexOf('#/admin/usuarios') === 0 ? 'on' : '') + '">' + IC.usuarios + 'Usuários da equipe</a>';
+        '<a href="#/admin/usuarios" class="' + (rota.indexOf('#/admin/usuarios') === 0 ? 'on' : '') + '">' + IC.usuarios + 'Usuários da equipe</a>' +
+        '<a href="#/admin/modulos" class="' + (rota.indexOf('#/admin/modulos') === 0 ? 'on' : '') + '">' + IC.camadas + 'Módulos do setor</a>';
     }
     $('#nav').innerHTML = html;
     if (resumoTickets) { var bc = $('#nav [data-contador=fila]'); if (bc) { bc.textContent = resumoTickets.minha_fila; bc.hidden = !resumoTickets.minha_fila; if (resumoTickets.minha_fila_atrasados) bc.classList.add('alerta'); } }
@@ -275,6 +276,7 @@
       return paginaLinks(null);
     }
     if (partes[0] === 'admin' && eu.papel === 'coordenador' && partes[1] === 'usuarios') return paginaUsuarios();
+    if (partes[0] === 'admin' && eu.papel === 'coordenador' && partes[1] === 'modulos') return paginaModulosCoord();
     if (partes[0] === 'admin' && eu.papel === 'admin') {
       if (partes[1] === 'equipes') return paginaEquipes();
       if (partes[1] === 'usuarios') return paginaUsuarios();
@@ -592,7 +594,85 @@
     compartilhado: ['Banco do portal · equipe', 'Salvo no servidor e compartilhado: todos que têm acesso veem e editam os mesmos dados.'],
   };
 
+  /* "Arquivo HTML" da janela do módulo (administrador e coordenador): versões anteriores e envio de versão nova */
+  function htmlArquivoModulo(mod) {
+    return '<h4 class="titulo-sec">Arquivo HTML</h4>' +
+      '<p class="ajuda" style="margin-top:-4px">' + (mod.tem_arquivo ? 'Versão em uso enviada em ' + quando(mod.versao_em) + ' (' + tamanho(mod.tamanho) + ').' : '<b style="color:var(--red)">Nenhum arquivo enviado ainda.</b>') + ' Ao enviar um arquivo novo, a versão anterior fica guardada e pode ser restaurada.</p>' +
+      '<label class="zona-envio" id="zArq">' + IC.enviar + '<div>Clique para escolher ou arraste o arquivo .html desta ferramenta</div><input type="file" accept=".html,.htm,text/html" hidden id="inArq"></label>' +
+      '<div id="resArq"></div><details style="margin-top:4px"><summary style="cursor:pointer;font-weight:700;color:var(--ink-2)">Versões anteriores</summary><div id="listaVersoes" class="ajuda">Carregando…</div></details>';
+  }
+  function ligarArquivoEVersoes(m, mod) {
+    // versões
+    api('GET', '/api/admin/modulos/' + mod.slug + '/versoes').then(function (r) {
+      var el = $('#listaVersoes', m);
+      if (!el) return;
+      if (!r.versoes.length) { el.textContent = 'Nenhuma versão enviada.'; return; }
+      el.innerHTML = '<div class="caixa-opcoes" style="margin-top:8px">' + r.versoes.map(function (v) {
+        var emUso = v.id === mod.versao_id;
+        return '<div class="linha" style="padding:8px 12px;border-bottom:1px solid var(--border)"><span style="flex:1;color:var(--ink-2)"><b>' + quando(v.enviado_em) + '</b> · ' + tamanho(v.tamanho) + (v.nome_original ? ' · ' + esc(v.nome_original) : '') + (v.enviado_por ? ' · por ' + esc(v.enviado_por) : '') + '</span>' +
+          (emUso ? '<span class="etiqueta verde">em uso</span>' : '<button class="btn ghost sm" data-versao="' + v.id + '">Usar esta</button>') + '</div>';
+      }).join('') + '</div>';
+      $$('[data-versao]', el).forEach(function (b) {
+        b.onclick = async function () {
+          try { await api('POST', '/api/admin/modulos/' + mod.slug + '/versoes/' + b.getAttribute('data-versao') + '/usar'); toast('Versão restaurada.', 'ok'); m.fechar(); recarregarQuadro(mod.slug); paginaModulos(); } catch (e) { toast(e.message, 'erro'); }
+        };
+      });
+    }).catch(function () {});
+
+    // envio do arquivo
+    ligarZona($('#zArq', m), $('#inArq', m), async function (arquivos) {
+      var f = arquivos[0];
+      var res = $('#resArq', m);
+      res.innerHTML = '<div class="msg aviso" style="margin-top:8px">Enviando ' + esc(f.name) + '…</div>';
+      try {
+        var r = await api('PUT', '/api/admin/modulos/' + mod.slug + '/arquivo', await f.arrayBuffer(), { bruto: true, headers: { 'X-Nome-Arquivo': encodeURIComponent(f.name) } });
+        if (r.fonte_dados) {
+          // o HTML já não usa planilha Google: a janela acompanha a mudança feita no servidor
+          var radio = $('input[name=mFonte][value="' + r.fonte_dados + '"]', m);
+          if (radio) radio.checked = true;
+          mod.fonte_dados = r.fonte_dados;
+        }
+        res.innerHTML = '<div class="msg ok" style="margin-top:8px">Arquivo publicado. Quem abrir a ferramenta já recebe a nova versão.' +
+          (r.fonte_dados === 'interno' ? ' Este arquivo não usa planilha Google: o módulo passou para <b>Banco do portal</b>.' : '') + '</div>' +
+          (r.aviso ? '<div class="msg aviso" style="margin-top:8px">' + esc(r.aviso) + '</div>' : '') +
+          (r.aviso_banco ? '<div class="msg aviso" style="margin-top:8px">' + esc(r.aviso_banco) + '</div>' : '');
+        recarregarQuadro(mod.slug);
+        recarregarModulosUsuario();
+      } catch (e) { res.innerHTML = '<div class="msg erro" style="margin-top:8px">' + esc(e.message) + '</div>'; }
+    });
+  }
+
+  /* Coordenador: só o HTML dos módulos dos setores das equipes dele (enviar versão nova e voltar uma anterior) */
+  async function paginaModulosCoord() {
+    definirBarra('<span class="setor">Coordenação</span><span class="sep">/</span><span class="nome">Módulos do setor</span>');
+    $('#conteudo').innerHTML = '<div class="pagina"><div class="carregando" style="position:static;background:none"><div><div class="giro"></div>Carregando…</div></div></div>';
+    var mods;
+    try { mods = (await api('GET', '/api/admin/modulos')).modulos; } catch (e) { toast(e.message, 'erro'); return; }
+    $('#conteudo').innerHTML = '<div class="pagina"><h1>Módulos do setor</h1><p class="sub">As ferramentas dos setores das suas equipes. Aqui você envia uma versão nova do HTML ou volta para uma versão anterior.</p>' +
+      '<div class="painel"><div class="tabela-wrap"><table><thead><tr><th>Módulo</th><th>Setor</th><th>Arquivo em uso</th></tr></thead><tbody>' +
+      (mods.map(function (x) {
+        return '<tr class="clicavel" data-slug="' + esc(x.slug) + '"><td><div class="linha" style="flex-wrap:nowrap"><div class="icone-mod" style="width:34px;height:34px">' + (IC[x.icone] || IC.app) + '</div><div><b>' + esc(x.nome) + '</b>' + (x.ativo ? '' : ' <span class="etiqueta cinza">desativado</span>') + '</div></div></td>' +
+          '<td>' + esc(x.setor_nome || '—') + '</td>' +
+          '<td>' + (x.tem_arquivo ? quando(x.versao_em) + '<span class="sec">' + tamanho(x.tamanho) + (x.nome_original ? ' · ' + esc(x.nome_original) : '') + '</span>' : '<span class="etiqueta vermelha">sem arquivo</span>') + '</td></tr>';
+      }).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--muted);font-weight:700;padding:30px">Nenhum módulo nos setores das suas equipes. Peça à administração para incluir você na equipe do setor.</td></tr>') +
+      '</tbody></table></div></div></div>';
+    $$('tr[data-slug]').forEach(function (tr) {
+      tr.onclick = function () {
+        var mod = mods.find(function (x) { return x.slug === tr.getAttribute('data-slug'); });
+        var m = modal({
+          titulo: mod.nome, largo: true,
+          corpo: '<style>.titulo-sec{font-family:var(--display);font-size:15px;margin:0 0 10px}</style><div class="pilha">' + htmlArquivoModulo(mod) + '</div>',
+          pe: '<a class="btn ghost" href="#/m/' + esc(mod.slug) + '" id="btAbrirMod" style="margin-right:auto">' + IC.novaAba + 'Abrir</a><button class="btn primary" data-fechar>Fechar</button>',
+          aoFechar: function () { paginaModulosCoord(); },
+        });
+        $('#btAbrirMod', m).onclick = function () { m.fechar(); };
+        ligarArquivoEVersoes(m, mod);
+      };
+    });
+  }
+
   async function paginaModulos() {
+    if (eu.papel === 'coordenador') return paginaModulosCoord();
     definirBarra('<span class="setor">Administração</span><span class="sep">/</span><span class="nome">Módulos e dados</span>');
     $('#conteudo').innerHTML = '<div class="pagina"><div class="carregando" style="position:static;background:none"><div><div class="giro"></div>Carregando…</div></div></div>';
     var j, setores, usuarios;
@@ -780,10 +860,7 @@
           '<div><label class="rot" for="mOrdem">Ordem no setor</label><input class="campo" type="number" id="mOrdem" value="' + (mod.ordem || 0) + '"></div>' +
           '<div><label class="rot">Situação</label><label class="linha" style="font-weight:700;padding-top:9px"><input type="checkbox" id="mAtivo"' + (mod.ativo ? ' checked' : '') + '> Módulo ativo</label></div></div>' +
 
-          '<h4 class="titulo-sec">Arquivo HTML</h4>' +
-          '<p class="ajuda" style="margin-top:-4px">' + (mod.tem_arquivo ? 'Versão em uso enviada em ' + quando(mod.versao_em) + ' (' + tamanho(mod.tamanho) + ').' : '<b style="color:var(--red)">Nenhum arquivo enviado ainda.</b>') + ' Ao enviar um arquivo novo, a versão anterior fica guardada e pode ser restaurada.</p>' +
-          '<label class="zona-envio" id="zArq">' + IC.enviar + '<div>Clique para escolher ou arraste o arquivo .html desta ferramenta</div><input type="file" accept=".html,.htm,text/html" hidden id="inArq"></label>' +
-          '<div id="resArq"></div><details style="margin-top:4px"><summary style="cursor:pointer;font-weight:700;color:var(--ink-2)">Versões anteriores</summary><div id="listaVersoes" class="ajuda">Carregando…</div></details>' +
+          htmlArquivoModulo(mod) +
 
           // ferramentas do Claude guardam tudo no banco de documentos: esta escolha não se aplica a elas
           '<div' + (mod.adaptador === 'claude-db' ? ' hidden' : '') + '>' +
@@ -810,44 +887,7 @@
       });
       $('#btAbrirMod', m).onclick = function () { m.fechar(); };
 
-      // versões
-      api('GET', '/api/admin/modulos/' + mod.slug + '/versoes').then(function (r) {
-        var el = $('#listaVersoes', m);
-        if (!el) return;
-        if (!r.versoes.length) { el.textContent = 'Nenhuma versão enviada.'; return; }
-        el.innerHTML = '<div class="caixa-opcoes" style="margin-top:8px">' + r.versoes.map(function (v) {
-          var emUso = v.id === mod.versao_id;
-          return '<div class="linha" style="padding:8px 12px;border-bottom:1px solid var(--border)"><span style="flex:1;color:var(--ink-2)"><b>' + quando(v.enviado_em) + '</b> · ' + tamanho(v.tamanho) + (v.nome_original ? ' · ' + esc(v.nome_original) : '') + (v.enviado_por ? ' · por ' + esc(v.enviado_por) : '') + '</span>' +
-            (emUso ? '<span class="etiqueta verde">em uso</span>' : '<button class="btn ghost sm" data-versao="' + v.id + '">Usar esta</button>') + '</div>';
-        }).join('') + '</div>';
-        $$('[data-versao]', el).forEach(function (b) {
-          b.onclick = async function () {
-            try { await api('POST', '/api/admin/modulos/' + mod.slug + '/versoes/' + b.getAttribute('data-versao') + '/usar'); toast('Versão restaurada.', 'ok'); m.fechar(); recarregarQuadro(mod.slug); paginaModulos(); } catch (e) { toast(e.message, 'erro'); }
-          };
-        });
-      }).catch(function () {});
-
-      // envio do arquivo
-      ligarZona($('#zArq', m), $('#inArq', m), async function (arquivos) {
-        var f = arquivos[0];
-        var res = $('#resArq', m);
-        res.innerHTML = '<div class="msg aviso" style="margin-top:8px">Enviando ' + esc(f.name) + '…</div>';
-        try {
-          var r = await api('PUT', '/api/admin/modulos/' + mod.slug + '/arquivo', await f.arrayBuffer(), { bruto: true, headers: { 'X-Nome-Arquivo': encodeURIComponent(f.name) } });
-          if (r.fonte_dados) {
-            // o HTML já não usa planilha Google: a janela acompanha a mudança feita no servidor
-            var radio = $('input[name=mFonte][value="' + r.fonte_dados + '"]', m);
-            if (radio) radio.checked = true;
-            mod.fonte_dados = r.fonte_dados;
-          }
-          res.innerHTML = '<div class="msg ok" style="margin-top:8px">Arquivo publicado. Quem abrir a ferramenta já recebe a nova versão.' +
-            (r.fonte_dados === 'interno' ? ' Este arquivo não usa planilha Google: o módulo passou para <b>Banco do portal</b>.' : '') + '</div>' +
-            (r.aviso ? '<div class="msg aviso" style="margin-top:8px">' + esc(r.aviso) + '</div>' : '') +
-            (r.aviso_banco ? '<div class="msg aviso" style="margin-top:8px">' + esc(r.aviso_banco) + '</div>' : '');
-          recarregarQuadro(mod.slug);
-          recarregarModulosUsuario();
-        } catch (e) { res.innerHTML = '<div class="msg erro" style="margin-top:8px">' + esc(e.message) + '</div>'; }
-      });
+      ligarArquivoEVersoes(m, mod);
 
       // importação dos dados de uma ferramenta do Claude
       if (mod.adaptador === 'claude-db') {
