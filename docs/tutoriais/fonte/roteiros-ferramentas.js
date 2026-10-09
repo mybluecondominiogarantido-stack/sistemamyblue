@@ -295,12 +295,12 @@ module.exports = [
     entrar: 'paula@myblue.com.br',
     inicio: '#/m/parceiros',
     // parceiros, carteira e lançamentos fictícios de janeiro até o mês anterior; dois condomínios
-    // da Central Síndicos ficam sem lançamento no último mês, para o vídeo lançar
-    preparar: (cen) => basePrestacao(cen, { pular: [6, 7] }),
+    // da Nordeste Condomínios (regra de excedente por boleto) ficam sem lançamento no último mês, para o vídeo lançar
+    preparar: (cen) => basePrestacao(cen, { pular: [8, 9] }),
     abertura: ['A comissão dos parceiros: a competência do mês, paga no mês seguinte.', ['Lançar o mês de um parceiro', 'O relatório da prestação de contas', 'Marcar envio e pagamento', 'Cadastrar condomínios e parceiros']],
     async gravar(t) {
       const f = quadro(t, 'parceiros');
-      const central = 'p-centralsindicosassociados';
+      const parceiro = 'p-nordestecondominios';
 
       const V = '1 · Prestações do mês';
       await t.clicar(f.locator('[data-aba=mes]'), { depois: 1500 });
@@ -311,25 +311,29 @@ module.exports = [
       const L = '2 · Lançar o mês';
       await t.legenda('Para lançar, abra <b>Lançamento</b> e escolha o parceiro. A competência já vem marcada.', { etapa: L, ms: 300 });
       await t.clicar(f.locator('[data-aba=lancar]'), { depois: 1400 });
-      await t.escolher(f.locator('#selParceiro'), { value: central }, { depois: 1600 });
-      await t.legenda('Aparecem os condomínios do parceiro. Informe, de cada um, TSR, tarifa bancária, multa, juros, encargos e correção.', { etapa: L, ms: 600 });
-      const valores = [['4.215,30', '268,80', '96,40', '41,25', '18,90', '9,60'], ['3.684,75', '232,50', '71,10', '35,80', '22,40', '6,15']];
-      let n = 0;
-      for (let i = 0; i < 3 && n < valores.length; i++) {
-        const tsr = f.locator(`[data-i="${i}"][data-k="tsr"]`);
-        if ((await tsr.inputValue()).replace(/[0,.]/g, '')) continue; // já lançado
-        const ks = ['tsr', 'tarifa', 'multa', 'juros', 'encargos', 'correcao'];
+      await t.escolher(f.locator('#selParceiro'), { value: parceiro }, { depois: 1600 });
+      await t.legenda('Aparecem os condomínios do parceiro e a regra do contrato. Informe, de cada um, TSR, tarifa bancária, multa, juros, encargos e correção.', { etapa: L, ms: 600 });
+      const valores = [['4.215,30', '268,80', '96,40', '41,25', '18,90', '9,60', '3,20', '118'], ['3.684,75', '232,50', '71,10', '35,80', '22,40', '6,15', '3,10', '96']];
+      const ks = ['tsr', 'tarifa', 'multa', 'juros', 'encargos', 'correcao'];
+      const vazias = [];
+      for (let i = 0; i < 3; i++) if (!(await f.locator(`[data-i="${i}"][data-k="tsr"]`).inputValue()).replace(/[0,.]/g, '')) vazias.push(i); // as já lançadas ficam
+      for (const [n, i] of vazias.slice(0, 2).entries()) {
         for (const [j, k] of ks.entries()) await t.digitar(f.locator(`[data-i="${i}"][data-k="${k}"]`), valores[n][j], { atraso: 30, depois: 200 });
-        n++;
+      }
+      await t.legenda('Este parceiro recebe o <b>excedente do boleto</b>: (valor por boleto − piso de R$ 2,50) × quantidade de boletos emitidos. A tarifa bancária do balanço não entra nessa conta.', { etapa: L, ms: 300 });
+      for (const [n, i] of vazias.slice(0, 2).entries()) {
+        await t.digitar(f.locator(`[data-i="${i}"][data-k="valorBoleto"]`), valores[n][6], { atraso: 45, depois: 250 });
+        await t.digitar(f.locator(`[data-i="${i}"][data-k="qtdBoletos"]`), valores[n][7], { atraso: 60, depois: 250 });
       }
       await t.legenda('O balanço da garantidora (PDF) pode ser anexado aqui, para ir junto no relatório. Depois, <b>Salvar e ver relatório</b>.', { etapa: L, ms: 300 });
       await t.mostrar(f.locator('#dropzone'), 2600);
       await t.clicar(f.locator('#btnSalvarVer'), { depois: 2200 });
 
       const R = '3 · Relatório';
-      await t.legenda('O relatório da prestação de contas: cada condomínio, a base de cálculo, o percentual e a comissão total do mês.', { etapa: R, ms: 600 });
+      await t.legenda('O relatório da prestação de contas: cada condomínio, a base de cálculo, o percentual e a comissão do mês.', { etapa: R, ms: 600 });
       await t.rolar(420);
-      await t.pausa(1800);
+      await t.legenda('O repasse de boletos mostra, por condomínio, a quantidade, o valor por boleto, o excedente e o repasse.', { etapa: R, ms: 300 });
+      await t.mostrar(f.locator('text=/Excedente por boleto/').first(), 3200);
       await t.rolar(-420);
       await t.legenda('Daqui você <b>baixa o PDF</b> para enviar ao parceiro, imprime ou volta para corrigir algum valor.', { etapa: R, ms: 300 });
       await t.mostrar(f.locator('#btnBaixarPdf'), 2000);
@@ -339,7 +343,7 @@ module.exports = [
       const E = '4 · Envio e pagamento';
       await t.clicar(f.locator('[data-aba=mes]'), { depois: 1500 });
       await t.legenda('De volta ao mês: enviou a prestação ao parceiro? Marque <b>Enviado</b> — a data do envio fica registrada.', { etapa: E, ms: 300 });
-      await t.clicar(f.locator(`[data-env="${central}"]`), { depois: 1600 });
+      await t.clicar(f.locator(`[data-env="${parceiro}"]`), { depois: 1600 });
       await t.legenda('Quando o pagamento sair, marque <b>Pago</b>. Os filtros mostram o que falta enviar ou pagar.', { etapa: E, ms: 300 });
       await t.clicar(f.locator('[data-pag="p-alfaadministradora"]'), { depois: 1800 });
       await t.mostrar(f.locator('#btnZipMes'), 2000);
@@ -367,7 +371,7 @@ module.exports = [
       await t.mostrar(f.locator('#novoParc'), 3600, { dy: 0.3 });
       await t.legenda('Tudo fica salvo no portal, compartilhado com a equipe — e o <b>PartnerChip</b> mostra esses números em painéis.', { etapa: P, ms: 3600 });
     },
-    resumo: ['<b>Lançamento</b>: parceiro → valores de cada condomínio → <b>Salvar e ver relatório</b>', '<b>Prestações do mês</b>: marcar enviado e pago, baixar os relatórios', '<b>Condomínios</b> e <b>Parceiros</b>: a carteira e as regras do contrato'],
+    resumo: ['<b>Lançamento</b>: parceiro → valores de cada condomínio (e boletos, se houver excedente) → <b>Salvar e ver relatório</b>', '<b>Prestações do mês</b>: marcar enviado e pago, baixar os relatórios', '<b>Condomínios</b> e <b>Parceiros</b>: a carteira e as regras do contrato'],
   },
   {
     nome: 'ferramenta-comissoes',
