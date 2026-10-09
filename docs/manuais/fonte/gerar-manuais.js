@@ -44,7 +44,9 @@ h1, h2, h3 { font-family: "Quicksand", Arial, sans-serif; color: var(--ink); lin
 h1 { font-size: 22pt; margin: 0 0 4mm; padding-top: 2mm; }
 h1 .num { color: var(--teal); margin-right: 3mm; }
 h2 { font-size: 14pt; margin: 7mm 0 2.5mm; color: var(--teal-d); }
-h3 { font-size: 11.5pt; margin: 5mm 0 2mm; }
+h3 { font-size: 11.5pt; margin: 5mm 0 2mm; break-after: avoid; }
+h4 { font-family: "Quicksand", Arial, sans-serif; font-size: 10.8pt; margin: 5mm 0 1.5mm; color: var(--teal-d); break-after: avoid; }
+p.onde { font-size: 9.4pt; color: var(--ink2); margin: 0 0 1.5mm; break-after: avoid; }
 p { margin: 0 0 3mm; }
 ul { margin: 0 0 3mm; padding-left: 5mm; }
 li { margin-bottom: 1.2mm; }
@@ -546,7 +548,7 @@ function manualSetor(s) {
     <li><b>Gestão do setor</b>: o coordenador e o supervisor ${art.do} ${esc(s.nome)} cuidam dos usuários, das ferramentas, da equipe e dos tipos de demanda do setor.</li>
     ${s.supervisao ? '<li><b>Supervisão da Central de Tickets</b>: visão e direcionamento dos tickets de <b>todos</b> os setores (veja o capítulo próprio).</li>' : ''}
   </ul>
-  ${fig('02-inicio', 'Tela inicial: atalho da Central de Tickets e as ferramentas liberadas para você.')}
+  ${fig('02-inicio', 'Tela inicial: atalho da Central de Tickets e as ferramentas liberadas para você.', 100, subs.length ? 'pequena' : '')}
   ${dica('O passo a passo de acesso, senha e menu está no <b>Manual Geral do Portal MyBlue</b>.')}`) +
 
   (subs.length ? cap('Subáreas do setor', `
@@ -555,6 +557,7 @@ function manualSetor(s) {
     `<b>${esc(a.nome)}</b>`, a.papel, a.ferramentas.map((k) => FERRAMENTAS[k].nome).join('<br>'),
     a.setorPortal ? `Recebe como o setor <b>${esc(a.setorPortal)}</b>` : `Recebe pelo setor <b>${esc(s.nome)}</b>`,
   ]))}
+  ${s.fluxo ? `<h3>Como as ferramentas se conectam</h3>${passos(s.fluxo)}` : ''}
   ${subs.some((a) => a.setorPortal) ? dica(`Na Central de Tickets, ${subs.filter((a) => a.setorPortal).map((a) => `<b>${esc(a.setorPortal)}</b>`).join(' e ')} ${subs.filter((a) => a.setorPortal).length > 1 ? 'aparecem como setores próprios' : 'aparece como setor próprio'}: quem pede escolhe ${subs.filter((a) => a.setorPortal).length > 1 ? 'esses setores' : 'esse setor'} em <i>Para qual setor?</i>. A equipe de cada um é formada por quem tem esse setor no cadastro.`) : ''}
   ${atencao(`Para o coordenador ou supervisor ${art.do} ${esc(s.nome)} cuidar também ${subs.filter((a) => a.setorPortal).map((a) => `de ${esc(a.setorPortal)}`).join(' e ')} (usuários, ferramentas, equipe e tipos de demanda), esses setores precisam estar marcados no cadastro dele, junto com ${esc(s.nome)}.`)}`) : '') +
 
@@ -564,6 +567,13 @@ function manualSetor(s) {
   <p>${f.descricao}</p>
   ${f.abas && f.abas.length ? `<h3>${f.tituloAbas || 'Abas da ferramenta'}</h3>${tabela([f.tituloAbas ? 'Parte' : 'Aba', 'O que faz'], f.abas.map(([a, d]) => [`<b>${a}</b>`, d]), 'abas')}` : ''}
   ${f.rotina ? `<h3>Rotina do mês</h3>${passos(f.rotina)}` : ''}
+  ${f.comoUsar && f.comoUsar.length ? `<h3>Como usar, passo a passo</h3>` + f.comoUsar.map((t) => `
+  <h4>${t.titulo}</h4>
+  ${t.quem || t.onde ? `<p class="onde">${[t.quem && `<b>Quem faz:</b> ${t.quem}`, t.onde && `<b>Onde:</b> ${t.onde}`].filter(Boolean).join(' · ')}</p>` : ''}
+  ${passos(t.passos)}
+  ${t.fig ? fig(t.fig[0], t.fig[1]) : ''}
+  ${t.dica ? dica(t.dica) : ''}
+  ${t.atencao ? atencao(t.atencao) : ''}`).join('') : ''}
   <h3>No portal</h3>
   <ul>
     <li><b>Como abrir:</b> no menu (ou digite parte do nome na busca) e no cartão da tela inicial. <b>Nova aba</b> abre em tela cheia.</li>
