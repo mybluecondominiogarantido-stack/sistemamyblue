@@ -265,13 +265,24 @@ CREATE TABLE IF NOT EXISTS links_campanhas (
   atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_links_campanhas_inicio ON links_campanhas(inicio);
+
+-- vídeos tutoriais (o catálogo, com título e para quem é, fica em server/tutoriais.js)
+CREATE TABLE IF NOT EXISTS tutoriais (
+  slug TEXT PRIMARY KEY,
+  video BYTEA,
+  tamanho INTEGER,
+  duracao_s INTEGER,
+  legendas TEXT,
+  enviado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  enviado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 `;
 
 /* Supabase publica o schema "public" pela API dele (PostgREST). Com RLS ligado e sem
    políticas, ninguém lê nem grava por lá; o portal conecta como dono das tabelas e não é afetado. */
 const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 'permissoes', 'armazenamento', 'colecoes', 'registros', 'documentos', 'auditoria',
   'setor_membros', 'ticket_categorias', 'tickets', 'ticket_eventos', 'ticket_anexos', 'notificacoes', 'condominios',
-  'links_pagina', 'links', 'links_campanhas'];
+  'links_pagina', 'links', 'links_campanhas', 'tutoriais'];
 const RLS = TABELAS.map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`).join(';\n');
 
 /* Ajustes em bancos já existentes (rodam a cada início e não fazem nada se já estiverem aplicados). */
@@ -297,7 +308,9 @@ ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto_tipo TEXT;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto_em TIMESTAMPTZ;
 ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_papel_check;
 ALTER TABLE usuarios ADD CONSTRAINT usuarios_papel_check CHECK (papel IN ('admin','coordenador','supervisor','usuario'));
-ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS criado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS criado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL;
+-- o vídeo já vem comprimido: guardado sem compressão, o banco lê só o pedaço pedido pelo player
+ALTER TABLE tutoriais ALTER COLUMN video SET STORAGE EXTERNAL
 `;
 
 async function abrir(cfg) {
