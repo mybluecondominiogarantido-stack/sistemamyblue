@@ -147,7 +147,50 @@ function moradores() {
   return linhas;
 }
 
-module.exports = { boletos, sindicos, extracaoVouch, prestacao, implantacoes, moradores, CONDS };
+/* Gestão de Viagens: viagens dos últimos meses em todas as etapas (documentos "viagens/<id>").
+   "por" é quem registrou/decidiu (id do portal "mb-<n>"). */
+function viagens(agora = new Date(), { por = '' } = {}) {
+  const dia = (n) => { const d = new Date(agora); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+  const quando = (n) => dia(n) + 'T13:00:00.000Z';
+  let k = 0;
+  const cot = (fornecedor, valor) => ({ id: 'c' + (++k), fornecedor, valor, obs: '' });
+  const item = (tipo, descricao, cots, esc = 0, realizado = null) => { const c = cots.map(([f, v]) => cot(f, v)); return { id: 'i' + (++k), tipo, descricao, cotacoes: c, escolhida: c[esc].id, realizado }; };
+  const V = (n, status, colaborador, setor, destino, regiao, diaria, ida, dias, itens, extra = {}) => ({
+    id: 'vdemo' + n, protocolo: `VG-${dia(ida).replace(/-/g, '')}-D${n}`, status, colaborador, setor, cargo: '', motivo: extra.motivo || 'Visita a condomínios da carteira',
+    origem: 'Fortaleza/CE', destino, dataIda: dia(ida), dataVolta: dia(ida + dias - 1), obs: '', solicitante: extra.solicitante || '', dataSolicitacao: dia(ida - 12),
+    itens, ajuda: { diaria, regiao, diariaAuto: true, dias, diasAuto: true, modo: 'inclusivo', semAjuda: false, realizado: null },
+    criadoEm: quando(ida - 12), criadoPor: por, historico: [{ quando: quando(ida - 12), por, acao: 'Viagem cadastrada' }],
+    ...(['aprovada', 'realizada', 'reprovada'].includes(status) ? { decisao: { por, em: quando(ida - 8), obs: status === 'reprovada' ? 'Fazer por videochamada.' : '' } } : {}),
+  });
+  const lista = [
+    V(1, 'realizada', 'Bruna Reis', 'Crédito', 'Natal/RN', 'nordeste', 65, -84, 3, [
+      item('hospedagem', '2 diárias, quarto single', [['Hotel Ponta Negra', 410], ['Pousada Mar Azul', 360]], 1, 360),
+      item('rodoviario', 'Ida e volta', [['Viação Litoral', 238]], 0, 238)]),
+    V(2, 'realizada', 'Marcos Lima', 'Cobrança', 'Recife/PE', 'nordeste', 65, -61, 4, [
+      item('aereo', 'Ida e volta', [['Azul', 980], ['LATAM', 1120], ['GOL', 1040]], 0, 980),
+      item('hospedagem', '3 diárias', [['Hotel Boa Viagem', 690], ['Hotel Recife Centro', 615]], 1, 640)], { solicitante: 'Lia Souza' }),
+    V(3, 'realizada', 'Gil Martins', 'Comercial', 'São Paulo/SP', 'sulsudeste', 75, -33, 3, [
+      item('aereo', 'Ida e volta', [['LATAM', 1460], ['GOL', 1390]], 1, 1390),
+      item('hospedagem', '2 diárias, próximo ao cliente', [['Hotel Paulista', 820], ['Hotel Jardins', 760]], 1, 760),
+      item('locacao', 'Carro econômico, 3 dias', [['Locadora Rápida', 345]], 0, 345)], { motivo: 'Reunião com parceiro' }),
+    V(4, 'aprovada', 'Davi Rocha', 'Crédito', 'João Pessoa/PB', 'nordeste', 65, 6, 3, [
+      item('hospedagem', '2 diárias', [['Hotel Tambaú', 520], ['Pousada Cabo Branco', 440]], 1),
+      item('rodoviario', 'Ida e volta', [['Viação Litoral', 196]], 0)], { solicitante: 'Caio Mendes' }),
+    V(5, 'aprovacao', 'Lia Souza', 'Cobrança', 'Salvador/BA', 'nordeste', 65, 14, 3, [
+      item('aereo', 'Ida e volta', [['Azul', 890], ['GOL', 940]], 0),
+      item('hospedagem', '2 diárias', [['Hotel Rio Vermelho', 600], ['Hotel Barra', 560]], 1)]),
+    V(6, 'reprovada', 'Sara Alves', 'CS', 'Brasília/DF', 'centrooeste', 75, 20, 2, [
+      item('aereo', 'Ida e volta', [['LATAM', 1680]], 0)], { motivo: 'Treinamento' }),
+  ];
+  const docs = {};
+  lista.forEach((v) => {
+    if (v.status === 'realizada') v.historico.push({ quando: quando(-1), por, acao: 'Marcada como realizada' });
+    docs['viagens/' + v.id] = v;
+  });
+  return docs;
+}
+
+module.exports = { boletos, sindicos, extracaoVouch, prestacao, implantacoes, moradores, viagens, CONDS };
 
 /* troca o valor de uma constante de lista embutida no HTML (casando os colchetes), mantendo o resto do arquivo */
 function trocarLista(html, nome, valor) {

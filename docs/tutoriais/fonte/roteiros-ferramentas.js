@@ -602,4 +602,98 @@ module.exports = [
     },
     resumo: ['Escolha a ferramenta pelo <b>cartão</b>', 'Envie o arquivo recebido, confira e <b>baixe o resultado</b>', '<b>Ferramentas</b> volta para a lista · tudo roda no navegador'],
   },
+  {
+    nome: 'ferramenta-viagens',
+    ferramenta: 'gestao-de-viagens',
+    entrar: 'paula@myblue.com.br',
+    inicio: '#/m/gestao-de-viagens',
+    async preparar(cen) {
+      // viagens fictícias em todas as etapas, registradas pela coordenadora
+      const r = await cen.admin('POST', '/api/admin/modulos/gestao-de-viagens/documentos',
+        { modulo: 'gestao-de-viagens', documentos: D.viagens(new Date(), { por: 'mb-' + cen.id['paula@myblue.com.br'] }) });
+      if (!r || !r.total) throw new Error('não gravou as viagens de exemplo');
+    },
+    abertura: ['Cotações de hospedagem, passagens e ajuda de custo, da solicitação ao que foi pago.', ['Cadastrar a viagem e as cotações', 'Enviar e aprovar', 'Lançar o que foi pago', 'Dashboard de gastos']],
+    async gravar(t) {
+      const f = quadro(t, 'gestao-de-viagens');
+      const ida = new Date(Date.now() + 18 * 864e5).toISOString().slice(0, 10);
+      const volta = new Date(Date.now() + 20 * 864e5).toISOString().slice(0, 10);
+
+      const V = '1 · Visão geral';
+      await t.legenda('No topo: viagens <b>em cotação</b>, <b>aguardando aprovação</b> e o gasto do mês. A lista mostra cada viagem com o previsto, o realizado e a situação.', { etapa: V, ms: 600 });
+      await t.mostrar(f.locator('#kpisViagens'), 2400, { dy: 0.5 });
+      await t.legenda('Filtre pelo mês da ida, pela situação ou busque pelo colaborador e destino.', { etapa: V, ms: 300 });
+      await t.clicar(f.locator('[data-st=todas]'), { depois: 2000 });
+
+      const N = '2 · Nova viagem';
+      await t.legenda('Clique em <b>Nova viagem</b>. Recebeu o pedido por e-mail? Salve em PDF e arraste aqui: os dados são lidos sozinhos. Ou preencha à mão.', { etapa: N, ms: 300 });
+      await t.clicar(f.locator('#btnNova'), { depois: 1200 });
+      await t.mostrar(f.locator('#dz'), 2000);
+      await t.digitar(f.locator('#f-colaborador'), 'Davi Rocha', { atraso: 40 });
+      await t.digitar(f.locator('#f-setor'), 'Crédito', { atraso: 40 });
+      await t.digitar(f.locator('#f-destino'), 'Natal/RN', { atraso: 45 });
+      await t.preencherCampo(f.locator('#f-dataIda'), ida);
+      await t.preencherCampo(f.locator('#f-dataVolta'), volta);
+      await t.digitar(f.locator('#f-solicitante'), 'Caio Mendes', { atraso: 36 });
+      await t.digitar(f.locator('#f-motivo'), 'Visita a condomínios da carteira', { atraso: 26 });
+
+      const C = '3 · Cotações';
+      await t.legenda('Cada item (hospedagem, passagem, locação) recebe uma ou mais <b>cotações</b>. Marque a escolhida em cada item — a economia em relação à mais cara aparece no resumo.', { etapa: C, ms: 300 });
+      await t.digitar(f.locator('[data-it=descricao]').first(), '2 diárias, quarto single', { atraso: 28 });
+      await t.digitar(f.locator('[data-cot=fornecedor]').first(), 'Hotel Ponta Negra', { atraso: 30 });
+      await t.digitar(f.locator('[data-cot=valor]').first(), '480,00', { atraso: 50 });
+      // o valor é confirmado ao sair do campo (a tela se redesenha); só então o próximo clique
+      const garantir = async (alvo, conta, n) => { await t.clicar(alvo, { depois: 900 }); if ((await conta.count()) < n) { await alvo.click(); await t.pausa(600); } };
+      await f.locator('[data-cot=valor]').first().press('Tab'); await t.pausa(500);
+      await garantir(f.locator('[data-addcot="0"]'), f.locator('[data-cot=fornecedor]'), 2);
+      await t.digitar(f.locator('[data-cot=fornecedor]').nth(1), 'Pousada Mar Azul', { atraso: 30 });
+      await t.digitar(f.locator('[data-cot=valor]').nth(1), '390,00', { atraso: 50 });
+      await f.locator('[data-cot=valor]').nth(1).press('Tab'); await t.pausa(500);
+      await t.clicar(f.locator('input[type=radio][data-esc]').nth(1), { depois: 1200 });
+      if (!(await f.locator('input[type=radio][data-esc]').nth(1).isChecked())) await f.locator('input[type=radio][data-esc]').nth(1).check();
+      await t.legenda('Mais um item: a passagem rodoviária.', { etapa: C, ms: 300 });
+      await garantir(f.locator('[data-additem=rodoviario]'), f.locator('[data-it=descricao]'), 2);
+      await t.digitar(f.locator('[data-it=descricao]').nth(1), 'Ida e volta', { atraso: 30 });
+      await t.digitar(f.locator('[data-cot=fornecedor]').nth(2), 'Viação Litoral', { atraso: 30 });
+      await t.digitar(f.locator('[data-cot=valor]').nth(2), '210,00', { atraso: 50 });
+      await f.locator('[data-cot=valor]').nth(2).press('Tab'); await t.pausa(500);
+      await t.clicar(f.locator('input[type=radio][data-esc]').nth(2), { depois: 1000 });
+      if (!(await f.locator('input[type=radio][data-esc]').nth(2).isChecked())) await f.locator('input[type=radio][data-esc]').nth(2).check();
+      await t.legenda('A <b>ajuda de custo</b> vem sozinha: a diária pela região do destino e os dias pela ida e volta. Dá para ajustar ou marcar "sem ajuda de custo".', { etapa: C, ms: 300 });
+      await t.mostrar(f.locator('#aj-total'), 2600);
+      await t.mostrar(f.locator('#resumo'), 2600);
+      await t.legenda('<b>Salvar cotação</b> guarda para continuar depois. Pronto? <b>Enviar para aprovação</b>.', { etapa: C, ms: 300 });
+      await t.clicar(f.locator('[data-act=enviar]'), { depois: 2200 });
+
+      const A = '4 · Aprovação';
+      await t.legenda('Quem aprova abre a viagem em <b>Aguardando aprovação</b>, confere as cotações e decide: aprovar, reprovar (com o motivo) ou voltar para cotação.', { etapa: A, ms: 300 });
+      await t.clicar(f.locator('[data-st=aprovacao]'), { depois: 1600 });
+      await t.clicar(f.locator('tr[data-id]:has-text("Davi Rocha")').first(), { depois: 1600 });
+      await t.mostrar(f.locator('[data-act=reprovar]'), 1600);
+      await t.clicar(f.locator('[data-act=aprovar]'), { depois: 1000 });
+      await t.digitar(f.locator('#cf-txt'), 'Aprovado. Priorizar a pousada.', { atraso: 26 });
+      await t.clicar(f.locator('#cf [data-r="1"]'), { depois: 2000 });
+
+      const R = '5 · Realizada';
+      await t.legenda('Depois da viagem, abra a viagem aprovada e informe o <b>valor pago</b> de cada item. Sem valor informado, entra o previsto.', { etapa: R, ms: 300 });
+      await t.clicar(f.locator('[data-st=aprovada]'), { depois: 1600 });
+      await t.clicar(f.locator('tr[data-id="vdemo4"]'), { depois: 1600 });
+      await t.digitar(f.locator('[data-it=realizado]').first(), '440,00', { atraso: 50 });
+      await f.locator('[data-it=realizado]').first().press('Tab'); await t.pausa(500);
+      await t.digitar(f.locator('[data-it=realizado]').nth(1), '196,00', { atraso: 50 });
+      await f.locator('[data-it=realizado]').nth(1).press('Tab'); await t.pausa(500);
+      await t.clicar(f.locator('[data-act=realizar]'), { depois: 1200 });
+      await t.clicar(f.locator('#cf [data-r="1"]'), { depois: 2000 });
+
+      const D2 = '6 · Dashboard e configurações';
+      await t.legenda('O <b>Dashboard de gastos</b> soma o que foi aprovado e realizado: por mês, por tipo de gasto, por setor e por colaborador.', { etapa: D2, ms: 300 });
+      await t.clicar(f.locator('#tab-dash'), { depois: 2600 });
+      await t.rolar(420);
+      await t.pausa(2400);
+      await t.rolar(-420);
+      await t.legenda('Em <b>Configurações</b>: o valor da diária por região, como contar os dias e a lista de setores.', { etapa: D2, ms: 300 });
+      await t.clicar(f.locator('#tab-config'), { depois: 3000 });
+    },
+    resumo: ['<b>Nova viagem</b>: dados, itens e cotações (marque a escolhida)', 'Ajuda de custo automática → <b>Enviar para aprovação</b> → aprovar', 'Informe o <b>valor pago</b> → <b>Realizada</b> · Dashboard de gastos'],
+  },
 ];

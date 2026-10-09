@@ -330,6 +330,12 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
     const aviso = reconhecido && reconhecido !== m.slug ? `Atenção: este arquivo parece ser da ferramenta "${(await modulos.obter(reconhecido)).nome}".` : null;
     let avisoPatch = null;
     let fonteAutomatica = null;
+    if (!m.adaptador && /claude\.use\(\s*["']db["']/.test(buf.toString('utf8'))) {
+      // ferramenta feita como artefato do Claude (window.claude.use('db')): os documentos ficam no banco do portal
+      await db.q("UPDATE modulos SET adaptador = 'claude-db', fonte_dados = 'interno', atualizado_em = now() WHERE slug = $1", [m.slug]);
+      await seg.auditar(req, 'modulo_editado', m.slug, { adaptador: 'claude-db', motivo: 'HTML usa o banco do Claude' });
+      fonteAutomatica = 'interno';
+    }
     if (m.adaptador && /SHEET_URL_BUILTIN\s*=\s*\\?["']\/api\/gas\//.test(buf.toString('utf8'))) {
       // HTML já ligado ao banco do portal (sem planilha Google): o módulo passa a usar a planilha interna
       if (m.fonte_dados !== 'interno') {
