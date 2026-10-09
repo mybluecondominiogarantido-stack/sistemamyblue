@@ -394,6 +394,7 @@ function manualGeral() {
     ['<b>Busca</b>', 'Digite parte do nome para achar uma ferramenta. Enter abre a primeira.'],
     ['<b>Início</b>', 'Saudação, atalho da Central de Tickets e os cartões das suas ferramentas.'],
     ['<b>Central de Links</b>', 'Os links úteis da equipe.'],
+    ['<b>Tutoriais</b>', 'Vídeos curtos mostrando o portal e as ferramentas em uso, com o passo a passo ao lado (clique num passo para ir ao trecho). Aparecem os vídeos do seu perfil, do seu setor e das suas ferramentas.'],
     ['<b>Central de Tickets → Tickets</b>', 'Suas filas. O número ao lado mostra quantos tickets estão com você (fica vermelho se algum está atrasado).'],
     ['<b>Painel de tickets</b>', 'Indicadores do atendimento.'],
     ['<b>Carteira → Carteira de condomínios</b>', 'Os condomínios atendidos e quem cuida de cada um.'],
@@ -580,6 +581,7 @@ function manualSetor(s) {
     <li><b>Os dados:</b> ${f.dados}</li>
     <li><b>Acesso:</b> quem tem a ferramenta liberada no cadastro, mais o coordenador e o supervisor do setor. Peça ao coordenador do setor ou à administração.</li>
     <li><b>Atualizações:</b> quando a ferramenta mudar, o coordenador ou supervisor envia o HTML novo em <b>Gestão do setor → Ferramentas do setor</b>.</li>
+    ${f.video ? '<li><b>Vídeo:</b> no menu <b>Tutoriais</b> há um vídeo com esta ferramenta sendo usada, passo a passo.</li>' : ''}
   </ul>
   ${f.obs ? dica(f.obs) : ''}`).join('') + `
   <h3>Cuidados</h3>

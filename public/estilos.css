@@ -181,7 +181,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--teal);width:16px;heigh
 .opcao-radio b{display:block;font-size:13.5px}
 .opcao-radio span{display:block;font-size:12.5px;color:var(--muted);font-weight:600}
 .segredo{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:17px;font-weight:700;background:var(--surface-2);border:1px dashed var(--border-2);padding:10px 14px;border-radius:10px;letter-spacing:.5px;user-select:all}
-.zona-envio{border:2px dashed var(--border-2);border-radius:var(--r);padding:22px;text-align:center;color:var(--muted);font-weight:700;cursor:pointer;transition:border-color .15s,background .15s}
+.zona-envio{display:block;border:2px dashed var(--border-2);border-radius:var(--r);padding:22px;text-align:center;color:var(--muted);font-weight:700;cursor:pointer;transition:border-color .15s,background .15s}
 .zona-envio.arrastando,.zona-envio:hover{border-color:var(--teal);background:var(--teal-bg);color:var(--teal-d)}
 
 /* ---------- aviso flutuante ---------- */
@@ -299,3 +299,26 @@ input[type=checkbox],input[type=radio]{accent-color:var(--teal);width:16px;heigh
 .tabela-carteira th{white-space:normal}
 .tabela-carteira .corta{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media (max-width:760px){.tabela-carteira{table-layout:auto;min-width:720px}}
+
+/* ===== tutoriais em vídeo ===== */
+.cartao-tut{padding:0;overflow:hidden;gap:8px}
+.cartao-tut h3,.cartao-tut p,.cartao-tut .setor-cartao{margin:0 16px}
+.cartao-tut .setor-cartao{margin-bottom:16px}
+.capa-tut{position:relative;height:118px;background:linear-gradient(150deg,#0c77be 0%,#199cb1 70%,#4fc1cf 100%);display:flex;align-items:center;justify-content:center;margin-bottom:6px}
+.capa-tut .play{width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,.95);color:var(--teal-d);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(0,0,0,.18);transition:transform .15s}
+.capa-tut .play svg{width:24px;height:24px}
+.cartao-tut:hover .play{transform:scale(1.08)}
+.capa-tut .dur{position:absolute;right:10px;bottom:9px;background:rgba(13,40,48,.82);color:#fff;font-size:12px;font-weight:800;border-radius:7px;padding:2px 8px}
+.capa-tut .visto{position:absolute;left:10px;bottom:9px;background:rgba(255,255,255,.92);color:var(--green);font-size:12px;font-weight:800;border-radius:7px;padding:2px 8px}
+.tutorial .setor-cartao{display:block;margin-bottom:6px}
+.grade-tut{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:18px;align-items:start}
+.quadro-video video{width:100%;aspect-ratio:16/9;display:block;background:#0d2830;border-radius:var(--r);box-shadow:var(--shadow)}
+.passos-tut{display:flex;flex-direction:column;max-height:min(70vh,560px)}
+.cab-passos{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:14px 16px 10px;font-family:var(--display);font-weight:700;font-size:15.5px;border-bottom:1px solid var(--border)}
+.passos-tut ol{list-style:none;margin:0;padding:8px;overflow:auto;position:relative}
+.passos-tut li.etapa{font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--teal-d);padding:12px 8px 4px}
+.passos-tut li.passo{display:flex;gap:10px;padding:7px 8px;border-radius:var(--r-sm);cursor:pointer;font-size:13.5px;font-weight:600;color:var(--ink-2);line-height:1.4}
+.passos-tut li.passo:hover{background:var(--surface-2)}
+.passos-tut li.passo.on{background:var(--teal-bg);color:var(--ink)}
+.passos-tut li.passo .t{flex:0 0 40px;font-variant-numeric:tabular-nums;color:var(--muted);font-weight:800;font-size:12.5px;padding-top:1px}
+@media (max-width:960px){.grade-tut{grid-template-columns:1fr}.passos-tut{max-height:none}.passos-tut ol{max-height:360px}}

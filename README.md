@@ -223,6 +223,15 @@ Página do portal com os links úteis da equipe (a antiga *Central de Links Grup
 
 Toda alteração fica no *Histórico de atividades* e entra no backup.
 
+## Tutoriais em vídeo
+
+No menu **Tutoriais**, vídeos curtos com o portal sendo usado de verdade (dados fictícios), com legenda e o passo a passo ao lado: clicar num passo leva ao trecho do vídeo. Cada pessoa vê só os vídeos do perfil dela (todos, equipe, líder, coordenador/supervisor, supervisão de tickets, administração) e das ferramentas que abre.
+
+- O catálogo (título, descrição e para quem é cada vídeo) está em `server/tutoriais.js`.
+- Os vídeos ficam no banco, não no repositório. A administração envia em **Administração → Tutoriais em vídeo**: arraste os `.mp4` e `.vtt` de uma vez, e cada arquivo vai para o tutorial com o mesmo nome. Até 150 MB por vídeo (`LIMITE_VIDEO_MB`).
+- O player busca o vídeo aos pedaços, então dá para avançar e voltar sem baixar o arquivo inteiro.
+- Os vídeos são gravados por `docs/tutoriais/fonte/gravar-tutoriais.js` (veja [`docs/tutoriais`](docs/tutoriais)).
+
 ## Colocar no ar
 
 ### No Railway
@@ -301,6 +310,7 @@ Rode `npm ci --omit=dev` e `npm start` com um gerenciador de processos (pm2, sys
 | `LIMITE_HTML_MB` / `LIMITE_DADOS_MB` | 40 / 25 | Tamanho máximo de HTML enviado e de dados gravados por vez |
 | `LIMITE_ANEXO_MB` | 10 | Tamanho máximo de cada anexo de ticket |
 | `LIMITE_FUNDO_MB` | 8 | Tamanho máximo de cada imagem de fundo da Central de Links |
+| `LIMITE_VIDEO_MB` | 150 | Tamanho máximo de cada vídeo tutorial |
 | `EXPEDIENTE_INICIO` / `EXPEDIENTE_FIM` | 8 / 17 | Horário de expediente usado nos prazos dos tickets |
 | `EXPEDIENTE_DIAS` | 1,2,3,4,5 | Dias com expediente (0 = domingo … 6 = sábado) |
 | `FERIADOS` | — | Dias sem expediente, ex.: `2026-11-02,2026-11-15,2026-11-20,2026-12-25` |
@@ -335,7 +345,8 @@ server/
   notificacoes.js   avisos da Central de Tickets (sino do portal e e-mail)
   email.js          envio de e-mail: Microsoft 365 (Graph) ou SMTP
   expediente.js     prazos em horário de expediente (seg–sex, 8h–17h)
-  rotas/            auth, admin, ferramentas (entrega, armazenamento, protocolo Apps Script), tickets e links (Central de Links)
+  tutoriais.js      catálogo dos vídeos tutoriais e quem vê cada um
+  rotas/            auth, admin, ferramentas (entrega, armazenamento, protocolo Apps Script), tickets, links (Central de Links) e tutoriais
 public/             portal (login, início, menu, administração)
 scripts/            importar-html e criar-admin
 test/               testes automatizados (npm test)

@@ -209,7 +209,8 @@
     var lista = modulos.filter(function (m) { return !termo || normal(m.nome + ' ' + m.setor + ' ' + m.descricao).indexOf(termo) >= 0; });
     var rota = location.hash || '#/';
     var html = termo ? '' : '<a href="#/" class="' + (rota === '#/' ? 'on' : '') + '">' + IC.inicio + 'Início</a>' +
-      '<a href="#/links" class="' + (rota.indexOf('#/links') === 0 ? 'on' : '') + '">' + IC.link + 'Central de Links</a>';
+      '<a href="#/links" class="' + (rota.indexOf('#/links') === 0 ? 'on' : '') + '">' + IC.link + 'Central de Links</a>' +
+      ((tutoriais && tutoriais.tutoriais.length) || eu.papel === 'admin' ? '<a href="#/tutoriais" class="' + (rota.indexOf('#/tutoriais') === 0 ? 'on' : '') + '">' + IC.video + 'Tutoriais</a>' : '');
     if (!termo) {
       html += '<div class="grupo">Central de Tickets</div>' +
         '<a href="#/tickets" class="' + (rota.indexOf('#/tickets') === 0 && rota.indexOf('#/tickets/painel') !== 0 ? 'on' : '') + '">' + IC.ticket + '<span>Tickets</span>' +
@@ -231,6 +232,7 @@
         '<a href="#/admin/usuarios" class="' + (rota.indexOf('#/admin/usuarios') === 0 ? 'on' : '') + '">' + IC.usuarios + 'Usuários e acessos</a>' +
         '<a href="#/admin/modulos" class="' + (rota.indexOf('#/admin/modulos') === 0 ? 'on' : '') + '">' + IC.camadas + 'Módulos e dados</a>' +
         '<a href="#/admin/equipes" class="' + (rota.indexOf('#/admin/equipes') === 0 ? 'on' : '') + '">' + IC.pessoas + 'Equipes e tipos de demanda</a>' +
+        '<a href="#/admin/tutoriais" class="' + (rota.indexOf('#/admin/tutoriais') === 0 ? 'on' : '') + '">' + IC.video + 'Tutoriais em vídeo</a>' +
         '<a href="#/admin/auditoria" class="' + (rota.indexOf('#/admin/auditoria') === 0 ? 'on' : '') + '">' + IC.historico + 'Histórico de atividades</a>';
     } else if (gestorSetor() && !termo) {
       html += '<div class="grupo">Gestão do setor</div>' +
@@ -286,7 +288,9 @@
       if (partes[1] === 'usuarios') return paginaUsuarios();
       if (partes[1] === 'modulos') return paginaModulos();
       if (partes[1] === 'auditoria') return paginaAuditoria();
+      if (partes[1] === 'tutoriais') return paginaAdminTutoriais();
     }
+    if (partes[0] === 'tutoriais') return partes[1] ? paginaTutorial(decodeURIComponent(partes[1])) : paginaTutoriais();
     if (partes[0] === 'conta') return paginaConta();
     return paginaInicio();
   }
@@ -621,8 +625,8 @@
       '<div id="resArq"></div><details style="margin-top:4px"><summary style="cursor:pointer;font-weight:700;color:var(--ink-2)">Versões anteriores</summary><div id="listaVersoes" class="ajuda">Carregando…</div></details>';
   }
   function ligarArquivoEVersoes(m, mod) {
-    // versões
-    api('GET', '/api/admin/modulos/' + mod.slug + '/versoes').then(function (r) {
+    // versões (recarrega depois de enviar um arquivo novo)
+    function carregarVersoes() { api('GET', '/api/admin/modulos/' + mod.slug + '/versoes').then(function (r) {
       var el = $('#listaVersoes', m);
       if (!el) return;
       if (!r.versoes.length) { el.textContent = 'Nenhuma versão enviada.'; return; }
@@ -636,7 +640,8 @@
           try { await api('POST', '/api/admin/modulos/' + mod.slug + '/versoes/' + b.getAttribute('data-versao') + '/usar'); toast('Versão restaurada.', 'ok'); m.fechar(); recarregarQuadro(mod.slug); paginaModulos(); } catch (e) { toast(e.message, 'erro'); }
         };
       });
-    }).catch(function () {});
+    }).catch(function () {}); }
+    carregarVersoes();
 
     // envio do arquivo
     ligarZona($('#zArq', m), $('#inArq', m), async function (arquivos) {
@@ -645,6 +650,8 @@
       res.innerHTML = '<div class="msg aviso" style="margin-top:8px">Enviando ' + esc(f.name) + '…</div>';
       try {
         var r = await api('PUT', '/api/admin/modulos/' + mod.slug + '/arquivo', await f.arrayBuffer(), { bruto: true, headers: { 'X-Nome-Arquivo': encodeURIComponent(f.name) } });
+        mod.versao_id = r.versao;
+        carregarVersoes();
         if (r.fonte_dados) {
           // o HTML já não usa planilha Google: a janela acompanha a mudança feita no servidor
           var radio = $('input[name=mFonte][value="' + r.fonte_dados + '"]', m);
@@ -1015,14 +1022,15 @@
     });
   }
 
-  function ligarZona(zona, input, aoEscolher) {
+  function ligarZona(zona, input, aoEscolher, aceita, aviso) {
+    aceita = aceita || /\.html?$/i;
     input.onchange = function () { if (input.files.length) aoEscolher(Array.prototype.slice.call(input.files)); input.value = ''; };
     zona.addEventListener('dragover', function (e) { e.preventDefault(); zona.classList.add('arrastando'); });
     zona.addEventListener('dragleave', function () { zona.classList.remove('arrastando'); });
     zona.addEventListener('drop', function (e) {
       e.preventDefault(); zona.classList.remove('arrastando');
-      var fs = Array.prototype.slice.call(e.dataTransfer.files).filter(function (f) { return /\.html?$/i.test(f.name); });
-      if (fs.length) aoEscolher(fs); else toast('Envie arquivos .html', 'erro');
+      var fs = Array.prototype.slice.call(e.dataTransfer.files).filter(function (f) { return aceita.test(f.name); });
+      if (fs.length) aoEscolher(fs); else toast(aviso || 'Envie arquivos .html', 'erro');
     });
   }
 
@@ -2448,6 +2456,163 @@
     carregar(true);
   }
 
+  /* ======================= tutoriais em vídeo ======================= */
+  var tutoriais = null; // os que a pessoa pode ver (com vídeo enviado)
+  function carregarTutoriais() {
+    return api('GET', '/api/tutoriais').then(function (j) { tutoriais = j; desenharMenu(); return j; }).catch(function () { return null; });
+  }
+  function duracaoTxt(s) { if (!s) return ''; return s < 60 ? s + ' s' : Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') + ' min'; }
+  function vistos() { return lembrar('tutoriais.vistos', {}); }
+  function cartaoTutorial(t) {
+    var visto = vistos()[t.slug] === t.v;
+    return '<a class="cartao cartao-tut" href="#/tutoriais/' + esc(t.slug) + '">' +
+      '<div class="capa-tut"><span class="play">' + IC.video + '</span>' + (t.duracao ? '<span class="dur">' + duracaoTxt(t.duracao) + '</span>' : '') +
+      (visto ? '<span class="visto">✓ assistido</span>' : '') + '</div>' +
+      '<h3>' + esc(t.titulo) + '</h3><p>' + esc(t.descricao) + '</p><span class="setor-cartao">' + esc(t.publico) + '</span></a>';
+  }
+
+  async function paginaTutoriais() {
+    definirBarra('<span class="nome">Tutoriais</span>');
+    $('#conteudo').innerHTML = carregandoHtml();
+    var j = await carregarTutoriais();
+    if (!j) { $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">Não foi possível carregar os tutoriais.</div></div>'; return; }
+    var html = '<div class="pagina"><h1>Tutoriais</h1><p class="sub">Vídeos curtos com o portal sendo usado de verdade (os dados são fictícios). Aqui aparecem os vídeos do seu perfil, do seu setor e das ferramentas que você usa.</p>';
+    if (!j.tutoriais.length) html += '<div class="vazio">Ainda não há tutoriais para você.' + (eu.papel === 'admin' ? '<br><a class="btn primary" style="margin-top:14px" href="#/admin/tutoriais">Enviar os vídeos</a>' : '') + '</div>';
+    j.grupos.forEach(function (g) {
+      var itens = j.tutoriais.filter(function (t) { return t.grupo === g; });
+      if (itens.length) html += '<section class="secao-setor"><h2>' + esc(g) + ' <span class="qtd">' + itens.length + '</span></h2><div class="cartoes">' + itens.map(cartaoTutorial).join('') + '</div></section>';
+    });
+    $('#conteudo').innerHTML = html + '</div>';
+  }
+
+  function lerVtt(txt) {
+    var tempo = function (h) { var p = h.split(':').map(Number); return p.length === 3 ? p[0] * 3600 + p[1] * 60 + p[2] : p[0] * 60 + p[1]; };
+    return String(txt || '').split(/\r?\n\r?\n/).map(function (bloco) {
+      var l = bloco.trim().split(/\r?\n/);
+      var i = l.findIndex(function (x) { return x.indexOf('-->') > 0; });
+      if (i < 0) return null;
+      var ts = l[i].split('-->');
+      var texto = l.slice(i + 1).join(' ');
+      var sep = texto.indexOf(' — ');
+      return { ini: tempo(ts[0].trim()), fim: tempo(ts[1].trim().split(' ')[0]), etapa: sep > 0 ? texto.slice(0, sep) : '', texto: sep > 0 ? texto.slice(sep + 3) : texto };
+    }).filter(Boolean);
+  }
+
+  async function paginaTutorial(slug) {
+    definirBarra('<a class="setor" href="#/tutoriais" style="text-decoration:none">Tutoriais</a><span class="sep">/</span><span class="nome">…</span>', '<a class="btn ghost sm" href="#/tutoriais">Voltar</a>');
+    $('#conteudo').innerHTML = carregandoHtml();
+    var j = tutoriais || await carregarTutoriais();
+    var t = j && j.tutoriais.find(function (x) { return x.slug === slug; });
+    if (!t) { $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">Tutorial não encontrado.<br><a class="btn ghost" style="margin-top:14px" href="#/tutoriais">Ver os tutoriais</a></div></div>'; return; }
+    definirBarra('<a class="setor" href="#/tutoriais" style="text-decoration:none">Tutoriais</a><span class="sep">/</span><span class="nome">' + esc(t.titulo) + '</span>', '<a class="btn ghost sm" href="#/tutoriais">Voltar</a>');
+    var outros = j.tutoriais.filter(function (x) { return x.grupo === t.grupo && x.slug !== t.slug; });
+    $('#conteudo').innerHTML = '<div class="pagina tutorial">' +
+      '<span class="setor-cartao">' + esc(t.grupo) + ' · ' + esc(t.publico) + '</span><h1>' + esc(t.titulo) + '</h1><p class="sub">' + esc(t.descricao) + '</p>' +
+      '<div class="grade-tut"><div class="quadro-video"><video id="vTut" controls playsinline preload="metadata" src="/api/tutoriais/' + esc(t.slug) + '/video?v=' + t.v + '"></video></div>' +
+      '<aside class="painel passos-tut"><div class="cab-passos">Passo a passo<span class="ajuda" style="margin:0">clique para ir ao trecho</span></div><ol id="olPassos"><li class="ajuda">' + (t.tem_legendas ? 'Carregando…' : 'Sem passo a passo para este vídeo.') + '</li></ol></aside></div>' +
+      (outros.length ? '<section class="secao-setor" style="margin-top:28px"><h2>Mais vídeos de ' + esc(t.grupo) + '</h2><div class="cartoes">' + outros.map(cartaoTutorial).join('') + '</div></section>' : '') + '</div>';
+    var v = $('#vTut');
+    v.addEventListener('timeupdate', function () {
+      if (v.duration && v.currentTime / v.duration > 0.9) { var vs = vistos(); if (vs[t.slug] !== t.v) { vs[t.slug] = t.v; guardar('tutoriais.vistos', vs); } }
+    });
+    if (!t.tem_legendas) return;
+    var cues = [];
+    try { var r = await fetch('/api/tutoriais/' + encodeURIComponent(t.slug) + '/legendas?v=' + t.v, { credentials: 'same-origin' }); if (r.ok) cues = lerVtt(await r.text()); } catch (e) { /* sem passos */ }
+    var ol = $('#olPassos');
+    if (!ol || location.hash !== '#/tutoriais/' + slug) return; // a pessoa já saiu da página
+    var etapaAnt = null;
+    ol.innerHTML = cues.map(function (c, i) {
+      var cab = c.etapa && c.etapa !== etapaAnt ? '<li class="etapa">' + esc(c.etapa) + '</li>' : '';
+      etapaAnt = c.etapa || etapaAnt;
+      return cab + '<li class="passo" data-i="' + i + '"><span class="t">' + duracaoTxt(Math.floor(c.ini)).replace(' min', '').replace(' s', 's') + '</span><span>' + esc(c.texto) + '</span></li>';
+    }).join('') || '<li class="ajuda">Sem passo a passo para este vídeo.</li>';
+    $$('li.passo', ol).forEach(function (li) {
+      li.addEventListener('click', function () { v.currentTime = cues[Number(li.getAttribute('data-i'))].ini + 0.05; v.play(); });
+    });
+    var ativo = -1;
+    v.addEventListener('timeupdate', function () {
+      var i = -1;
+      cues.forEach(function (c, k) { if (v.currentTime >= c.ini && v.currentTime < c.fim) i = k; });
+      if (i === ativo) return;
+      ativo = i;
+      $$('li.passo', ol).forEach(function (li) { li.classList.toggle('on', Number(li.getAttribute('data-i')) === i); });
+      var on = $('li.passo.on', ol);
+      if (on) ol.scrollTop = on.offsetTop - ol.offsetTop - 60;
+    });
+  }
+
+  /* administração: envia os vídeos gravados (cada arquivo vai para o tutorial com o mesmo nome) */
+  async function paginaAdminTutoriais() {
+    definirBarra('<span class="setor">Administração</span><span class="sep">/</span><span class="nome">Tutoriais</span>', '<a class="btn ghost sm" href="#/tutoriais">' + IC.video + 'Ver como as pessoas veem</a>');
+    $('#conteudo').innerHTML = carregandoHtml();
+    var j;
+    try { j = await api('GET', '/api/admin/tutoriais'); } catch (e) { toast(e.message, 'erro'); return; }
+    var enviados = j.tutoriais.filter(function (t) { return t.tem_video; }).length;
+    $('#conteudo').innerHTML = '<div class="pagina"><h1>Tutoriais em vídeo</h1>' +
+      '<p class="sub">Cada pessoa vê os vídeos do perfil, do setor e das ferramentas dela. ' + enviados + ' de ' + j.tutoriais.length + ' vídeos enviados.</p>' +
+      '<label class="zona-envio" id="zTut" style="margin-bottom:12px">' + IC.enviar + '<div>Arraste aqui os arquivos <b>.mp4</b> e <b>.vtt</b> dos tutoriais (pode ser todos de uma vez) ou clique para escolher.<br>' +
+      '<span class="ajuda">Cada arquivo vai para o tutorial com o mesmo nome (ex.: ticket-atender.mp4 e ticket-atender.vtt).</span></div>' +
+      '<input type="file" accept=".mp4,.vtt,video/mp4,text/vtt" multiple hidden id="inTut"></label>' +
+      '<div id="resTut" class="pilha" style="margin-bottom:16px"></div>' +
+      '<div class="painel"><div class="tabela-wrap"><table><thead><tr><th>Tutorial</th><th>Para quem</th><th>Situação</th><th></th></tr></thead><tbody>' +
+      j.grupos.map(function (g) {
+        var itens = j.tutoriais.filter(function (t) { return t.grupo === g; });
+        if (!itens.length) return '';
+        return '<tr><td colspan="4" style="background:var(--surface-2);font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">' + esc(g) + '</td></tr>' +
+          itens.map(function (t) {
+            return '<tr><td><b>' + esc(t.titulo) + '</b><div class="ajuda" style="margin:2px 0 0">' + esc(t.slug) + '</div></td><td>' + esc(t.publico) + (t.modulo ? '<div class="ajuda" style="margin:2px 0 0">' + esc(t.modulo) + '</div>' : '') + '</td>' +
+              '<td>' + (t.tem_video ? '<span class="etiqueta verde">enviado</span> <span class="ajuda" style="display:inline">' + duracaoTxt(t.duracao) + ' · ' + tamanho(t.tamanho) + ' · ' + quando(t.enviado_em) + (t.tem_legendas ? '' : ' · sem passo a passo') + '</span>' : '<span class="etiqueta cinza">falta enviar</span>') + '</td>' +
+              '<td style="text-align:right;white-space:nowrap">' + (t.tem_video ? '<a class="btn ghost sm" href="#/tutoriais/' + esc(t.slug) + '">Ver</a> <button class="btn ghost sm" data-tirar="' + esc(t.slug) + '">Remover</button>' : '') + '</td></tr>';
+          }).join('');
+      }).join('') + '</tbody></table></div></div></div>';
+
+    function enviar(url, arquivo, tipo, aoProgresso) {
+      return new Promise(function (ok, falha) {
+        var x = new XMLHttpRequest();
+        x.open('PUT', url);
+        x.setRequestHeader('Content-Type', tipo);
+        x.upload.onprogress = function (e) { if (e.lengthComputable) aoProgresso(Math.round(e.loaded / e.total * 100)); };
+        x.onload = function () {
+          var r = {}; try { r = JSON.parse(x.responseText); } catch (e) { /* sem JSON */ }
+          if (x.status >= 200 && x.status < 300) ok(r); else falha(new Error(r.erro || ('Erro ' + x.status)));
+        };
+        x.onerror = function () { falha(new Error('Falha de conexão.')); };
+        x.send(arquivo);
+      });
+    }
+    var slugs = {}; j.tutoriais.forEach(function (t) { slugs[t.slug] = t; });
+    async function processar(arquivos) {
+      var res = $('#resTut');
+      // legendas depois do vídeo do mesmo tutorial
+      arquivos.sort(function (a, b) { return /\.vtt$/i.test(a.name) - /\.vtt$/i.test(b.name); });
+      for (var i = 0; i < arquivos.length; i++) {
+        var f = arquivos[i];
+        var slug = f.name.replace(/\.(mp4|vtt)$/i, '').toLowerCase();
+        var vtt = /\.vtt$/i.test(f.name);
+        var linha = document.createElement('div');
+        linha.className = 'msg aviso';
+        res.appendChild(linha);
+        if (!slugs[slug]) { linha.className = 'msg erro'; linha.textContent = f.name + ': não há tutorial com este nome.'; continue; }
+        linha.textContent = f.name + ': enviando…';
+        try {
+          await enviar('/api/admin/tutoriais/' + slug + '/' + (vtt ? 'legendas' : 'video'), f, vtt ? 'text/vtt' : 'video/mp4', function (p) { linha.textContent = f.name + ': enviando… ' + p + '%'; });
+          linha.className = 'msg ok'; linha.textContent = f.name + ' → ' + slugs[slug].titulo + (vtt ? ' (passo a passo)' : '');
+        } catch (e) { linha.className = 'msg erro'; linha.textContent = f.name + ': ' + e.message; }
+      }
+      tutoriais = null; carregarTutoriais();
+      var bt = document.createElement('button'); bt.className = 'btn primary'; bt.textContent = 'Atualizar a lista'; bt.onclick = paginaAdminTutoriais;
+      res.appendChild(bt);
+    }
+    ligarZona($('#zTut'), $('#inTut'), processar, /\.(mp4|vtt)$/i, 'Envie arquivos .mp4 ou .vtt');
+    $$('[data-tirar]').forEach(function (b) {
+      b.onclick = async function () {
+        var t = slugs[b.getAttribute('data-tirar')];
+        if (!(await confirmar('Remover vídeo', 'Remover o vídeo "' + esc(t.titulo) + '"? Ele deixa de aparecer para as pessoas até ser enviado de novo.', 'Remover', true))) return;
+        try { await api('DELETE', '/api/admin/tutoriais/' + t.slug); toast('Vídeo removido.', 'ok'); tutoriais = null; carregarTutoriais(); paginaAdminTutoriais(); } catch (e) { toast(e.message, 'erro'); }
+      };
+    });
+  }
+
   /* ======================= partida ======================= */
   async function iniciar() {
     try {
@@ -2464,6 +2629,7 @@
     }
     try { await carregarMeta(); } catch (e) { /* a central carrega depois */ }
     montarCasca();
+    carregarTutoriais();
     atualizarResumo();
     buscarAvisos();
     $('#btSino').onclick = abrirAvisos;

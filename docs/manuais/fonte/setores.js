@@ -33,6 +33,7 @@ const FERRAMENTAS = {
     ],
   },
   renegociacoes: {
+    video: true,
     nome: 'Controle de Renegociações e Tickets',
     descricao: 'Controle próprio do CS para as renegociações de contrato, a perda de receita no exercício e os tickets do Sucesso do Cliente.',
     dados: 'Os registros ficam no banco do portal e são compartilhados pela equipe.',
@@ -44,6 +45,7 @@ const FERRAMENTAS = {
     ],
   },
   suprimentos: {
+    video: true,
     nome: 'Controle de Pedidos — Suprimentos',
     descricao: 'Controle dos pedidos de compra: valores, forma de pagamento (à vista ou parcelado), vencimentos e o que já foi pago. Os pagamentos saem às <b>terças e quintas-feiras</b>.',
     dados: 'Os pedidos ficam no banco do portal e são compartilhados pela equipe. Excluir um pedido só o remove da tela, como já acontecia antes.',
@@ -136,6 +138,7 @@ const FERRAMENTAS = {
     ],
   },
   boletos: {
+    video: true,
     nome: 'Controle de Emissão de Boletos',
     descricao: 'Supervisão de Crédito: acompanhamento da emissão dos boletos de cada condomínio, por competência, com meta de 10 dias antes do vencimento.',
     dados: 'Fica no banco do portal e é compartilhado por toda a equipe, ao vivo: o que uma pessoa marca aparece para as outras em poucos segundos. O histórico mostra quem fez cada alteração.',
@@ -150,6 +153,7 @@ const FERRAMENTAS = {
     ],
   },
   sindicos: {
+    video: true,
     nome: 'Controle de Síndicos',
     descricao: 'Compara a extração do Vouch com a base de contatos dos síndicos e gera a lista do Marketing.',
     dados: 'A base de contatos fica no banco do portal e é compartilhada pela equipe, ao vivo. Cada edição fica no histórico da ferramenta.',
