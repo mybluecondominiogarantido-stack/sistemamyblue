@@ -495,7 +495,7 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
   r.get('/api/admin/backup', async (req, res) => {
     const tabelas = ['setores', 'usuarios', 'modulos', 'permissoes', 'modulo_versoes', 'armazenamento', 'colecoes', 'registros', 'documentos', 'auditoria',
       'setor_membros', 'ticket_categorias', 'tickets', 'ticket_eventos', 'ticket_anexos', 'notificacoes',
-      'condominios', 'links_pagina', 'links', 'links_campanhas'];
+      'condominios', 'links_pagina', 'links', 'links_campanhas', 'modulo_arquivos'];
     const saida = { sistema: 'portal-myblue', versao_backup: 4, gerado_em: new Date().toISOString(), tabelas: {} };
     for (const t of tabelas) {
       const { rows } = await db.q(`SELECT * FROM ${t}`);

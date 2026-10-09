@@ -1,4 +1,5 @@
 'use strict';
+const crypto = require('crypto');
 const express = require('express');
 const { hostsDoPortal } = require('../seguranca');
 
@@ -78,6 +79,50 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, cfg }) {
     const chaves = Object.keys(corpo.set || {});
     await seg.auditar(req, 'dados_gravados', x.m.slug, { chaves: chaves.slice(0, 20), removidas: (corpo.del || []).slice(0, 20), limpar: !!corpo.limpar, escopo: x.escopo === '*' ? 'equipe' : 'usuario' });
     res.json({ ok: true });
+  });
+
+  /* ---------- arquivos das ferramentas (contratos, comprovantes…) ----------
+     Ficam numa tabela própria e só são baixados quando alguém abre, para não pesar nos dados da tela.
+     Quem tem acesso à ferramenta envia e abre. Nunca são apagados (histórico). */
+  const corpoArquivo = express.raw({ type: () => true, limit: `${cfg.limiteAnexoMb || 10}mb` });
+  async function moduloComArquivos(req, res) {
+    const m = await modulos.obter(req.params.slug);
+    if (!m) { res.status(404).json({ erro: 'Ferramenta não encontrada.' }); return null; }
+    if (!(await seg.podeAcessar(req.usuario, m.slug))) { res.status(403).json({ erro: 'Sem acesso a esta ferramenta.' }); return null; }
+    return m;
+  }
+
+  r.post('/api/arquivos/:slug', seg.exigirLogin, corpoArquivo, async (req, res) => {
+    const m = await moduloComArquivos(req, res);
+    if (!m) return;
+    const buf = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+    if (!buf.length) return res.status(400).json({ erro: 'Arquivo vazio.' });
+    let nome = 'arquivo';
+    try { nome = decodeURIComponent(String(req.headers['x-nome-arquivo'] || 'arquivo')); } catch { /* mantém o padrão */ }
+    nome = nome.replace(/[\\/\r\n"]/g, '_').slice(0, 200) || 'arquivo';
+    const tipo = /^[\w.+-]+\/[\w.+-]+$/.test(String(req.headers['content-type'] || '')) ? String(req.headers['content-type']) : 'application/octet-stream';
+    const sha = crypto.createHash('sha256').update(buf).digest('hex');
+    const a = await db.um(`INSERT INTO modulo_arquivos (modulo_slug, nome, tipo, tamanho, sha256, conteudo, enviado_por)
+      VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, enviado_em`, [m.slug, nome, tipo, buf.length, sha, buf, req.usuario.id]);
+    await seg.auditar(req, 'arquivo_ferramenta_enviado', m.slug, { id: a.id, nome, bytes: buf.length });
+    res.status(201).json({ id: a.id, nome, tipo, tamanho: buf.length, enviado_em: a.enviado_em, url: `/api/arquivos/${encodeURIComponent(m.slug)}/${a.id}` });
+  });
+
+  // PDF e imagens abrem no navegador; o resto é sempre baixado (nunca executa HTML enviado)
+  const ABRE_NO_NAVEGADOR = /^(application\/pdf|image\/(png|jpeg|gif|webp))$/;
+  r.get('/api/arquivos/:slug/:id', seg.exigirLogin, async (req, res) => {
+    const m = await moduloComArquivos(req, res);
+    if (!m) return;
+    const a = await db.um('SELECT nome, tipo, conteudo FROM modulo_arquivos WHERE id = $1 AND modulo_slug = $2', [Number(req.params.id) || 0, m.slug]);
+    if (!a) return res.status(404).json({ erro: 'Arquivo não encontrado.' });
+    const abre = ABRE_NO_NAVEGADOR.test(a.tipo) && req.query.baixar !== '1';
+    res.set('Content-Type', abre ? a.tipo : 'application/octet-stream');
+    res.set('Content-Disposition', `${abre ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(a.nome)}`);
+    // o leitor de PDF do navegador não abre em documento com "sandbox"; PDF não executa a página do portal
+    if (a.tipo !== 'application/pdf') res.set('Content-Security-Policy', "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox");
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.set('Cache-Control', 'private, no-store');
+    res.send(a.conteudo);
   });
 
   /* ---------- banco de documentos das ferramentas feitas como artefato do Claude ---------- */

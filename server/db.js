@@ -276,13 +276,27 @@ CREATE TABLE IF NOT EXISTS tutoriais (
   enviado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
   enviado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- arquivos enviados de dentro das ferramentas (ex.: contrato assinado nas Comissões de Novos Condomínios)
+CREATE TABLE IF NOT EXISTS modulo_arquivos (
+  id SERIAL PRIMARY KEY,
+  modulo_slug TEXT NOT NULL REFERENCES modulos(slug) ON DELETE CASCADE,
+  nome TEXT NOT NULL,
+  tipo TEXT NOT NULL,
+  tamanho INTEGER NOT NULL,
+  sha256 TEXT NOT NULL,
+  conteudo BYTEA NOT NULL,
+  enviado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  enviado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_modulo_arquivos_modulo ON modulo_arquivos(modulo_slug);
 `;
 
 /* Supabase publica o schema "public" pela API dele (PostgREST). Com RLS ligado e sem
    políticas, ninguém lê nem grava por lá; o portal conecta como dono das tabelas e não é afetado. */
 const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 'permissoes', 'armazenamento', 'colecoes', 'registros', 'documentos', 'auditoria',
   'setor_membros', 'ticket_categorias', 'tickets', 'ticket_eventos', 'ticket_anexos', 'notificacoes', 'condominios',
-  'links_pagina', 'links', 'links_campanhas', 'tutoriais'];
+  'links_pagina', 'links', 'links_campanhas', 'tutoriais', 'modulo_arquivos'];
 const RLS = TABELAS.map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`).join(';\n');
 
 /* Ajustes em bancos já existentes (rodam a cada início e não fazem nada se já estiverem aplicados). */
