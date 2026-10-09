@@ -241,8 +241,9 @@ module.exports = [
       await t.legenda('Para cada síndico novo, complete <b>telefone</b> e <b>e-mail</b> e diga o que fazer com o anterior.', { etapa: V, ms: 300 });
       await t.digitar(f.locator('input[placeholder="Telefone"]').first(), '(85) 90000-4321');
       await t.digitar(f.locator('input[placeholder="E-mail"]').first(), 'mariana.torres@exemplo.com.br', { atraso: 22 });
-      await t.legenda('Nada é gravado até você clicar em <b>Confirmar atualização</b>.', { etapa: V, ms: 900 });
-      await t.clicar(f.locator('#btnConfirm'), { depois: 2600 });
+      await t.legenda('Nada é gravado até você clicar em <b>Confirmar atualização</b> e confirmar o resumo.', { etapa: V, ms: 900 });
+      await t.clicar(f.locator('#btnConfirm'), { depois: 1800 });
+      await t.clicar(f.locator('button:visible:text-is("Confirmar")'), { depois: 2400 });
 
       const B = '2 · Base de contatos';
       await t.legenda('A <b>Base de contatos</b> é editável direto na tabela. Os atalhos mostram quem está sem telefone ou e-mail.', { etapa: B, ms: 300 });
