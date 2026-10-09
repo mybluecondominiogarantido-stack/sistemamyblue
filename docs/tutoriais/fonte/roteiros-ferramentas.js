@@ -25,7 +25,7 @@ async function basePrestacao(cen, opcoes) {
 
 /* coordenador do Comercial (fictício), com o primeiro acesso já feito */
 async function pessoaComercial(cen, base) {
-  await cen.admin('POST', '/api/admin/usuarios', { nome: 'Gil Martins', email: 'gil@myblue.com.br', senha: 'Senha1234', papel: 'coordenador', setores: [cen.S('Comercial')] });
+  await cen.admin('POST', '/api/admin/usuarios', { nome: 'Gil Martins', email: 'gil@myblue.com.br', senha: 'Senha1234', papel: 'coordenador', setores: [cen.S('Comercial')], modulos: ['parceiros'] });
   const c = cliente(base);
   await c('POST', '/api/auth/login', { email: 'gil@myblue.com.br', senha: 'Senha1234' });
   await c('POST', '/api/auth/senha', { atual: 'Senha1234', nova: SENHA });
