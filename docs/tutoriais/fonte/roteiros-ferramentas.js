@@ -61,16 +61,16 @@ module.exports = [
       await t.legenda('Os pagamentos saem às <b>terças e quintas</b>. Esta aba mostra a próxima janela: quantos pedidos e quanto pagar.', { etapa: J, ms: 300 });
       await t.clicar(f.locator('button.tab:has-text("Janelas de pagamento")'), { depois: 3400 });
       await t.legenda('Os atrasados aparecem em <b>Pedidos atrasados</b>. Pagou? Clique no <b>✓</b> para marcar como pago.', { etapa: J, ms: 400 });
-      await t.clicar(f.locator('button[title="Marcar como pago"]').first(), { depois: 2200 });
+      await t.clicar(f.locator('button[title="Marcar como pago"]:visible').first(), { depois: 2200 });
 
       const C = '5 · Corrigir';
       await t.clicar(f.locator('button.tab:has-text("Pedidos")').first(), { depois: 1400 });
       await t.legenda('Marcou por engano? Num pedido pago, o mesmo botão volta para <b>em aberto</b>. O <b>lápis</b> corrige valor, descrição ou vencimento.', { etapa: C, ms: 300 });
-      await t.mostrar(f.locator('button[title="Marcar em aberto"]').first(), 2000);
-      await t.mostrar(f.locator('button[title="Editar"]').first(), 2200);
+      await t.mostrar(f.locator('button[title="Marcar em aberto"]:visible').first(), 2000);
+      await t.mostrar(f.locator('button[title="Editar"]:visible').first(), 2200);
       await t.legenda('Use os filtros (à vista, parcelado, vencidos, pagos) e a busca para achar um pedido.', { etapa: C, ms: 300 });
-      await t.clicar(f.locator('button:has-text("Vencidos")').first(), { depois: 2000 });
-      await t.clicar(f.locator('button:has-text("Status")').first(), { depois: 800 });
+      await t.clicar(f.locator('button:visible:has-text("Vencidos")').first(), { depois: 2000 });
+      await t.clicar(f.locator('button:visible:has-text("Status")').first(), { depois: 800 });
 
       const M = '6 · Conferir um mês';
       await t.legenda('Em <b>Pedidos do mês</b>, escolha o mês: em aberto, vencidos, pagos e o total.', { etapa: M, ms: 300 });
@@ -98,6 +98,8 @@ module.exports = [
         ['Cond. Jardim Azul', 'CE', 'fechado', '20.906,08', '2,5', '1,99', 'taxa', '08'], ['Res. Primavera', 'PB', 'fechado', '14.320,00', '2,8', '2,4', 'taxa', '09'],
         ['Ed. Horizonte', 'RN', 'negociando', '9.870,50', '2,5', '2,2', 'boleto', '10'], ['Cond. Monte Verde', 'CE', 'pendente', '31.200,00', '2,2', '1,9', 'taxa', '10'],
       ]) {
+        // depois de salvar, a ferramenta muda de aba: volta para o formulário
+        await p.click('button.tab:has-text("Nova Renegociação")'); await p.waitForSelector('#nova_condominio', { state: 'visible' });
         await p.fill('#nova_condominio', cond); await p.selectOption('#nova_estado', uf);
         await p.fill('#nova_data', `${ano}-${mes}-05`); await p.fill('#nova_vigencia', `${ano}-${mes}-10`); await p.selectOption('#nova_status', st);
         await p.fill('#nova_vop', vop); await p.fill('#nova_qtdBoletos', '60'); await p.fill('#nova_fidelizacao', '12');
@@ -146,7 +148,7 @@ module.exports = [
       await t.legenda('Na <b>Central de dados</b>: todas as renegociações, com busca, filtro por status e exportação em Excel ou PDF.', { etapa: C, ms: 300 });
       await t.clicar(f.locator('button.tab:has-text("Central de dados")'), { depois: 2400 });
       await t.legenda('<b>Editar</b> corrige um registro. O <b>Relatório mensal</b> gera o PDF do mês.', { etapa: C, ms: 300 });
-      await t.mostrar(f.locator('button:has-text("Editar")').first(), 2000);
+      await t.mostrar(f.locator('button:visible:has-text("Editar")').first(), 2000);
       await t.clicar(f.locator('button.tab:has-text("Relatório mensal")'), { depois: 1200 });
       await t.mostrar(f.locator('#relGen'), 2200);
 
@@ -177,14 +179,14 @@ module.exports = [
       await t.legenda('O <b>Painel</b> mostra a competência: emitidos, no prazo, com atraso, atrasados e a meta dos próximos dias.', { etapa: P, ms: 400 });
       await t.mostrar(f.locator('text=/no prazo/i').first(), 3400);
       await t.legenda('Os atrasados aparecem com <b>Emitir</b>: clique quando confirmar a emissão na Vouch. A data de hoje é gravada.', { etapa: P, ms: 300 });
-      await t.clicar(f.locator('button:has-text("Emitir")').first(), { depois: 2200 });
+      await t.clicar(f.locator('button:visible:has-text("Emitir")').first(), { depois: 2200 });
 
       const C = '2 · Controle';
       await t.legenda('Em <b>Controle</b>, a lista da competência por vencimento. Filtre pelo seu nome.', { etapa: C, ms: 300 });
       await t.clicar(f.locator('button:has-text("Controle")').first(), { depois: 1400 });
       await t.escolher(f.locator('#fr'), 'Bruna Reis', { depois: 1600 });
       await t.legenda('Para corrigir uma emissão, altere a data ou desmarque no <b>✕</b>. <b>Emitir pendentes</b> marca o grupo todo.', { etapa: C, ms: 300 });
-      await t.mostrar(f.locator('button:has-text("pendentes")').first(), 2600);
+      await t.mostrar(f.locator('button:visible:has-text("pendentes")').first(), 2600);
       const linha = f.locator('tr:has-text("Cond. Jardim Azul")');
       await t.legenda('Teve <b>erro na emissão</b>? Marque a caixa, classifique a gravidade e o tipo e escreva a justificativa.', { etapa: C, ms: 300 });
       await t.clicar(linha.locator('input[type=checkbox]').last(), { depois: 900 });

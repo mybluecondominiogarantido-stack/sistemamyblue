@@ -625,8 +625,8 @@
       '<div id="resArq"></div><details style="margin-top:4px"><summary style="cursor:pointer;font-weight:700;color:var(--ink-2)">Versões anteriores</summary><div id="listaVersoes" class="ajuda">Carregando…</div></details>';
   }
   function ligarArquivoEVersoes(m, mod) {
-    // versões
-    api('GET', '/api/admin/modulos/' + mod.slug + '/versoes').then(function (r) {
+    // versões (recarrega depois de enviar um arquivo novo)
+    function carregarVersoes() { api('GET', '/api/admin/modulos/' + mod.slug + '/versoes').then(function (r) {
       var el = $('#listaVersoes', m);
       if (!el) return;
       if (!r.versoes.length) { el.textContent = 'Nenhuma versão enviada.'; return; }
@@ -640,7 +640,8 @@
           try { await api('POST', '/api/admin/modulos/' + mod.slug + '/versoes/' + b.getAttribute('data-versao') + '/usar'); toast('Versão restaurada.', 'ok'); m.fechar(); recarregarQuadro(mod.slug); paginaModulos(); } catch (e) { toast(e.message, 'erro'); }
         };
       });
-    }).catch(function () {});
+    }).catch(function () {}); }
+    carregarVersoes();
 
     // envio do arquivo
     ligarZona($('#zArq', m), $('#inArq', m), async function (arquivos) {
@@ -649,6 +650,8 @@
       res.innerHTML = '<div class="msg aviso" style="margin-top:8px">Enviando ' + esc(f.name) + '…</div>';
       try {
         var r = await api('PUT', '/api/admin/modulos/' + mod.slug + '/arquivo', await f.arrayBuffer(), { bruto: true, headers: { 'X-Nome-Arquivo': encodeURIComponent(f.name) } });
+        mod.versao_id = r.versao;
+        carregarVersoes();
         if (r.fonte_dados) {
           // o HTML já não usa planilha Google: a janela acompanha a mudança feita no servidor
           var radio = $('input[name=mFonte][value="' + r.fonte_dados + '"]', m);
