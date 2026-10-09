@@ -13,6 +13,11 @@ const { execFileSync } = require('child_process');
 const { cliente } = require('./gravador');
 
 const SENHA = 'Nova12345';
+const EXTRAS = {
+  'comissoes-de-novos-condominios': ['Comissões de Novos Condomínios', 'Comercial', 'aperto'],
+  'partnerchip-resultados': ['PartnerChip — Resultados', 'Comercial', 'grafico'],
+  'central-patrocinio': ['Central de Patrocínio', 'Administrativa/Financeira', 'documento'],
+};
 const exemplo = (t) => `<!doctype html><html><head><meta charset="utf-8"><title>${t}</title></head><body style="font-family:sans-serif;padding:40px;color:#13323a"><h2>${t}</h2><p>Ferramenta de exemplo.</p></body></html>`;
 
 /* imagens e arquivos de exemplo usados nos vídeos (gerados na hora, nada real) */
@@ -41,6 +46,14 @@ async function montarCenario(base, { ferramentas = {} } = {}) {
   for (const [slug, t] of Object.entries(titulos)) {
     await a('PUT', `/api/admin/modulos/${slug}/arquivo`, ferramentas[slug] ? fs.readFileSync(ferramentas[slug]) : exemplo(t));
   }
+  // ferramentas que entraram depois do catálogo inicial: criadas como no portal (dados no banco, compartilhados)
+  for (const [slug, [nome, setor, icone]] of Object.entries(EXTRAS)) {
+    if (!ferramentas[slug]) continue;
+    await a('POST', '/api/admin/modulos', { nome, slug, setor_id: S(setor), icone, descricao: '', armazenamento: 'compartilhado' });
+    await a('PUT', `/api/admin/modulos/${slug}/arquivo`, fs.readFileSync(ferramentas[slug]));
+  }
+  // a Prestação de Contas grava no banco do portal, compartilhado pela equipe
+  if (ferramentas.parceiros) await a('PATCH', '/api/admin/modulos/parceiros', { armazenamento: 'compartilhado' });
   await a('PATCH', '/api/admin/modulos/sindicos', { setor_id: S('Crédito') });
 
   // carteira de condomínios
