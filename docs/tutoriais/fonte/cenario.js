@@ -17,6 +17,7 @@ const EXTRAS = {
   'comissoes-de-novos-condominios': ['Comissões de Novos Condomínios', 'Comercial', 'aperto'],
   'partnerchip-resultados': ['PartnerChip — Resultados', 'Comercial', 'grafico'],
   'central-patrocinio': ['Central de Patrocínio', 'Administrativa/Financeira', 'documento'],
+  'gestao-de-viagens': ['Gestão de Viagens', 'Administrativa/Financeira', 'app'],
 };
 const exemplo = (t) => `<!doctype html><html><head><meta charset="utf-8"><title>${t}</title></head><body style="font-family:sans-serif;padding:40px;color:#13323a"><h2>${t}</h2><p>Ferramenta de exemplo.</p></body></html>`;
 
