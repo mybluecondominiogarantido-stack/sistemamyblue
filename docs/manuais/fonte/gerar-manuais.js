@@ -11,111 +11,44 @@
 const fs = require('fs');
 const path = require('path');
 const { SETORES, FERRAMENTAS } = require('./setores');
+const { esc, fig, passos, dica, atencao, tabela, etq, documento, capVersoes, pdfTimbrado, playwright } = require('./padrao');
 
-const FONTE = __dirname;
 const SAIDA = path.join(__dirname, '..');
-const LOGO = path.join(__dirname, '..', '..', '..', 'public', 'img', 'logo.png');
-const VERSAO = 'Outubro de 2026';
+const VERSAO = '2.0';
+const DATA = 'Outubro de 2026';
 
-const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const PRIO = { urgente: 'Urgente', alta: 'Alta', media: 'Média', baixa: 'Baixa' };
 function prazo(h) {
   if (h % 9 === 0) return h / 9 === 1 ? '1 dia útil' : `${h / 9} dias úteis`;
   return `${h} h úteis`;
 }
 
-/* ---------- blocos ---------- */
-const fig = (img, legenda, largura = 100, cls = '') => `<figure class="${cls}" style="width:${largura}%"><img src="img/${img}.jpg"><figcaption>${legenda}</figcaption></figure>`;
-const passos = (lista) => `<ol class="passos">${lista.map((p) => `<li>${p}</li>`).join('')}</ol>`;
-const dica = (t) => `<div class="caixa dica"><span class="tit">Dica</span>${t}</div>`;
-const atencao = (t) => `<div class="caixa atencao"><span class="tit">Atenção</span>${t}</div>`;
-const tabela = (cab, linhas, cls = '') => `<table class="${cls}"><thead><tr>${cab.map((c) => `<th>${c}</th>`).join('')}</tr></thead><tbody>${linhas.map((l) => `<tr>${l.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
-const etq = (t, cor) => `<span class="etq ${cor}">${t}</span>`;
-
-const CSS = `
-@page { size: A4; margin: 18mm 16mm 20mm 16mm; }
-@page capa { margin: 0; }
-:root { --teal:#199cb1; --teal-d:#147f90; --teal-bg:#e3f4f7; --blue:#0b76ba; --ink:#13323a; --ink2:#3c5660; --muted:#6f8a94; --border:#dde8ec; --bg:#eef4f7;
-  --green:#1f9d6b; --green-bg:#e4f5ee; --amber:#9a6512; --amber-bg:#fbf0db; --red:#d8463b; --red-bg:#fbe7e5; }
-* { box-sizing: border-box; }
-html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-body { font-family: "Nunito Sans", Arial, sans-serif; color: var(--ink); font-size: 10.6pt; line-height: 1.5; margin: 0; }
-h1, h2, h3 { font-family: "Quicksand", Arial, sans-serif; color: var(--ink); line-height: 1.2; }
-h1 { font-size: 22pt; margin: 0 0 4mm; padding-top: 2mm; }
-h1 .num { color: var(--teal); margin-right: 3mm; }
-h2 { font-size: 14pt; margin: 7mm 0 2.5mm; color: var(--teal-d); }
-h3 { font-size: 11.5pt; margin: 5mm 0 2mm; break-after: avoid; }
-h4 { font-family: "Quicksand", Arial, sans-serif; font-size: 10.8pt; margin: 5mm 0 1.5mm; color: var(--teal-d); break-after: avoid; }
-p.onde { font-size: 9.4pt; color: var(--ink2); margin: 0 0 1.5mm; break-after: avoid; }
-p { margin: 0 0 3mm; }
-ul { margin: 0 0 3mm; padding-left: 5mm; }
-li { margin-bottom: 1.2mm; }
-a { color: var(--teal-d); }
-.capitulo { break-before: page; }
-.intro { font-size: 11.5pt; color: var(--ink2); margin-bottom: 5mm; }
-figure { margin: 3mm auto 5mm; break-inside: avoid; }
-figure img { width: auto; max-width: 100%; max-height: 98mm; margin: 0 auto; display: block; border: 1px solid var(--border); border-radius: 3mm; box-shadow: 0 1mm 4mm rgba(19,50,58,.10); }
-figcaption { font-size: 8.6pt; color: var(--muted); text-align: center; margin-top: 2mm; font-style: italic; }
-.lado { display: flex; gap: 6mm; align-items: flex-start; break-inside: avoid; }
-.lado > div { flex: 1; }
-.lado > figure { flex: 0 0 38%; margin-top: 0; }
-.pequena img { max-height: 78mm; }
-ol.passos { counter-reset: p; list-style: none; padding: 0; margin: 2mm 0 4mm; }
-ol.passos li { counter-increment: p; position: relative; padding: 0 0 0 10mm; margin-bottom: 2.6mm; min-height: 7mm; }
-ol.passos li::before { content: counter(p); position: absolute; left: 0; top: -.3mm; width: 6.6mm; height: 6.6mm; border-radius: 50%; background: var(--teal); color: #fff; font-weight: 800; font-size: 9.5pt; display: flex; align-items: center; justify-content: center; }
-.caixa { border-radius: 2.5mm; padding: 3mm 4mm; margin: 3mm 0 4mm; break-inside: avoid; font-size: 10pt; }
-.caixa .tit { display: block; font-family: "Quicksand", Arial, sans-serif; font-weight: 700; font-size: 10pt; margin-bottom: .8mm; }
-.dica { background: var(--teal-bg); border-left: 1.2mm solid var(--teal); }
-.dica .tit { color: var(--teal-d); }
-.atencao { background: var(--amber-bg); border-left: 1.2mm solid #d98a1b; }
-.atencao .tit { color: var(--amber); }
-table { width: 100%; border-collapse: collapse; margin: 2mm 0 5mm; font-size: 9.6pt; break-inside: auto; }
-tr { break-inside: avoid; }
-th { background: var(--teal-d); color: #fff; text-align: left; padding: 2mm 2.6mm; font-weight: 700; font-size: 9pt; }
-td { padding: 2mm 2.6mm; border-bottom: 1px solid var(--border); vertical-align: top; }
-tbody tr:nth-child(even) td { background: #f6fafb; }
-table.abas td:first-child { width: 30%; }
-.etq { display: inline-block; font-size: 8.4pt; font-weight: 800; border-radius: 99px; padding: .3mm 2.4mm; white-space: nowrap; }
-.etq.azul { background: var(--teal-bg); color: var(--teal-d); } .etq.ambar { background: var(--amber-bg); color: var(--amber); }
-.etq.cinza { background: #f1f5f7; color: var(--muted); border: 1px solid var(--border); } .etq.verde { background: var(--green-bg); color: var(--green); }
-.etq.vermelha { background: var(--red-bg); color: var(--red); }
-.sim { color: var(--green); font-weight: 800; } .nao { color: #b3c3c9; }
-.sumario { list-style: none; padding: 0; margin: 4mm 0; columns: 2; column-gap: 10mm; }
-.sumario li { padding: 1.6mm 0; border-bottom: 1px dotted var(--border); font-weight: 700; break-inside: avoid; }
-.sumario li span { color: var(--teal); margin-right: 2mm; }
-.cartao-rapido { border: 1px solid var(--border); border-radius: 3mm; padding: 4mm 5mm; background: #f9fcfd; break-inside: avoid; }
-.cartao-rapido h3 { margin-top: 0; }
-.grade2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm 8mm; }
-.grade2 > div { break-inside: avoid; }
-
-/* capa */
-.capa { page: capa; height: 297mm; position: relative; overflow: hidden; break-after: page; }
-.capa .faixa { position: absolute; inset: 0 0 auto 0; height: 168mm; background: linear-gradient(150deg, #0c77be 0%, #199cb1 70%, #4fc1cf 100%); color: #fff; padding: 46mm 22mm 0; }
-.capa .faixa .chapeu { font-size: 11pt; letter-spacing: .5mm; text-transform: uppercase; opacity: .85; font-weight: 800; }
-.capa .faixa h1 { color: #fff; font-size: 46pt; margin: 4mm 0 4mm; line-height: 1.08; overflow-wrap: break-word; }
-.capa .faixa h1.longo { font-size: 36pt; }
-.capa .faixa .sub { font-size: 14pt; opacity: .92; max-width: 150mm; }
-.capa .onda { position: absolute; left: 0; right: 0; top: 150mm; height: 40mm; background: #fff; border-radius: 50% 50% 0 0 / 100% 100% 0 0; transform: scaleX(1.4); }
-.capa .base { position: absolute; left: 22mm; right: 22mm; bottom: 26mm; }
-.capa .base img { height: 17mm; }
-.capa .base .info { margin-top: 8mm; color: var(--muted); font-size: 10pt; border-top: 1px solid var(--border); padding-top: 4mm; display: flex; justify-content: space-between; }
-.capa .destaques { position: absolute; left: 22mm; right: 22mm; top: 196mm; display: grid; grid-template-columns: repeat(3, 1fr); gap: 5mm; }
-.capa .destaques div { background: var(--bg); border-radius: 3mm; padding: 4mm; font-size: 9.6pt; color: var(--ink2); }
-.capa .destaques b { display: block; font-family: "Quicksand", Arial, sans-serif; color: var(--teal-d); font-size: 11pt; margin-bottom: 1mm; }
-`;
-
-function documento(titulo, corpo) {
-  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(titulo)}</title>
-<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
-<style>${CSS}</style></head><body>${corpo}</body></html>`;
-}
-
-function capa(chapeu, titulo, sub, destaques) {
-  const longo = titulo.replace(/<[^>]+>/g, '').length > 18;
-  return `<section class="capa"><div class="faixa"><div class="chapeu">${chapeu}</div><h1 class="${longo ? 'longo' : ''}">${titulo.replace(/\//g, '/<wbr>')}</h1><div class="sub">${sub}</div></div><div class="onda"></div>
-  <div class="destaques">${destaques.map(([t, d]) => `<div><b>${t}</b>${d}</div>`).join('')}</div>
-  <div class="base"><img src="${LOGO}"><div class="info"><span>Portal MyBlue · uso interno</span><span>${VERSAO}</span></div></div></section>`;
-}
+/* histórico dos manuais (o mesmo para o geral e os dos setores) */
+const HISTORICO = [
+  ['1.0', '06/10/2026', 'Versão inicial: Manual Geral e um manual por setor (acesso, Central de Tickets, avisos e painel).'],
+  ['1.1', '07/10/2026', 'Carteira de condomínios, Central de Links, foto de perfil; tickets de condomínio direto para o responsável da carteira e prazo para conclusão.'],
+  ['1.2', '08/10/2026', 'Perfis Coordenador e Supervisor, acessos centralizados no cadastro (perfil + setor), gestão do setor; Suprimentos, Parceiros e Comissões como subáreas da Administrativa/Financeira; o que cada aba das ferramentas faz.'],
+  ['1.3', '09/10/2026', 'Passo a passo das ferramentas da Administrativa/Financeira; Tutoriais em vídeo; baixar o HTML de versões anteriores.'],
+  ['2.0', '09/10/2026', 'Manuais no padrão visual da MyBlue (timbrado, partes e capítulos); catálogo das ferramentas; Central de Patrocínio e Gestão de Viagens; Central de Ferramentas do Crédito com as sete automações; regra de excedente por boleto da Prestação de Contas (v7); regra de tutoriais sempre em dia.'],
+];
+const VERSOES = (doc) => capVersoes({
+  titulo: `Manutenção e controle de versão deste manual`,
+  intro: `Este manual é um documento vivo: acompanha o portal e as ferramentas. ${doc}`,
+  quando: [
+    'Ferramenta <b>nova</b> no portal ou ferramenta <b>atualizada</b> (HTML novo) que mude telas ou o jeito de usar.',
+    'Mudança nas regras de acesso, nos perfis ou na Central de Tickets (situações, prazos, avisos).',
+    'Nova área do portal (como foram a Carteira, a Central de Links e os Tutoriais).',
+    'Junto com o manual, o <b>tutorial em vídeo</b> da ferramenta é gravado ou regravado (o portal avisa em <i>Administração → Tutoriais</i>).',
+  ],
+  como: [
+    'O conteúdo de cada setor e de cada ferramenta fica em <code>docs/manuais/fonte/setores.js</code>; os textos gerais, em <code>gerar-manuais.js</code>.',
+    'As telas usam dados fictícios (<code>capturar-telas.js</code>).',
+    'Gere os PDFs com <code>node docs/manuais/fonte/gerar-manuais.js</code> e registre a versão na tabela abaixo.',
+    'Avise a equipe e substitua a versão anterior onde os manuais são distribuídos.',
+  ],
+  historico: HISTORICO,
+  proxima: 'Próxima revisão: sempre que uma ferramenta mudar, e no mínimo a cada seis meses.',
+});
 
 /* ---------- trechos usados nos dois tipos de manual ---------- */
 const CONCEITOS = `
@@ -339,25 +272,50 @@ ${fig('19-links', 'Central de Links.')}
   <li><b>Título da página:</b> título e subtítulo do topo.</li>
 </ul>`;
 
+/* catálogo: cada ferramenta, o setor e para que serve */
+function CATALOGO() {
+  const linhas = [];
+  for (const st of SETORES) {
+    for (const k of st.ferramentas) linhas.push([st.nome, k]);
+    for (const a of st.subareas || []) for (const k of a.ferramentas) linhas.push([`${st.nome} · ${a.nome}`, k]);
+  }
+  return `
+  <p class="intro">Cada setor tem as suas ferramentas, que abrem dentro do portal. Quem pode abrir cada uma é definido no cadastro da pessoa (ferramentas liberadas) e, para coordenadores e supervisores, pelo setor.</p>
+  ${tabela(['Setor', 'Ferramenta', 'Para que serve'], linhas.map(([setor, k]) => [setor, `<b>${FERRAMENTAS[k].nome}</b>${FERRAMENTAS[k].video ? '<br><span class="etq azul" style="margin-top:1mm">vídeo</span>' : ''}`, FERRAMENTAS[k].descricao]))}
+  <h2>Onde ficam os dados de cada ferramenta</h2>
+  ${tabela(['Ferramenta', 'Dados'], linhas.map(([, k]) => [`<b>${FERRAMENTAS[k].nome}</b>`, FERRAMENTAS[k].dados]))}
+  ${dica('O passo a passo de cada ferramenta (o que cada aba faz e como fazer cada tarefa) está no <b>manual do setor</b> dela. As marcadas com <b>vídeo</b> têm tutorial no menu <b>Tutoriais</b>.')}
+  <h2>Atualização das ferramentas</h2>
+  <ul>
+    <li>Quando uma ferramenta muda, o coordenador ou supervisor do setor envia o HTML novo em <b>Gestão do setor → Ferramentas do setor</b> (a administração, em <b>Módulos e dados</b>). Todos passam a usar a versão nova.</li>
+    <li>A versão anterior fica guardada: dá para <b>voltar</b> para ela ou <b>baixar</b> o HTML de qualquer versão em <i>Versões anteriores</i>.</li>
+    <li>Toda ferramenta nova ganha um tutorial em vídeo, e toda atualização que mude a tela ou o jeito de usar pede a revisão do tutorial e deste manual.</li>
+  </ul>`;
+}
+
+const TUTORIAIS = `
+<p class="intro">No menu <b>Tutoriais</b> ficam vídeos curtos com o portal e as ferramentas sendo usados de verdade, com dados fictícios, legenda e o <b>passo a passo</b> ao lado: clique num passo para ir direto ao trecho.</p>
+${tabela(['Grupo', 'Vídeos'], [
+  ['<b>Primeiros passos</b>', 'Primeiro acesso e o portal · Carteira de condomínios · Central de Links.'],
+  ['<b>Central de Tickets</b>', 'Abrir e acompanhar um ticket · Atender um ticket · Líder: distribuir a fila · Supervisão.'],
+  ['<b>Central de Links</b>', 'Editar a Central de Links (quem tem a marcação de Marketing).'],
+  ['<b>Ferramentas</b>', 'Um vídeo por ferramenta, para quem abre a ferramenta.'],
+  ['<b>Gestão do setor</b>', 'Usuários do setor · Ferramentas do setor · Carteira: trocar o responsável · Equipe e tipos de demanda.'],
+  ['<b>Administração</b>', 'Usuários e acessos · Módulos e dados.'],
+])}
+<ul>
+  <li>Cada pessoa vê os vídeos do <b>perfil</b>, do <b>setor</b> e das <b>ferramentas</b> dela. A administração vê todos.</li>
+  <li>O vídeo carrega aos pedaços: dá para avançar e voltar sem esperar baixar o arquivo inteiro.</li>
+  <li>A administração envia os vídeos em <b>Administração → Tutoriais em vídeo</b> (arraste os <code>.mp4</code> e <code>.vtt</code>; cada arquivo vai para o tutorial com o mesmo nome).</li>
+</ul>
+${atencao('A página da administração avisa quando uma ferramenta recebeu um HTML novo <b>depois</b> do vídeo dela (<i>ferramenta atualizada — regravar</i>) e lista as ferramentas que ainda não têm tutorial.')}`;
+
 /* ---------- Manual Geral ---------- */
 function manualGeral() {
-  const caps = [
-    ['O que é o Portal MyBlue'], ['Entrar, sair e sua conta'], ['Tela inicial e menu'], ['Perfis e acessos'],
-    ['Central de Tickets: como funciona'], ['Pedir algo para outro setor'], ['Acompanhar seus pedidos'],
-    ['Atender os tickets do seu setor'], ['Líder do setor'], ['Supervisão da Central de Tickets'],
-    ['Avisos: sino, som e e-mail'], ['Painel de indicadores'], ['Carteira de condomínios'], ['Central de Links'],
-    ['Gestão do setor: coordenador e supervisor'], ['Administração'], ['Quem pode o quê'], ['Perguntas frequentes'],
-  ];
-  let n = 0;
-  const cap = (titulo, html) => `<section class="capitulo"><h1><span class="num">${++n}</span>${titulo}</h1>${html}</section>`;
-  const corpo = capa('Manual de utilização', 'Portal MyBlue', 'Guia geral do portal e da Central de Tickets para todas as pessoas da equipe.', [
-    ['Ferramentas', 'Todas as ferramentas dos setores em um só endereço, com login.'],
-    ['Central de Tickets', 'Demandas entre setores com responsável, prazo para resposta e para conclusão.'],
-    ['Gestão do setor', 'Coordenadores e supervisores cuidam do próprio setor.'],
-  ]) +
-  `<section><h1>Sumário</h1><ol class="sumario">${caps.map(([t], i) => `<li><span>${i + 1}</span>${t}</li>`).join('')}</ol>
-  ${dica('Cada setor também tem o seu <b>manual do setor</b>, com as ferramentas, a rotina e os tipos de demanda que atende.')}</section>` +
-
+  const est = [];
+  const cap = (titulo, html) => { est.push({ cap: titulo, html }); return ''; };
+  const parte = (titulo) => { est.push({ parte: titulo }); return ''; };
+  const corpo = parte('Apresentação e acesso') +
   cap('O que é o Portal MyBlue', `
   <p class="intro">O portal reúne em um único endereço as ferramentas que cada setor usa no dia a dia, a <b>Central de Tickets</b>, a <b>Carteira de condomínios</b> e a <b>Central de Links</b>.</p>
   <ul>
@@ -411,6 +369,7 @@ function manualGeral() {
   </ul>`) +
 
   cap('Perfis e acessos', PERFIS) +
+  parte('Central de Tickets') +
 
   cap('Central de Tickets: como funciona', `
   <p class="intro">A Central de Tickets organiza as demandas entre os setores: <b>quem precisa pede</b>, o ticket vai <b>para o responsável</b> (ou para a fila do setor), quem atende <b>inicia o atendimento com um prazo</b>, trata e <b>quem pediu é avisado</b>.</p>
@@ -441,8 +400,12 @@ function manualGeral() {
   <p>O <b>perfil</b> Supervisor é outra coisa: ele gerencia os setores do cadastro dele (veja <i>Gestão do setor</i>).</p>`) +
   cap('Avisos: sino, som e e-mail', AVISOS) +
   cap('Painel de indicadores', PAINEL) +
+  parte('Carteira, links, ferramentas e tutoriais') +
   cap('Carteira de condomínios', CARTEIRA) +
   cap('Central de Links', LINKS) +
+  cap('Ferramentas dos setores', CATALOGO()) +
+  cap('Tutoriais em vídeo', TUTORIAIS) +
+  parte('Gestão e administração') +
   cap('Gestão do setor: coordenador e supervisor', GESTAO) +
   cap('Administração', `
   <p class="intro">Este capítulo é para os <b>administradores</b> do portal, que fazem tudo, em todos os setores.</p>
@@ -496,6 +459,7 @@ function manualGeral() {
     ['Escolher responsável, prioridade e prazo para resposta', '—', '—', 'sim', 'sim', 'sim'],
     ['Painel de tickets', '—', 'seus setores', 'seus setores', 'todos', 'todos'],
   ].map((l) => l.map((c, i) => (i === 0 ? c : c === 'sim' ? '<span class="sim">✓</span>' : c === '—' ? '<span class="nao">—</span>' : c))))}`) +
+  parte('Anexos e referências') +
   cap('Perguntas frequentes', `
   ${[
     ['Abri o ticket no setor errado. E agora?', 'Escreva um comentário pedindo a transferência. A equipe do setor transfere para o certo, ou cancele e abra de novo.'],
@@ -510,8 +474,9 @@ function manualGeral() {
     ['A ferramenta mudou, mas eu ainda vejo a versão antiga.', 'Use <b>⟳ Recarregar</b> na barra de cima. Se a tela do portal parecer antiga, aperte <b>Ctrl + Shift + R</b>.'],
     ['Que tamanho de arquivo posso anexar?', 'Até 10 MB por arquivo. Imagens abrem no navegador; os demais arquivos são baixados.'],
   ].map(([q, r]) => `<h3>${q}</h3><p>${r}</p>`).join('')}`);
-
-  return documento('Manual Geral — Portal MyBlue', corpo);
+  void corpo;
+  est.push(VERSOES('Cada setor também tem o seu <b>manual do setor</b>, com as ferramentas, a rotina e os tipos de demanda que atende.'));
+  return documento({ chapeu: 'Manual de utilização', titulo: 'Portal MyBlue', versao: VERSAO, data: DATA, fim: 'Manual' }, est);
 }
 
 /* ---------- Manual do setor ---------- */
@@ -519,8 +484,8 @@ function manualSetor(s) {
   // artigo certo para o nome do setor ("da Cobrança", "do Crédito")
   const fem = ['Administrativa/Financeira', 'Cobrança', 'Implantação', 'Máquina de Vendas', 'Supervisão', 'Gerência'].includes(s.nome);
   const art = { o: fem ? 'a' : 'o', O: fem ? 'A' : 'O', do: fem ? 'da' : 'do', ao: fem ? 'à' : 'ao' };
-  let n = 0;
-  const cap = (titulo, html) => `<section class="capitulo"><h1><span class="num">${++n}</span>${titulo}</h1>${html}</section>`;
+  const est = [];
+  const cap = (titulo, html) => { est.push({ cap: titulo, html }); return ''; };
   const subs = s.subareas || [];
   const ferr = s.ferramentas.map((k) => ({ ...FERRAMENTAS[k], area: null }))
     .concat(...subs.map((a) => a.ferramentas.map((k) => ({ ...FERRAMENTAS[k], area: a.nome }))));
@@ -532,12 +497,7 @@ function manualSetor(s) {
   }
   const tipos = [].concat(...grupos.map((g) => g.tipos));
 
-  const corpo = capa('Manual do setor', esc(s.nome), `Como o setor ${esc(s.nome)} usa o Portal MyBlue e a Central de Tickets.`, [
-    ['O setor no portal', ferr.length ? `${ferr.length === 1 ? 'Ferramenta' : 'Ferramentas'} do setor e a Central de Tickets.` : 'Central de Tickets para receber e pedir demandas.'],
-    ['Rotina', 'Como a equipe e o líder tratam a fila no dia a dia.'],
-    ['Tipos de demanda', `${tipos.length} tipos sugeridos, com prazo e o que informar.`],
-  ]) +
-
+  const corpo =
   cap(`O setor ${esc(s.nome)} no portal`, `
   <p class="intro">${s.papel}</p>
   ${subs.length ? `<p>${art.O} ${esc(s.nome)} é responsável também por: ${subs.map((a) => `<b>${esc(a.nome)}</b>`).join(', ')} (veja o capítulo <i>Subáreas do setor</i>).</p>` : ''}
@@ -679,31 +639,26 @@ function manualSetor(s) {
   ${tabela(['Prioridade', 'Prazo padrão'], [[etq('Urgente', 'vermelha'), '4 h úteis'], [etq('Alta', 'ambar'), '1 dia útil'], [etq('Média', 'azul'), '3 dias úteis'], [etq('Baixa', 'cinza'), '5 dias úteis']])}
   <p>Dúvidas sobre acesso, equipe ou tipos de demanda: fale com o coordenador do setor ou com a administração do portal.</p>`);
 
-  return documento(`Manual do setor ${s.nome} — Portal MyBlue`, corpo);
+  void corpo;
+  est.push(VERSOES('O Manual Geral do Portal MyBlue traz o passo a passo de acesso, senha, menu e da Central de Tickets.'));
+  return documento({ chapeu: 'Manual do setor', titulo: esc(s.nome), sub: 'Portal MyBlue &nbsp;•&nbsp; MyBlue Condomínio Garantido', versao: VERSAO, data: DATA, fim: 'Manual' }, est);
 }
 
 /* ---------- PDF ---------- */
 async function gerar() {
-  const { chromium } = require(require('child_process').execSync('npm root -g').toString().trim() + '/playwright');
+  const { chromium } = playwright();
   const br = await chromium.launch();
   const page = await br.newPage();
-  const lista = [['Manual-Geral-Portal-MyBlue', 'Manual Geral', manualGeral()]];
-  for (const s of SETORES) lista.push([`Manual-Setor-${s.arquivo}`, `Manual do setor ${s.nome}`, manualSetor(s)]);
-  fs.mkdirSync(path.join(SAIDA, 'setores'), { recursive: true });
-  for (const [arquivo, titulo, html] of lista) {
-    const htmlPath = path.join(FONTE, `_${arquivo}.html`);
-    fs.writeFileSync(htmlPath, html);
-    await page.goto('file://' + htmlPath, { waitUntil: 'networkidle' });
-    await page.evaluate(() => document.fonts.ready);
-    const destino = arquivo.startsWith('Manual-Setor') ? path.join(SAIDA, 'setores', arquivo + '.pdf') : path.join(SAIDA, arquivo + '.pdf');
-    await page.pdf({
-      path: destino, format: 'A4', printBackground: true, preferCSSPageSize: true, displayHeaderFooter: true,
-      headerTemplate: '<span></span>',
-      footerTemplate: `<div style="width:100%;font-family:Arial,sans-serif;font-size:7.5pt;color:#9db3bc;padding:0 16mm;display:flex;justify-content:space-between">
-        <span>Portal MyBlue · ${esc(titulo)}</span><span><span class="pageNumber"></span> / <span class="totalPages"></span></span></div>`,
-    });
-    fs.unlinkSync(htmlPath);
-    console.log('ok', path.relative(SAIDA, destino));
+  const destino = process.env.SAIDA_MANUAIS || SAIDA;
+  const lista = [['Manual-Geral-Portal-MyBlue', manualGeral()]];
+  for (const s of SETORES) lista.push([`Manual-Setor-${s.arquivo}`, manualSetor(s)]);
+  fs.mkdirSync(path.join(destino, 'setores'), { recursive: true });
+  const pedidos = process.argv.slice(2);
+  for (const [arquivo, html] of lista) {
+    if (pedidos.length && !pedidos.some((x) => arquivo.includes(x))) continue;
+    const pdf = path.join(destino, arquivo.startsWith('Manual-Setor') ? 'setores' : '', arquivo + '.pdf');
+    await pdfTimbrado(page, html, pdf);
+    console.log('ok', path.relative(destino, pdf));
   }
   await br.close();
 }
