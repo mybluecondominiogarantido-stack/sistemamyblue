@@ -2549,8 +2549,18 @@
     var j;
     try { j = await api('GET', '/api/admin/tutoriais'); } catch (e) { toast(e.message, 'erro'); return; }
     var enviados = j.tutoriais.filter(function (t) { return t.tem_video; }).length;
+    var desatualizados = j.tutoriais.filter(function (t) { return t.desatualizado; });
+    var pendencias = '';
+    if (desatualizados.length) {
+      pendencias += '<div class="msg aviso" style="margin-bottom:10px"><b>' + desatualizados.length + ' tutorial(is) para atualizar:</b> a ferramenta recebeu um HTML novo depois do vídeo — ' +
+        desatualizados.map(function (t) { return esc(t.titulo); }).join(', ') + '.</div>';
+    }
+    if ((j.sem_tutorial || []).length) {
+      pendencias += '<div class="msg aviso" style="margin-bottom:10px"><b>Ferramentas sem tutorial:</b> ' +
+        j.sem_tutorial.map(function (m) { return esc(m.nome); }).join(', ') + '. Toda ferramenta nova precisa de um vídeo.</div>';
+    }
     $('#conteudo').innerHTML = '<div class="pagina"><h1>Tutoriais em vídeo</h1>' +
-      '<p class="sub">Cada pessoa vê os vídeos do perfil, do setor e das ferramentas dela. ' + enviados + ' de ' + j.tutoriais.length + ' vídeos enviados.</p>' +
+      '<p class="sub">Cada pessoa vê os vídeos do perfil, do setor e das ferramentas dela. ' + enviados + ' de ' + j.tutoriais.length + ' vídeos enviados.</p>' + pendencias +
       '<label class="zona-envio" id="zTut" style="margin-bottom:12px">' + IC.enviar + '<div>Arraste aqui os arquivos <b>.mp4</b> e <b>.vtt</b> dos tutoriais (pode ser todos de uma vez) ou clique para escolher.<br>' +
       '<span class="ajuda">Cada arquivo vai para o tutorial com o mesmo nome (ex.: ticket-atender.mp4 e ticket-atender.vtt).</span></div>' +
       '<input type="file" accept=".mp4,.vtt,video/mp4,text/vtt" multiple hidden id="inTut"></label>' +
@@ -2562,7 +2572,7 @@
         return '<tr><td colspan="4" style="background:var(--surface-2);font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">' + esc(g) + '</td></tr>' +
           itens.map(function (t) {
             return '<tr><td><b>' + esc(t.titulo) + '</b><div class="ajuda" style="margin:2px 0 0">' + esc(t.slug) + '</div></td><td>' + esc(t.publico) + (t.modulo ? '<div class="ajuda" style="margin:2px 0 0">' + esc(t.modulo) + '</div>' : '') + '</td>' +
-              '<td>' + (t.tem_video ? '<span class="etiqueta verde">enviado</span> <span class="ajuda" style="display:inline">' + duracaoTxt(t.duracao) + ' · ' + tamanho(t.tamanho) + ' · ' + quando(t.enviado_em) + (t.tem_legendas ? '' : ' · sem passo a passo') + '</span>' : '<span class="etiqueta cinza">falta enviar</span>') + '</td>' +
+              '<td>' + (t.desatualizado ? '<span class="etiqueta ambar">ferramenta atualizada em ' + quando(t.ferramenta_atualizada_em) + ' — regravar</span><br>' : '') + (t.tem_video ? '<span class="etiqueta verde">enviado</span> <span class="ajuda" style="display:inline">' + duracaoTxt(t.duracao) + ' · ' + tamanho(t.tamanho) + ' · ' + quando(t.enviado_em) + (t.tem_legendas ? '' : ' · sem passo a passo') + '</span>' : '<span class="etiqueta cinza">falta enviar</span>') + '</td>' +
               '<td style="text-align:right;white-space:nowrap">' + (t.tem_video ? '<a class="btn ghost sm" href="#/tutoriais/' + esc(t.slug) + '">Ver</a> <button class="btn ghost sm" data-tirar="' + esc(t.slug) + '">Remover</button>' : '') + '</td></tr>';
           }).join('');
       }).join('') + '</tbody></table></div></div></div>';

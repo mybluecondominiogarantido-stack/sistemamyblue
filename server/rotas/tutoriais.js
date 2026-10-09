@@ -80,7 +80,22 @@ function rotasTutoriais({ db, seg, cfg }) {
   /* ---------- administração (o acesso só do administrador é conferido em rotasAdmin) ---------- */
   r.get('/api/admin/tutoriais', async (req, res) => {
     const l = await linhas();
-    res.json({ grupos: GRUPOS, tutoriais: TUTORIAIS.map((t) => resumo(t, l.get(t.slug))) });
+    // a versão em uso de cada ferramenta: se entrou depois do vídeo, o tutorial precisa ser atualizado
+    const mods = (await db.q(`SELECT m.slug, m.nome, v.enviado_em AS versao_em FROM modulos m
+      LEFT JOIN modulo_versoes v ON v.id = m.versao_id WHERE m.ativo ORDER BY m.nome`)).rows;
+    const versao = new Map(mods.map((m) => [m.slug, m.versao_em]));
+    const comTutorial = new Set(TUTORIAIS.filter((t) => typeof t.publico === 'object').map((t) => t.publico.modulo));
+    res.json({
+      grupos: GRUPOS,
+      tutoriais: TUTORIAIS.map((t) => {
+        const x = resumo(t, l.get(t.slug));
+        const v = x.modulo ? versao.get(x.modulo) : null;
+        x.ferramenta_atualizada_em = v || null;
+        x.desatualizado = !!(x.tem_video && v && new Date(v) > new Date(x.enviado_em));
+        return x;
+      }),
+      sem_tutorial: mods.filter((m) => m.versao_em && !comTutorial.has(m.slug)) // só as que já têm HTML.map((m) => ({ slug: m.slug, nome: m.nome })),
+    });
   });
 
   const slugValido = (req, res, next) => (porSlug.has(req.params.slug) ? next() : erro(res, 404, 'Este vídeo não está na lista de tutoriais.'));
