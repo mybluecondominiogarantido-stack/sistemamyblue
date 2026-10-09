@@ -231,6 +231,7 @@ No menu **Tutoriais**, vídeos curtos com o portal sendo usado de verdade (dados
 - Os vídeos ficam no banco, não no repositório. A administração envia em **Administração → Tutoriais em vídeo**: arraste os `.mp4` e `.vtt` de uma vez, e cada arquivo vai para o tutorial com o mesmo nome. Até 150 MB por vídeo (`LIMITE_VIDEO_MB`).
 - O player busca o vídeo aos pedaços, então dá para avançar e voltar sem baixar o arquivo inteiro.
 - Os vídeos são gravados por `docs/tutoriais/fonte/gravar-tutoriais.js` (veja [`docs/tutoriais`](docs/tutoriais)).
+- **Toda ferramenta nova ganha um tutorial, e toda atualização de ferramenta revê o dela.** A página da administração avisa quando a ferramenta recebeu um HTML novo depois do vídeo ("regravar") e lista as ferramentas que ainda não têm tutorial.
 
 ## Colocar no ar
 
