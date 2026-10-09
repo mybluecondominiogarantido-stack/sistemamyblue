@@ -396,12 +396,16 @@ module.exports = [
       await t.clicar(f.locator('label:has(input[name=tp][value=sim])'), { depois: 800 });
       await t.legenda('Confirme o parceiro (a ferramenta sugere pela ADM informada) e marque o tipo de comissão: <b>recorrência</b> e/ou <b>venda</b>.', { etapa: C, ms: 300 });
       await t.escolher(f.locator('#rP1'), { value: 'p-alfaadministradora' });
-      await t.clicar(f.locator('label:has(#rRec)'), { depois: 900 });
+      await t.clicar(f.locator('#rRec'), { depois: 300 });
+      if (!(await f.locator('#rRec').isChecked())) await f.locator('#rRec').check(); // a janela rola enquanto o cursor chega
+      await t.pausa(600);
       await t.digitar(f.locator('#rObs'), 'Indicação do síndico, contrato assinado em setembro.', { atraso: 22 });
       await t.clicar(f.locator('#rEnviar'), { depois: 1800 });
       await t.legenda('Sem parceiro? Marque <b>Não tem parceiro</b> — não gera comissão, mas fica registrado.', { etapa: C, ms: 300 });
       await t.clicar(f.locator('[data-abrir$="-f4103"]'), { depois: 1300 });
-      await t.clicar(f.locator('label:has(input[name=tp][value=nao])'), { depois: 900 });
+      await t.clicar(f.locator('label:has(input[name=tp][value=nao])'), { depois: 300 });
+      if (!(await f.locator('input[name=tp][value=nao]').isChecked())) await f.locator('input[name=tp][value=nao]').check();
+      await t.pausa(600);
       await t.clicar(f.locator('#rEnviar'), { depois: 1800 });
 
       const A = '3 · Aprovação da gestão';
