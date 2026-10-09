@@ -60,7 +60,7 @@ npm run criar-admin -- seu.email@myblue.com.br "Seu Nome"
    npm run importar-html -- ./modulos-originais
    ```
 
-Para atualizar uma ferramenta, basta enviar o HTML novo no módulo dela. Toda versão anterior fica guardada e pode ser restaurada com um clique (*Versões anteriores*).
+Para atualizar uma ferramenta, basta enviar o HTML novo no módulo dela. Toda versão anterior fica guardada e pode ser restaurada com um clique (*Versões anteriores*). Em *Versões anteriores*, **Baixar** devolve o HTML de qualquer versão exatamente como foi enviado (o administrador e o coordenador/supervisor do setor da ferramenta).
 
 Para publicar uma ferramenta nova, use **Novo módulo**, escolha nome, setor e ícone e envie o HTML.
 
