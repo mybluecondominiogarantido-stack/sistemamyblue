@@ -7,12 +7,16 @@ const { abrir } = require('./db');
 const { criarSeguranca, hashSenha, senhaAleatoria } = require('./seguranca');
 const { criarServicoModulos } = require('./modulos');
 const { criarRegistros } = require('./registros');
+const { criarDocumentos } = require('./documentos');
 const { criarNotificador } = require('./notificacoes');
 const { criarExpediente, lerExpediente } = require('./expediente');
 const { rotasAuth } = require('./rotas/auth');
 const { rotasAdmin } = require('./rotas/admin');
 const { rotasFerramentas } = require('./rotas/ferramentas');
 const { rotasTickets, rotasAdminTickets } = require('./rotas/tickets');
+const { rotasCarteira } = require('./rotas/carteira');
+const { rotasLinks } = require('./rotas/links');
+const { rotasTutoriais } = require('./rotas/tutoriais');
 
 function carregarEnv(arquivo) {
   if (!fs.existsSync(arquivo)) return;
@@ -43,6 +47,8 @@ function lerConfig(sobrescrever = {}) {
     limiteHtmlMb: Number(e.LIMITE_HTML_MB) || 40,
     limiteDadosMb: Number(e.LIMITE_DADOS_MB) || 25,
     limiteAnexoMb: Number(e.LIMITE_ANEXO_MB) || 10,
+    limiteFundoMb: Number(e.LIMITE_FUNDO_MB) || 8,
+    limiteVideoMb: Number(e.LIMITE_VIDEO_MB) || 150,
     silencioso: false,
     ...sobrescrever,
   };
@@ -70,9 +76,10 @@ async function criarApp(cfg) {
   const seg = criarSeguranca(db, cfg);
   const modulos = criarServicoModulos(db, cfg);
   const registros = criarRegistros(db);
+  const documentos = criarDocumentos(db);
   const avisos = criarNotificador(db, cfg);
   const expediente = criarExpediente(lerExpediente());
-  const ctx = { db, seg, modulos, registros, avisos, expediente, cfg };
+  const ctx = { db, seg, modulos, registros, documentos, avisos, expediente, cfg };
 
   const app = express();
   app.disable('x-powered-by');
@@ -95,6 +102,9 @@ async function criarApp(cfg) {
   app.use(rotasFerramentas(ctx));
   app.use(rotasTickets(ctx));
   app.use(rotasAdminTickets(ctx));
+  app.use(rotasCarteira(ctx));
+  app.use(rotasLinks(ctx));
+  app.use(rotasTutoriais(ctx));
 
   const publico = path.join(__dirname, '..', 'public');
   app.get('/login', (req, res) => res.sendFile(path.join(publico, 'login.html')));

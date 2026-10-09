@@ -39,6 +39,7 @@ svg{flex-shrink:0}
 
 label.rot{display:block;font-size:12px;font-weight:800;color:var(--ink-2);margin:0 0 6px;letter-spacing:.2px}
 .campo{width:100%;border:1px solid var(--border-2);background:var(--surface);border-radius:var(--r-sm);padding:10px 12px;font-size:14.5px;transition:border-color .15s,box-shadow .15s}
+.campo[readonly],select.campo:disabled{background:var(--bg);color:var(--ink-2)}
 .campo:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(25,156,177,.15)}
 textarea.campo{min-height:80px;resize:vertical}
 .campo-senha{position:relative}
@@ -89,6 +90,8 @@ textarea.campo{min-height:80px;resize:vertical}
 .nav a.inativo{opacity:.55}
 .lateral .pe{border-top:1px solid var(--border);padding:12px 14px;display:flex;align-items:center;gap:10px}
 .avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(150deg,var(--teal),var(--blue));color:#fff;display:grid;place-items:center;font-weight:800;font-size:14px;flex-shrink:0}
+.avatar{overflow:hidden}
+.avatar img{width:100%;height:100%;object-fit:cover;display:block}
 .lateral .pe .quem{flex:1;min-width:0}
 .lateral .pe .quem b{display:block;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lateral .pe .quem span{display:block;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -178,7 +181,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--teal);width:16px;heigh
 .opcao-radio b{display:block;font-size:13.5px}
 .opcao-radio span{display:block;font-size:12.5px;color:var(--muted);font-weight:600}
 .segredo{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:17px;font-weight:700;background:var(--surface-2);border:1px dashed var(--border-2);padding:10px 14px;border-radius:10px;letter-spacing:.5px;user-select:all}
-.zona-envio{border:2px dashed var(--border-2);border-radius:var(--r);padding:22px;text-align:center;color:var(--muted);font-weight:700;cursor:pointer;transition:border-color .15s,background .15s}
+.zona-envio{display:block;border:2px dashed var(--border-2);border-radius:var(--r);padding:22px;text-align:center;color:var(--muted);font-weight:700;cursor:pointer;transition:border-color .15s,background .15s}
 .zona-envio.arrastando,.zona-envio:hover{border-color:var(--teal);background:var(--teal-bg);color:var(--teal-d)}
 
 /* ---------- aviso flutuante ---------- */
@@ -252,3 +255,70 @@ input[type=checkbox],input[type=radio]{accent-color:var(--teal);width:16px;heigh
 .aviso b{color:var(--ink);font-size:13.5px}
 .aviso.nao-lido{background:var(--teal-bg);border-left:3px solid var(--teal)}
 .aviso .sec{font-size:12px;color:var(--muted)}
+
+/* ---------- Central de Links ---------- */
+/* fundo da campanha do mês (imagem enviada pelo marketing) com uma camada escura por cima para dar leitura */
+.central-links{position:relative;min-height:100%;display:flex;justify-content:center;padding:44px 16px 60px;
+  background:linear-gradient(160deg,#0c77be 0%,#199cb1 55%,#d5ebf6 140%);background-size:cover;background-position:center}
+.central-links.com-fundo{background-image:var(--fundo);background-color:#13323a}
+.central-links::before{content:"";position:absolute;inset:0;background:rgba(9,30,38,var(--escurecer,0));pointer-events:none}
+@media (max-width:700px){.central-links.com-fundo{background-image:var(--fundo-celular)}}
+.cl-coluna{position:relative;width:100%;max-width:580px;display:flex;flex-direction:column;gap:22px}
+.cl-cab{text-align:center;color:#fff;display:flex;flex-direction:column;align-items:center;gap:6px}
+.cl-logo{height:40px;background:#fff;border-radius:14px;padding:8px 14px;box-shadow:var(--shadow);margin-bottom:10px}
+.cl-cab h1{font-family:var(--display);font-size:28px;margin:0;text-shadow:0 2px 12px rgba(0,0,0,.35)}
+.cl-cab p{margin:0;font-weight:700;font-size:15px;opacity:.95;text-shadow:0 1px 8px rgba(0,0,0,.35);white-space:pre-line}
+.cl-campanha{display:inline-flex;align-items:center;gap:6px;margin-top:8px;background:rgba(255,255,255,.92);color:var(--teal-d);font-weight:800;font-size:12.5px;border-radius:999px;padding:4px 12px}
+.cl-campanha svg{width:15px;height:15px}
+.cl-grupo{display:flex;flex-direction:column;gap:10px}
+.cl-grupo h2{margin:6px 0 0;font-size:12px;text-transform:uppercase;letter-spacing:.8px;color:#fff;font-weight:800;text-align:center;text-shadow:0 1px 6px rgba(0,0,0,.4)}
+.cl-link{display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:var(--r);background:rgba(255,255,255,.94);color:var(--ink);text-decoration:none;box-shadow:0 6px 20px rgba(0,0,0,.14);transition:transform .15s,box-shadow .15s,background .15s;backdrop-filter:blur(6px)}
+.cl-link:hover{transform:translateY(-2px);background:#fff;box-shadow:0 10px 28px rgba(0,0,0,.2)}
+.cl-link>svg{width:16px;height:16px;color:var(--faint)}
+.cl-icone{width:40px;height:40px;border-radius:12px;background:var(--teal-bg);color:var(--teal-d);display:grid;place-items:center;flex-shrink:0}
+.cl-icone svg{width:21px;height:21px}
+.cl-texto{flex:1;min-width:0}
+.cl-texto b{display:block;font-family:var(--display);font-size:15.5px;line-height:1.25}
+.cl-texto span{display:block;font-size:13px;color:var(--muted);font-weight:600}
+.cl-vazio{background:rgba(255,255,255,.94);border-radius:var(--r);padding:30px;text-align:center;font-weight:700;color:var(--muted)}
+.lista-campanhas{display:flex;flex-direction:column}
+.campanha{display:flex;align-items:center;gap:14px;padding:12px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.campanha:last-child{border-bottom:0}
+.campanha .info{flex:1;min-width:200px}
+.campanha .sec{display:block;font-size:12.5px;color:var(--muted);font-weight:600;margin-top:2px}
+.miniatura,.previa-img{background:var(--surface-2) center/cover no-repeat;border:1px solid var(--border);border-radius:10px;display:grid;place-items:center;color:var(--faint)}
+.miniatura{width:96px;height:56px;flex-shrink:0}
+.zona-img{border:2px dashed var(--border-2);border-radius:var(--r);padding:12px;cursor:pointer;display:flex;flex-direction:column;gap:10px;transition:border-color .15s,background .15s}
+.zona-img:hover,.zona-img.arrastando{border-color:var(--teal);background:var(--teal-bg)}
+.previa-img{height:150px}
+.previa-img svg{width:30px;height:30px}
+
+/* Carteira de condomínios: tabela que cabe na largura da tela */
+.tabela-carteira{table-layout:fixed}
+.tabela-carteira th,.tabela-carteira td{padding:10px 12px;overflow-wrap:anywhere}
+.tabela-carteira th{white-space:normal}
+.tabela-carteira .corta{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:760px){.tabela-carteira{table-layout:auto;min-width:720px}}
+
+/* ===== tutoriais em vídeo ===== */
+.cartao-tut{padding:0;overflow:hidden;gap:8px}
+.cartao-tut h3,.cartao-tut p,.cartao-tut .setor-cartao{margin:0 16px}
+.cartao-tut .setor-cartao{margin-bottom:16px}
+.capa-tut{position:relative;height:118px;background:linear-gradient(150deg,#0c77be 0%,#199cb1 70%,#4fc1cf 100%);display:flex;align-items:center;justify-content:center;margin-bottom:6px}
+.capa-tut .play{width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,.95);color:var(--teal-d);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(0,0,0,.18);transition:transform .15s}
+.capa-tut .play svg{width:24px;height:24px}
+.cartao-tut:hover .play{transform:scale(1.08)}
+.capa-tut .dur{position:absolute;right:10px;bottom:9px;background:rgba(13,40,48,.82);color:#fff;font-size:12px;font-weight:800;border-radius:7px;padding:2px 8px}
+.capa-tut .visto{position:absolute;left:10px;bottom:9px;background:rgba(255,255,255,.92);color:var(--green);font-size:12px;font-weight:800;border-radius:7px;padding:2px 8px}
+.tutorial .setor-cartao{display:block;margin-bottom:6px}
+.grade-tut{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:18px;align-items:start}
+.quadro-video video{width:100%;aspect-ratio:16/9;display:block;background:#0d2830;border-radius:var(--r);box-shadow:var(--shadow)}
+.passos-tut{display:flex;flex-direction:column;max-height:min(70vh,560px)}
+.cab-passos{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:14px 16px 10px;font-family:var(--display);font-weight:700;font-size:15.5px;border-bottom:1px solid var(--border)}
+.passos-tut ol{list-style:none;margin:0;padding:8px;overflow:auto;position:relative}
+.passos-tut li.etapa{font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--teal-d);padding:12px 8px 4px}
+.passos-tut li.passo{display:flex;gap:10px;padding:7px 8px;border-radius:var(--r-sm);cursor:pointer;font-size:13.5px;font-weight:600;color:var(--ink-2);line-height:1.4}
+.passos-tut li.passo:hover{background:var(--surface-2)}
+.passos-tut li.passo.on{background:var(--teal-bg);color:var(--ink)}
+.passos-tut li.passo .t{flex:0 0 40px;font-variant-numeric:tabular-nums;color:var(--muted);font-weight:800;font-size:12.5px;padding-top:1px}
+@media (max-width:960px){.grade-tut{grid-template-columns:1fr}.passos-tut{max-height:none}.passos-tut ol{max-height:360px}}

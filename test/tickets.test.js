@@ -96,8 +96,8 @@ test('admin monta a equipe do setor e os tipos de demanda', async () => {
 
 let ticket;
 test('qualquer pessoa abre ticket para um setor; prazo vem do tipo de demanda', async () => {
-  assert.equal((await solicitante('POST', '/api/tickets', { titulo: '', setor_id: setorCobranca })).status, 400);
-  const r = await solicitante('POST', '/api/tickets', { titulo: 'Boleto do Cond. Azul', descricao: 'Síndico pediu a 2ª via', setor_id: setorCobranca, categoria_id: categoria });
+  assert.equal((await solicitante('POST', '/api/tickets', { interno: true, titulo: '', setor_id: setorCobranca })).status, 400);
+  const r = await solicitante('POST', '/api/tickets', { interno: true, titulo: 'Boleto do Cond. Azul', descricao: 'Síndico pediu a 2ª via', setor_id: setorCobranca, categoria_id: categoria });
   assert.equal(r.status, 201, r.texto);
   ticket = r.json.id;
   const d = (await solicitante('GET', `/api/tickets/${ticket}`)).json;
@@ -109,7 +109,7 @@ test('qualquer pessoa abre ticket para um setor; prazo vem do tipo de demanda', 
   assert.ok(Math.abs(new Date(d.ticket.prazo) - esperado) < 5000, 'prazo de 8 h úteis');
   assert.equal(d.pode.equipe, false);
   // categoria de outro setor é recusada
-  assert.equal((await solicitante('POST', '/api/tickets', { titulo: 'x', setor_id: setorCredito, categoria_id: categoria })).status, 400);
+  assert.equal((await solicitante('POST', '/api/tickets', { interno: true, titulo: 'x', setor_id: setorCredito, categoria_id: categoria })).status, 400);
 });
 
 test('visibilidade: setor vê, quem é de fora não vê', async () => {
@@ -123,22 +123,47 @@ test('visibilidade: setor vê, quem é de fora não vê', async () => {
   assert.ok((await solicitante('GET', '/api/tickets?vis=abertos')).json.tickets.some((t) => t.id === ticket));
 });
 
-test('líder distribui; membro só assume para si; solicitante não atribui', async () => {
+test('só o líder muda responsável, prioridade e prazo para resposta', async () => {
   assert.equal((await membro('PATCH', `/api/tickets/${ticket}`, { responsavel_id: ids['lider@teste.com'] })).status, 403);
+  assert.equal((await membro('PATCH', `/api/tickets/${ticket}`, { responsavel_id: ids['membro@teste.com'] })).status, 403, 'membro não assume sozinho');
   assert.equal((await solicitante('PATCH', `/api/tickets/${ticket}`, { responsavel_id: ids['membro@teste.com'] })).status, 403);
+  assert.equal((await membro('PATCH', `/api/tickets/${ticket}`, { prioridade: 'baixa' })).status, 403);
+  assert.equal((await membro('PATCH', `/api/tickets/${ticket}`, { prazo: new Date(Date.now() + 864e5).toISOString() })).status, 403);
   // pessoa de fora do setor não pode ser responsável
   assert.equal((await lider('PATCH', `/api/tickets/${ticket}`, { responsavel_id: ids['outro@teste.com'] })).status, 400);
-  let r = await lider('PATCH', `/api/tickets/${ticket}`, { responsavel_id: ids['membro@teste.com'] });
+  const r = await lider('PATCH', `/api/tickets/${ticket}`, { responsavel_id: ids['membro@teste.com'] });
   assert.equal(r.status, 200, r.texto);
-  let d = (await membro('GET', `/api/tickets/${ticket}`)).json;
+  const d = (await membro('GET', `/api/tickets/${ticket}`)).json;
   assert.equal(d.ticket.responsavel_id, ids['membro@teste.com']);
-  assert.equal(d.ticket.status, 'em_andamento', 'atribuir tira da situação "novo"');
+  assert.equal(d.ticket.status, 'novo', 'continua "novo" até a pessoa iniciar com o prazo para conclusão');
+  assert.equal(d.pode.atribuir, false);
+  assert.equal(d.pode.prazo_conclusao, true);
   assert.ok((await membro('GET', '/api/tickets?vis=minha')).json.tickets.some((t) => t.id === ticket));
-  const resumo = (await membro('GET', '/api/tickets/resumo')).json;
-  assert.equal(resumo.minha_fila, 1);
-  // devolve para a fila e assume de novo
-  assert.equal((await membro('PATCH', `/api/tickets/${ticket}`, { responsavel_id: null })).status, 200);
-  assert.equal((await membro('PATCH', `/api/tickets/${ticket}`, { responsavel_id: ids['membro@teste.com'] })).status, 200);
+  assert.equal((await membro('GET', '/api/tickets/resumo')).json.minha_fila, 1);
+  // membro também não devolve para a fila
+  assert.equal((await membro('PATCH', `/api/tickets/${ticket}`, { responsavel_id: null })).status, 403);
+});
+
+test('quem pega o ticket inicia informando o prazo para conclusão', async () => {
+  assert.equal((await membro('PATCH', `/api/tickets/${ticket}`, { status: 'em_andamento' })).status, 400, 'sem prazo para conclusão não inicia');
+  assert.equal((await membro('PATCH', `/api/tickets/${ticket}`, { status: 'em_andamento', prazo_conclusao: new Date(Date.now() - 864e5).toISOString() })).status, 400, 'data passada');
+  assert.equal((await solicitante('PATCH', `/api/tickets/${ticket}`, { prazo_conclusao: new Date(Date.now() + 864e5).toISOString() })).status, 403);
+  const conclusao = new Date(Date.now() + 2 * 864e5);
+  let r = await membro('PATCH', `/api/tickets/${ticket}`, { status: 'em_andamento', prazo_conclusao: conclusao.toISOString() });
+  assert.equal(r.status, 200, r.texto);
+  let d = (await solicitante('GET', `/api/tickets/${ticket}`)).json;
+  assert.equal(d.ticket.status, 'em_andamento');
+  assert.equal(new Date(d.ticket.prazo_conclusao).getTime(), conclusao.getTime(), 'quem abriu vê a previsão');
+  assert.ok(d.ticket.primeira_resposta_em, 'definir o prazo conta como 1º retorno');
+  const aviso = (await solicitante('GET', '/api/notificacoes')).json.notificacoes.find((n) => n.ticket_id === ticket && /atendimento/.test(n.titulo));
+  assert.ok(aviso && /Previsão de conclusão/.test(aviso.texto));
+  // mudar depois exige o motivo
+  const nova = new Date(Date.now() + 3 * 864e5).toISOString();
+  assert.equal((await membro('PATCH', `/api/tickets/${ticket}`, { prazo_conclusao: nova })).status, 400);
+  r = await membro('PATCH', `/api/tickets/${ticket}`, { prazo_conclusao: nova, motivo: 'Aguardando o banco' });
+  assert.equal(r.status, 200, r.texto);
+  d = (await solicitante('GET', `/api/tickets/${ticket}`)).json;
+  assert.ok(d.eventos.some((e) => e.tipo === 'prazo_conclusao' && e.texto === 'Aguardando o banco'));
 });
 
 test('notas internas e anexos internos ficam só com a equipe', async () => {
@@ -157,6 +182,14 @@ test('notas internas e anexos internos ficam só com a equipe', async () => {
   const visto = (await solicitante('GET', `/api/tickets/${ticket}`)).json;
   assert.ok(!visto.eventos.some((e) => e.interno), 'solicitante não vê notas internas');
   assert.ok(visto.eventos.some((e) => e.texto === 'Estamos emitindo a 2ª via.'));
+
+  // foto de quem comentou aparece no comentário
+  const png = Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000000', 'hex');
+  assert.equal((await membro('PUT', '/api/auth/foto', png, { headers: { 'content-type': 'image/png' } })).status, 200);
+  const comFoto = (await solicitante('GET', `/api/tickets/${ticket}`)).json.eventos.find((e) => e.texto === 'Estamos emitindo a 2ª via.');
+  assert.ok(comFoto.usuario_foto_v, 'comentário traz a versão da foto do autor');
+  assert.equal((await solicitante('GET', `/api/usuarios/${comFoto.usuario_id}/foto`, undefined, { bruto: true })).status, 200);
+  assert.equal((await solicitante('GET', `/api/tickets/${ticket}`)).json.eventos.find((e) => e.texto === 'Obrigada!').usuario_foto_v, null);
   assert.deepEqual(visto.anexos.map((a) => a.id), [publico]);
   assert.equal((await solicitante('GET', `/api/tickets/${ticket}/anexos/${interno}`, undefined, { bruto: true })).status, 404);
   const equipe = (await membro('GET', `/api/tickets/${ticket}`)).json;
@@ -196,6 +229,7 @@ test('transferir para outro setor volta para a fila do novo setor', async () => 
   assert.equal(d.ticket.responsavel_id, null);
   assert.equal(d.ticket.status, 'novo');
   assert.equal(d.ticket.categoria_id, null);
+  assert.equal(d.ticket.prazo_conclusao, null, 'a equipe nova define o próprio prazo para conclusão');
   // a equipe antiga deixa de ver (não é mais do setor nem responsável)
   assert.equal((await membro('GET', `/api/tickets/${ticket}`)).status, 404);
   // setor com tickets não pode ser removido
@@ -203,7 +237,7 @@ test('transferir para outro setor volta para a fila do novo setor', async () => 
 });
 
 test('atrasados e painel de indicadores', async () => {
-  const r = await solicitante('POST', '/api/tickets', { titulo: 'Acordo de cobrança', setor_id: setorCobranca, prioridade: 'urgente' });
+  const r = await solicitante('POST', '/api/tickets', { interno: true, titulo: 'Acordo de cobrança', setor_id: setorCobranca, prioridade: 'urgente' });
   const atrasado = r.json.id;
   assert.equal((await lider('PATCH', `/api/tickets/${atrasado}`, { prazo: new Date(Date.now() - 3600e3).toISOString() })).status, 200);
   const lista = (await lider('GET', '/api/tickets?vis=setor&atrasados=1')).json.tickets;
@@ -218,6 +252,12 @@ test('atrasados e painel de indicadores', async () => {
   assert.equal((await solicitante('GET', '/api/tickets/painel/indicadores')).status, 403);
   const geral = (await admin('GET', '/api/tickets/painel/indicadores')).json;
   assert.ok(geral.por_setor.length >= 2);
+
+  // respondeu (1º retorno): o prazo para resposta deixa de contar; passa a valer o de conclusão
+  assert.equal((await lider('POST', `/api/tickets/${atrasado}/comentarios`, { texto: 'Vendo isso' })).status, 201);
+  assert.equal((await lider('GET', '/api/tickets?vis=setor&atrasados=1')).json.tickets.length, 0);
+  await ctx.db.q("UPDATE tickets SET prazo_conclusao = now() - interval '1 hour' WHERE id = $1", [atrasado]);
+  assert.deepEqual((await lider('GET', '/api/tickets?vis=setor&atrasados=1')).json.tickets.map((t) => t.id), [atrasado], 'conclusão vencida');
 
   // cancelado pelo solicitante
   assert.equal((await solicitante('PATCH', `/api/tickets/${atrasado}`, { status: 'cancelado' })).status, 200);
@@ -235,7 +275,7 @@ const esperar = () => new Promise((ok) => setTimeout(ok, 30));
 
 test('quem recebe o ticket é avisado no portal e por e-mail', async () => {
   emails.length = 0;
-  const r = await solicitante('POST', '/api/tickets', { titulo: 'Negativação indevida', setor_id: setorCobranca });
+  const r = await solicitante('POST', '/api/tickets', { interno: true, titulo: 'Negativação indevida', setor_id: setorCobranca });
   const id = r.json.id;
   await esperar();
   // ticket novo: avisa o líder do setor (triagem)
@@ -277,7 +317,7 @@ test('quem recebe o ticket é avisado no portal e por e-mail', async () => {
 
 test('perfil Supervisão vê e direciona tickets de todos os setores', async () => {
   const sup = await criarPessoa('Sueli Supervisora', 'sup@teste.com');
-  const r0 = await solicitante('POST', '/api/tickets', { titulo: 'Contrato novo', setor_id: setorCobranca });
+  const r0 = await solicitante('POST', '/api/tickets', { interno: true, titulo: 'Contrato novo', setor_id: setorCobranca });
   const id = r0.json.id;
   // antes do perfil: não vê
   assert.equal((await sup('GET', `/api/tickets/${id}`)).status, 404);
@@ -307,4 +347,77 @@ test('administração envia e-mail de teste para si', async () => {
   assert.equal(emails[0].para.email, 'admin@teste.com');
   assert.equal((await lider('POST', '/api/admin/equipes/email-teste')).status, 403);
   assert.equal((await admin('GET', '/api/admin/equipes')).json.email.ativo, true);
+});
+
+/* ===================== condomínio da carteira ===================== */
+test('demanda de condomínio vai direto para a pessoa da carteira; interna vai para o líder', async () => {
+  const csv = Buffer.from([
+    'ID;SITUAÇÃO;COMARCA;CONDOMÍNIO;ANALISTA ADMINISTRATIVA;ANALISTA EXTRAJUDICIAL;ASSISTENTE CRÉDITO',
+    '1;ATIVO;CE;Jardim Azul;MARIO MEMBRO - 4601;FULANA APOIO - 4700;OTAVIO OUTRO - 4602',
+    '2;ATIVO;PB;Solar;BELTRANO SEM CADASTRO - 4603;;',
+  ].join('\r\n'), 'latin1');
+  assert.equal((await admin('POST', '/api/carteira/importar', csv, { headers: { 'content-type': 'text/csv' } })).status, 200);
+  const azul = (await ctx.db.um("SELECT id FROM condominios WHERE codigo = '1'")).id;
+  const solar = (await ctx.db.um("SELECT id FROM condominios WHERE codigo = '2'")).id;
+
+  // precisa dizer se é de condomínio ou interna
+  assert.equal((await solicitante('POST', '/api/tickets', { titulo: 'Sem escolha', setor_id: setorCobranca })).status, 400);
+  assert.equal((await solicitante('POST', '/api/tickets', { titulo: 'Inexistente', setor_id: setorCobranca, condominio_id: 99999 })).status, 400);
+
+  const meta = (await solicitante('GET', '/api/tickets/meta')).json;
+  const m = meta.condominios.find((c) => c.id === azul);
+  assert.equal(m.resp[setorCobranca], 'Mário Membro', 'acha o nome sem acento e sem ramal');
+  assert.equal(m.resp[setorCredito], 'Otávio Outro');
+  assert.equal(meta.condominios.find((c) => c.id === solar).resp[setorCobranca], null, 'na carteira, mas sem cadastro');
+
+  emails.length = 0;
+  let r = await solicitante('POST', '/api/tickets', { titulo: '2ª via unidade 101', setor_id: setorCobranca, condominio_id: azul });
+  assert.equal(r.status, 201, r.texto);
+  assert.equal(r.json.responsavel.id, ids['membro@teste.com']);
+  let d = (await membro('GET', `/api/tickets/${r.json.id}`)).json;
+  assert.equal(d.ticket.condominio_nome, 'Jardim Azul');
+  assert.equal(d.ticket.status, 'novo');
+  assert.ok(d.eventos.some((e) => e.tipo === 'atribuicao' && e.detalhe.automatico));
+  assert.ok(emails.some((x) => x.para.email === 'membro@teste.com'));
+  assert.ok(!emails.some((x) => x.para.email === 'lider@teste.com'), 'líder não precisa distribuir');
+
+  r = await solicitante('POST', '/api/tickets', { titulo: 'Balancete', setor_id: setorCredito, condominio_id: azul });
+  assert.equal(r.json.responsavel.id, ids['outro@teste.com']);
+
+  // pessoa da carteira sem cadastro no portal: fila do setor (líder); a equipe vê o aviso interno
+  r = await solicitante('POST', '/api/tickets', { titulo: 'Acordo', setor_id: setorCobranca, condominio_id: solar });
+  assert.equal(r.json.responsavel, null);
+  const tSolar = r.json.id;
+  assert.ok((await lider('GET', `/api/tickets/${tSolar}`)).json.eventos.some((e) => e.tipo === 'carteira_sem_cadastro'));
+  assert.ok(!(await solicitante('GET', `/api/tickets/${tSolar}`)).json.eventos.some((e) => e.tipo === 'carteira_sem_cadastro'));
+
+  // interna: fila do setor, líder avisado
+  emails.length = 0;
+  r = await solicitante('POST', '/api/tickets', { titulo: 'Notebook novo', setor_id: setorCobranca, interno: true });
+  assert.equal(r.json.responsavel, null);
+  assert.ok(emails.some((x) => x.para.email === 'lider@teste.com'));
+  assert.equal((await admin('GET', `/api/tickets/${r.json.id}`)).json.ticket.demanda_interna, true);
+
+  // transferir para o Crédito leva à assistente de crédito do condomínio
+  assert.equal((await lider('PATCH', `/api/tickets/${tSolar}`, { setor_id: setorCredito })).status, 200);
+  assert.equal((await admin('GET', `/api/tickets/${tSolar}`)).json.ticket.responsavel_id, null, 'Solar não tem assistente de crédito');
+
+  // busca pelo nome do condomínio
+  assert.ok((await admin('GET', '/api/tickets?vis=todos&q=jardim%20azul')).json.tickets.length >= 2);
+});
+
+test('mudar a prioridade recalcula o prazo para resposta', async () => {
+  const r = await solicitante('POST', '/api/tickets', { interno: true, titulo: 'Prioridade muda', setor_id: setorCobranca, prioridade: 'media' });
+  const id = r.json.id;
+  let d = (await lider('GET', `/api/tickets/${id}`)).json.ticket;
+  const { criarExpediente } = require('../server/expediente');
+  const exp = criarExpediente();
+  assert.equal((await lider('PATCH', `/api/tickets/${id}`, { prioridade: 'urgente' })).status, 200);
+  const depois = (await lider('GET', `/api/tickets/${id}`)).json.ticket;
+  assert.ok(Math.abs(new Date(depois.prazo) - exp.somarHorasUteis(new Date(d.criado_em), 4)) < 5000, 'urgente: 4 h úteis da abertura');
+  // depois do 1º retorno o prazo para resposta não muda mais
+  await lider('POST', `/api/tickets/${id}/comentarios`, { texto: 'Visto' });
+  assert.equal((await lider('PATCH', `/api/tickets/${id}`, { prioridade: 'baixa' })).status, 200);
+  d = (await lider('GET', `/api/tickets/${id}`)).json.ticket;
+  assert.equal(new Date(d.prazo).getTime(), new Date(depois.prazo).getTime());
 });

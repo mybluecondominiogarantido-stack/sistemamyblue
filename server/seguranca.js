@@ -106,14 +106,14 @@ function criarSeguranca(db, cfg) {
       const token = lerCookies(req)[COOKIE];
       if (token) {
         const th = sha256(token);
-        const s = await db.um(`SELECT s.expira_em, u.id, u.nome, u.email, u.papel, u.ativo, u.trocar_senha, u.supervisor_tickets
+        const s = await db.um(`SELECT s.expira_em, u.id, u.nome, u.email, u.papel, u.ativo, u.trocar_senha, u.foto_em, u.supervisor_tickets, u.editor_links
           FROM sessoes s JOIN usuarios u ON u.id = s.usuario_id WHERE s.token_hash = $1`, [th]);
         if (s && s.ativo && new Date(s.expira_em) > new Date()) {
           if (new Date(s.expira_em) - Date.now() < duracaoMs / 2) {
             await db.q('UPDATE sessoes SET expira_em = $1 WHERE token_hash = $2', [new Date(Date.now() + duracaoMs), th]);
             res.setHeader('Set-Cookie', montarCookie(req, token, duracaoMs));
           }
-          req.usuario = { id: s.id, nome: s.nome, email: s.email, papel: s.papel, trocar_senha: !!s.trocar_senha, supervisor_tickets: !!s.supervisor_tickets };
+          req.usuario = { id: s.id, nome: s.nome, email: s.email, papel: s.papel, trocar_senha: !!s.trocar_senha, foto_v: s.foto_em ? new Date(s.foto_em).getTime() : null, supervisor_tickets: !!s.supervisor_tickets, editor_links: !!s.editor_links };
         } else if (s) {
           await db.q('DELETE FROM sessoes WHERE token_hash = $1', [th]);
         }
@@ -124,15 +124,28 @@ function criarSeguranca(db, cfg) {
     }
   }
 
+  /* Setores que a pessoa gerencia: o administrador, todos (null); coordenador e supervisor, os setores do cadastro dele;
+     os demais, nenhum. O setor de cada pessoa fica em setor_membros (é também a equipe dela na Central de Tickets). */
+  const GESTORES_DE_SETOR = ['coordenador', 'supervisor'];
+  async function setoresGeridos(usuario) {
+    if (!usuario) return new Set();
+    if (usuario.papel === 'admin') return null;
+    if (!GESTORES_DE_SETOR.includes(usuario.papel)) return new Set();
+    return new Set((await db.q('SELECT setor_id FROM setor_membros WHERE usuario_id = $1', [usuario.id])).rows.map((x) => x.setor_id));
+  }
+
+  /* ferramentas que a pessoa abre: as liberadas no cadastro e, para coordenador e supervisor, todas as dos setores dele */
   async function modulosDoUsuario(usuario) {
-    const { rows } = await db.q('SELECT modulo_slug FROM permissoes WHERE usuario_id = $1', [usuario.id]);
+    const { rows } = await db.q(`SELECT modulo_slug FROM permissoes WHERE usuario_id = $1
+      UNION SELECT m.slug FROM modulos m JOIN setor_membros sm ON sm.setor_id = m.setor_id
+        WHERE sm.usuario_id = $1 AND $2`, [usuario.id, GESTORES_DE_SETOR.includes(usuario.papel)]);
     return new Set(rows.map((r) => r.modulo_slug));
   }
 
   async function podeAcessar(usuario, slug) {
     if (!usuario) return false;
     if (usuario.papel === 'admin') return true;
-    return !!(await db.um('SELECT 1 FROM permissoes WHERE usuario_id = $1 AND modulo_slug = $2', [usuario.id, slug]));
+    return (await modulosDoUsuario(usuario)).has(slug);
   }
 
   const exigirLogin = (req, res, next) => {
@@ -183,7 +196,7 @@ function criarSeguranca(db, cfg) {
 
   return {
     auditar, iniciarSessao, encerrarSessao, identificar, exigirLogin, exigirAdmin, mesmaOrigem,
-    podeAcessar, modulosDoUsuario, bloqueado, registrarFalha, limparFalhas,
+    podeAcessar, modulosDoUsuario, setoresGeridos, GESTORES_DE_SETOR, bloqueado, registrarFalha, limparFalhas,
   };
 }
 

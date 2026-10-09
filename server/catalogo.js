@@ -15,6 +15,8 @@
  *      'gas-linhas'  → leitura em linhas (cabeçalho + linhas), gravações via POST
  *      'gas-objetos' → leitura em objetos, gravações upsert/delete via JSONP
  *      'gas-posicional' → leitura em linhas; alterações apontam a linha pela posição na planilha
+ *      'claude-db'   → ferramenta feita como artefato do Claude (window.claude.use('db')); o portal
+ *                      oferece o mesmo banco de documentos, guardado no banco do portal
  *  - fonte_dados: 'google' (continua na planilha Google) ou 'interno' (banco do portal)
  *  - config.titulo: trecho do <title> usado para reconhecer o arquivo no import automático
  */
@@ -124,6 +126,30 @@ const MODULOS = [
       colecoes: { partners: null, condos: null, entries: null, status: null },
       patches_interno: [URL_PLANILHA],
     },
+  },
+  {
+    slug: 'boletos',
+    nome: 'Controle de Emissão de Boletos',
+    descricao: 'Supervisão de Crédito: acompanhamento da emissão dos boletos, com meta de 10 dias antes do vencimento.',
+    setor: 'Crédito',
+    icone: 'documento',
+    ordem: 2,
+    armazenamento: 'navegador',
+    adaptador: 'claude-db',
+    fonte_dados: 'interno',
+    config: { titulo: 'Controle de Emissão de Boletos' },
+  },
+  {
+    slug: 'sindicos',
+    nome: 'Controle de Síndicos',
+    descricao: 'Extração do Vouch × base de contatos dos síndicos × lista do Marketing.',
+    setor: 'CS',
+    icone: 'pessoas',
+    ordem: 2,
+    armazenamento: 'navegador',
+    adaptador: 'claude-db',
+    fonte_dados: 'interno',
+    config: { titulo: 'Controle de Síndicos' },
   },
 ];
 

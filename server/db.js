@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   nome TEXT NOT NULL,
   email TEXT NOT NULL UNIQUE,
   senha_hash TEXT NOT NULL,
-  papel TEXT NOT NULL DEFAULT 'usuario' CHECK (papel IN ('admin','usuario')),
+  papel TEXT NOT NULL DEFAULT 'usuario' CHECK (papel IN ('admin','coordenador','supervisor','usuario')),
   ativo BOOLEAN NOT NULL DEFAULT TRUE,
   trocar_senha BOOLEAN NOT NULL DEFAULT FALSE,
   criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -100,6 +100,20 @@ CREATE TABLE IF NOT EXISTS registros (
   UNIQUE (modulo_slug, colecao, item_id)
 );
 
+-- documentos das ferramentas feitas como artefato do Claude (dados NULL = apagado)
+CREATE SEQUENCE IF NOT EXISTS documentos_seq;
+CREATE TABLE IF NOT EXISTS documentos (
+  modulo_slug TEXT NOT NULL REFERENCES modulos(slug) ON DELETE CASCADE,
+  colecao TEXT NOT NULL,
+  doc_id TEXT NOT NULL,
+  dados JSONB,
+  seq BIGINT NOT NULL,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  PRIMARY KEY (modulo_slug, colecao, doc_id)
+);
+CREATE INDEX IF NOT EXISTS idx_documentos_seq ON documentos(modulo_slug, seq);
+
 CREATE TABLE IF NOT EXISTS auditoria (
   id SERIAL PRIMARY KEY,
   quando TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -180,6 +194,28 @@ CREATE TABLE IF NOT EXISTS ticket_anexos (
 );
 CREATE INDEX IF NOT EXISTS idx_ticket_anexos_ticket ON ticket_anexos(ticket_id);
 
+-- carteira de condomínios (aba Carteira, a 1ª carga vem do CSV da planilha)
+CREATE TABLE IF NOT EXISTS condominios (
+  id SERIAL PRIMARY KEY,
+  codigo TEXT NOT NULL UNIQUE,
+  nome TEXT NOT NULL,
+  situacao TEXT NOT NULL DEFAULT 'ATIVO',
+  comarca TEXT NOT NULL DEFAULT '',
+  vencimento TEXT NOT NULL DEFAULT '',
+  analista_cobranca TEXT NOT NULL DEFAULT '',
+  analista_extrajudicial TEXT NOT NULL DEFAULT '',
+  assistente_credito TEXT NOT NULL DEFAULT '',
+  administradora TEXT NOT NULL DEFAULT '',
+  forma_envio TEXT NOT NULL DEFAULT '',
+  inicio_contrato DATE,
+  razao_social TEXT NOT NULL DEFAULT '',
+  cnpj TEXT NOT NULL DEFAULT '',
+  observacoes TEXT NOT NULL DEFAULT '',
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
+);
+
 -- avisos para cada pessoa (sino do portal)
 CREATE TABLE IF NOT EXISTS notificacoes (
   id SERIAL PRIMARY KEY,
@@ -192,19 +228,89 @@ CREATE TABLE IF NOT EXISTS notificacoes (
   criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_notificacoes_usuario ON notificacoes(usuario_id, id);
+
+-- ===== Central de Links =====
+-- título e subtítulo da página (uma linha só)
+CREATE TABLE IF NOT EXISTS links_pagina (
+  id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  titulo TEXT NOT NULL DEFAULT 'Central de Links',
+  subtitulo TEXT NOT NULL DEFAULT '',
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS links (
+  id SERIAL PRIMARY KEY,
+  grupo TEXT NOT NULL DEFAULT '',
+  titulo TEXT NOT NULL,
+  url TEXT NOT NULL,
+  descricao TEXT NOT NULL DEFAULT '',
+  icone TEXT NOT NULL DEFAULT 'link',
+  ordem INTEGER NOT NULL DEFAULT 0,
+  ativo BOOLEAN NOT NULL DEFAULT TRUE,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
+);
+
+-- campanhas do marketing: cada uma vale a partir da data de início até começar a próxima
+CREATE TABLE IF NOT EXISTS links_campanhas (
+  id SERIAL PRIMARY KEY,
+  nome TEXT NOT NULL,
+  inicio DATE NOT NULL,
+  escurecer INTEGER NOT NULL DEFAULT 35 CHECK (escurecer BETWEEN 0 AND 85),
+  fundo BYTEA,
+  fundo_tipo TEXT,
+  fundo_celular BYTEA,
+  fundo_celular_tipo TEXT,
+  criado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_links_campanhas_inicio ON links_campanhas(inicio);
+
+-- vídeos tutoriais (o catálogo, com título e para quem é, fica em server/tutoriais.js)
+CREATE TABLE IF NOT EXISTS tutoriais (
+  slug TEXT PRIMARY KEY,
+  video BYTEA,
+  tamanho INTEGER,
+  duracao_s INTEGER,
+  legendas TEXT,
+  enviado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  enviado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 `;
 
 /* Supabase publica o schema "public" pela API dele (PostgREST). Com RLS ligado e sem
    políticas, ninguém lê nem grava por lá; o portal conecta como dono das tabelas e não é afetado. */
-const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 'permissoes', 'armazenamento', 'colecoes', 'registros', 'auditoria',
-  'setor_membros', 'ticket_categorias', 'tickets', 'ticket_eventos', 'ticket_anexos', 'notificacoes'];
+const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 'permissoes', 'armazenamento', 'colecoes', 'registros', 'documentos', 'auditoria',
+  'setor_membros', 'ticket_categorias', 'tickets', 'ticket_eventos', 'ticket_anexos', 'notificacoes', 'condominios',
+  'links_pagina', 'links', 'links_campanhas', 'tutoriais'];
 const RLS = TABELAS.map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`).join(';\n');
 
 /* Ajustes em bancos já existentes (rodam a cada início e não fazem nada se já estiverem aplicados). */
 const AJUSTES = `
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS supervisor_tickets BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS editor_links BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS condominio_id INTEGER REFERENCES condominios(id) ON DELETE SET NULL;
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS demanda_interna BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS prazo_conclusao TIMESTAMPTZ;
+ALTER TABLE condominios ADD COLUMN IF NOT EXISTS vencimento TEXT NOT NULL DEFAULT '';
+ALTER TABLE condominios ADD COLUMN IF NOT EXISTS analista_cobranca TEXT NOT NULL DEFAULT '';
+ALTER TABLE condominios ADD COLUMN IF NOT EXISTS analista_extrajudicial TEXT NOT NULL DEFAULT '';
+ALTER TABLE condominios ADD COLUMN IF NOT EXISTS assistente_credito TEXT NOT NULL DEFAULT '';
+ALTER TABLE condominios ADD COLUMN IF NOT EXISTS forma_envio TEXT NOT NULL DEFAULT '';
+ALTER TABLE condominios ADD COLUMN IF NOT EXISTS inicio_contrato DATE;
+ALTER TABLE condominios ADD COLUMN IF NOT EXISTS observacoes TEXT NOT NULL DEFAULT '';
+ALTER TABLE condominios ADD COLUMN IF NOT EXISTS criado_em TIMESTAMPTZ NOT NULL DEFAULT now();
+ALTER TABLE condominios ADD COLUMN IF NOT EXISTS atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL;
 ALTER TABLE modulos DROP CONSTRAINT IF EXISTS modulos_adaptador_check;
-ALTER TABLE modulos ADD CONSTRAINT modulos_adaptador_check CHECK (adaptador IS NULL OR adaptador IN ('gas-linhas','gas-objetos','gas-posicional'))
+ALTER TABLE modulos ADD CONSTRAINT modulos_adaptador_check CHECK (adaptador IS NULL OR adaptador IN ('gas-linhas','gas-objetos','gas-posicional','claude-db'));
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto BYTEA;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto_tipo TEXT;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto_em TIMESTAMPTZ;
+ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_papel_check;
+ALTER TABLE usuarios ADD CONSTRAINT usuarios_papel_check CHECK (papel IN ('admin','coordenador','supervisor','usuario'));
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS criado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL;
+-- o vídeo já vem comprimido: guardado sem compressão, o banco lê só o pedaço pedido pelo player
+ALTER TABLE tutoriais ALTER COLUMN video SET STORAGE EXTERNAL
 `;
 
 async function abrir(cfg) {
@@ -215,7 +321,9 @@ async function abrir(cfg) {
     for (const cmd of (SCHEMA + ';' + RLS + ';' + AJUSTES).split(';').map((s) => s.trim()).filter(Boolean)) await t.q(cmd);
     await semear(t);
     await semearSetores(t);
+    await semearNovosModulos(t);
     await sincronizarCatalogo(t);
+    await migrarCarteira(t);
   });
   return db;
 }
@@ -233,6 +341,24 @@ async function semear(t) {
     ]);
   }
   await t.q("INSERT INTO auditoria (acao, detalhe) VALUES ('catalogo_semeado', $1::jsonb)", [JSON.stringify({ modulos: MODULOS.map((m) => m.slug) })]);
+}
+
+/* Módulos que entraram no catálogo depois da instalação: cria cada um uma única vez
+   (se o admin apagar depois, não volta). */
+async function semearNovosModulos(t) {
+  const sem = await t.um("SELECT detalhe FROM auditoria WHERE acao = 'catalogo_semeado' ORDER BY id LIMIT 1");
+  const iniciais = new Set((sem && sem.detalhe && sem.detalhe.modulos) || []);
+  for (const m of MODULOS) {
+    if (iniciais.has(m.slug)) continue;
+    if (await t.um("SELECT 1 FROM auditoria WHERE acao = 'modulo_semeado' AND modulo_slug = $1 LIMIT 1", [m.slug])) continue;
+    const setor = await t.um('SELECT id FROM setores WHERE nome = $1', [m.setor]);
+    await t.q(`INSERT INTO modulos (slug, nome, descricao, setor_id, icone, ordem, armazenamento, adaptador, fonte_dados, config)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb) ON CONFLICT (slug) DO NOTHING`, [
+      m.slug, m.nome, m.descricao || '', setor ? setor.id : null, m.icone || 'app', m.ordem || 0,
+      m.armazenamento || 'navegador', m.adaptador || null, m.fonte_dados || 'google', JSON.stringify(m.config || {}),
+    ]);
+    await t.q("INSERT INTO auditoria (acao, modulo_slug) VALUES ('modulo_semeado', $1)", [m.slug]);
+  }
 }
 
 /* Lista oficial de setores (Central de Tickets), aplicada uma única vez em bancos já instalados:
@@ -257,6 +383,16 @@ async function sincronizarCatalogo(t) {
     for (const k of CHAVES_DE_SISTEMA) if (m.config && m.config[k] !== undefined) sistema[k] = m.config[k];
     await t.q(`UPDATE modulos SET adaptador = COALESCE(adaptador, $2), config = config || $3::jsonb WHERE slug = $1`,
       [m.slug, m.adaptador || null, JSON.stringify(sistema)]);
+  }
+}
+
+/* Bancos que receberam a 1ª versão da carteira guardavam as pessoas num JSON (coluna da planilha → nome):
+   leva para os campos de cada função. Só preenche o que estiver vazio, então rodar de novo não muda nada. */
+async function migrarCarteira(t) {
+  const antiga = await t.um("SELECT 1 FROM information_schema.columns WHERE table_name = 'condominios' AND column_name = 'pessoas'");
+  if (!antiga) return;
+  for (const [campo, coluna] of [['analista_cobranca', 'ANALISTA ADMINISTRATIVA'], ['analista_extrajudicial', 'ANALISTA EXTRAJUDICIAL'], ['assistente_credito', 'ASSISTENTE CREDITO']]) {
+    await t.q(`UPDATE condominios SET ${campo} = UPPER(TRIM(pessoas->>$1)) WHERE ${campo} = '' AND COALESCE(pessoas->>$1, '') <> ''`, [coluna]);
   }
 }
 

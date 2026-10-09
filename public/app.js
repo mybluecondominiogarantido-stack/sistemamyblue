@@ -15,6 +15,12 @@
   }
   function tamanho(b) { if (b == null) return '—'; return b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB'; }
   function iniciais(nome) { return String(nome || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(function (p) { return p[0].toUpperCase(); }).join(''); }
+  /* avatar: foto (se houver) ou iniciais */
+  function avatarHtml(u, tam) {
+    var estilo = tam ? ' style="width:' + tam + 'px;height:' + tam + 'px;font-size:' + Math.round(tam * 0.38) + 'px"' : '';
+    if (u && u.foto_v) return '<span class="avatar"' + estilo + '><img src="/api/usuarios/' + u.id + '/foto?v=' + u.foto_v + '" alt=""></span>';
+    return '<span class="avatar"' + estilo + '>' + esc(iniciais(u && u.nome)) + '</span>';
+  }
   function normal(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
   function guardar(k, v) { try { localStorage.setItem('portal.' + k, JSON.stringify(v)); } catch (e) { /* sem armazenamento */ } }
   function lembrar(k, padrao) { try { var v = localStorage.getItem('portal.' + k); return v == null ? padrao : JSON.parse(v); } catch (e) { return padrao; } }
@@ -108,9 +114,20 @@
     baixar: svg('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/>'),
     mais: svg('<path d="M12 5v14M5 12h14"/>'),
     sino: svg('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>'),
+    link: svg('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'),
+    mensagem: svg('<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>'),
+    video: svg('<rect x="2" y="5" width="15" height="14" rx="2"/><path d="m17 10 5-3v10l-5-3z"/>'),
+    pasta: svg('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
+    megafone: svg('<path d="m3 11 15-6v14L3 13z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>'),
+    imagem: svg('<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>'),
+    lapis: svg('<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>'),
+    olho: svg('<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'),
+    cima: svg('<path d="m18 15-6-6-6 6"/>'),
+    baixo: svg('<path d="m6 9 6 6 6-6"/>'),
     banco: svg('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/>'),
   };
-  var ROTULO_ICONE = { app: 'Genérico', calculadora: 'Calculadora', grafico: 'Gráfico', aperto: 'Negociação', caixa: 'Pacote', carteira: 'Carteira', documento: 'Documento', pessoas: 'Pessoas', ticket: 'Ticket', casa: 'Condomínio', calendario: 'Calendário', escudo: 'Segurança' };
+  var ROTULO_ICONE = { app: 'Genérico', calculadora: 'Calculadora', grafico: 'Gráfico', aperto: 'Negociação', caixa: 'Pacote', carteira: 'Carteira', documento: 'Documento', pessoas: 'Pessoas', ticket: 'Ticket', casa: 'Condomínio', calendario: 'Calendário', escudo: 'Segurança',
+    link: 'Link', mensagem: 'Mensagem / WhatsApp', video: 'Vídeo', pasta: 'Pasta', megafone: 'Campanha / Comunicado' };
 
   /* ======================= estado ======================= */
   var eu = null;
@@ -128,7 +145,7 @@
     $('#btRecolher').innerHTML = IC.recolher;
     $('#btConta').innerHTML = IC.conta;
     $('#btSair').innerHTML = IC.sair;
-    $('#avatar').textContent = iniciais(eu.nome);
+    desenharAvatar();
     $('#quemNome').textContent = eu.nome;
     $('#quemEmail').textContent = eu.email;
     if (lembrar('recolhido', false)) $('#casca').classList.add('recolhida');
@@ -160,6 +177,11 @@
     setInterval(function () { fetch('/api/auth/eu', { credentials: 'same-origin' }).then(function (r) { if (r.status === 401) sessaoExpirada(); }).catch(function () {}); }, 5 * 60 * 1000);
   }
 
+  function desenharAvatar() {
+    var a = $('#avatar');
+    a.innerHTML = eu.foto_v ? '<img src="/api/usuarios/' + eu.id + '/foto?v=' + eu.foto_v + '" alt="">' : esc(iniciais(eu.nome));
+  }
+
   var avisouSessao = false;
   function sessaoExpirada() {
     if (avisouSessao) return;
@@ -186,12 +208,16 @@
     var termo = normal($('#busca').value);
     var lista = modulos.filter(function (m) { return !termo || normal(m.nome + ' ' + m.setor + ' ' + m.descricao).indexOf(termo) >= 0; });
     var rota = location.hash || '#/';
-    var html = termo ? '' : '<a href="#/" class="' + (rota === '#/' ? 'on' : '') + '">' + IC.inicio + 'Início</a>';
+    var html = termo ? '' : '<a href="#/" class="' + (rota === '#/' ? 'on' : '') + '">' + IC.inicio + 'Início</a>' +
+      '<a href="#/links" class="' + (rota.indexOf('#/links') === 0 ? 'on' : '') + '">' + IC.link + 'Central de Links</a>' +
+      ((tutoriais && tutoriais.tutoriais.length) || eu.papel === 'admin' ? '<a href="#/tutoriais" class="' + (rota.indexOf('#/tutoriais') === 0 ? 'on' : '') + '">' + IC.video + 'Tutoriais</a>' : '');
     if (!termo) {
       html += '<div class="grupo">Central de Tickets</div>' +
         '<a href="#/tickets" class="' + (rota.indexOf('#/tickets') === 0 && rota.indexOf('#/tickets/painel') !== 0 ? 'on' : '') + '">' + IC.ticket + '<span>Tickets</span>' +
         '<i data-contador="fila" class="contador" hidden></i></a>' +
-        (souEquipe() ? '<a href="#/tickets/painel" class="' + (rota.indexOf('#/tickets/painel') === 0 ? 'on' : '') + '">' + IC.grafico + 'Painel de tickets</a>' : '');
+        (souEquipe() ? '<a href="#/tickets/painel" class="' + (rota.indexOf('#/tickets/painel') === 0 ? 'on' : '') + '">' + IC.grafico + 'Painel de tickets</a>' : '') +
+        '<div class="grupo">Carteira</div>' +
+        '<a href="#/carteira" class="' + (rota.indexOf('#/carteira') === 0 ? 'on' : '') + '">' + IC.casa + 'Carteira de condomínios</a>';
     }
     porSetor(lista).forEach(function (g) {
       html += '<div class="grupo">' + esc(g.setor) + '</div>';
@@ -206,7 +232,13 @@
         '<a href="#/admin/usuarios" class="' + (rota.indexOf('#/admin/usuarios') === 0 ? 'on' : '') + '">' + IC.usuarios + 'Usuários e acessos</a>' +
         '<a href="#/admin/modulos" class="' + (rota.indexOf('#/admin/modulos') === 0 ? 'on' : '') + '">' + IC.camadas + 'Módulos e dados</a>' +
         '<a href="#/admin/equipes" class="' + (rota.indexOf('#/admin/equipes') === 0 ? 'on' : '') + '">' + IC.pessoas + 'Equipes e tipos de demanda</a>' +
+        '<a href="#/admin/tutoriais" class="' + (rota.indexOf('#/admin/tutoriais') === 0 ? 'on' : '') + '">' + IC.video + 'Tutoriais em vídeo</a>' +
         '<a href="#/admin/auditoria" class="' + (rota.indexOf('#/admin/auditoria') === 0 ? 'on' : '') + '">' + IC.historico + 'Histórico de atividades</a>';
+    } else if (gestorSetor() && !termo) {
+      html += '<div class="grupo">Gestão do setor</div>' +
+        '<a href="#/admin/usuarios" class="' + (rota.indexOf('#/admin/usuarios') === 0 ? 'on' : '') + '">' + IC.usuarios + 'Usuários do setor</a>' +
+        '<a href="#/admin/modulos" class="' + (rota.indexOf('#/admin/modulos') === 0 ? 'on' : '') + '">' + IC.camadas + 'Ferramentas do setor</a>' +
+        '<a href="#/admin/equipes" class="' + (rota.indexOf('#/admin/equipes') === 0 ? 'on' : '') + '">' + IC.pessoas + 'Equipe e tipos de demanda</a>';
     }
     $('#nav').innerHTML = html;
     if (resumoTickets) { var bc = $('#nav [data-contador=fila]'); if (bc) { bc.textContent = resumoTickets.minha_fila; bc.hidden = !resumoTickets.minha_fila; if (resumoTickets.minha_fila_atrasados) bc.classList.add('alerta'); } }
@@ -240,12 +272,25 @@
       if (/^\d+$/.test(partes[1] || '')) return paginaTicket(Number(partes[1]));
       return paginaTickets(lembrar('tickets.visao', 'minha'));
     }
+    if (partes[0] === 'carteira') return paginaCarteira(partes[1]);
+    if (partes[0] === 'links') {
+      if (partes[1] === 'gestao' && editorLinks()) return paginaGestaoLinks(partes[2]);
+      if (partes[1] === 'previa' && editorLinks()) return paginaLinks(Number(partes[2]) || null);
+      return paginaLinks(null);
+    }
+    if (partes[0] === 'admin' && gestorSetor()) {
+      if (partes[1] === 'usuarios') return paginaUsuarios();
+      if (partes[1] === 'modulos') return paginaModulosCoord();
+      if (partes[1] === 'equipes') return paginaEquipes();
+    }
     if (partes[0] === 'admin' && eu.papel === 'admin') {
       if (partes[1] === 'equipes') return paginaEquipes();
       if (partes[1] === 'usuarios') return paginaUsuarios();
       if (partes[1] === 'modulos') return paginaModulos();
       if (partes[1] === 'auditoria') return paginaAuditoria();
+      if (partes[1] === 'tutoriais') return paginaAdminTutoriais();
     }
+    if (partes[0] === 'tutoriais') return partes[1] ? paginaTutorial(decodeURIComponent(partes[1])) : paginaTutoriais();
     if (partes[0] === 'conta') return paginaConta();
     return paginaInicio();
   }
@@ -344,7 +389,13 @@
   /* ======================= minha conta ======================= */
   function paginaConta() {
     definirBarra('<span class="nome">Minha conta</span>');
-    $('#conteudo').innerHTML = '<div class="pagina" style="max-width:640px"><h1>Minha conta</h1><p class="sub">' + esc(eu.nome) + ' · ' + esc(eu.email) + ' · ' + (eu.papel === 'admin' ? 'Administrador' : 'Usuário') + '</p>' +
+    $('#conteudo').innerHTML = '<div class="pagina" style="max-width:640px"><h1>Minha conta</h1><p class="sub">' + esc(eu.nome) + ' · ' + esc(eu.email) + ' · ' + (PAPEL[eu.papel] || 'Usuário') + '</p>' +
+      '<div class="painel" style="padding:20px;margin-bottom:16px"><h3 style="margin:0 0 14px;font-family:var(--display)">Foto de perfil</h3>' +
+      '<div class="linha" style="gap:18px;flex-wrap:nowrap"><div id="fotoPrevia">' + avatarHtml(eu, 84) + '</div>' +
+      '<div class="pilha" style="gap:8px"><div class="linha"><label class="btn primary sm" for="inFoto" style="cursor:pointer">' + IC.enviar + 'Escolher foto</label>' +
+      '<button class="btn ghost sm" id="btTirarFoto"' + (eu.foto_v ? '' : ' hidden') + '>Remover</button></div>' +
+      '<input type="file" id="inFoto" accept="image/*" hidden><div class="ajuda" style="margin:0">JPG ou PNG. A foto é recortada em quadrado e reduzida automaticamente.</div>' +
+      '<div id="msgFoto" class="msg" hidden></div></div></div></div>' +
       '<div class="painel" style="padding:20px"><form id="fSenha" class="pilha"><h3 style="margin:0;font-family:var(--display)">Trocar senha</h3>' +
       '<div id="msgSenha" class="msg" hidden></div>' +
       '<div><label class="rot" for="sAtual">Senha atual</label><input class="campo" id="sAtual" type="password" autocomplete="current-password" required></div>' +
@@ -352,6 +403,29 @@
       '<div><label class="rot" for="sNova2">Repita a nova senha</label><input class="campo" id="sNova2" type="password" autocomplete="new-password" required></div></div>' +
       '<div class="ajuda" style="margin-top:-6px">Pelo menos 8 caracteres, com letras e números. Ao trocar, as sessões em outros aparelhos são encerradas.</div>' +
       '<div><button class="btn primary" type="submit">Salvar nova senha</button></div></form></div></div>';
+    function msgFoto(tipo, texto) { var m = $('#msgFoto'); m.className = 'msg ' + tipo; m.textContent = texto; m.hidden = !texto; }
+    function atualizarFoto(v) {
+      eu.foto_v = v;
+      $('#fotoPrevia').innerHTML = avatarHtml(eu, 84);
+      $('#btTirarFoto').hidden = !v;
+      desenharAvatar();
+    }
+    $('#inFoto').onchange = async function () {
+      var f = this.files[0]; this.value = '';
+      if (!f) return;
+      if (!/^image\//.test(f.type)) { msgFoto('erro', 'Escolha um arquivo de imagem.'); return; }
+      msgFoto('aviso', 'Enviando…');
+      try {
+        var blob = await reduzirFoto(f, 320);
+        var r = await fetch('/api/auth/foto', { method: 'PUT', headers: { 'Content-Type': blob.type }, body: blob, credentials: 'same-origin' });
+        var j = await r.json().catch(function () { return {}; });
+        if (!r.ok) throw new Error(j.erro || 'Não foi possível enviar a foto.');
+        atualizarFoto(j.foto_v); msgFoto('ok', 'Foto atualizada.');
+      } catch (err) { msgFoto('erro', err.message); }
+    };
+    $('#btTirarFoto').onclick = async function () {
+      try { await api('DELETE', '/api/auth/foto'); atualizarFoto(null); msgFoto('ok', 'Foto removida.'); } catch (err) { msgFoto('erro', err.message); }
+    };
     $('#fSenha').addEventListener('submit', async function (e) {
       e.preventDefault();
       var msg = $('#msgSenha');
@@ -371,6 +445,10 @@
     cacheAdminModulos = j;
     return j;
   }
+
+  var PAPEL = { admin: 'Administrador', coordenador: 'Coordenador', supervisor: 'Supervisor', usuario: 'Usuário' };
+  /* coordenador e supervisor gerenciam os setores do cadastro deles */
+  function gestorSetor() { return eu && (eu.papel === 'coordenador' || eu.papel === 'supervisor'); }
 
   function seletorModulos(listaMods, marcados, nomeCampo) {
     var html = '<div class="caixa-opcoes">';
@@ -417,13 +495,17 @@
   }
 
   async function paginaUsuarios() {
-    definirBarra('<span class="setor">Administração</span><span class="sep">/</span><span class="nome">Usuários e acessos</span>');
+    var coord = gestorSetor();
+    definirBarra('<span class="setor">' + (coord ? 'Gestão do setor' : 'Administração') + '</span><span class="sep">/</span><span class="nome">' + (coord ? 'Usuários do setor' : 'Usuários e acessos') + '</span>');
     $('#conteudo').innerHTML = '<div class="pagina"><div class="carregando" style="position:static;background:none"><div><div class="giro"></div>Carregando…</div></div></div>';
     var dados, mods;
-    try { dados = await api('GET', '/api/admin/usuarios'); mods = (await carregarModulosAdmin()).modulos; } catch (e) { toast(e.message, 'erro'); return; }
-    var nomeMod = {}; mods.forEach(function (m) { nomeMod[m.slug] = m.nome; });
+    try { dados = await api('GET', '/api/admin/usuarios'); mods = coord ? dados.modulos_disponiveis : (await carregarModulosAdmin()).modulos; } catch (e) { toast(e.message, 'erro'); return; }
+    var nomeMod = coord ? (dados.nomes_modulos || {}) : {}; mods.forEach(function (m) { nomeMod[m.slug] = m.nome; });
 
-    $('#conteudo').innerHTML = '<div class="pagina"><h1>Usuários e acessos</h1><p class="sub">Cadastre as pessoas da equipe e escolha quais ferramentas cada uma pode abrir.</p>' +
+    var nomeSetor = {}; (dados.setores || []).forEach(function (x) { nomeSetor[x.id] = x.nome; });
+    Object.keys(dados.nomes_setores || {}).forEach(function (k) { nomeSetor[k] = dados.nomes_setores[k]; });
+    $('#conteudo').innerHTML = '<div class="pagina"><h1>' + (coord ? 'Usuários do setor' : 'Usuários e acessos') + '</h1><p class="sub">' +
+      (coord ? 'Cadastre as pessoas do seu setor e libere as ferramentas do setor. Aparecem aqui os usuários dos seus setores e os que você criou.' : 'Cadastre as pessoas, escolha o perfil, o setor e quais ferramentas cada uma pode abrir.') + '</p>' +
       '<div class="painel"><div class="cab-painel"><input class="campo" id="fUsu" placeholder="Buscar por nome ou e-mail…" style="max-width:320px">' +
       '<label class="linha" style="font-weight:700;font-size:13px;color:var(--muted)"><input type="checkbox" id="fInativos"> mostrar desativados</label><span class="espaco"></span>' +
       '<button class="btn primary" id="btNovoUsu">' + IC.mais + 'Novo usuário</button></div>' +
@@ -435,9 +517,9 @@
       var lista = dados.usuarios.filter(function (u) { return (inativos || u.ativo) && (!t || normal(u.nome + ' ' + u.email).indexOf(t) >= 0); });
       $('#tbUsu').innerHTML = lista.map(function (u) {
         var ferr = u.papel === 'admin' ? '<span class="etiqueta azul">todas</span>' :
-          u.modulos.length ? '<span title="' + esc(u.modulos.map(function (s) { return nomeMod[s] || s; }).join('\n')) + '">' + u.modulos.length + ' de ' + mods.length + '</span>' : '<span class="etiqueta ambar">nenhuma</span>';
-        return '<tr class="clicavel" data-id="' + u.id + '"><td><b>' + esc(u.nome) + '</b><span class="sec">' + esc(u.email) + '</span></td>' +
-          '<td>' + (u.papel === 'admin' ? 'Administrador' : 'Usuário') + (u.supervisor_tickets ? ' <span class="etiqueta azul">supervisão tickets</span>' : '') + '</td><td>' + ferr + '</td><td>' + quando(u.ultimo_login) + '</td>' +
+          u.modulos.length ? '<span title="' + esc(u.modulos.map(function (s) { return nomeMod[s] || s; }).join('\n')) + '">' + u.modulos.length + (coord ? ' ferramenta(s)' : ' de ' + mods.length) + '</span>' : '<span class="etiqueta ambar">nenhuma</span>';
+        return '<tr class="clicavel" data-id="' + u.id + '"><td><div class="linha" style="flex-wrap:nowrap;gap:10px">' + avatarHtml(u, 34) + '<div><b>' + esc(u.nome) + '</b><span class="sec">' + esc(u.email) + '</span></div></div></td>' +
+          '<td>' + (PAPEL[u.papel] || 'Usuário') + (u.setores && u.setores.length ? '<span class="sec">' + esc(u.setores.map(function (x) { return nomeSetor[x] || ''; }).filter(Boolean).join(', ')) + '</span>' : '') + (u.supervisor_tickets ? ' <span class="etiqueta azul">supervisão tickets</span>' : '') + (u.editor_links ? ' <span class="etiqueta azul">central de links</span>' : '') + '</td><td>' + ferr + '</td><td>' + quando(u.ultimo_login) + '</td>' +
           '<td>' + (!u.ativo ? '<span class="etiqueta cinza">desativado</span>' : u.trocar_senha ? '<span class="etiqueta ambar">aguardando 1º acesso</span>' : '<span class="etiqueta verde">ativo</span>') + '</td></tr>';
       }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);font-weight:700;padding:30px">Nenhum usuário encontrado.</td></tr>';
       $$('#tbUsu tr[data-id]').forEach(function (tr) {
@@ -451,18 +533,30 @@
 
     function editarUsuario(u) {
       var novo = !u;
-      u = u || { nome: '', email: '', papel: 'usuario', ativo: true, modulos: [] };
+      u = u || { nome: '', email: '', papel: 'usuario', ativo: true, modulos: [], setores: coord && dados.setores.length === 1 ? [dados.setores[0].id] : [] };
+      var setoresU = u.setores || [];
+      var blocoSetores = '<div><label class="rot">Setor' + (dados.setores.length > 1 ? '(es)' : '') + '</label><div class="caixa-opcoes" style="max-height:170px">' +
+        dados.setores.map(function (x) { return '<label><input type="checkbox" name="uSetor" value="' + x.id + '"' + (setoresU.indexOf(x.id) >= 0 ? ' checked' : '') + '><span>' + esc(x.nome) + '</span></label>'; }).join('') + '</div>' +
+        '<div class="ajuda">' + (coord ? 'A pessoa entra na equipe do setor na Central de Tickets.' : 'É o setor da pessoa: forma a equipe do setor na Central de Tickets e, para coordenador e supervisor, define o que eles gerenciam.') + '</div></div>';
       var m = modal({
         titulo: novo ? 'Novo usuário' : 'Editar usuário', largo: true,
         corpo: '<form id="fU" class="pilha" novalidate><div class="grade-2">' +
           '<div><label class="rot" for="uNome">Nome</label><input class="campo" id="uNome" value="' + esc(u.nome) + '" required></div>' +
           '<div><label class="rot" for="uEmail">E-mail (login)</label><input class="campo" id="uEmail" type="email" value="' + esc(u.email) + '" required></div></div>' +
+          (coord ? '' :
           '<div><label class="rot">Perfil</label><div class="grade-2">' +
-          '<label class="opcao-radio"><input type="radio" name="uPapel" value="usuario"' + (u.papel !== 'admin' ? ' checked' : '') + '><div><b>Usuário</b><span>Abre só as ferramentas marcadas abaixo.</span></div></label>' +
+          '<label class="opcao-radio"><input type="radio" name="uPapel" value="usuario"' + (u.papel === 'usuario' || !PAPEL[u.papel] ? ' checked' : '') + '><div><b>Usuário</b><span>Abre só as ferramentas marcadas abaixo.</span></div></label>' +
+          '<label class="opcao-radio"><input type="radio" name="uPapel" value="supervisor"' + (u.papel === 'supervisor' ? ' checked' : '') + '><div><b>Supervisor</b><span>Gerencia o(s) setor(es) dele: usuários comuns, ferramentas, equipe, tipos de demanda e carteira. Mesmos poderes do coordenador.</span></div></label>' +
+          '<label class="opcao-radio"><input type="radio" name="uPapel" value="coordenador"' + (u.papel === 'coordenador' ? ' checked' : '') + '><div><b>Coordenador</b><span>Gerencia o(s) setor(es) dele: usuários comuns, ferramentas, equipe, tipos de demanda e carteira.</span></div></label>' +
           '<label class="opcao-radio"><input type="radio" name="uPapel" value="admin"' + (u.papel === 'admin' ? ' checked' : '') + '><div><b>Administrador</b><span>Acessa tudo e gerencia usuários, módulos e dados.</span></div></label></div></div>' +
-          '<label class="opcao-radio" style="margin:0"><input type="checkbox" id="uSup"' + (u.supervisor_tickets ? ' checked' : '') + '><div><b>Supervisão / Coordenação da Central de Tickets</b>' +
-          '<span>Vê os tickets de todos os setores e direciona: troca o responsável, transfere, muda situação, prioridade e prazo. Não dá acesso à administração do portal.</span></div></label>' +
-          '<div id="blocoMods"><label class="rot">Ferramentas liberadas</label>' + seletorModulos(mods, u.modulos, 'uMod') + '</div>' +
+          '<label class="opcao-radio" style="margin:0"><input type="checkbox" id="uSup"' + (u.supervisor_tickets ? ' checked' : '') + '><div><b>Supervisão da Central de Tickets</b>' +
+          '<span>Vê os tickets de todos os setores e direciona: troca o responsável, transfere, muda situação, prioridade e prazo. Para quem acompanha a empresa toda (ex.: Gerência).</span></div></label>' +
+          '<label class="opcao-radio" style="margin:0"><input type="checkbox" id="uLinks"' + (u.editor_links ? ' checked' : '') + '><div><b>Marketing — Central de Links</b>' +
+          '<span>Troca o fundo da campanha do mês e edita os links da Central de Links. Não dá acesso à administração do portal.</span></div></label>') +
+          blocoSetores +
+          '<div id="blocoMods"><label class="rot">Ferramentas liberadas</label>' + (mods.length ? seletorModulos(mods, u.modulos, 'uMod') : '<div class="ajuda">Você ainda não tem ferramentas para liberar. Peça à administração.</div>') +
+          (coord && u.modulos.some(function (s) { return !mods.some(function (x) { return x.slug === s; }); }) ? '<div class="ajuda">Esta pessoa também tem ferramentas de outros setores, liberadas pela administração, que continuam como estão.</div>' : '') +
+          (coord ? '' : '<div class="ajuda" id="ajudaGestor" hidden>Coordenador e supervisor já abrem todas as ferramentas dos setores dele. Marque aqui só as de outros setores.</div>') + '</div>' +
           (novo ? '<div><label class="rot" for="uSenha">Senha inicial (opcional)</label><input class="campo" id="uSenha" type="text" autocomplete="off" placeholder="Deixe em branco para gerar uma automaticamente"><div class="ajuda">A pessoa precisará trocar a senha no primeiro acesso.</div></div>' :
             '<label class="linha" style="font-weight:700"><input type="checkbox" id="uAtivo"' + (u.ativo ? ' checked' : '') + '> Usuário ativo (desmarque para bloquear o acesso)</label>') +
           '<div id="uMsg" class="msg erro" hidden></div></form>',
@@ -470,15 +564,24 @@
           '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="btSalvarU">' + (novo ? 'Criar usuário' : 'Salvar') + '</button>',
       });
       ligarGrupos(m);
-      function papelMudou() { $('#blocoMods', m).hidden = $('input[name=uPapel]:checked', m).value === 'admin'; }
+      function papelMudou() {
+        var r = $('input[name=uPapel]:checked', m);
+        $('#blocoMods', m).hidden = !!r && r.value === 'admin';
+        if ($('#ajudaGestor', m)) $('#ajudaGestor', m).hidden = !r || (r.value !== 'coordenador' && r.value !== 'supervisor');
+      }
       $$('input[name=uPapel]', m).forEach(function (r) { r.onchange = papelMudou; });
       papelMudou();
       $('#btSalvarU', m).onclick = async function () {
         var corpo = {
-          nome: $('#uNome', m).value, email: $('#uEmail', m).value, papel: $('input[name=uPapel]:checked', m).value,
+          nome: $('#uNome', m).value, email: $('#uEmail', m).value,
           modulos: $$('input[name=uMod]:checked', m).map(function (i) { return i.value; }),
-          supervisor_tickets: $('#uSup', m).checked,
+          setores: $$('input[name=uSetor]:checked', m).map(function (i) { return Number(i.value); }),
         };
+        if (!coord) {
+          corpo.papel = $('input[name=uPapel]:checked', m).value;
+          corpo.supervisor_tickets = $('#uSup', m).checked;
+          corpo.editor_links = $('#uLinks', m).checked;
+        }
         try {
           if (novo) {
             corpo.senha = $('#uSenha', m).value;
@@ -514,7 +617,99 @@
     compartilhado: ['Banco do portal · equipe', 'Salvo no servidor e compartilhado: todos que têm acesso veem e editam os mesmos dados.'],
   };
 
+  /* "Arquivo HTML" da janela do módulo (administrador e coordenador): versões anteriores e envio de versão nova */
+  function htmlArquivoModulo(mod) {
+    return '<h4 class="titulo-sec">Arquivo HTML</h4>' +
+      '<p class="ajuda" style="margin-top:-4px">' + (mod.tem_arquivo ? 'Versão em uso enviada em ' + quando(mod.versao_em) + ' (' + tamanho(mod.tamanho) + ').' : '<b style="color:var(--red)">Nenhum arquivo enviado ainda.</b>') + ' Ao enviar um arquivo novo, a versão anterior fica guardada e pode ser restaurada.</p>' +
+      '<label class="zona-envio" id="zArq">' + IC.enviar + '<div>Clique para escolher ou arraste o arquivo .html desta ferramenta</div><input type="file" accept=".html,.htm,text/html" hidden id="inArq"></label>' +
+      '<div id="resArq"></div><details style="margin-top:4px"><summary style="cursor:pointer;font-weight:700;color:var(--ink-2)">Versões anteriores</summary><div id="listaVersoes" class="ajuda">Carregando…</div></details>';
+  }
+  function ligarArquivoEVersoes(m, mod) {
+    // versões (recarrega depois de enviar um arquivo novo)
+    function carregarVersoes() { api('GET', '/api/admin/modulos/' + mod.slug + '/versoes').then(function (r) {
+      var el = $('#listaVersoes', m);
+      if (!el) return;
+      if (!r.versoes.length) { el.textContent = 'Nenhuma versão enviada.'; return; }
+      el.innerHTML = '<div class="caixa-opcoes" style="margin-top:8px">' + r.versoes.map(function (v) {
+        var emUso = v.id === mod.versao_id;
+        return '<div class="linha" style="padding:8px 12px;border-bottom:1px solid var(--border)"><span style="flex:1;color:var(--ink-2)"><b>' + quando(v.enviado_em) + '</b> · ' + tamanho(v.tamanho) + (v.nome_original ? ' · ' + esc(v.nome_original) : '') + (v.enviado_por ? ' · por ' + esc(v.enviado_por) : '') + '</span>' +
+          (emUso ? '<span class="etiqueta verde">em uso</span>' : '<button class="btn ghost sm" data-versao="' + v.id + '">Usar esta</button>') + '</div>';
+      }).join('') + '</div>';
+      $$('[data-versao]', el).forEach(function (b) {
+        b.onclick = async function () {
+          try { await api('POST', '/api/admin/modulos/' + mod.slug + '/versoes/' + b.getAttribute('data-versao') + '/usar'); toast('Versão restaurada.', 'ok'); m.fechar(); recarregarQuadro(mod.slug); paginaModulos(); } catch (e) { toast(e.message, 'erro'); }
+        };
+      });
+    }).catch(function () {}); }
+    carregarVersoes();
+
+    // envio do arquivo
+    ligarZona($('#zArq', m), $('#inArq', m), async function (arquivos) {
+      var f = arquivos[0];
+      var res = $('#resArq', m);
+      res.innerHTML = '<div class="msg aviso" style="margin-top:8px">Enviando ' + esc(f.name) + '…</div>';
+      try {
+        var r = await api('PUT', '/api/admin/modulos/' + mod.slug + '/arquivo', await f.arrayBuffer(), { bruto: true, headers: { 'X-Nome-Arquivo': encodeURIComponent(f.name) } });
+        mod.versao_id = r.versao;
+        carregarVersoes();
+        if (r.fonte_dados) {
+          // o HTML já não usa planilha Google: a janela acompanha a mudança feita no servidor
+          var radio = $('input[name=mFonte][value="' + r.fonte_dados + '"]', m);
+          if (radio) radio.checked = true;
+          mod.fonte_dados = r.fonte_dados;
+        }
+        res.innerHTML = '<div class="msg ok" style="margin-top:8px">Arquivo publicado. Quem abrir a ferramenta já recebe a nova versão.' +
+          (r.fonte_dados === 'interno' ? ' Este arquivo não usa planilha Google: o módulo passou para <b>Banco do portal</b>.' : '') + '</div>' +
+          (r.aviso ? '<div class="msg aviso" style="margin-top:8px">' + esc(r.aviso) + '</div>' : '') +
+          (r.aviso_banco ? '<div class="msg aviso" style="margin-top:8px">' + esc(r.aviso_banco) + '</div>' : '');
+        recarregarQuadro(mod.slug);
+        recarregarModulosUsuario();
+      } catch (e) { res.innerHTML = '<div class="msg erro" style="margin-top:8px">' + esc(e.message) + '</div>'; }
+    });
+  }
+
+  /* Coordenador e supervisor: as ferramentas dos setores dele (HTML, versões e quem pode abrir) */
+  async function paginaModulosCoord() {
+    definirBarra('<span class="setor">Gestão do setor</span><span class="sep">/</span><span class="nome">Ferramentas do setor</span>');
+    $('#conteudo').innerHTML = '<div class="pagina"><div class="carregando" style="position:static;background:none"><div><div class="giro"></div>Carregando…</div></div></div>';
+    var mods, pessoas;
+    try { mods = (await api('GET', '/api/admin/modulos')).modulos; pessoas = (await api('GET', '/api/admin/usuarios')).usuarios; } catch (e) { toast(e.message, 'erro'); return; }
+    if (location.hash.indexOf('#/admin/modulos') !== 0) return; // a pessoa já foi para outra tela
+    $('#conteudo').innerHTML = '<div class="pagina"><h1>Ferramentas do setor</h1><p class="sub">As ferramentas dos seus setores. Envie uma versão nova do HTML, volte para uma anterior e escolha quem do setor pode abrir cada uma.</p>' +
+      '<div class="painel"><div class="tabela-wrap"><table><thead><tr><th>Módulo</th><th>Setor</th><th>Arquivo em uso</th></tr></thead><tbody>' +
+      (mods.map(function (x) {
+        return '<tr class="clicavel" data-slug="' + esc(x.slug) + '"><td><div class="linha" style="flex-wrap:nowrap"><div class="icone-mod" style="width:34px;height:34px">' + (IC[x.icone] || IC.app) + '</div><div><b>' + esc(x.nome) + '</b>' + (x.ativo ? '' : ' <span class="etiqueta cinza">desativado</span>') + '</div></div></td>' +
+          '<td>' + esc(x.setor_nome || '—') + '</td>' +
+          '<td>' + (x.tem_arquivo ? quando(x.versao_em) + '<span class="sec">' + tamanho(x.tamanho) + (x.nome_original ? ' · ' + esc(x.nome_original) : '') + '</span>' : '<span class="etiqueta vermelha">sem arquivo</span>') + '</td></tr>';
+      }).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--muted);font-weight:700;padding:30px">Nenhuma ferramenta nos seus setores. Peça à administração para conferir o setor no seu cadastro.</td></tr>') +
+      '</tbody></table></div></div></div>';
+    $$('tr[data-slug]').forEach(function (tr) {
+      tr.onclick = function () {
+        var mod = mods.find(function (x) { return x.slug === tr.getAttribute('data-slug'); });
+        var m = modal({
+          titulo: mod.nome, largo: true,
+          corpo: '<style>.titulo-sec{font-family:var(--display);font-size:15px;margin:22px 0 10px;padding-top:18px;border-top:1px solid var(--border)}.titulo-sec:first-child{margin-top:0;padding-top:0;border-top:0}</style><div class="pilha">' + htmlArquivoModulo(mod) +
+            '<h4 class="titulo-sec">Quem pode abrir</h4><p class="ajuda" style="margin-top:-4px">Pessoas do seu setor. Coordenadores, supervisores e administradores do setor já abrem todas as ferramentas dele.</p>' +
+            (pessoas.length ? '<div class="caixa-opcoes">' + pessoas.map(function (u) {
+              return '<label><input type="checkbox" name="mUsu" value="' + u.id + '"' + ((mod.usuarios || []).indexOf(u.id) >= 0 ? ' checked' : '') + '><span>' + esc(u.nome) + ' <span class="sec" style="display:inline;color:var(--muted)">· ' + esc(u.email) + (u.ativo ? '' : ' · desativado') + '</span></span></label>';
+            }).join('') + '</div><div class="linha" style="margin-top:8px"><button class="btn primary sm" id="btSalvarAcesso" type="button">Salvar quem pode abrir</button></div>' : '<div class="ajuda">Nenhum usuário no seu setor ainda. Cadastre em Usuários do setor.</div>') + '</div>',
+          pe: '<a class="btn ghost" href="#/m/' + esc(mod.slug) + '" id="btAbrirMod" style="margin-right:auto">' + IC.novaAba + 'Abrir</a><button class="btn ghost" data-fechar>Fechar</button>',
+          aoFechar: function () { if (location.hash.indexOf('#/admin/modulos') === 0) paginaModulosCoord(); },
+        });
+        $('#btAbrirMod', m).onclick = function () { m.fechar(); };
+        ligarArquivoEVersoes(m, mod);
+        if ($('#btSalvarAcesso', m)) $('#btSalvarAcesso', m).onclick = async function () {
+          try {
+            await api('PUT', '/api/admin/modulos/' + mod.slug + '/acesso', { usuarios: $$('input[name=mUsu]:checked', m).map(function (i) { return Number(i.value); }) });
+            toast('Acesso salvo.', 'ok');
+          } catch (e) { toast(e.message, 'erro'); }
+        };
+      };
+    });
+  }
+
   async function paginaModulos() {
+    if (gestorSetor()) return paginaModulosCoord();
     definirBarra('<span class="setor">Administração</span><span class="sep">/</span><span class="nome">Módulos e dados</span>');
     $('#conteudo').innerHTML = '<div class="pagina"><div class="carregando" style="position:static;background:none"><div><div class="giro"></div>Carregando…</div></div></div>';
     var j, setores, usuarios;
@@ -534,7 +729,8 @@
       '<div class="tabela-wrap"><table><thead><tr><th>Módulo</th><th>Setor</th><th>Arquivo</th><th>Onde ficam os dados</th><th>Situação</th></tr></thead><tbody>' +
       mods.map(function (m) {
         var dados = ROTULO_ARM[m.armazenamento][0];
-        if (m.adaptador) dados = (m.fonte_dados === 'interno' ? '<span class="etiqueta verde">' + IC.banco + ' planilha no banco do portal</span>' : '<span class="etiqueta ambar">planilha Google</span>') + (m.armazenamento !== 'navegador' ? '<span class="sec">+ ' + esc(dados) + '</span>' : '');
+        if (m.adaptador === 'claude-db') dados = '<span class="etiqueta verde">' + IC.banco + ' banco do portal</span>';
+        else if (m.adaptador) dados = (m.fonte_dados === 'interno' ? '<span class="etiqueta verde">' + IC.banco + ' planilha no banco do portal</span>' : '<span class="etiqueta ambar">planilha Google</span>') + (m.armazenamento !== 'navegador' ? '<span class="sec">+ ' + esc(dados) + '</span>' : '');
         else dados = '<span class="etiqueta ' + (m.armazenamento === 'navegador' ? 'cinza' : 'verde') + '">' + esc(dados) + '</span>';
         return '<tr class="clicavel" data-slug="' + esc(m.slug) + '"><td><div class="linha" style="flex-wrap:nowrap"><div class="icone-mod" style="width:34px;height:34px">' + (IC[m.icone] || IC.app) + '</div><div><b>' + esc(m.nome) + '</b><span class="sec">/' + esc(m.slug) + '</span></div></div></td>' +
           '<td>' + esc(m.setor_nome || '—') + '</td>' +
@@ -657,8 +853,21 @@
       var resumo = {}; (mod.dados_registros || []).forEach(function (r) { resumo[r.colecao] = r; });
       var armRes = mod.dados_armazenamento || [];
 
+      var planilha = !!mod.adaptador && mod.adaptador !== 'claude-db';
       var secPlanilha = '';
-      if (mod.adaptador) {
+      if (mod.adaptador === 'claude-db') {
+        var cols = Object.keys(resumo).sort();
+        secPlanilha = '<h4 class="titulo-sec">Dados da ferramenta</h4>' +
+          '<p class="ajuda" style="margin-top:-4px">Esta ferramenta foi feita como artefato do Claude. No portal, tudo o que ela grava fica no banco do MyBlue, compartilhado com quem tem acesso a ela.</p>' +
+          '<div class="caixa-opcoes" style="max-height:none;margin-top:4px">' + (cols.length ? cols.map(function (c) {
+            var r = resumo[c];
+            return '<div class="linha" style="padding:9px 12px;border-bottom:1px solid var(--border)"><b style="min-width:130px">' + esc(c) + '</b><span class="ajuda" style="margin:0">' + r.total + ' documento(s) · atualizado ' + quando(r.ultima) + '</span><span class="espaco"></span>' +
+              (c.indexOf('/') < 0 ? '<a class="btn ghost sm" href="/api/admin/modulos/' + esc(mod.slug) + '/dados/' + esc(c) + '.csv">' + IC.baixar + 'CSV</a>' : '') + '</div>';
+          }).join('') : '<div class="ajuda" style="padding:9px 12px;margin:0">Ainda não há dados gravados.</div>') + '</div>' +
+          '<div class="linha" style="margin-top:8px"><a class="btn ghost sm" href="/api/admin/modulos/' + esc(mod.slug) + '/dados">' + IC.baixar + 'Baixar tudo (JSON)</a>' +
+          '<label class="btn ghost sm" style="cursor:pointer">' + IC.enviar + 'Importar dados (JSON)<input type="file" accept=".json,application/json" hidden id="inDocs"></label></div>' +
+          '<div class="ajuda">A importação <b>substitui</b> todos os dados desta ferramenta pelos do arquivo. Use o arquivo de dados exportado do Claude.</div><div id="resDocs"></div>';
+      } else if (planilha) {
         secPlanilha = '<h4 class="titulo-sec">Planilha da ferramenta</h4>' +
           '<p class="ajuda" style="margin-top:-4px">Esta ferramenta foi feita para gravar numa planilha Google (Apps Script). O portal tem uma planilha equivalente dentro do próprio banco.</p>' +
           '<div class="grade-2">' +
@@ -688,18 +897,17 @@
           '<div><label class="rot" for="mOrdem">Ordem no setor</label><input class="campo" type="number" id="mOrdem" value="' + (mod.ordem || 0) + '"></div>' +
           '<div><label class="rot">Situação</label><label class="linha" style="font-weight:700;padding-top:9px"><input type="checkbox" id="mAtivo"' + (mod.ativo ? ' checked' : '') + '> Módulo ativo</label></div></div>' +
 
-          '<h4 class="titulo-sec">Arquivo HTML</h4>' +
-          '<p class="ajuda" style="margin-top:-4px">' + (mod.tem_arquivo ? 'Versão em uso enviada em ' + quando(mod.versao_em) + ' (' + tamanho(mod.tamanho) + ').' : '<b style="color:var(--red)">Nenhum arquivo enviado ainda.</b>') + ' Ao enviar um arquivo novo, a versão anterior fica guardada e pode ser restaurada.</p>' +
-          '<label class="zona-envio" id="zArq">' + IC.enviar + '<div>Clique para escolher ou arraste o arquivo .html desta ferramenta</div><input type="file" accept=".html,.htm,text/html" hidden id="inArq"></label>' +
-          '<div id="resArq"></div><details style="margin-top:4px"><summary style="cursor:pointer;font-weight:700;color:var(--ink-2)">Versões anteriores</summary><div id="listaVersoes" class="ajuda">Carregando…</div></details>' +
+          htmlArquivoModulo(mod) +
 
+          // ferramentas do Claude guardam tudo no banco de documentos: esta escolha não se aplica a elas
+          '<div' + (mod.adaptador === 'claude-db' ? ' hidden' : '') + '>' +
           '<h4 class="titulo-sec">Onde ficam os dados salvos pela ferramenta</h4>' +
           ['navegador', 'usuario', 'compartilhado'].map(function (k) {
             return '<label class="opcao-radio"><input type="radio" name="mArm" value="' + k + '"' + (mod.armazenamento === k ? ' checked' : '') + '><div><b>' + ROTULO_ARM[k][0] + '</b><span>' + ROTULO_ARM[k][1] + '</span></div></label>';
           }).join('') +
           (armRes.length ? '<div class="ajuda">No banco agora: ' + armRes.map(function (a) { return (a.escopo === '*' ? 'equipe' : 'usuário #' + a.escopo.slice(2)) + ' — ' + a.chaves + ' chave(s), ' + tamanho(a.bytes); }).join(' · ') + '</div>' : '') +
           '<details><summary style="cursor:pointer;font-weight:700;color:var(--ink-2)">Avançado: chaves que ficam só no navegador</summary><input class="campo" id="mLocais" style="margin-top:8px" value="' + esc(((mod.config && mod.config.chaves_locais) || []).join(', ')) + '" placeholder="^staticrypt, rascunho_">' +
-          '<div class="ajuda">Expressões separadas por vírgula. Chaves que combinarem continuam apenas no navegador de cada pessoa.</div></details>' +
+          '<div class="ajuda">Expressões separadas por vírgula. Chaves que combinarem continuam apenas no navegador de cada pessoa.</div></details></div>' +
           secPlanilha +
 
           '<h4 class="titulo-sec">Quem pode abrir</h4>' +
@@ -716,47 +924,30 @@
       });
       $('#btAbrirMod', m).onclick = function () { m.fechar(); };
 
-      // versões
-      api('GET', '/api/admin/modulos/' + mod.slug + '/versoes').then(function (r) {
-        var el = $('#listaVersoes', m);
-        if (!el) return;
-        if (!r.versoes.length) { el.textContent = 'Nenhuma versão enviada.'; return; }
-        el.innerHTML = '<div class="caixa-opcoes" style="margin-top:8px">' + r.versoes.map(function (v) {
-          var emUso = v.id === mod.versao_id;
-          return '<div class="linha" style="padding:8px 12px;border-bottom:1px solid var(--border)"><span style="flex:1;color:var(--ink-2)"><b>' + quando(v.enviado_em) + '</b> · ' + tamanho(v.tamanho) + (v.nome_original ? ' · ' + esc(v.nome_original) : '') + (v.enviado_por ? ' · por ' + esc(v.enviado_por) : '') + '</span>' +
-            (emUso ? '<span class="etiqueta verde">em uso</span>' : '<button class="btn ghost sm" data-versao="' + v.id + '">Usar esta</button>') + '</div>';
-        }).join('') + '</div>';
-        $$('[data-versao]', el).forEach(function (b) {
-          b.onclick = async function () {
-            try { await api('POST', '/api/admin/modulos/' + mod.slug + '/versoes/' + b.getAttribute('data-versao') + '/usar'); toast('Versão restaurada.', 'ok'); m.fechar(); recarregarQuadro(mod.slug); paginaModulos(); } catch (e) { toast(e.message, 'erro'); }
-          };
-        });
-      }).catch(function () {});
+      ligarArquivoEVersoes(m, mod);
 
-      // envio do arquivo
-      ligarZona($('#zArq', m), $('#inArq', m), async function (arquivos) {
-        var f = arquivos[0];
-        var res = $('#resArq', m);
-        res.innerHTML = '<div class="msg aviso" style="margin-top:8px">Enviando ' + esc(f.name) + '…</div>';
-        try {
-          var r = await api('PUT', '/api/admin/modulos/' + mod.slug + '/arquivo', await f.arrayBuffer(), { bruto: true, headers: { 'X-Nome-Arquivo': encodeURIComponent(f.name) } });
-          if (r.fonte_dados) {
-            // o HTML já não usa planilha Google: a janela acompanha a mudança feita no servidor
-            var radio = $('input[name=mFonte][value="' + r.fonte_dados + '"]', m);
-            if (radio) radio.checked = true;
-            mod.fonte_dados = r.fonte_dados;
-          }
-          res.innerHTML = '<div class="msg ok" style="margin-top:8px">Arquivo publicado. Quem abrir a ferramenta já recebe a nova versão.' +
-            (r.fonte_dados === 'interno' ? ' Este arquivo não usa planilha Google: o módulo passou para <b>Banco do portal</b>.' : '') + '</div>' +
-            (r.aviso ? '<div class="msg aviso" style="margin-top:8px">' + esc(r.aviso) + '</div>' : '') +
-            (r.aviso_banco ? '<div class="msg aviso" style="margin-top:8px">' + esc(r.aviso_banco) + '</div>' : '');
-          recarregarQuadro(mod.slug);
-          recarregarModulosUsuario();
-        } catch (e) { res.innerHTML = '<div class="msg erro" style="margin-top:8px">' + esc(e.message) + '</div>'; }
-      });
+      // importação dos dados de uma ferramenta do Claude
+      if (mod.adaptador === 'claude-db') {
+        $('#inDocs', m).onchange = async function (e) {
+          var arq = e.target.files[0]; e.target.value = '';
+          if (!arq) return;
+          var res = $('#resDocs', m);
+          var corpo;
+          try { corpo = JSON.parse(await arq.text()); } catch (x) { corpo = null; }
+          if (!corpo || !corpo.documentos || typeof corpo.documentos !== 'object') { res.innerHTML = '<div class="msg erro" style="margin-top:8px">Este arquivo não é um arquivo de dados do portal.</div>'; return; }
+          var n = Object.keys(corpo.documentos).length;
+          if (!(await confirmar('Importar dados', 'Os dados atuais de <b>' + esc(mod.nome) + '</b> serão <b>substituídos</b> pelos ' + n + ' documento(s) do arquivo. Quem estiver com a ferramenta aberta passa a ver os dados novos em alguns segundos.', 'Importar'))) return;
+          try {
+            var r = await api('POST', '/api/admin/modulos/' + mod.slug + '/documentos', corpo);
+            res.innerHTML = '<div class="msg ok" style="margin-top:8px">' + r.total + ' documento(s) importado(s).</div>';
+            toast('Dados importados.', 'ok');
+            paginaModulos();
+          } catch (x) { res.innerHTML = '<div class="msg erro" style="margin-top:8px">' + esc(x.message) + '</div>'; }
+        };
+      }
 
       // importação da planilha Google
-      if (mod.adaptador) {
+      if (planilha) {
         $('#btImportar', m).onclick = async function () {
           var url = $('#mGoogle', m).value.trim();
           if (!/^https:\/\/script\.google(usercontent)?\.com\/.+/.test(url)) { toast('Informe o link do Apps Script (https://script.google.com/…/exec).', 'erro'); return; }
@@ -791,7 +982,7 @@
 
       $('#btSalvarMod', m).onclick = async function () {
         var arm = $('input[name=mArm]:checked', m).value;
-        var fonte = mod.adaptador ? $('input[name=mFonte]:checked', m).value : undefined;
+        var fonte = planilha ? $('input[name=mFonte]:checked', m).value : undefined;
         var avisos = [];
         if (arm !== mod.armazenamento) avisos.push('Mudar onde os dados ficam faz a ferramenta começar a usar outro local: o que estava salvo no local anterior não é copiado automaticamente.');
         if (fonte && fonte !== mod.fonte_dados) avisos.push(fonte === 'interno' ? 'A ferramenta passará a gravar no banco do portal. Confira se os dados da planilha Google já foram importados.' : 'A ferramenta voltará a gravar na planilha Google. O que foi lançado no banco do portal não é enviado para a planilha.');
@@ -812,14 +1003,34 @@
     }
   }
 
-  function ligarZona(zona, input, aoEscolher) {
+  /* recorta no centro em quadrado e reduz (a foto sai com poucos KB) */
+  function reduzirFoto(arquivo, lado) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(arquivo);
+      var img = new Image();
+      img.onload = function () {
+        var m = Math.min(img.naturalWidth, img.naturalHeight);
+        var c = document.createElement('canvas'); c.width = c.height = lado;
+        var ctx = c.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, lado, lado);
+        ctx.drawImage(img, (img.naturalWidth - m) / 2, (img.naturalHeight - m) / 2, m, m, 0, 0, lado, lado);
+        URL.revokeObjectURL(url);
+        c.toBlob(function (b) { b ? resolve(b) : reject(new Error('Não foi possível processar a imagem.')); }, 'image/jpeg', 0.86);
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('Não consegui abrir essa imagem.')); };
+      img.src = url;
+    });
+  }
+
+  function ligarZona(zona, input, aoEscolher, aceita, aviso) {
+    aceita = aceita || /\.html?$/i;
     input.onchange = function () { if (input.files.length) aoEscolher(Array.prototype.slice.call(input.files)); input.value = ''; };
     zona.addEventListener('dragover', function (e) { e.preventDefault(); zona.classList.add('arrastando'); });
     zona.addEventListener('dragleave', function () { zona.classList.remove('arrastando'); });
     zona.addEventListener('drop', function (e) {
       e.preventDefault(); zona.classList.remove('arrastando');
-      var fs = Array.prototype.slice.call(e.dataTransfer.files).filter(function (f) { return /\.html?$/i.test(f.name); });
-      if (fs.length) aoEscolher(fs); else toast('Envie arquivos .html', 'erro');
+      var fs = Array.prototype.slice.call(e.dataTransfer.files).filter(function (f) { return aceita.test(f.name); });
+      if (fs.length) aoEscolher(fs); else toast(aviso || 'Envie arquivos .html', 'erro');
     });
   }
 
@@ -853,7 +1064,7 @@
   };
   var PRIO = { urgente: ['Urgente', 'vermelha'], alta: ['Alta', 'ambar'], media: ['Média', 'azul'], baixa: ['Baixa', 'cinza'] };
   var ROTULO_STATUS_AJUDA = {
-    novo: 'Na fila do setor, ainda sem tratamento.', em_andamento: 'Alguém do setor está tratando.',
+    novo: 'Ainda não iniciado.', em_andamento: 'Alguém do setor está tratando.',
     aguardando: 'Parado esperando retorno de quem abriu ou de terceiros.', resolvido: 'Demanda atendida.', cancelado: 'Não será atendido.',
   };
   var metaTickets = null;
@@ -885,13 +1096,37 @@
   }
   function horas(h) { return h == null ? '—' : h < 1 ? Math.max(1, Math.round(h * 60)) + ' min' : h < 48 ? String(h).replace('.', ',') + ' h' : (Math.round(h / 24 * 10) / 10).toString().replace('.', ',') + ' dias'; }
   /* prazo com aviso de atraso (sempre com texto, nunca só cor) */
+  /* contagem até uma data: "vence em 3 h" / "⚠ atrasado 1 h" */
+  function contagem(data, aberto) {
+    if (!data) return '<span class="sec">sem prazo</span>';
+    var falta = new Date(data) - Date.now();
+    if (!aberto) return '<span title="' + esc(quando(data)) + '">' + quando(data) + '</span>';
+    if (falta < 0) return '<span class="etiqueta vermelha" title="Prazo: ' + esc(quando(data)) + '">⚠ atrasado ' + duracao(falta) + '</span>';
+    return '<span title="Prazo: ' + esc(quando(data)) + '"' + (falta < 4 * 3600000 ? ' class="etiqueta ambar"' : '') + '>vence em ' + duracao(falta) + '</span>';
+  }
+  function emAberto(t) { return ['novo', 'em_andamento', 'aguardando'].indexOf(t.status) >= 0; }
+  /* prazo para resposta: conta até o 1º retorno da equipe */
+  function prazoRespostaTxt(t) {
+    if (t.primeira_resposta_em) {
+      var tarde = t.prazo && new Date(t.primeira_resposta_em) > new Date(t.prazo);
+      return '<span class="etiqueta ' + (tarde ? 'ambar' : 'verde') + '" title="Prazo: ' + esc(quando(t.prazo)) + '">✓ respondido ' + (tarde ? 'com atraso' : 'no prazo') + '</span>';
+    }
+    return atrasoTxt(t.prazo, emAberto(t));
+  }
+  /* no detalhe do ticket a data já aparece no campo: só sinaliza quando venceu */
+  function atrasoTxt(data, aberto) {
+    var falta = data ? new Date(data) - Date.now() : 0;
+    return aberto && data && falta < 0 ? '<span class="etiqueta vermelha">⚠ atrasado ' + duracao(falta) + '</span>' : '';
+  }
+  function prazoConclusaoTxt(t, comData) {
+    if (!t.prazo_conclusao) return '<span class="sec">' + (emAberto(t) ? 'ainda não definido' : '—') + '</span>';
+    return (comData ? '<div style="font-weight:700">' + quando(t.prazo_conclusao) + '</div>' : '') + atrasoTxt(t.prazo_conclusao, emAberto(t));
+  }
+  /* coluna "Prazo" da lista: antes do 1º retorno vale o da resposta; depois, o da conclusão */
   function prazoTxt(t) {
-    if (!t.prazo) return '<span class="sec">sem prazo</span>';
-    var falta = new Date(t.prazo) - Date.now();
-    var aberto = ['novo', 'em_andamento', 'aguardando'].indexOf(t.status) >= 0;
-    if (!aberto) return '<span title="' + esc(quando(t.prazo)) + '">' + quando(t.prazo) + '</span>';
-    if (falta < 0) return '<span class="etiqueta vermelha" title="Prazo: ' + esc(quando(t.prazo)) + '">⚠ atrasado ' + duracao(falta) + '</span>';
-    return '<span title="Prazo: ' + esc(quando(t.prazo)) + '"' + (falta < 4 * 3600000 ? ' class="etiqueta ambar"' : '') + '>vence em ' + duracao(falta) + '</span>';
+    if (!t.primeira_resposta_em && emAberto(t)) return contagem(t.prazo, true) + '<span class="sec">resposta</span>';
+    if (t.prazo_conclusao) return contagem(t.prazo_conclusao, emAberto(t)) + '<span class="sec">conclusão</span>';
+    return emAberto(t) ? '<span class="sec">sem previsão</span>' : '<span class="sec">—</span>';
   }
   function localInput(iso) {
     if (!iso) return '';
@@ -1019,14 +1254,26 @@
   async function novoTicket() {
     var meta;
     try { meta = await carregarMeta(); } catch (e) { toast(e.message, 'erro'); return; }
+    // condomínios da carteira; nomes repetidos (mesmo nome em outra UF) levam a UF
+    var conds = (meta.condominios || []).map(function (c) {
+      return { id: c.id, resp: c.resp || {}, rotulo: c.nome + (c.comarca ? ' · ' + c.comarca : '') + (c.distratado ? ' · distratado' : '') };
+    });
+    var porRotulo = {};
+    conds.forEach(function (c) { if (porRotulo[normal(c.rotulo)]) c.rotulo += ' · nº ' + c.id; porRotulo[normal(c.rotulo)] = c; });
     var m = modal({
       titulo: 'Novo ticket', largo: true,
       corpo: '<form id="fT" class="pilha" novalidate>' +
         '<div class="grade-2"><div><label class="rot" for="tSetor">Para qual setor?</label><select class="campo" id="tSetor"><option value="">Escolha o setor…</option>' +
         meta.setores.map(function (s) { return '<option value="' + s.id + '">' + esc(s.nome) + '</option>'; }).join('') + '</select></div>' +
         '<div><label class="rot" for="tCat">Tipo de demanda</label><select class="campo" id="tCat" disabled><option value="">Escolha o setor primeiro</option></select></div></div>' +
+        '<div><label class="rot">A demanda é de</label><div class="grade-2">' +
+        '<label class="opcao-radio" style="margin:0"><input type="radio" name="tOrigem" value="condominio"><div><b>Um condomínio</b><span>Vai direto para o responsável pelo condomínio no setor</span></div></label>' +
+        '<label class="opcao-radio" style="margin:0"><input type="radio" name="tOrigem" value="interna"><div><b>Interna</b><span>Não é de um condomínio: vai para o líder do setor</span></div></label></div></div>' +
+        '<div id="tCondBloco" hidden><label class="rot" for="tCond">Condomínio</label><input class="campo" id="tCond" list="tCondLista" autocomplete="off" placeholder="Digite o nome do condomínio">' +
+        '<datalist id="tCondLista">' + conds.map(function (c) { return '<option value="' + esc(c.rotulo) + '"></option>'; }).join('') + '</datalist></div>' +
+        '<div class="ajuda" id="tDestino" hidden></div>' +
         '<div><label class="rot" for="tTitulo">Assunto</label><input class="campo" id="tTitulo" maxlength="160" placeholder="Resumo da demanda em uma linha"></div>' +
-        '<div><label class="rot" for="tDesc">Descrição</label><textarea class="campo" id="tDesc" rows="6" maxlength="10000" placeholder="O que precisa ser feito, condomínio/unidade, valores, datas… Quanto mais detalhe, mais rápido o atendimento."></textarea></div>' +
+        '<div><label class="rot" for="tDesc">Descrição</label><textarea class="campo" id="tDesc" rows="6" maxlength="10000" placeholder="O que precisa ser feito, unidade, valores, datas… Quanto mais detalhe, mais rápido o atendimento."></textarea></div>' +
         '<div class="grade-2"><div><label class="rot" for="tPrio">Prioridade</label><select class="campo" id="tPrio">' +
         ['baixa', 'media', 'alta', 'urgente'].map(function (p) { return '<option value="' + p + '"' + (p === 'media' ? ' selected' : '') + '>' + PRIO[p][0] + '</option>'; }).join('') + '</select>' +
         '<div class="ajuda" id="tPrazo"></div></div>' +
@@ -1039,9 +1286,29 @@
       var s = setor();
       var c = s && s.categorias.find(function (x) { return String(x.id) === $('#tCat', m).value; });
       var h = c && c.prazo_horas ? c.prazo_horas : meta.prazo_padrao_horas[$('#tPrio', m).value];
-      $('#tPrazo', m).textContent = 'Prazo de atendimento: ' + horasUteis(h) + (c && c.prazo_horas ? ' (definido para este tipo de demanda)' : '') + ', contando só o expediente (' + textoExpediente() + ').';
+      $('#tPrazo', m).textContent = 'Prazo para resposta: ' + horasUteis(h) + (c && c.prazo_horas ? ' (definido para este tipo de demanda)' : '') + ', contando só o expediente (' + textoExpediente() + ').';
     }
+    function origem() { var r = $('input[name=tOrigem]:checked', m); return r ? r.value : ''; }
+    function condominio() { return porRotulo[normal($('#tCond', m).value.trim())] || null; }
+    // para onde o ticket vai: pessoa da carteira ou líder do setor
+    function destino() {
+      var s = setor(), o = origem(), el = $('#tDestino', m), c = condominio();
+      $('#tCondBloco', m).hidden = o !== 'condominio';
+      el.hidden = !o || !s;
+      if (el.hidden) return;
+      if (o === 'interna') { el.innerHTML = 'Demanda interna: vai para o líder de <b>' + esc(s.nome) + '</b>, que distribui.'; return; }
+      if (!conds.length) { el.innerHTML = '<span style="color:var(--red)">A carteira de condomínios ainda está vazia. Use "Interna" ou peça à administração para importar a carteira.</span>'; return; }
+      if (!$('#tCond', m).value.trim()) { el.textContent = 'Escolha o condomínio da lista.'; return; }
+      if (!c) { el.innerHTML = '<span style="color:var(--red)">Condomínio não encontrado na carteira. Escolha um nome da lista.</span>'; return; }
+      var r = c.resp[s.id];
+      el.innerHTML = r ? 'Vai direto para <b>' + esc(r) + '</b>, responsável por este condomínio em ' + esc(s.nome) + '.' :
+        r === null ? 'O responsável deste condomínio na carteira ainda não está na equipe de ' + esc(s.nome) + ' no portal: vai para o líder do setor.' :
+        'Vai para o líder de <b>' + esc(s.nome) + '</b>, que distribui.';
+    }
+    $$('input[name=tOrigem]', m).forEach(function (r) { r.onchange = function () { destino(); if (origem() === 'condominio') $('#tCond', m).focus(); }; });
+    $('#tCond', m).oninput = destino;
     $('#tSetor', m).onchange = function () {
+      destino();
       var s = setor();
       var sel = $('#tCat', m);
       sel.disabled = !s || !s.categorias.length;
@@ -1061,17 +1328,21 @@
       var bt = this;
       var msg = $('#tMsg', m);
       if (!$('#tSetor', m).value) { msg.textContent = 'Escolha o setor que vai atender.'; msg.hidden = false; return; }
+      if (!origem()) { msg.textContent = 'Diga se a demanda é de um condomínio ou interna.'; msg.hidden = false; return; }
+      var cond = origem() === 'condominio' ? condominio() : null;
+      if (origem() === 'condominio' && !cond) { msg.textContent = 'Escolha o condomínio da lista.'; msg.hidden = false; return; }
       if (!$('#tTitulo', m).value.trim()) { msg.textContent = 'Informe o assunto.'; msg.hidden = false; return; }
       bt.disabled = true;
       try {
         var r = await api('POST', '/api/tickets', {
           setor_id: Number($('#tSetor', m).value), categoria_id: $('#tCat', m).value ? Number($('#tCat', m).value) : null,
           prioridade: $('#tPrio', m).value, titulo: $('#tTitulo', m).value, descricao: $('#tDesc', m).value,
+          interno: !cond, condominio_id: cond ? cond.id : null,
         });
         var arqs = Array.prototype.slice.call($('#tArq', m).files);
         if (arqs.length) await enviarAnexos(r.id, arqs, false);
         m.fechar();
-        toast('Ticket ' + numTicket(r.id) + ' aberto.', 'ok');
+        toast('Ticket ' + numTicket(r.id) + ' aberto' + (r.responsavel ? ' e enviado para ' + r.responsavel.nome : '') + '.', 'ok');
         location.hash = '#/tickets/' + r.id;
       } catch (e) { msg.textContent = e.message; msg.hidden = false; bt.disabled = false; }
     };
@@ -1090,14 +1361,16 @@
     var visoes = VISOES.filter(function (v) { return (v[0] !== 'todos' || gestorTickets()) && (v[0] !== 'setor' || souEquipe()) && (v[0] !== 'minha' || souEquipe()); });
     if (!visoes.some(function (v) { return v[0] === visao; })) visao = visoes[0][0];
     guardar('tickets.visao', visao);
-    var filtros = lembrar('tickets.filtros.' + visao, { status: 'abertos', setor: '', q: '', atrasados: false, semResp: false });
+    var filtros = lembrar('tickets.filtros.' + visao, { status: 'todos', setor: '', q: '', atrasados: false, semResp: false });
+    // a situação sempre abre em "Todas as situações" (os em aberto vêm primeiro na lista)
+    filtros.status = 'todos';
     definirBarra('<span class="setor">Central de Tickets</span><span class="sep">/</span><span class="nome">' + esc(visoes.find(function (v) { return v[0] === visao; })[1]) + '</span>');
     var setoresFiltro = visao === 'setor' && !gestorTickets() ? meusSetores() : (metaTickets ? metaTickets.setores : []);
     $('#conteudo').innerHTML = '<div class="pagina"><h1>Central de Tickets</h1><p class="sub">Demandas entre os setores: abra, acompanhe e trate tudo em um só lugar.</p>' +
       '<nav class="abas">' + visoes.map(function (v) { return '<a href="#/tickets/fila/' + v[0] + '" class="' + (v[0] === visao ? 'on' : '') + '" title="' + esc(v[2]) + '">' + esc(v[1]) + '</a>'; }).join('') + '</nav>' +
       '<div class="painel"><div class="cab-painel">' +
       '<input class="campo" id="fTq" type="search" placeholder="Buscar por nº ou assunto…" style="max-width:260px" value="' + esc(filtros.q) + '">' +
-      '<select class="campo" id="fTst" style="max-width:170px"><option value="abertos">Em aberto</option><option value="todos">Todas as situações</option>' +
+      '<select class="campo" id="fTst" style="max-width:170px"><option value="todos">Todas as situações</option><option value="abertos">Em aberto</option>' +
       Object.keys(ST_TICKET).map(function (k) { return '<option value="' + k + '">' + ST_TICKET[k][0] + '</option>'; }).join('') + '</select>' +
       (visao === 'minha' ? '' : '<select class="campo" id="fTse" style="max-width:200px"><option value="">Todos os setores</option>' +
         setoresFiltro.map(function (s) { return '<option value="' + s.id + '">' + esc(s.nome) + '</option>'; }).join('') + '</select>') +
@@ -1125,7 +1398,7 @@
       $('#tbT').innerHTML = r.tickets.map(function (t) {
         var pessoa = visao === 'minha' ? esc(t.solicitante_nome || '—') : t.responsavel_nome ? esc(t.responsavel_nome) : '<span class="etiqueta ambar">sem responsável</span>';
         return '<tr class="clicavel" data-id="' + t.id + '"><td class="num" style="text-align:left;white-space:nowrap"><b>' + numTicket(t.id) + '</b></td>' +
-          '<td><b>' + esc(t.titulo) + '</b><span class="sec">' + (t.categoria_nome ? esc(t.categoria_nome) + ' · ' : '') + 'aberto por ' + esc(t.solicitante_nome || '—') + ' em ' + quando(t.criado_em) +
+          '<td><b>' + esc(t.titulo) + '</b><span class="sec">' + (t.condominio_nome ? esc(t.condominio_nome) + ' · ' : t.demanda_interna ? 'Interna · ' : '') + (t.categoria_nome ? esc(t.categoria_nome) + ' · ' : '') + 'aberto por ' + esc(t.solicitante_nome || '—') + ' em ' + quando(t.criado_em) +
           (t.comentarios ? ' · ' + t.comentarios + ' comentário' + (t.comentarios === 1 ? '' : 's') : '') + '</span></td>' +
           '<td>' + esc(t.setor_nome) + '</td><td>' + etqPrio(t.prioridade) + '</td><td>' + etqStatus(t.status) + '</td><td>' + pessoa + '</td><td style="white-space:nowrap">' + prazoTxt(t) + '</td></tr>';
       }).join('') || '<tr><td colspan="7"><div class="vazio" style="border:0;padding:34px">' +
@@ -1143,12 +1416,14 @@
   function textoEvento(e) {
     var d = e.detalhe || {};
     switch (e.tipo) {
-      case 'criado': return 'abriu o ticket para <b>' + esc(d.setor || '') + '</b>';
+      case 'criado': return 'abriu o ticket para <b>' + esc(d.setor || '') + '</b>' + (d.condominio ? ' · ' + esc(d.condominio) : d.interna ? ' · demanda interna' : '');
       case 'status': return 'mudou a situação de ' + etqStatus(d.de) + ' para ' + etqStatus(d.para);
-      case 'atribuicao': return d.para ? 'atribuiu a <b>' + esc(d.para) + '</b>' : 'devolveu o ticket para a fila do setor';
+      case 'atribuicao': return d.para ? (d.automatico ? 'enviou para <b>' + esc(d.para) + '</b>, responsável pelo condomínio na carteira' : 'atribuiu a <b>' + esc(d.para) + '</b>') : 'devolveu o ticket para a fila do setor';
+      case 'carteira_sem_cadastro': return 'não achou <b>' + esc(pessoaCarteira(d.carteira).nome) + '</b> (responsável pelo condomínio na carteira) na equipe do setor: o ticket ficou com o líder';
+      case 'prazo_conclusao': return (d.de ? 'mudou a previsão de conclusão para <b>' : 'iniciou o atendimento com previsão de conclusão para <b>') + quando(d.para) + '</b>';
       case 'transferencia': return 'transferiu de <b>' + esc(d.de || '') + '</b> para <b>' + esc(d.para || '') + '</b>' + (d.categoria ? ' (' + esc(d.categoria) + ')' : '');
       case 'prioridade': return 'mudou a prioridade de ' + etqPrio(d.de) + ' para ' + etqPrio(d.para);
-      case 'prazo': return 'mudou o prazo para <b>' + (d.para ? quando(d.para) : 'sem prazo') + '</b>';
+      case 'prazo': return 'mudou o prazo para resposta para <b>' + (d.para ? quando(d.para) : 'sem prazo') + '</b>';
       case 'anexo': return 'anexou <b>' + esc(d.nome || 'arquivo') + '</b>';
       default: return esc(e.tipo);
     }
@@ -1181,7 +1456,7 @@
     var linhaTempo = d.eventos.map(function (e) {
       var quem = '<b>' + esc(e.usuario_nome || 'Sistema') + '</b>';
       if (e.tipo === 'comentario') {
-        return '<div class="evento comentario' + (e.interno ? ' interno' : '') + '"><div class="avatar mini">' + esc(iniciais(e.usuario_nome)) + '</div><div class="balao">' +
+        return '<div class="evento comentario' + (e.interno ? ' interno' : '') + '">' + avatarHtml({ id: e.usuario_id, nome: e.usuario_nome, foto_v: e.usuario_foto_v }, 30) + '<div class="balao">' +
           '<div class="cab-ev">' + quem + (e.interno ? ' <span class="etiqueta ambar">nota interna · só a equipe vê</span>' : '') + '<span class="espaco"></span><span class="sec">' + quando(e.criado_em) + '</span></div>' +
           '<div class="texto-livre">' + esc(e.texto) + '</div></div></div>';
       }
@@ -1217,11 +1492,16 @@
       (pode.equipe ? '<select class="campo" id="dStatus">' + Object.keys(ST_TICKET).map(function (k) { return '<option value="' + k + '"' + (k === t.status ? ' selected' : '') + '>' + ST_TICKET[k][0] + '</option>'; }).join('') + '</select>' +
         '<div class="ajuda" id="dStatusAjuda">' + esc(ROTULO_STATUS_AJUDA[t.status]) + '</div>' : etqStatus(t.status)) + '</div>' +
       '<div class="campo-lado"><label class="rot">Responsável</label>' + (opcoesResp || '<div style="font-weight:700">' + (t.responsavel_nome ? esc(t.responsavel_nome) : '<span class="etiqueta ambar">sem responsável</span>') + '</div>') +
-      '<div class="linha" style="margin-top:8px">' + (pode.assumir ? '<button class="btn ghost sm" id="btAssumir">Assumir para mim</button>' : '') +
-      (t.responsavel_id === eu.id && aberto && !pode.atribuir ? '<button class="btn ghost sm" id="btDevolver">Devolver à fila</button>' : '') + '</div></div>' +
-      '<div class="campo-lado"><label class="rot">Prioridade</label>' + (pode.equipe ? '<select class="campo" id="dPrio">' + ['baixa', 'media', 'alta', 'urgente'].map(function (p) { return '<option value="' + p + '"' + (p === t.prioridade ? ' selected' : '') + '>' + PRIO[p][0] + '</option>'; }).join('') + '</select>' : etqPrio(t.prioridade)) + '</div>' +
-      '<div class="campo-lado"><label class="rot">Prazo</label>' + (pode.equipe ? '<input class="campo" type="datetime-local" id="dPrazo" value="' + localInput(t.prazo) + '">' : '') + '<div style="margin-top:6px">' + prazoTxt(t) + '</div></div>' +
-      (pode.equipe ? '<div class="linha"><button class="btn primary" id="btSalvarT" style="flex:1">Salvar alterações</button></div>' : '') +
+      (pode.assumir ? '<div class="linha" style="margin-top:8px"><button class="btn ghost sm" id="btAssumir">Assumir para mim</button></div>' : '') +
+      (pode.equipe && !pode.atribuir ? '<div class="ajuda">Só o líder do setor muda o responsável.</div>' : '') + '</div>' +
+      '<div class="campo-lado"><label class="rot">Prioridade</label>' + (pode.prazos ? '<select class="campo" id="dPrio">' + ['baixa', 'media', 'alta', 'urgente'].map(function (p) { return '<option value="' + p + '"' + (p === t.prioridade ? ' selected' : '') + '>' + PRIO[p][0] + '</option>'; }).join('') + '</select>' : etqPrio(t.prioridade)) + '</div>' +
+      '<div class="campo-lado"><label class="rot">Prazo para resposta</label>' + (pode.prazos ? '<input class="campo" type="datetime-local" id="dPrazo" value="' + localInput(t.prazo) + '">' : '<div style="font-weight:700">' + quando(t.prazo) + '</div>') +
+      '<div style="margin-top:6px">' + prazoRespostaTxt(t) + '</div></div>' +
+      '<div class="campo-lado"><label class="rot">Prazo para conclusão</label>' + (pode.prazo_conclusao && t.prazo_conclusao ? '<input class="campo" type="datetime-local" id="dConclusao" value="' + localInput(t.prazo_conclusao) + '">' : '') +
+      '<div style="margin-top:6px">' + prazoConclusaoTxt(t, !(pode.prazo_conclusao && t.prazo_conclusao)) + '</div>' +
+      (pode.prazo_conclusao && !t.prazo_conclusao ? '<div class="ajuda">Definido por quem atende ao iniciar o atendimento.</div>' : '') + '</div>' +
+      (pode.prazo_conclusao && t.status === 'novo' && t.responsavel_id ? '<div class="linha" style="margin-bottom:8px"><button class="btn primary" id="btIniciar" style="flex:1">Iniciar atendimento</button></div>' : '') +
+      (pode.equipe ? '<div class="linha"><button class="btn ' + (pode.prazo_conclusao && t.status === 'novo' && t.responsavel_id ? 'ghost' : 'primary') + '" id="btSalvarT" style="flex:1">Salvar alterações</button></div>' : '') +
       '</div>' +
       '<div class="painel" style="padding:16px"><div class="pilha" style="gap:8px">' +
       (pode.equipe && aberto ? '<button class="btn ghost" id="btTransferir">Transferir para outro setor</button>' : '') +
@@ -1229,6 +1509,7 @@
       (!pode.equipe && pode.cancelar ? '<button class="btn danger" id="btCancelarT">Cancelar meu pedido</button>' : '') +
       (pode.reabrir ? '<button class="btn ghost" id="btReabrir">Reabrir ticket</button>' : '') +
       '<dl class="info-ticket"><dt>Setor</dt><dd>' + esc(t.setor_nome) + '</dd><dt>Tipo</dt><dd>' + esc(t.categoria_nome || '—') + '</dd>' +
+      '<dt>Condomínio</dt><dd>' + (t.condominio_nome ? esc(t.condominio_nome) + (t.condominio_comarca ? ' · ' + esc(t.condominio_comarca) : '') : t.demanda_interna ? 'Interna' : '—') + '</dd>' +
       '<dt>Aberto por</dt><dd>' + esc(t.solicitante_nome || '—') + '</dd><dt>Aberto em</dt><dd>' + quando(t.criado_em) + '</dd>' +
       '<dt>1ª resposta</dt><dd>' + (t.primeira_resposta_em ? quando(t.primeira_resposta_em) : '—') + '</dd>' +
       (t.resolvido_em ? '<dt>Resolvido em</dt><dd>' + quando(t.resolvido_em) + '</dd>' : '') + '</dl></div></div>' +
@@ -1270,12 +1551,33 @@
       } catch (err) { toast(err.message, 'erro'); $('#btComentar').disabled = false; }
     };
     if ($('#dStatus')) $('#dStatus').onchange = function () { $('#dStatusAjuda').textContent = ROTULO_STATUS_AJUDA[this.value]; };
+    // mudar a prioridade recalcula o prazo para resposta (enquanto ninguém respondeu)
+    if ($('#dPrio') && !t.primeira_resposta_em) {
+      $('#dPrio').insertAdjacentHTML('afterend', '<div class="ajuda" id="dPrioAjuda"></div>');
+      $('#dPrio').onchange = function () {
+        var h = metaTickets && metaTickets.prazo_padrao_horas && metaTickets.prazo_padrao_horas[this.value];
+        $('#dPrioAjuda').textContent = this.value !== t.prioridade && h ? 'Ao salvar, o prazo para resposta passa a ser ' + horasUteis(h) + ' contados da abertura.' : '';
+      };
+    }
     if ($('#btSalvarT')) {
       $('#btSalvarT').onclick = async function () {
         var corpo = {};
         if ($('#dStatus').value !== t.status) corpo.status = $('#dStatus').value;
-        if ($('#dPrio').value !== t.prioridade) corpo.prioridade = $('#dPrio').value;
-        if ($('#dPrazo').value !== localInput(t.prazo)) corpo.prazo = $('#dPrazo').value ? new Date($('#dPrazo').value).toISOString() : null;
+        if ($('#dPrio') && $('#dPrio').value !== t.prioridade) corpo.prioridade = $('#dPrio').value;
+        if ($('#dPrazo') && $('#dPrazo').value !== localInput(t.prazo)) corpo.prazo = $('#dPrazo').value ? new Date($('#dPrazo').value).toISOString() : null;
+        if ($('#dConclusao') && $('#dConclusao').value !== localInput(t.prazo_conclusao)) {
+          if (!$('#dConclusao').value) { toast('Informe a data do prazo para conclusão.', 'erro'); return; }
+          corpo.prazo_conclusao = new Date($('#dConclusao').value).toISOString();
+          var mc = await pedirMotivo('Mudar prazo para conclusão', 'Por que o prazo mudou? (aparece para quem abriu)', true, 'Salvar');
+          if (mc === null) return;
+          corpo.motivo = mc;
+        }
+        // começar a tratar exige o prazo para conclusão
+        if (t.status === 'novo' && (corpo.status === 'em_andamento' || corpo.status === 'aguardando') && !t.prazo_conclusao) {
+          var pc = await pedirConclusao();
+          if (!pc) return;
+          corpo.prazo_conclusao = pc;
+        }
         if ($('#dResp')) { var rsp = $('#dResp').value ? Number($('#dResp').value) : null; if (rsp !== t.responsavel_id) corpo.responsavel_id = rsp; }
         if (!Object.keys(corpo).length) { toast('Nada foi alterado.'); return; }
         if (corpo.status === 'resolvido' || corpo.status === 'cancelado') {
@@ -1287,7 +1589,31 @@
       };
     }
     if ($('#btAssumir')) $('#btAssumir').onclick = function () { mudar({ responsavel_id: eu.id }, 'Ticket assumido.'); };
-    if ($('#btDevolver')) $('#btDevolver').onclick = function () { mudar({ responsavel_id: null }, 'Ticket devolvido para a fila do setor.'); };
+    /* pede a data de conclusão (padrão: o prazo para resposta, se ainda estiver no futuro) */
+    function pedirConclusao() {
+      return new Promise(function (resolve) {
+        var valor = null;
+        var sugestao = ''; // quem atende escolhe a data; não reaproveita o prazo para resposta
+        var mm = modal({
+          titulo: 'Iniciar atendimento',
+          corpo: '<div class="pilha"><p style="margin:0;font-weight:600;color:var(--ink-2)">Até quando você conclui esta demanda? Quem abriu o ticket vê essa previsão.</p>' +
+            '<div><label class="rot" for="mConc">Prazo para conclusão</label><input class="campo" type="datetime-local" id="mConc" value="' + sugestao + '"></div><div id="mMsgC" class="msg erro" hidden></div></div>',
+          pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mOkC">Iniciar</button>',
+          aoFechar: function () { resolve(valor); },
+        });
+        $('#mOkC', mm).onclick = function () {
+          var v = $('#mConc', mm).value;
+          var msg = $('#mMsgC', mm);
+          if (!v) { msg.textContent = 'Informe a data e a hora.'; msg.hidden = false; return; }
+          if (new Date(v) <= new Date()) { msg.textContent = 'O prazo precisa ser uma data futura.'; msg.hidden = false; return; }
+          valor = new Date(v).toISOString(); mm.fechar();
+        };
+      });
+    }
+    if ($('#btIniciar')) $('#btIniciar').onclick = async function () {
+      var pc = await pedirConclusao();
+      if (pc) mudar({ status: 'em_andamento', prazo_conclusao: pc }, 'Atendimento iniciado.');
+    };
     if ($('#btResolver')) {
       $('#btResolver').onclick = async function () {
         var mot = await pedirMotivo('Resolver ticket', 'O que foi feito? (aparece para quem abriu)', false, 'Marcar como resolvido');
@@ -1369,9 +1695,10 @@
       $('#pCorpo').innerHTML =
         '<div class="tiles">' +
         tile('Em aberto', g.abertos, g.sem_responsavel + ' sem responsável') +
-        tile('Atrasados', g.atrasados ? '⚠ ' + g.atrasados : '0', 'prazo vencido, ainda em aberto', g.atrasados > 0) +
+        tile('Atrasados', g.atrasados ? '⚠ ' + g.atrasados : '0', 'sem resposta no prazo ou conclusão vencida', g.atrasados > 0) +
+        tile('Respondidos no prazo', g.respondidos ? Math.round(g.respondidos_no_prazo / g.respondidos * 100) + '%' : '—', g.respondidos ? g.respondidos_no_prazo + ' de ' + g.respondidos + ' no período' : 'prazo para resposta') +
         tile('Abertos no período', g.criados, '') +
-        tile('Resolvidos no período', g.resolvidos, g.resolvidos ? pct + ' dentro do prazo' : '') +
+        tile('Resolvidos no período', g.resolvidos, g.resolvidos ? pct + ' dentro do prazo para conclusão' : '') +
         tile('Tempo médio de resolução', horas(g.horas_resolucao), 'da abertura até resolver') +
         tile('Tempo médio de 1ª resposta', horas(g.horas_primeira_resposta), 'até o primeiro retorno da equipe') +
         '</div>' +
@@ -1387,20 +1714,333 @@
     carregar();
   }
 
+  /* ======================= Carteira de condomínios ======================= */
+  var CART_SIT = { ATIVO: ['Ativo', 'verde'], DISTRATADO: ['Distratado', 'cinza'] };
+  // "EDUARDO SOUSA - 4663" → { nome: 'Eduardo Sousa', ramal: '4663' }
+  function pessoaCarteira(v) {
+    var m = String(v || '').match(/^(.*?)\s*-\s*(\d+)\s*$/);
+    var nome = (m ? m[1] : String(v || '')).toLowerCase().replace(/(^|\s)(\S)/g, function (x, a, b) { return a + b.toUpperCase(); })
+      .replace(/ (Da|De|Do|Das|Dos|E) /g, function (x) { return x.toLowerCase(); });
+    return { nome: nome, ramal: m ? m[2] : '' };
+  }
+  function celPessoa(v) {
+    if (!v) return '<span class="etiqueta ambar">sem responsável</span>';
+    var p = pessoaCarteira(v);
+    return '<b style="font-weight:700">' + esc(p.nome) + '</b>' + (p.ramal ? '<span class="sec">ramal ' + esc(p.ramal) + '</span>' : '');
+  }
+  function etqSituacao(s) { var x = CART_SIT[s] || [s || '—', 'ambar']; return '<span class="etiqueta ' + x[1] + '">' + esc(x[0]) + '</span>'; }
+  function unicos(lista) { return lista.filter(function (v, i, a) { return v && a.indexOf(v) === i; }).sort(function (a, b) { return a.localeCompare(b, 'pt-BR'); }); }
+
+  async function paginaCarteira(aba) {
+    aba = aba === 'responsaveis' ? 'responsaveis' : 'condominios';
+    definirBarra('<span class="setor">Carteira</span><span class="sep">/</span><span class="nome">' + (aba === 'responsaveis' ? 'Responsáveis' : 'Condomínios') + '</span>');
+    $('#conteudo').innerHTML = carregandoHtml();
+    var j;
+    try { j = await api('GET', '/api/carteira'); } catch (e) { toast(e.message, 'erro'); return; }
+    var conds = j.condominios, funcoes = j.funcoes, admin = j.pode_editar;
+    // colunas de responsável que esta pessoa altera e transfere (coordenador/supervisor: as do setor dele)
+    var editaveis = j.funcoes_editaveis || [];
+    function editavel(campo) { return admin || editaveis.indexOf(campo) >= 0; }
+    var ativos = conds.filter(function (c) { return c.situacao === 'ATIVO'; });
+    var porUf = {};
+    ativos.forEach(function (c) { porUf[c.comarca || '—'] = (porUf[c.comarca || '—'] || 0) + 1; });
+    var ufs = Object.keys(porUf).sort(function (a, b) { return porUf[b] - porUf[a]; });
+    var semResp = ativos.filter(function (c) { return funcoes.some(function (f) { return !c[f.campo]; }); });
+    function tile(rotulo, valor, extra, alerta) {
+      return '<div class="tile' + (alerta ? ' alerta' : '') + '"><span class="rot-tile">' + rotulo + '</span><b>' + valor + '</b>' + (extra ? '<span class="sec">' + extra + '</span>' : '') + '</div>';
+    }
+    $('#conteudo').innerHTML = '<div class="pagina"><h1>Carteira de condomínios</h1>' +
+      '<p class="sub">Os condomínios atendidos e quem cuida de cada um: analista de cobrança, analista extrajudicial (ApoioCob) e assistente de crédito.</p>' +
+      (conds.length ? '<div class="tiles" style="margin-bottom:20px;grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">' +
+        tile('Condomínios ativos', ativos.length, conds.length - ativos.length + ' distratado' + (conds.length - ativos.length === 1 ? '' : 's')) +
+        tile('Comarcas', ufs.length, ufs.slice(0, 4).map(function (u) { return esc(u) + ' ' + porUf[u]; }).join(' · ')) +
+        funcoes.map(function (f) {
+          var n = unicos(ativos.map(function (c) { return c[f.campo]; })).length;
+          return tile(esc(f.rotulo.replace(' (ApoioCob)', '')), n, n ? 'pessoas · média de ' + Math.round(ativos.filter(function (c) { return c[f.campo]; }).length / n) + ' cada' : '');
+        }).join('') +
+        tile('Sem responsável', semResp.length, 'ativos com função em branco', semResp.length > 0) + '</div>' : '') +
+      '<nav class="abas"><a href="#/carteira" class="' + (aba === 'condominios' ? 'on' : '') + '">Condomínios</a>' +
+      '<a href="#/carteira/responsaveis" class="' + (aba === 'responsaveis' ? 'on' : '') + '">Responsáveis</a></nav><div id="cCorpo"></div></div>';
+
+    var acoes = '<button class="btn ghost" id="btCExportar"' + (conds.length ? '' : ' disabled') + '>' + IC.baixar + 'Exportar CSV</button>' +
+      (admin ? '<button class="btn ghost" id="btCImportar">' + IC.enviar + 'Importar CSV</button><button class="btn primary" id="btCNovo">' + IC.mais + 'Novo condomínio</button>' : '');
+
+    if (!conds.length) {
+      $('#cCorpo').innerHTML = '<div class="vazio">A carteira ainda está vazia.' + (admin ? '<div class="ajuda" style="margin:8px 0 16px">Importe o CSV da planilha <i>Carteira de Condomínios</i> ou cadastre o primeiro condomínio.</div><div class="linha" style="justify-content:center">' + acoes + '</div>' : ' A administração ainda vai importar a planilha.') + '</div>';
+    } else if (aba === 'condominios') desenharCondominios();
+    else desenharResponsaveis();
+    ligarAcoes();
+
+    function ligarAcoes() {
+      if ($('#btCExportar')) $('#btCExportar').onclick = function () { location.href = '/api/carteira/exportar'; };
+      if ($('#btCImportar')) $('#btCImportar').onclick = importarCarteira;
+      if ($('#btCNovo')) $('#btCNovo').onclick = function () { editarCondominio(null); };
+    }
+
+    function desenharCondominios() {
+      var f = lembrar('carteira.filtros', { q: '', situacao: 'ATIVO', uf: '', adm: '', pessoa: '', semResp: false, ordem: 'nome', desc: false });
+      var pessoas = funcoes.map(function (fn) {
+        return '<optgroup label="' + esc(fn.rotulo) + '">' + unicos(conds.map(function (c) { return c[fn.campo]; })).map(function (p) {
+          return '<option value="' + esc(fn.campo + '|' + p) + '">' + esc(pessoaCarteira(p).nome) + '</option>';
+        }).join('') + '</optgroup>';
+      }).join('');
+      // 5 colunas de largura fixa: cabe na tela sem rolar para o lado (ID, UF, vencimento e situação vão junto do nome)
+      var cols = [['nome', 'Condomínio', '30%']]
+        .concat(funcoes.map(function (fn) { return [fn.campo, fn.rotulo.replace(' (ApoioCob)', ''), '18%']; }))
+        .concat([['administradora', 'Administradora', '16%']]);
+      $('#cCorpo').innerHTML = '<div class="painel"><div class="cab-painel">' +
+        '<input class="campo" id="cfQ" type="search" placeholder="Buscar nome, razão social, CNPJ ou ID…" style="max-width:280px">' +
+        '<select class="campo" id="cfSit" style="max-width:150px"><option value="ATIVO">Ativos</option><option value="DISTRATADO">Distratados</option><option value="">Todas as situações</option></select>' +
+        '<select class="campo" id="cfUf" style="max-width:130px"><option value="">Todas as UFs</option>' + unicos(conds.map(function (c) { return c.comarca; })).map(function (u) { return '<option>' + esc(u) + '</option>'; }).join('') + '</select>' +
+        '<select class="campo" id="cfAdm" style="max-width:190px"><option value="">Todas as administradoras</option>' + unicos(conds.map(function (c) { return c.administradora; })).map(function (u) { return '<option>' + esc(u) + '</option>'; }).join('') + '</select>' +
+        '<select class="campo" id="cfPes" style="max-width:220px"><option value="">Todos os responsáveis</option>' + pessoas + '</select>' +
+        '<label class="linha" style="font-weight:700;font-size:13px;color:var(--muted)"><input type="checkbox" id="cfSem"> sem responsável</label>' +
+        '<span class="espaco"></span>' + acoes + '</div>' +
+        '<div class="tabela-wrap"><table class="tabela-carteira"><colgroup>' + cols.map(function (c) { return '<col style="width:' + c[2] + '">'; }).join('') + '</colgroup><thead><tr>' + cols.map(function (c) {
+          return '<th data-ordem="' + c[0] + '" style="cursor:pointer" title="Ordenar">' + esc(c[1]) + ' <span data-seta="' + c[0] + '"></span></th>';
+        }).join('') + '</tr></thead><tbody id="tbC"></tbody></table></div>' +
+        '<div class="ajuda" id="cTotal" style="padding:10px 16px;border-top:1px solid var(--border)"></div></div>';
+      $('#cfQ').value = f.q; $('#cfSit').value = f.situacao; $('#cfUf').value = f.uf; $('#cfAdm').value = f.adm; $('#cfPes').value = f.pessoa; $('#cfSem').checked = !!f.semResp;
+      function filtrar() {
+        f = { q: $('#cfQ').value.trim(), situacao: $('#cfSit').value, uf: $('#cfUf').value, adm: $('#cfAdm').value, pessoa: $('#cfPes').value, semResp: $('#cfSem').checked, ordem: f.ordem, desc: f.desc };
+        guardar('carteira.filtros', f);
+        var t = normal(f.q), dig = f.q.replace(/\D/g, '');
+        var pes = f.pessoa ? f.pessoa.split('|') : null;
+        var lista = conds.filter(function (c) {
+          if (f.situacao && c.situacao !== f.situacao) return false;
+          if (f.uf && c.comarca !== f.uf) return false;
+          if (f.adm && c.administradora !== f.adm) return false;
+          if (pes && c[pes[0]] !== pes[1]) return false;
+          if (f.semResp && !funcoes.some(function (fn) { return !c[fn.campo]; })) return false;
+          if (t && normal(c.nome + ' ' + c.razao_social + ' ' + c.codigo + ' ' + c.administradora).indexOf(t) < 0 && !(dig.length >= 4 && c.cnpj.replace(/\D/g, '').indexOf(dig) >= 0)) return false;
+          return true;
+        });
+        lista.sort(function (a, b) {
+          var x = a[f.ordem] || '', y = b[f.ordem] || '';
+          var r = /^\d+$/.test(x) && /^\d+$/.test(y) ? Number(x) - Number(y) : String(x).localeCompare(String(y), 'pt-BR', { numeric: true });
+          return (f.desc ? -r : r) || a.nome.localeCompare(b.nome, 'pt-BR');
+        });
+        $$('[data-seta]').forEach(function (s) { s.textContent = s.getAttribute('data-seta') === f.ordem ? (f.desc ? '↓' : '↑') : ''; });
+        $('#tbC').innerHTML = lista.map(function (c) {
+          return '<tr class="clicavel" data-id="' + c.id + '"><td><b>' + esc(c.nome) + '</b>' + (c.situacao !== 'ATIVO' ? ' ' + etqSituacao(c.situacao) : '') +
+            '<span class="sec">ID ' + esc(c.codigo) + (c.comarca ? ' · ' + esc(c.comarca) : '') + (c.vencimento ? ' · venc. ' + esc(c.vencimento) : '') + '</span>' +
+            (c.razao_social ? '<span class="sec corta" title="' + esc(c.razao_social + (c.cnpj ? ' · ' + c.cnpj : '')) + '">' + esc(c.razao_social) + '</span>' : '') + '</td>' +
+            funcoes.map(function (fn) { return '<td>' + celPessoa(c[fn.campo]) + '</td>'; }).join('') +
+            '<td>' + esc(c.administradora && c.administradora !== '-' ? c.administradora : '—') + (c.forma_envio ? '<span class="sec">' + esc(c.forma_envio) + '</span>' : '') + '</td></tr>';
+        }).join('') || '<tr><td colspan="' + cols.length + '"><div class="vazio" style="border:0;padding:34px">Nenhum condomínio com estes filtros.</div></td></tr>';
+        $('#cTotal').textContent = lista.length + ' de ' + conds.length + ' condomínio' + (conds.length === 1 ? '' : 's');
+        $$('#tbC tr[data-id]').forEach(function (tr) { tr.onclick = function () { verCondominio(Number(tr.getAttribute('data-id'))); }; });
+      }
+      var espera;
+      $('#cfQ').oninput = function () { clearTimeout(espera); espera = setTimeout(filtrar, 200); };
+      $$('#cfSit,#cfUf,#cfAdm,#cfPes,#cfSem').forEach(function (el) { el.onchange = filtrar; });
+      $$('th[data-ordem]').forEach(function (th) {
+        th.onclick = function () { var o = th.getAttribute('data-ordem'); f.desc = f.ordem === o ? !f.desc : false; f.ordem = o; filtrar(); };
+      });
+      filtrar();
+    }
+
+    function desenharResponsaveis() {
+      $('#cCorpo').innerHTML = '<div class="linha" style="margin-bottom:14px"><span class="ajuda" style="flex:1;min-width:240px">Quantos condomínios cada pessoa tem na carteira. Clique no número para ver a lista' +
+        (editaveis.length ? '; use <b>Transferir</b> quando alguém sair ou a carteira for redistribuída.' : '.') + '</span>' + acoes + '</div>' +
+        funcoes.map(function (fn) {
+          var nomes = unicos(conds.map(function (c) { return c[fn.campo]; }));
+          var sem = ativos.filter(function (c) { return !c[fn.campo]; }).length;
+          var linhas = nomes.map(function (p) {
+            var deles = conds.filter(function (c) { return c[fn.campo] === p; });
+            var at = deles.filter(function (c) { return c.situacao === 'ATIVO'; });
+            var porU = {};
+            at.forEach(function (c) { porU[c.comarca || '—'] = (porU[c.comarca || '—'] || 0) + 1; });
+            var pp = pessoaCarteira(p);
+            return { p: p, html: '<tr><td><b>' + esc(pp.nome) + '</b></td><td class="sec">' + esc(pp.ramal || '—') + '</td>' +
+              '<td class="num"><a href="#" data-ver="' + esc(fn.campo + '|' + p) + '"><b>' + at.length + '</b></a></td>' +
+              '<td class="sec">' + Object.keys(porU).sort(function (a, b) { return porU[b] - porU[a]; }).map(function (u) { return esc(u) + ' ' + porU[u]; }).join(' · ') + '</td>' +
+              '<td class="num">' + (deles.length - at.length) + '</td>' +
+              (editaveis.length ? '<td style="text-align:right">' + (editavel(fn.campo) ? '<button class="btn ghost sm" data-transferir="' + esc(fn.campo + '|' + p) + '">Transferir</button>' : '') + '</td>' : '') + '</tr>', n: at.length };
+          }).sort(function (a, b) { return b.n - a.n; });
+          return '<div class="painel" style="margin-bottom:18px"><div class="cab-painel"><b style="font-family:var(--display)">' + esc(fn.rotulo) + '</b>' +
+            '<span class="sec" style="color:var(--muted);font-weight:600;font-size:13px">' + nomes.length + ' pessoa' + (nomes.length === 1 ? '' : 's') + '</span><span class="espaco"></span>' +
+            (sem ? '<a href="#" class="etiqueta ambar" data-sem="1">' + sem + ' ativo' + (sem === 1 ? '' : 's') + ' sem responsável</a>' : '') + '</div>' +
+            '<div class="tabela-wrap"><table><thead><tr><th>Pessoa</th><th>Ramal</th><th class="num">Ativos</th><th>Por UF</th><th class="num">Distratados</th>' + (editaveis.length ? '<th></th>' : '') + '</tr></thead><tbody>' +
+            (linhas.map(function (l) { return l.html; }).join('') || '<tr><td colspan="6" class="sec" style="text-align:center;padding:20px">Ninguém nesta função.</td></tr>') + '</tbody></table></div></div>';
+        }).join('');
+      $$('[data-ver]').forEach(function (a) {
+        a.onclick = function (e) {
+          e.preventDefault();
+          guardar('carteira.filtros', { q: '', situacao: 'ATIVO', uf: '', adm: '', pessoa: a.getAttribute('data-ver'), semResp: false, ordem: 'nome', desc: false });
+          location.hash = '#/carteira';
+        };
+      });
+      $$('[data-sem]').forEach(function (a) {
+        a.onclick = function (e) {
+          e.preventDefault();
+          guardar('carteira.filtros', { q: '', situacao: 'ATIVO', uf: '', adm: '', pessoa: '', semResp: true, ordem: 'nome', desc: false });
+          location.hash = '#/carteira';
+        };
+      });
+      $$('[data-transferir]').forEach(function (b) {
+        b.onclick = function () { var x = b.getAttribute('data-transferir').split('|'); transferir(x[0], x.slice(1).join('|')); };
+      });
+    }
+
+    function transferir(campo, de) {
+      var fn = funcoes.find(function (x) { return x.campo === campo; });
+      var deles = conds.filter(function (c) { return c[campo] === de; }).sort(function (a, b) { return (a.situacao === 'ATIVO' ? 0 : 1) - (b.situacao === 'ATIVO' ? 0 : 1) || a.nome.localeCompare(b.nome, 'pt-BR'); });
+      var m = modal({
+        titulo: 'Transferir carteira', largo: true,
+        corpo: '<div class="pilha"><p style="margin:0;font-weight:600;color:var(--ink-2)">' + esc(fn.rotulo) + ': condomínios de <b>' + esc(pessoaCarteira(de).nome) + '</b>. Desmarque os que devem continuar com essa pessoa.</p>' +
+          '<div><label class="rot" for="trPara">Passar para</label><input class="campo" id="trPara" list="trLista" placeholder="NOME - RAMAL (ex.: MARIA SILVA - 4700)">' +
+          '<datalist id="trLista">' + unicos(conds.map(function (c) { return c[campo]; })).filter(function (p) { return p !== de; }).map(function (p) { return '<option value="' + esc(p) + '"></option>'; }).join('') + '</datalist></div>' +
+          '<div class="caixa-opcoes"><div class="grp"><input type="checkbox" id="trTodos" checked> ' + deles.length + ' condomínio' + (deles.length === 1 ? '' : 's') + '</div>' + deles.map(function (c) {
+            return '<label><input type="checkbox" name="trC" value="' + c.id + '" checked><span style="flex:1">' + esc(c.nome) + ' <span class="sec" style="display:inline">' + esc(c.comarca) + '</span></span>' + etqSituacao(c.situacao) + '</label>';
+          }).join('') + '</div><div id="trMsg" class="msg erro" hidden></div></div>',
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="btTrOk">Transferir</button>',
+      });
+      $('#trTodos', m).onchange = function () { var v = this.checked; $$('input[name=trC]', m).forEach(function (i) { i.checked = v; }); };
+      $('#btTrOk', m).onclick = async function () {
+        var ids = $$('input[name=trC]:checked', m).map(function (i) { return Number(i.value); });
+        var msg = $('#trMsg', m);
+        if (!$('#trPara', m).value.trim()) { msg.textContent = 'Informe para quem vai a carteira.'; msg.hidden = false; return; }
+        if (!ids.length) { msg.textContent = 'Marque pelo menos um condomínio.'; msg.hidden = false; return; }
+        try {
+          var r = await api('POST', '/api/carteira/transferir', { funcao: campo, de: de, para: $('#trPara', m).value, ids: ids });
+          m.fechar();
+          toast(r.condominios + ' condomínio' + (r.condominios === 1 ? '' : 's') + ' transferido' + (r.condominios === 1 ? '' : 's') + '.', 'ok');
+          paginaCarteira('responsaveis');
+        } catch (e) { msg.textContent = e.message; msg.hidden = false; }
+      };
+    }
+
+    function importarCarteira() {
+      var m = modal({
+        titulo: 'Importar carteira',
+        corpo: '<div class="pilha"><div><label class="rot" for="ciArq">Arquivo CSV da Carteira de Condomínios</label><input class="campo" id="ciArq" type="file" accept=".csv,text/csv"></div>' +
+          '<div class="ajuda">No Excel: <i>Arquivo → Salvar como → CSV (separado por ponto e vírgula)</i>. Cada condomínio é reconhecido pela coluna <b>ID</b>: os que já existem são atualizados, ' +
+          'os novos são incluídos e os que não estão no arquivo ficam como estão. Toda mudança fica no histórico do condomínio.</div><div id="ciRes"></div></div>',
+        pe: '<button class="btn ghost" data-fechar>Fechar</button><button class="btn primary" id="btCiOk">' + IC.enviar + 'Importar</button>',
+      });
+      var feito = false;
+      $('#btCiOk', m).onclick = async function () {
+        if (feito) { m.fechar(); paginaCarteira(aba); return; }
+        var arq = $('#ciArq', m).files[0];
+        if (!arq) { toast('Escolha o arquivo CSV.', 'erro'); return; }
+        var bt = this; bt.disabled = true;
+        try {
+          var r = await api('POST', '/api/carteira/importar', arq, { bruto: true, headers: { 'Content-Type': 'text/csv' } });
+          $('#ciRes', m).innerHTML = '<div class="tiles" style="grid-template-columns:repeat(3,1fr)">' + tile('Novos', r.novos) + tile('Atualizados', r.atualizados) + tile('Sem mudança', r.iguais) + '</div>' +
+            (r.avisos.length ? '<div class="msg erro" style="margin-top:12px">' + r.avisos.map(esc).join('<br>') + '</div>' : '');
+          feito = true;
+          bt.innerHTML = 'Ver carteira';
+        } catch (e) { toast(e.message, 'erro'); }
+        bt.disabled = false;
+      };
+    }
+
+    async function verCondominio(id) {
+      var d;
+      try { d = await api('GET', '/api/carteira/' + id); } catch (e) { toast(e.message, 'erro'); return; }
+      editarCondominio(d.condominio, d.historico);
+    }
+
+    var ROTULO_CAMPO = { codigo: 'ID', nome: 'Condomínio', situacao: 'Situação', comarca: 'UF', vencimento: 'Vencimento', administradora: 'Administradora', forma_envio: 'Forma de envio',
+      inicio_contrato: 'Início do contrato', razao_social: 'Razão social', cnpj: 'CNPJ', observacoes: 'Observações' };
+    funcoes.forEach(function (fn) { ROTULO_CAMPO[fn.campo] = fn.rotulo; });
+
+    function editarCondominio(c, historico) {
+      var novo = !c;
+      c = c || { situacao: 'ATIVO' };
+      var ro = !admin;
+      // coordenador/supervisor: altera só o responsável do setor dele
+      var parcial = !admin && !novo && editaveis.length > 0;
+      function campo(id, rotulo, valor, extra, liberado) {
+        return '<div><label class="rot" for="' + id + '">' + rotulo + '</label><input class="campo" id="' + id + '" value="' + esc(valor || '') + '"' + (ro && !liberado ? ' readonly' : '') + (extra || '') + '></div>';
+      }
+      function lista(id, valores) { return '<datalist id="' + id + '">' + unicos(valores).map(function (v) { return '<option value="' + esc(v) + '"></option>'; }).join('') + '</datalist>'; }
+      var hist = (historico || []).map(function (h) {
+        var det = h.detalhe || {};
+        var o = h.acao === 'condominio_criado' ? 'cadastrou o condomínio' : Object.keys(det.mudancas || {}).map(function (k) {
+          var v = det.mudancas[k];
+          return '<b>' + esc(ROTULO_CAMPO[k] || k) + '</b>: ' + esc(v[0] || '(vazio)') + ' → ' + esc(v[1] || '(vazio)');
+        }).join('; ');
+        var como = h.acao === 'condominio_importado' ? ' (importação)' : h.acao === 'carteira_transferida' ? ' (transferência de carteira)' : '';
+        return '<div class="evento sistema"><span class="ponto"></span><div><b>' + esc(h.usuario_nome || 'Sistema') + '</b> ' + o + esc(como) + ' <span class="sec" style="display:inline">· ' + quando(h.quando) + '</span></div></div>';
+      }).join('');
+      var m = modal({
+        titulo: novo ? 'Novo condomínio' : c.nome, largo: true,
+        corpo: '<form class="pilha" id="fCond" novalidate>' +
+          '<div class="grade-3">' + campo('cdCodigo', 'ID', c.codigo, novo ? ' placeholder="automático"' : '') +
+          '<div><label class="rot" for="cdSit">Situação</label><select class="campo" id="cdSit"' + (ro ? ' disabled' : '') + '>' +
+            unicos(j.situacoes.concat([c.situacao])).map(function (s) { return '<option value="' + esc(s) + '"' + (s === c.situacao ? ' selected' : '') + '>' + esc((CART_SIT[s] || [s])[0]) + '</option>'; }).join('') + '</select></div>' +
+          campo('cdUf', 'UF (comarca)', c.comarca, ' maxlength="30" list="cdUfs"') + '</div>' +
+          campo('cdNome', 'Condomínio', c.nome, ' maxlength="160"') +
+          '<div class="grade-2">' + campo('cdRazao', 'Razão social', c.razao_social, ' maxlength="200"') + campo('cdCnpj', 'CNPJ', c.cnpj, ' maxlength="20" inputmode="numeric"') + '</div>' +
+          '<div class="grade-3">' + campo('cdVenc', 'Vencimento', c.vencimento, ' maxlength="40" placeholder="10 ou 5º DIA ÚTIL" list="cdVencs"') +
+          campo('cdAdm', 'Administradora', c.administradora, ' maxlength="120" list="cdAdms"') + campo('cdEnvio', 'Forma de envio', c.forma_envio, ' maxlength="60" list="cdEnvios"') + '</div>' +
+          '<div class="grade-3">' + funcoes.map(function (fn) { return campo('cd_' + fn.campo, esc(fn.rotulo), c[fn.campo], ' maxlength="120" list="cdl_' + fn.campo + '" placeholder="NOME - RAMAL"', parcial && editavel(fn.campo)); }).join('') + '</div>' +
+          (parcial ? '<div class="ajuda">Você altera o responsável do seu setor. Os demais dados do condomínio são da administração.</div>' : '') +
+          '<div class="grade-3">' + campo('cdInicio', 'Início do contrato', c.inicio_contrato, ' type="date"') + '</div>' +
+          '<div><label class="rot" for="cdObs">Observações</label><textarea class="campo" id="cdObs" rows="3" maxlength="4000"' + (ro ? ' readonly' : '') + '>' + esc(c.observacoes || '') + '</textarea></div>' +
+          lista('cdUfs', conds.map(function (x) { return x.comarca; })) + lista('cdVencs', conds.map(function (x) { return x.vencimento; })) +
+          lista('cdAdms', conds.map(function (x) { return x.administradora; })) + lista('cdEnvios', conds.map(function (x) { return x.forma_envio; })) +
+          funcoes.map(function (fn) { return lista('cdl_' + fn.campo, conds.map(function (x) { return x[fn.campo]; })); }).join('') +
+          '<div id="cdMsg" class="msg erro" hidden></div>' +
+          (novo ? '' : '<div class="ajuda">Atualizado em ' + quando(c.atualizado_em) + (c.atualizado_por_nome ? ' por ' + esc(c.atualizado_por_nome) : '') + '.</div>') +
+          (hist ? '<hr style="border:0;border-top:1px solid var(--border);margin:4px 0"><div><label class="rot">Histórico</label><div class="linha-tempo">' + hist + '</div></div>' : '') + '</form>',
+        pe: (admin && !novo ? '<button class="btn danger" id="btCdApagar" style="margin-right:auto">Remover</button>' : '') +
+          '<button class="btn ghost" data-fechar>' + (admin || parcial ? 'Cancelar' : 'Fechar') + '</button>' + (admin || parcial ? '<button class="btn primary" id="btCdOk">' + (novo ? 'Cadastrar' : 'Salvar') + '</button>' : ''),
+      });
+      if (parcial) {
+        $('#btCdOk', m).onclick = async function () {
+          var corpo = {};
+          funcoes.forEach(function (fn) { if (editavel(fn.campo)) corpo[fn.campo] = $('#cd_' + fn.campo, m).value; });
+          var bt = this; bt.disabled = true;
+          try { await api('PATCH', '/api/carteira/' + c.id, corpo); m.fechar(); toast('Responsável atualizado.', 'ok'); paginaCarteira(aba); }
+          catch (e) { var msg = $('#cdMsg', m); msg.textContent = e.message; msg.hidden = false; bt.disabled = false; }
+        };
+        return;
+      }
+      if (!admin) return;
+      $('#btCdOk', m).onclick = async function () {
+        var corpo = {
+          codigo: $('#cdCodigo', m).value, situacao: $('#cdSit', m).value, comarca: $('#cdUf', m).value, nome: $('#cdNome', m).value,
+          razao_social: $('#cdRazao', m).value, cnpj: $('#cdCnpj', m).value, vencimento: $('#cdVenc', m).value, administradora: $('#cdAdm', m).value,
+          forma_envio: $('#cdEnvio', m).value, inicio_contrato: $('#cdInicio', m).value, observacoes: $('#cdObs', m).value,
+        };
+        funcoes.forEach(function (fn) { corpo[fn.campo] = $('#cd_' + fn.campo, m).value; });
+        var msg = $('#cdMsg', m);
+        if (!corpo.nome.trim()) { msg.textContent = 'Informe o nome do condomínio.'; msg.hidden = false; return; }
+        if (!novo && !corpo.codigo.trim()) { msg.textContent = 'Informe o ID.'; msg.hidden = false; return; }
+        var bt = this; bt.disabled = true;
+        try {
+          if (novo) await api('POST', '/api/carteira', corpo); else await api('PATCH', '/api/carteira/' + c.id, corpo);
+          m.fechar();
+          toast(novo ? 'Condomínio cadastrado.' : 'Condomínio atualizado.', 'ok');
+          paginaCarteira(aba);
+        } catch (e) { msg.textContent = e.message; msg.hidden = false; bt.disabled = false; }
+      };
+      if ($('#btCdApagar', m)) $('#btCdApagar', m).onclick = async function () {
+        if (!(await confirmar('Remover ' + c.nome + '?', 'O condomínio sai da carteira. Se ele apenas deixou de ser atendido, prefira mudar a situação para Distratado e manter o histórico.', 'Remover', true))) return;
+        try { await api('DELETE', '/api/carteira/' + c.id); m.fechar(); toast('Condomínio removido.', 'ok'); paginaCarteira(aba); } catch (e) { toast(e.message, 'erro'); }
+      };
+    }
+  }
+
   /* ---------- admin: equipes e tipos de demanda ---------- */
   async function paginaEquipes() {
-    definirBarra('<span class="setor">Administração</span><span class="sep">/</span><span class="nome">Equipes e tipos de demanda</span>');
+    var restrito = gestorSetor();
+    definirBarra('<span class="setor">' + (restrito ? 'Gestão do setor' : 'Administração') + '</span><span class="sep">/</span><span class="nome">' + (restrito ? 'Equipe e tipos de demanda' : 'Equipes e tipos de demanda') + '</span>');
     $('#conteudo').innerHTML = carregandoHtml();
     var j;
     try { j = await api('GET', '/api/admin/equipes'); await carregarMeta(); } catch (e) { toast(e.message, 'erro'); return; }
+    restrito = !!j.restrito;
     var nomeU = {};
     j.usuarios.forEach(function (u) { nomeU[u.id] = u.nome; });
     var em = j.email || {};
-    $('#conteudo').innerHTML = '<div class="pagina"><h1>Equipes e tipos de demanda</h1><p class="sub">Para cada setor, quem atende os tickets (e quem é líder, que distribui) e os tipos de demanda com o prazo de atendimento.</p>' +
-      '<div class="atalho-tickets"><div class="icone-mod">' + IC.sino + '</div><div style="flex:1;min-width:220px"><b style="font-family:var(--display)">Avisos por e-mail</b>' +
+    $('#conteudo').innerHTML = '<div class="pagina"><h1>' + (restrito ? 'Equipe e tipos de demanda' : 'Equipes e tipos de demanda') + '</h1><p class="sub">Para cada setor, quem atende os tickets (e quem é líder, que distribui) e os tipos de demanda com o prazo de atendimento. Quem é de cada setor vem do cadastro da pessoa.</p>' +
+      (restrito ? '' : '<div class="atalho-tickets"><div class="icone-mod">' + IC.sino + '</div><div style="flex:1;min-width:220px"><b style="font-family:var(--display)">Avisos por e-mail</b>' +
       '<span class="sec" style="display:block;color:var(--muted);font-weight:600;font-size:13px">' +
       (em.ativo ? 'Enviando ' + (em.tipo === 'microsoft365' ? 'pelo Microsoft 365' : 'por SMTP') + ' como <b>' + esc(em.remetente || '') + '</b>.' : 'Não configurado: por enquanto os avisos aparecem só no portal (veja o README, seção Central de Tickets).') +
-      '</span></div>' + (em.ativo ? '<button class="btn ghost sm" id="btEmailTeste">Enviar e-mail de teste para mim</button>' : '<span class="etiqueta ambar">sem e-mail</span>') + '</div>' +
+      '</span></div>' + (em.ativo ? '<button class="btn ghost sm" id="btEmailTeste">Enviar e-mail de teste para mim</button>' : '<span class="etiqueta ambar">sem e-mail</span>') + '</div>') +
       '<div class="cartoes">' + j.setores.map(function (s) {
         var lideres = s.membros.filter(function (m) { return m.lider; }).map(function (m) { return nomeU[m.usuario_id]; });
         var ativos = s.categorias.filter(function (c) { return c.ativo; });
@@ -1409,7 +2049,7 @@
           (!s.membros.length ? '<span class="etiqueta ambar">sem equipe</span>' : !lideres.length ? '<span class="etiqueta ambar">sem líder</span>' : '') + '</div>' +
           '<p>' + (lideres.length ? 'Líder: ' + esc(lideres.join(', ')) : 'Defina quem distribui os tickets deste setor.') + '</p>' +
           '<div class="acoes"><span class="btn ghost sm">Configurar</span></div></div>';
-      }).join('') + '</div><p class="ajuda" style="margin-top:14px">Para criar, renomear ou remover setores use <a href="#/admin/modulos">Módulos e dados → Setores</a>.</p></div>';
+      }).join('') + '</div>' + (restrito ? '' : '<p class="ajuda" style="margin-top:14px">Para criar, renomear ou remover setores use <a href="#/admin/modulos">Módulos e dados → Setores</a>.</p>') + '</div>';
     if ($('#btEmailTeste')) $('#btEmailTeste').onclick = async function () {
       var bt = this; bt.disabled = true;
       try { var r = await api('POST', '/api/admin/equipes/email-teste'); toast('E-mail de teste enviado para ' + r.para + '. Confira a caixa de entrada (e o lixo eletrônico).', 'ok'); }
@@ -1425,13 +2065,14 @@
         titulo: s.nome, largo: true,
         corpo: '<div class="pilha"><div><label class="rot">Equipe que atende os tickets do setor</label>' +
           '<input class="campo" id="eBusca" placeholder="Filtrar pessoas…" style="margin-bottom:8px">' +
-          '<div class="caixa-opcoes" id="eLista">' + j.usuarios.filter(function (u) { return u.ativo || membros[u.id] !== undefined; }).map(function (u) {
+          '<div class="caixa-opcoes" id="eLista">' + j.usuarios.filter(function (u) { return restrito ? membros[u.id] !== undefined : (u.ativo || membros[u.id] !== undefined); }).map(function (u) {
             var dentro = membros[u.id] !== undefined;
-            return '<label data-nome="' + esc(normal(u.nome + ' ' + u.email)) + '"><input type="checkbox" name="eMembro" value="' + u.id + '"' + (dentro ? ' checked' : '') + '>' +
+            return '<label data-nome="' + esc(normal(u.nome + ' ' + u.email)) + '"><input type="checkbox" name="eMembro" value="' + u.id + '"' + (dentro ? ' checked' : '') + (restrito ? ' disabled' : '') + '>' +
               '<span style="flex:1">' + esc(u.nome) + ' <span class="sec" style="display:inline">' + esc(u.email) + '</span></span>' +
               '<span class="linha" style="font-size:12.5px;font-weight:700;color:var(--muted)"><input type="checkbox" name="eLider" value="' + u.id + '"' + (membros[u.id] ? ' checked' : '') + (dentro ? '' : ' disabled') + '> líder</span></label>';
-          }).join('') + '</div><div class="ajuda">Líder: vê a fila do setor e distribui para qualquer pessoa da equipe. Demais pessoas: veem a fila, assumem tickets e tratam os que estão com elas.</div></div>' +
-          '<div class="linha"><button class="btn primary" id="btSalvarEquipe">Salvar equipe</button></div>' +
+          }).join('') + '</div><div class="ajuda">Líder: vê a fila do setor e distribui para qualquer pessoa da equipe. Demais pessoas: veem a fila, assumem tickets e tratam os que estão com elas. Coordenador e supervisor do setor já distribuem.' +
+          (restrito ? ' Para incluir ou tirar alguém do setor, use <b>Usuários do setor</b>.' : ' Também dá para definir o setor no cadastro da pessoa (Usuários e acessos).') + '</div></div>' +
+          '<div class="linha"><button class="btn primary" id="btSalvarEquipe">' + (restrito ? 'Salvar líderes' : 'Salvar equipe') + '</button></div>' +
           '<hr style="border:0;border-top:1px solid var(--border);margin:6px 0">' +
           '<div><label class="rot">Tipos de demanda</label><div class="caixa-opcoes" style="max-height:none">' +
           (s.categorias.map(function (c) {
@@ -1491,6 +2132,283 @@
     }
   }
 
+  /* ======================= Central de Links ======================= */
+  function editorLinks() { return eu.papel === 'admin' || !!eu.editor_links; }
+  function dataBr(iso) { var p = String(iso || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : '—'; }
+
+  async function paginaLinks(previa) {
+    var trilha = '<span class="nome">Central de Links</span>';
+    definirBarra(trilha);
+    $('#conteudo').innerHTML = carregandoHtml();
+    var j;
+    try { j = await api('GET', '/api/links' + (previa ? '?campanha=' + previa : '')); } catch (e) { toast(e.message, 'erro'); return; }
+    if (j.pode_editar) {
+      definirBarra(previa ? '<span class="setor">Central de Links</span><span class="sep">/</span><span class="nome">Pré-visualização</span>' : trilha,
+        (previa ? '<a class="btn ghost sm" href="#/links/gestao">Voltar à edição</a>' : '') +
+        '<a class="btn ghost sm" href="#/links/gestao">' + IC.lapis + '<span class="so-desktop">Editar links e fundo</span></a>');
+    }
+    var c = j.campanha;
+    var estilo = '';
+    if (c && c.fundo_url) estilo += '--fundo:url(\'' + esc(c.fundo_url) + '\');';
+    if (c && (c.fundo_celular_url || c.fundo_url)) estilo += '--fundo-celular:url(\'' + esc(c.fundo_celular_url || c.fundo_url) + '\');';
+    estilo += '--escurecer:' + ((c ? c.escurecer : 0) / 100) + ';';
+    var grupos = [], porNome = {};
+    j.links.forEach(function (l) {
+      var g = l.grupo || '';
+      if (!porNome[g]) { porNome[g] = { nome: g, itens: [] }; grupos.push(porNome[g]); }
+      porNome[g].itens.push(l);
+    });
+    var html = '<div class="central-links' + (c && c.fundo_url ? ' com-fundo' : '') + '" style="' + estilo + '"><div class="cl-coluna">' +
+      '<div class="cl-cab"><img src="/img/logo.png" alt="MyBlue" class="cl-logo"><h1>' + esc(j.pagina.titulo) + '</h1>' +
+      (j.pagina.subtitulo ? '<p>' + esc(j.pagina.subtitulo) + '</p>' : '') +
+      (previa ? '<span class="cl-campanha">' + IC.olho + 'Pré-visualização: ' + esc(c ? c.nome : 'campanha não encontrada') + '</span>' : '') + '</div>';
+    if (!j.links.length) {
+      html += '<div class="cl-vazio">Nenhum link publicado ainda.' + (j.pode_editar ? '<br><a class="btn primary sm" href="#/links/gestao/links" style="margin-top:12px">' + IC.mais + 'Cadastrar links</a>' : '') + '</div>';
+    }
+    grupos.forEach(function (g) {
+      html += '<section class="cl-grupo">' + (g.nome ? '<h2>' + esc(g.nome) + '</h2>' : '') + g.itens.map(function (l) {
+        return '<a class="cl-link" href="' + esc(l.url) + '" target="_blank" rel="noopener noreferrer">' +
+          '<span class="cl-icone">' + (IC[l.icone] || IC.link) + '</span><span class="cl-texto"><b>' + esc(l.titulo) + '</b>' +
+          (l.descricao ? '<span>' + esc(l.descricao) + '</span>' : '') + '</span>' + IC.novaAba + '</a>';
+      }).join('') + '</section>';
+    });
+    html += '</div></div>';
+    $('#conteudo').innerHTML = html;
+  }
+
+  async function paginaGestaoLinks(aba) {
+    aba = ['campanhas', 'links', 'pagina'].indexOf(aba) >= 0 ? aba : 'campanhas';
+    definirBarra('<span class="setor">Central de Links</span><span class="sep">/</span><span class="nome">Editar</span>',
+      '<a class="btn ghost sm" href="#/links">' + IC.olho + '<span class="so-desktop">Ver página</span></a>');
+    $('#conteudo').innerHTML = carregandoHtml();
+    var j;
+    try { j = await api('GET', '/api/links/gestao'); } catch (e) { toast(e.message, 'erro'); return; }
+    var ABAS = [['campanhas', 'Fundo da campanha'], ['links', 'Links'], ['pagina', 'Título da página']];
+    var html = '<div class="pagina"><h1>Central de Links</h1><p class="sub">Troque o fundo a cada campanha e mantenha os links em dia. Tudo o que for salvo aqui aparece na hora para todos do portal.</p>' +
+      '<nav class="abas">' + ABAS.map(function (a) { return '<a href="#/links/gestao/' + a[0] + '" class="' + (a[0] === aba ? 'on' : '') + '">' + a[1] + '</a>'; }).join('') + '</nav>';
+    if (aba === 'campanhas') html += htmlCampanhas(j);
+    if (aba === 'links') html += htmlLinksGestao(j);
+    if (aba === 'pagina') {
+      html += '<div class="painel" style="padding:18px;max-width:640px"><form id="fPag" class="pilha">' +
+        '<div><label class="rot" for="pTit">Título</label><input class="campo" id="pTit" maxlength="120" value="' + esc(j.pagina.titulo) + '"></div>' +
+        '<div><label class="rot" for="pSub">Subtítulo (opcional)</label><textarea class="campo" id="pSub" maxlength="300">' + esc(j.pagina.subtitulo) + '</textarea></div>' +
+        '<div><button class="btn primary" type="submit">Salvar</button></div></form></div>';
+    }
+    html += '</div>';
+    $('#conteudo').innerHTML = html;
+    if (aba === 'campanhas') ligarCampanhas(j);
+    if (aba === 'links') ligarLinksGestao(j);
+    if (aba === 'pagina') {
+      $('#fPag').onsubmit = async function (e) {
+        e.preventDefault();
+        try { await api('PUT', '/api/links/gestao/pagina', { titulo: $('#pTit').value, subtitulo: $('#pSub').value }); toast('Página atualizada.', 'ok'); } catch (er) { toast(er.message, 'erro'); }
+      };
+    }
+  }
+
+  /* ----- campanhas (fundos) ----- */
+  function htmlCampanhas(j) {
+    var vig = j.campanhas.find(function (c) { return c.id === j.vigente_id; });
+    var html = '<div class="painel"><div class="cab-painel"><div style="flex:1;min-width:220px"><b style="font-family:var(--display)">Campanhas</b>' +
+      '<span class="ajuda" style="display:block;margin:2px 0 0">Cada campanha entra no ar sozinha na data de início e fica até começar a próxima. Dá para deixar o mês seguinte pronto com antecedência.</span></div>' +
+      '<button class="btn primary sm" id="btNovaCamp">' + IC.mais + 'Nova campanha</button></div>';
+    if (!j.campanhas.length) {
+      html += '<div style="padding:30px;text-align:center;color:var(--muted);font-weight:700">Nenhuma campanha cadastrada. Enquanto isso, a página usa o fundo padrão MyBlue.</div>';
+    } else {
+      html += '<div class="lista-campanhas">' + j.campanhas.map(function (c) {
+        var situacao = c.id === j.vigente_id ? etq(['no ar agora', 'verde']) : c.inicio > j.hoje ? etq(['agendada', 'azul']) : etq(['encerrada', 'cinza']);
+        return '<div class="campanha" data-camp="' + c.id + '">' +
+          '<div class="miniatura"' + (c.fundo_url ? ' style="background-image:url(\'' + esc(c.fundo_url) + '\')"' : '') + '>' + (c.fundo_url ? '' : IC.imagem) + '</div>' +
+          '<div class="info"><div class="linha" style="gap:8px"><b>' + esc(c.nome) + '</b>' + situacao + (c.tem_fundo ? '' : etq(['sem imagem', 'ambar'])) + '</div>' +
+          '<span class="sec">A partir de ' + dataBr(c.inicio) + ' · escurecer ' + c.escurecer + '%' + (c.tem_fundo_celular ? ' · com versão para celular' : '') + '</span></div>' +
+          '<div class="linha" style="gap:6px"><a class="btn ghost sm" href="#/links/previa/' + c.id + '">' + IC.olho + 'Ver</a><button class="btn ghost sm" data-editar-camp="' + c.id + '">' + IC.lapis + 'Editar</button></div></div>';
+      }).join('') + '</div>';
+    }
+    html += '</div>';
+    if (!vig && j.campanhas.length) html += '<div class="msg aviso" style="margin-top:14px">Nenhuma campanha começou ainda: a página está com o fundo padrão MyBlue.</div>';
+    return html;
+  }
+
+  function ligarCampanhas(j) {
+    $('#btNovaCamp').onclick = function () { editarCampanha(j, null); };
+    $$('[data-editar-camp]').forEach(function (b) {
+      b.onclick = function () { editarCampanha(j, j.campanhas.find(function (c) { return c.id === Number(b.getAttribute('data-editar-camp')); })); };
+    });
+  }
+
+  function editarCampanha(j, c) {
+    var novo = !c;
+    var hoje = new Date();
+    var proxMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1);
+    var p2 = function (n) { return String(n).padStart(2, '0'); };
+    c = c || { nome: '', inicio: proxMes.getFullYear() + '-' + p2(proxMes.getMonth() + 1) + '-01', escurecer: 35 };
+    var arquivos = { fundo: null, 'fundo-celular': null };
+    function zonaImg(qual, rotulo, ajuda, url) {
+      return '<div><label class="rot">' + rotulo + '</label><div class="zona-img" id="z-' + qual + '">' +
+        '<div class="previa-img"' + (url ? ' style="background-image:url(\'' + esc(url) + '\')"' : '') + '>' + (url ? '' : IC.imagem) + '</div>' +
+        '<div class="ajuda" style="margin:0">' + ajuda + '</div><input type="file" accept="image/jpeg,image/png,image/webp" hidden></div></div>';
+    }
+    var m = modal({
+      titulo: novo ? 'Nova campanha' : 'Editar campanha', largo: true,
+      corpo: '<div class="pilha"><div class="grade-2">' +
+        '<div><label class="rot" for="cNome">Nome da campanha</label><input class="campo" id="cNome" maxlength="100" placeholder="Ex.: Outubro Rosa" value="' + esc(c.nome) + '"></div>' +
+        '<div><label class="rot" for="cInicio">Entra no ar em</label><input class="campo" id="cInicio" type="date" value="' + esc(c.inicio) + '"><div class="ajuda">Fica no ar até a data de início da próxima campanha.</div></div></div>' +
+        '<div class="grade-2">' +
+        zonaImg('fundo', 'Fundo — computador', 'Clique ou arraste a imagem (JPG, PNG ou WEBP, até ' + j.limite_fundo_mb + ' MB). Sugestão: 1920 × 1080 px, deitada.', c.fundo_url) +
+        zonaImg('fundo-celular', 'Fundo — celular (opcional)', 'Sugestão: 1080 × 1920 px, em pé. Sem ela, o celular usa a do computador.', c.fundo_celular_url) +
+        '</div>' +
+        (!novo && c.tem_fundo_celular ? '<label class="linha" style="font-weight:700;font-size:13px"><input type="checkbox" id="cTirarCel"> remover a versão para celular</label>' : '') +
+        '<div><label class="rot" for="cEsc">Escurecer o fundo: <span id="cEscV">' + c.escurecer + '%</span></label><input id="cEsc" type="range" min="0" max="85" step="5" value="' + c.escurecer + '" style="width:100%;accent-color:var(--teal)">' +
+        '<div class="ajuda">Escurece a imagem para os botões e o título continuarem legíveis. Use 0% se a arte já tiver espaço limpo no meio.</div></div>' +
+        '<div id="cMsg" class="msg erro" hidden></div></div>',
+      pe: (novo ? '' : '<button class="btn danger" id="btApagarCamp" style="margin-right:auto">Excluir</button>') +
+        '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="btSalvarCamp">' + (novo ? 'Criar campanha' : 'Salvar') + '</button>',
+    });
+    $('#cEsc', m).oninput = function () { $('#cEscV', m).textContent = this.value + '%'; };
+    Object.keys(arquivos).forEach(function (qual) {
+      var z = $('#z-' + qual, m), inp = $('input[type=file]', z);
+      function escolher(f) {
+        if (!f) return;
+        if (!/^image\/(jpeg|png|webp)$/.test(f.type)) { toast('Use uma imagem JPG, PNG ou WEBP.', 'erro'); return; }
+        if (f.size > j.limite_fundo_mb * 1048576) { toast('Imagem grande demais (máximo ' + j.limite_fundo_mb + ' MB).', 'erro'); return; }
+        arquivos[qual] = f;
+        var pv = $('.previa-img', z);
+        pv.innerHTML = '';
+        pv.style.backgroundImage = 'url(\'' + URL.createObjectURL(f) + '\')';
+      }
+      z.onclick = function () { inp.click(); };
+      inp.onchange = function () { escolher(inp.files[0]); inp.value = ''; };
+      z.addEventListener('dragover', function (e) { e.preventDefault(); z.classList.add('arrastando'); });
+      z.addEventListener('dragleave', function () { z.classList.remove('arrastando'); });
+      z.addEventListener('drop', function (e) { e.preventDefault(); z.classList.remove('arrastando'); escolher(e.dataTransfer.files[0]); });
+    });
+    $('#btSalvarCamp', m).onclick = async function () {
+      var bt = this, msg = $('#cMsg', m);
+      msg.hidden = true;
+      if (novo && !arquivos.fundo) { msg.textContent = 'Escolha a imagem de fundo para computador.'; msg.hidden = false; return; }
+      bt.disabled = true;
+      try {
+        var corpo = { nome: $('#cNome', m).value, inicio: $('#cInicio', m).value, escurecer: Number($('#cEsc', m).value) };
+        var id = c.id;
+        if (novo) id = (await api('POST', '/api/links/gestao/campanhas', corpo)).id;
+        else await api('PATCH', '/api/links/gestao/campanhas/' + id, corpo);
+        for (var qual in arquivos) {
+          if (arquivos[qual]) await api('PUT', '/api/links/gestao/campanhas/' + id + '/' + qual, arquivos[qual], { bruto: true, headers: { 'Content-Type': arquivos[qual].type } });
+        }
+        if ($('#cTirarCel', m) && $('#cTirarCel', m).checked && !arquivos['fundo-celular']) await api('DELETE', '/api/links/gestao/campanhas/' + id + '/fundo-celular');
+        m.fechar();
+        toast(novo ? 'Campanha criada.' : 'Campanha atualizada.', 'ok');
+        paginaGestaoLinks('campanhas');
+      } catch (e) {
+        msg.textContent = e.message; msg.hidden = false; bt.disabled = false;
+        if (novo && id) { novo = false; c = { id: id }; } // a campanha já existe: o próximo clique só reenvia a imagem
+      }
+    };
+    if (!novo) {
+      $('#btApagarCamp', m).onclick = async function () {
+        if (!(await confirmar('Excluir campanha', 'A campanha <b>' + esc(c.nome) + '</b> e as imagens dela serão apagadas.', 'Excluir', true))) return;
+        try { await api('DELETE', '/api/links/gestao/campanhas/' + c.id); m.fechar(); toast('Campanha excluída.', 'ok'); paginaGestaoLinks('campanhas'); } catch (e) { toast(e.message, 'erro'); }
+      };
+    }
+  }
+
+  /* ----- links ----- */
+  function htmlLinksGestao(j) {
+    var html = '<div class="painel"><div class="cab-painel"><div style="flex:1;min-width:220px"><b style="font-family:var(--display)">Links</b>' +
+      '<span class="ajuda" style="display:block;margin:2px 0 0">Use as setas para mudar a ordem. Links com o mesmo grupo aparecem juntos, sob o nome do grupo.</span></div>' +
+      '<button class="btn ghost sm" id="btColarLinks">' + IC.documento + 'Colar lista de links</button>' +
+      '<button class="btn primary sm" id="btNovoLink">' + IC.mais + 'Novo link</button></div>';
+    if (!j.links.length) return html + '<div style="padding:30px;text-align:center;color:var(--muted);font-weight:700">Nenhum link cadastrado.</div></div>';
+    html += '<div class="tabela-wrap"><table><thead><tr><th style="width:70px">Ordem</th><th>Link</th><th>Grupo</th><th>Situação</th></tr></thead><tbody>' +
+      j.links.map(function (l, i) {
+        return '<tr class="clicavel" data-link="' + l.id + '"><td style="white-space:nowrap">' +
+          '<button class="btn icon ghost" data-mover="-1" title="Subir" aria-label="Subir"' + (i === 0 ? ' disabled' : '') + '>' + IC.cima + '</button> ' +
+          '<button class="btn icon ghost" data-mover="1" title="Descer" aria-label="Descer"' + (i === j.links.length - 1 ? ' disabled' : '') + '>' + IC.baixo + '</button></td>' +
+          '<td><div class="linha" style="gap:8px;flex-wrap:nowrap"><span class="icone-mod" style="width:32px;height:32px;border-radius:9px">' + (IC[l.icone] || IC.link) + '</span><div style="min-width:0"><b>' + esc(l.titulo) + '</b>' +
+          '<span class="sec" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:420px">' + esc(l.url) + '</span></div></div></td>' +
+          '<td>' + (l.grupo ? esc(l.grupo) : '<span class="sec">—</span>') + '</td>' +
+          '<td>' + (l.ativo ? etq(['publicado', 'verde']) : etq(['oculto', 'cinza'])) + '</td></tr>';
+      }).join('') + '</tbody></table></div></div>';
+    return html;
+  }
+
+  function ligarLinksGestao(j) {
+    $('#btNovoLink').onclick = function () { editarLink(j, null); };
+    $('#btColarLinks').onclick = colarLinks;
+    $$('tr[data-link]').forEach(function (tr) {
+      var id = Number(tr.getAttribute('data-link'));
+      tr.onclick = function () { editarLink(j, j.links.find(function (l) { return l.id === id; })); };
+    });
+    $$('[data-mover]').forEach(function (b) {
+      b.onclick = async function (e) {
+        e.stopPropagation();
+        var ids = j.links.map(function (l) { return l.id; });
+        var id = Number(b.closest('tr').getAttribute('data-link'));
+        var i = ids.indexOf(id), k = i + Number(b.getAttribute('data-mover'));
+        if (k < 0 || k >= ids.length) return;
+        ids[i] = ids[k]; ids[k] = id;
+        try { await api('PUT', '/api/links/gestao/ordem', { ids: ids }); paginaGestaoLinks('links'); } catch (er) { toast(er.message, 'erro'); }
+      };
+    });
+  }
+
+  function colarLinks() {
+    var m = modal({
+      titulo: 'Colar lista de links', largo: true,
+      corpo: '<div class="pilha"><div><label class="rot" for="cLista">Uma linha por link: nome, um traço e o endereço</label>' +
+        '<textarea class="campo" id="cLista" style="min-height:260px;font-size:13px" placeholder="Lista de Ramais — https://…&#10;Solicitação de Motoboy — https://…"></textarea>' +
+        '<div class="ajuda">Pode colar com marcadores (*, -, •). Os links entram no fim da lista, com ícone sugerido pelo nome; links que já existem (mesmo nome e endereço) são pulados. Depois dá para editar cada um.</div></div>' +
+        '<div><label class="rot" for="cGrupo">Grupo (opcional)</label><input class="campo" id="cGrupo" maxlength="80" placeholder="Deixe em branco para uma lista única"></div>' +
+        '<div id="cRes" class="msg" hidden></div></div>',
+      pe: '<button class="btn ghost" data-fechar>Fechar</button><button class="btn primary" id="btImportarLinks">Incluir links</button>',
+      aoFechar: function () { paginaGestaoLinks('links'); },
+    });
+    $('#btImportarLinks', m).onclick = async function () {
+      var res = $('#cRes', m);
+      try {
+        var r = await api('POST', '/api/links/gestao/importar', { texto: $('#cLista', m).value, grupo: $('#cGrupo', m).value });
+        res.className = 'msg ' + (r.erros.length ? 'aviso' : 'ok');
+        res.innerHTML = r.incluidos + ' link(s) incluído(s)' + (r.repetidos ? ', ' + r.repetidos + ' já existiam' : '') + '.' +
+          (r.erros.length ? '<br>Não entendi ' + r.erros.length + ' linha(s): ' + r.erros.map(function (e) { return esc(e.texto) + (e.motivo ? ' (' + esc(e.motivo) + ')' : ''); }).join('; ') : '');
+        res.hidden = false;
+      } catch (e) { res.className = 'msg erro'; res.textContent = e.message; res.hidden = false; }
+    };
+  }
+
+  function editarLink(j, l) {
+    var novo = !l;
+    l = l || { titulo: '', url: 'https://', grupo: '', descricao: '', icone: 'link', ativo: true };
+    var grupos = [];
+    j.links.forEach(function (x) { if (x.grupo && grupos.indexOf(x.grupo) < 0) grupos.push(x.grupo); });
+    var m = modal({
+      titulo: novo ? 'Novo link' : 'Editar link',
+      corpo: '<form class="pilha" id="fLink" novalidate>' +
+        '<div><label class="rot" for="lTit">Nome do botão</label><input class="campo" id="lTit" maxlength="120" value="' + esc(l.titulo) + '"></div>' +
+        '<div><label class="rot" for="lUrl">Endereço (link)</label><input class="campo" id="lUrl" type="url" maxlength="2000" value="' + esc(l.url) + '"><div class="ajuda">Link completo, começando com https://. Também aceita mailto: e tel:.</div></div>' +
+        '<div class="grade-2"><div><label class="rot" for="lGrupo">Grupo (opcional)</label><input class="campo" id="lGrupo" maxlength="80" list="lGrupos" value="' + esc(l.grupo) + '" placeholder="Ex.: Formulários">' +
+        '<datalist id="lGrupos">' + grupos.map(function (g) { return '<option value="' + esc(g) + '">'; }).join('') + '</datalist></div>' +
+        '<div><label class="rot" for="lIcone">Ícone</label><select class="campo" id="lIcone">' + j.icones.map(function (i) { return '<option value="' + i + '"' + (i === l.icone ? ' selected' : '') + '>' + esc(ROTULO_ICONE[i] || i) + '</option>'; }).join('') + '</select></div></div>' +
+        '<div><label class="rot" for="lDesc">Descrição curta (opcional)</label><input class="campo" id="lDesc" maxlength="300" value="' + esc(l.descricao) + '"></div>' +
+        '<label class="linha" style="font-weight:700"><input type="checkbox" id="lAtivo"' + (l.ativo ? ' checked' : '') + '> Publicado (desmarque para esconder sem apagar)</label>' +
+        '<div id="lMsg" class="msg erro" hidden></div></form>',
+      pe: (novo ? '' : '<button class="btn danger" id="btApagarLink" style="margin-right:auto">Excluir</button>') +
+        '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="btSalvarLink">' + (novo ? 'Incluir' : 'Salvar') + '</button>',
+    });
+    $('#btSalvarLink', m).onclick = async function () {
+      var corpo = { titulo: $('#lTit', m).value, url: $('#lUrl', m).value, grupo: $('#lGrupo', m).value, descricao: $('#lDesc', m).value, icone: $('#lIcone', m).value, ativo: $('#lAtivo', m).checked };
+      try {
+        if (novo) await api('POST', '/api/links/gestao/links', corpo); else await api('PATCH', '/api/links/gestao/links/' + l.id, corpo);
+        m.fechar(); toast(novo ? 'Link incluído.' : 'Link atualizado.', 'ok'); paginaGestaoLinks('links');
+      } catch (e) { var x = $('#lMsg', m); x.textContent = e.message; x.hidden = false; }
+    };
+    if (!novo) {
+      $('#btApagarLink', m).onclick = async function () {
+        if (!(await confirmar('Excluir link', 'O link <b>' + esc(l.titulo) + '</b> sai da Central de Links.', 'Excluir', true))) return;
+        try { await api('DELETE', '/api/links/gestao/links/' + l.id); m.fechar(); toast('Link excluído.', 'ok'); paginaGestaoLinks('links'); } catch (e) { toast(e.message, 'erro'); }
+      };
+    }
+  }
+
   /* ======================= admin: auditoria ======================= */
   var ROTULO_ACAO = {
     login: 'Entrou no portal', login_falha: 'Tentativa de login falhou', logout: 'Saiu', senha_alterada: 'Trocou a senha', senha_redefinida: 'Redefiniu senha de usuário',
@@ -1501,6 +2419,8 @@
     catalogo_semeado: 'Sistema instalado', email_teste: 'Enviou e-mail de teste',
     setores_oficiais: 'Setores oficiais cadastrados', ticket_criado: 'Abriu ticket', ticket_atribuicao: 'Atribuiu ticket', ticket_transferencia: 'Transferiu ticket',
     ticket_status: 'Mudou situação de ticket', equipe_editada: 'Editou equipe do setor', categoria_criada: 'Criou tipo de demanda', categoria_editada: 'Editou tipo de demanda', categoria_removida: 'Removeu tipo de demanda',
+    links_pagina: 'Editou a Central de Links', link_criado: 'Incluiu link', link_editado: 'Editou link', link_removido: 'Removeu link',
+    campanha_criada: 'Criou campanha (Central de Links)', campanha_editada: 'Editou campanha (Central de Links)', campanha_removida: 'Removeu campanha (Central de Links)', campanha_fundo: 'Trocou fundo de campanha', links_importados: 'Colou lista de links',
   };
 
   async function paginaAuditoria() {
@@ -1536,6 +2456,163 @@
     carregar(true);
   }
 
+  /* ======================= tutoriais em vídeo ======================= */
+  var tutoriais = null; // os que a pessoa pode ver (com vídeo enviado)
+  function carregarTutoriais() {
+    return api('GET', '/api/tutoriais').then(function (j) { tutoriais = j; desenharMenu(); return j; }).catch(function () { return null; });
+  }
+  function duracaoTxt(s) { if (!s) return ''; return s < 60 ? s + ' s' : Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') + ' min'; }
+  function vistos() { return lembrar('tutoriais.vistos', {}); }
+  function cartaoTutorial(t) {
+    var visto = vistos()[t.slug] === t.v;
+    return '<a class="cartao cartao-tut" href="#/tutoriais/' + esc(t.slug) + '">' +
+      '<div class="capa-tut"><span class="play">' + IC.video + '</span>' + (t.duracao ? '<span class="dur">' + duracaoTxt(t.duracao) + '</span>' : '') +
+      (visto ? '<span class="visto">✓ assistido</span>' : '') + '</div>' +
+      '<h3>' + esc(t.titulo) + '</h3><p>' + esc(t.descricao) + '</p><span class="setor-cartao">' + esc(t.publico) + '</span></a>';
+  }
+
+  async function paginaTutoriais() {
+    definirBarra('<span class="nome">Tutoriais</span>');
+    $('#conteudo').innerHTML = carregandoHtml();
+    var j = await carregarTutoriais();
+    if (!j) { $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">Não foi possível carregar os tutoriais.</div></div>'; return; }
+    var html = '<div class="pagina"><h1>Tutoriais</h1><p class="sub">Vídeos curtos com o portal sendo usado de verdade (os dados são fictícios). Aqui aparecem os vídeos do seu perfil, do seu setor e das ferramentas que você usa.</p>';
+    if (!j.tutoriais.length) html += '<div class="vazio">Ainda não há tutoriais para você.' + (eu.papel === 'admin' ? '<br><a class="btn primary" style="margin-top:14px" href="#/admin/tutoriais">Enviar os vídeos</a>' : '') + '</div>';
+    j.grupos.forEach(function (g) {
+      var itens = j.tutoriais.filter(function (t) { return t.grupo === g; });
+      if (itens.length) html += '<section class="secao-setor"><h2>' + esc(g) + ' <span class="qtd">' + itens.length + '</span></h2><div class="cartoes">' + itens.map(cartaoTutorial).join('') + '</div></section>';
+    });
+    $('#conteudo').innerHTML = html + '</div>';
+  }
+
+  function lerVtt(txt) {
+    var tempo = function (h) { var p = h.split(':').map(Number); return p.length === 3 ? p[0] * 3600 + p[1] * 60 + p[2] : p[0] * 60 + p[1]; };
+    return String(txt || '').split(/\r?\n\r?\n/).map(function (bloco) {
+      var l = bloco.trim().split(/\r?\n/);
+      var i = l.findIndex(function (x) { return x.indexOf('-->') > 0; });
+      if (i < 0) return null;
+      var ts = l[i].split('-->');
+      var texto = l.slice(i + 1).join(' ');
+      var sep = texto.indexOf(' — ');
+      return { ini: tempo(ts[0].trim()), fim: tempo(ts[1].trim().split(' ')[0]), etapa: sep > 0 ? texto.slice(0, sep) : '', texto: sep > 0 ? texto.slice(sep + 3) : texto };
+    }).filter(Boolean);
+  }
+
+  async function paginaTutorial(slug) {
+    definirBarra('<a class="setor" href="#/tutoriais" style="text-decoration:none">Tutoriais</a><span class="sep">/</span><span class="nome">…</span>', '<a class="btn ghost sm" href="#/tutoriais">Voltar</a>');
+    $('#conteudo').innerHTML = carregandoHtml();
+    var j = tutoriais || await carregarTutoriais();
+    var t = j && j.tutoriais.find(function (x) { return x.slug === slug; });
+    if (!t) { $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">Tutorial não encontrado.<br><a class="btn ghost" style="margin-top:14px" href="#/tutoriais">Ver os tutoriais</a></div></div>'; return; }
+    definirBarra('<a class="setor" href="#/tutoriais" style="text-decoration:none">Tutoriais</a><span class="sep">/</span><span class="nome">' + esc(t.titulo) + '</span>', '<a class="btn ghost sm" href="#/tutoriais">Voltar</a>');
+    var outros = j.tutoriais.filter(function (x) { return x.grupo === t.grupo && x.slug !== t.slug; });
+    $('#conteudo').innerHTML = '<div class="pagina tutorial">' +
+      '<span class="setor-cartao">' + esc(t.grupo) + ' · ' + esc(t.publico) + '</span><h1>' + esc(t.titulo) + '</h1><p class="sub">' + esc(t.descricao) + '</p>' +
+      '<div class="grade-tut"><div class="quadro-video"><video id="vTut" controls playsinline preload="metadata" src="/api/tutoriais/' + esc(t.slug) + '/video?v=' + t.v + '"></video></div>' +
+      '<aside class="painel passos-tut"><div class="cab-passos">Passo a passo<span class="ajuda" style="margin:0">clique para ir ao trecho</span></div><ol id="olPassos"><li class="ajuda">' + (t.tem_legendas ? 'Carregando…' : 'Sem passo a passo para este vídeo.') + '</li></ol></aside></div>' +
+      (outros.length ? '<section class="secao-setor" style="margin-top:28px"><h2>Mais vídeos de ' + esc(t.grupo) + '</h2><div class="cartoes">' + outros.map(cartaoTutorial).join('') + '</div></section>' : '') + '</div>';
+    var v = $('#vTut');
+    v.addEventListener('timeupdate', function () {
+      if (v.duration && v.currentTime / v.duration > 0.9) { var vs = vistos(); if (vs[t.slug] !== t.v) { vs[t.slug] = t.v; guardar('tutoriais.vistos', vs); } }
+    });
+    if (!t.tem_legendas) return;
+    var cues = [];
+    try { var r = await fetch('/api/tutoriais/' + encodeURIComponent(t.slug) + '/legendas?v=' + t.v, { credentials: 'same-origin' }); if (r.ok) cues = lerVtt(await r.text()); } catch (e) { /* sem passos */ }
+    var ol = $('#olPassos');
+    if (!ol || location.hash !== '#/tutoriais/' + slug) return; // a pessoa já saiu da página
+    var etapaAnt = null;
+    ol.innerHTML = cues.map(function (c, i) {
+      var cab = c.etapa && c.etapa !== etapaAnt ? '<li class="etapa">' + esc(c.etapa) + '</li>' : '';
+      etapaAnt = c.etapa || etapaAnt;
+      return cab + '<li class="passo" data-i="' + i + '"><span class="t">' + duracaoTxt(Math.floor(c.ini)).replace(' min', '').replace(' s', 's') + '</span><span>' + esc(c.texto) + '</span></li>';
+    }).join('') || '<li class="ajuda">Sem passo a passo para este vídeo.</li>';
+    $$('li.passo', ol).forEach(function (li) {
+      li.addEventListener('click', function () { v.currentTime = cues[Number(li.getAttribute('data-i'))].ini + 0.05; v.play(); });
+    });
+    var ativo = -1;
+    v.addEventListener('timeupdate', function () {
+      var i = -1;
+      cues.forEach(function (c, k) { if (v.currentTime >= c.ini && v.currentTime < c.fim) i = k; });
+      if (i === ativo) return;
+      ativo = i;
+      $$('li.passo', ol).forEach(function (li) { li.classList.toggle('on', Number(li.getAttribute('data-i')) === i); });
+      var on = $('li.passo.on', ol);
+      if (on) ol.scrollTop = on.offsetTop - ol.offsetTop - 60;
+    });
+  }
+
+  /* administração: envia os vídeos gravados (cada arquivo vai para o tutorial com o mesmo nome) */
+  async function paginaAdminTutoriais() {
+    definirBarra('<span class="setor">Administração</span><span class="sep">/</span><span class="nome">Tutoriais</span>', '<a class="btn ghost sm" href="#/tutoriais">' + IC.video + 'Ver como as pessoas veem</a>');
+    $('#conteudo').innerHTML = carregandoHtml();
+    var j;
+    try { j = await api('GET', '/api/admin/tutoriais'); } catch (e) { toast(e.message, 'erro'); return; }
+    var enviados = j.tutoriais.filter(function (t) { return t.tem_video; }).length;
+    $('#conteudo').innerHTML = '<div class="pagina"><h1>Tutoriais em vídeo</h1>' +
+      '<p class="sub">Cada pessoa vê os vídeos do perfil, do setor e das ferramentas dela. ' + enviados + ' de ' + j.tutoriais.length + ' vídeos enviados.</p>' +
+      '<label class="zona-envio" id="zTut" style="margin-bottom:12px">' + IC.enviar + '<div>Arraste aqui os arquivos <b>.mp4</b> e <b>.vtt</b> dos tutoriais (pode ser todos de uma vez) ou clique para escolher.<br>' +
+      '<span class="ajuda">Cada arquivo vai para o tutorial com o mesmo nome (ex.: ticket-atender.mp4 e ticket-atender.vtt).</span></div>' +
+      '<input type="file" accept=".mp4,.vtt,video/mp4,text/vtt" multiple hidden id="inTut"></label>' +
+      '<div id="resTut" class="pilha" style="margin-bottom:16px"></div>' +
+      '<div class="painel"><div class="tabela-wrap"><table><thead><tr><th>Tutorial</th><th>Para quem</th><th>Situação</th><th></th></tr></thead><tbody>' +
+      j.grupos.map(function (g) {
+        var itens = j.tutoriais.filter(function (t) { return t.grupo === g; });
+        if (!itens.length) return '';
+        return '<tr><td colspan="4" style="background:var(--surface-2);font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">' + esc(g) + '</td></tr>' +
+          itens.map(function (t) {
+            return '<tr><td><b>' + esc(t.titulo) + '</b><div class="ajuda" style="margin:2px 0 0">' + esc(t.slug) + '</div></td><td>' + esc(t.publico) + (t.modulo ? '<div class="ajuda" style="margin:2px 0 0">' + esc(t.modulo) + '</div>' : '') + '</td>' +
+              '<td>' + (t.tem_video ? '<span class="etiqueta verde">enviado</span> <span class="ajuda" style="display:inline">' + duracaoTxt(t.duracao) + ' · ' + tamanho(t.tamanho) + ' · ' + quando(t.enviado_em) + (t.tem_legendas ? '' : ' · sem passo a passo') + '</span>' : '<span class="etiqueta cinza">falta enviar</span>') + '</td>' +
+              '<td style="text-align:right;white-space:nowrap">' + (t.tem_video ? '<a class="btn ghost sm" href="#/tutoriais/' + esc(t.slug) + '">Ver</a> <button class="btn ghost sm" data-tirar="' + esc(t.slug) + '">Remover</button>' : '') + '</td></tr>';
+          }).join('');
+      }).join('') + '</tbody></table></div></div></div>';
+
+    function enviar(url, arquivo, tipo, aoProgresso) {
+      return new Promise(function (ok, falha) {
+        var x = new XMLHttpRequest();
+        x.open('PUT', url);
+        x.setRequestHeader('Content-Type', tipo);
+        x.upload.onprogress = function (e) { if (e.lengthComputable) aoProgresso(Math.round(e.loaded / e.total * 100)); };
+        x.onload = function () {
+          var r = {}; try { r = JSON.parse(x.responseText); } catch (e) { /* sem JSON */ }
+          if (x.status >= 200 && x.status < 300) ok(r); else falha(new Error(r.erro || ('Erro ' + x.status)));
+        };
+        x.onerror = function () { falha(new Error('Falha de conexão.')); };
+        x.send(arquivo);
+      });
+    }
+    var slugs = {}; j.tutoriais.forEach(function (t) { slugs[t.slug] = t; });
+    async function processar(arquivos) {
+      var res = $('#resTut');
+      // legendas depois do vídeo do mesmo tutorial
+      arquivos.sort(function (a, b) { return /\.vtt$/i.test(a.name) - /\.vtt$/i.test(b.name); });
+      for (var i = 0; i < arquivos.length; i++) {
+        var f = arquivos[i];
+        var slug = f.name.replace(/\.(mp4|vtt)$/i, '').toLowerCase();
+        var vtt = /\.vtt$/i.test(f.name);
+        var linha = document.createElement('div');
+        linha.className = 'msg aviso';
+        res.appendChild(linha);
+        if (!slugs[slug]) { linha.className = 'msg erro'; linha.textContent = f.name + ': não há tutorial com este nome.'; continue; }
+        linha.textContent = f.name + ': enviando…';
+        try {
+          await enviar('/api/admin/tutoriais/' + slug + '/' + (vtt ? 'legendas' : 'video'), f, vtt ? 'text/vtt' : 'video/mp4', function (p) { linha.textContent = f.name + ': enviando… ' + p + '%'; });
+          linha.className = 'msg ok'; linha.textContent = f.name + ' → ' + slugs[slug].titulo + (vtt ? ' (passo a passo)' : '');
+        } catch (e) { linha.className = 'msg erro'; linha.textContent = f.name + ': ' + e.message; }
+      }
+      tutoriais = null; carregarTutoriais();
+      var bt = document.createElement('button'); bt.className = 'btn primary'; bt.textContent = 'Atualizar a lista'; bt.onclick = paginaAdminTutoriais;
+      res.appendChild(bt);
+    }
+    ligarZona($('#zTut'), $('#inTut'), processar, /\.(mp4|vtt)$/i, 'Envie arquivos .mp4 ou .vtt');
+    $$('[data-tirar]').forEach(function (b) {
+      b.onclick = async function () {
+        var t = slugs[b.getAttribute('data-tirar')];
+        if (!(await confirmar('Remover vídeo', 'Remover o vídeo "' + esc(t.titulo) + '"? Ele deixa de aparecer para as pessoas até ser enviado de novo.', 'Remover', true))) return;
+        try { await api('DELETE', '/api/admin/tutoriais/' + t.slug); toast('Vídeo removido.', 'ok'); tutoriais = null; carregarTutoriais(); paginaAdminTutoriais(); } catch (e) { toast(e.message, 'erro'); }
+      };
+    });
+  }
+
   /* ======================= partida ======================= */
   async function iniciar() {
     try {
@@ -1552,6 +2629,7 @@
     }
     try { await carregarMeta(); } catch (e) { /* a central carrega depois */ }
     montarCasca();
+    carregarTutoriais();
     atualizarResumo();
     buscarAvisos();
     $('#btSino').onclick = abrirAvisos;

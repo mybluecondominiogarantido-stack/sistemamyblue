@@ -66,12 +66,24 @@ Para publicar uma ferramenta nova, use **Novo módulo**, escolha nome, setor e �
 
 ## Usuários e permissões
 
-Em *Usuários e acessos*:
+Tudo sai do **cadastro da pessoa** (*Usuários e acessos*): **perfil**, **setor(es)** e ferramentas liberadas. O setor também forma a equipe do setor na Central de Tickets.
 
-- **Usuário:** vê e abre só as ferramentas marcadas no cadastro dele. Dá para marcar o setor inteiro de uma vez.
-- **Administrador:** acessa todas as ferramentas e a administração.
+| | Usuário | Coordenador | Supervisor | Administrador |
+|---|---|---|---|---|
+| Ferramentas | as liberadas | todas dos setores dele + as liberadas | todas dos setores dele + as liberadas | todas |
+| Usuários | — | usuários comuns dos setores dele | usuários comuns dos setores dele | todos, todos os perfis |
+| Ferramentas do setor (HTML, versões, quem abre) | — | setores dele | setores dele | todas, mais *Módulos e dados* completo |
+| Equipe e tipos de demanda | — | líderes e tipos dos setores dele | líderes e tipos dos setores dele | todos os setores |
+| Tickets | conforme a equipe | líder nos setores dele | líder nos setores dele | todos |
+| Carteira | consulta | responsável do setor dele (editar e transferir) | responsável do setor dele (editar e transferir) | tudo |
+| Histórico, backup, setores, Central de Links | — | — | — | sim |
+
+- **Coordenador e supervisor** têm os mesmos poderes, cada um nos setores do seu cadastro. Nenhum fica acima do outro: coordenadores, supervisores e administradores só o administrador cria e edita. Eles cuidam de **usuários comuns** que estão nos setores deles (ou que eles criaram), e o que a administração liberou de outros setores para a pessoa continua como está.
+- Na Carteira, o responsável de cada setor é: Cobrança → *analista de cobrança*; Crédito → *assistente de crédito*. O analista extrajudicial e os demais dados do condomínio ficam com a administração.
+- Marcações à parte, no cadastro: **Supervisão da Central de Tickets** (vê e direciona os tickets de **todos** os setores, ex.: Gerência) e **Marketing — Central de Links** (edita a Central de Links).
 - Ao criar um usuário (ou redefinir a senha), o portal mostra uma senha temporária. A pessoa cria a própria senha no primeiro acesso.
 - Desativar um usuário encerra na hora as sessões abertas dele.
+- Cada pessoa pode pôr uma **foto de perfil** em *Minha conta* (recortada e reduzida no navegador; fica no banco). Ela aparece no menu e na lista de usuários.
 
 O acesso é conferido no servidor: quem não tem permissão não recebe o HTML da ferramenta nem consegue ler ou gravar os dados dela.
 
@@ -105,25 +117,63 @@ Para voltar atrás, marque **Planilha Google (como hoje)**. O que foi lançado n
 
 A versão publicada no portal é a do arquivo **sem** a senha própria (StatiCrypt): o acesso é controlado só pelo login e pelas permissões do portal. A planilha dessa ferramenta não tem coluna de ID (o nº do pedido se repete nas parcelas) e as alterações apontam a linha pela posição; na planilha interna, o portal confere o nº do pedido e o vencimento antes de alterar, para nunca mexer na linha errada. Excluir um pedido nessa ferramenta só remove da tela, como já acontecia com a planilha Google.
 
+### Ferramentas feitas como artefato do Claude (Boletos e Síndicos)
+
+O **Controle de Emissão de Boletos** (Crédito) e o **Controle de Síndicos** (CS) foram criados como artefatos publicados no claude.ai e gravam no banco do artefato (`window.claude.use('db')`). No portal eles rodam sem nenhuma alteração no HTML: o portal entrega o mesmo `window.claude` (banco de documentos, `user` e `downloads`), com os documentos guardados na tabela `documentos` do Supabase.
+
+- **Tempo real:** cada tela aberta busca o que mudou a cada 3 segundos (30 s com a aba em segundo plano). O que uma pessoa grava aparece para as outras sem recarregar.
+- **Quem fez:** o portal identifica cada pessoa como `mb-<id do usuário>`. Registros antigos, feitos ainda no Claude, guardam o id do Claude (`u_…`). Para mostrar o nome dessas pessoas, coloque no `config` do módulo `"pessoas_legadas": {"u_…": "Nome"}`.
+- **Dados:** em *Módulos e dados* aparecem as coleções com a contagem de documentos, o CSV de cada uma e o JSON completo.
+
+## Carteira de condomínios
+
+Menu **Carteira → Carteira de condomínios**. Reúne os condomínios atendidos e quem cuida de cada um:
+
+| Função | Coluna na planilha |
+|---|---|
+| Analista de cobrança | ANALISTA ADMINISTRATIVA |
+| Analista extrajudicial (ApoioCob, prestador de serviços) | ANALISTA EXTRAJUDICIAL |
+| Assistente de crédito | ASSISTENTE CRÉDITO |
+
+- **Condomínios:** indicadores (ativos, comarcas, pessoas por função, ativos sem responsável), busca por nome, razão social, CNPJ ou ID, filtros por situação, UF, administradora e responsável, e ordenação por coluna. Clique no condomínio para ver a ficha completa e o histórico de alterações.
+- **Responsáveis:** quantos condomínios ativos cada pessoa tem, por UF. A administração usa **Transferir** para passar a carteira de uma pessoa (toda ou só alguns condomínios) para outra.
+- **Quem pode o quê:** todos que entram no portal consultam e exportam. Cadastrar, editar, remover, importar e transferir é da administração. Toda alteração fica no histórico do condomínio (o que mudou, quem e quando).
+- **Importar / exportar:** a carga inicial vem do CSV da planilha *Carteira de Condomínios* (no Excel: *Salvar como → CSV separado por ponto e vírgula*). Cada condomínio é reconhecido pelo **ID**: os existentes são atualizados, os novos incluídos e os que não estão no arquivo ficam como estão. O *Exportar CSV* gera o mesmo formato, que abre no Excel e pode ser importado de volta.
+- Os dados da carteira **não vão para o Git** (o repositório é público): entram só pelo portal. Arquivos `.csv` ficam fora do Git.
+
+Na Central de Tickets, a carteira define para quem vai o ticket de um condomínio (veja *Central de Tickets → Fluxo*).
+
 ## Central de Tickets
 
 Demandas internas entre os setores: quem precisa de algo de outro setor abre um ticket, o setor recebe, o líder distribui e o responsável trata até resolver. Fica no menu **Central de Tickets** e não depende de nenhum HTML enviado.
 
 **Fluxo**
 
-1. **Abrir:** qualquer pessoa logada escolhe o setor, o tipo de demanda, a prioridade, descreve e pode anexar arquivos.
-2. **Fila do setor:** o ticket entra como *Novo*, sem responsável. Os líderes do setor recebem aviso (sino, som e e-mail). Se o setor não tiver líder, a equipe inteira recebe.
-3. **Distribuir:** o líder atribui a alguém da equipe. Qualquer pessoa do setor também pode **assumir** um ticket da fila, ou devolver para a fila um que esteja com ela.
-4. **Tratar:** o responsável muda a situação (*Em andamento*, *Aguardando*), conversa com quem abriu e registra **notas internas** (quem abriu não vê). Também pode transferir para outro setor, e aí o ticket volta para a fila do novo setor.
-5. **Resolver:** quem abriu é avisado e pode **reabrir** se não ficou resolvido. Também pode cancelar o próprio pedido.
+1. **Abrir:** qualquer pessoa logada escolhe o setor, o tipo de demanda (opcional) e diz se a demanda é de **um condomínio** (escolhido na Carteira de condomínios) ou **interna**. Depois descreve, define a prioridade e pode anexar arquivos.
+2. **Para quem vai:**
+   - **Condomínio, setor Cobrança ou Crédito:** vai direto para a pessoa da carteira do condomínio (Cobrança → *analista de cobrança*, Crédito → *assistente de crédito*), que recebe o aviso por e-mail. A pessoa é encontrada pelo nome (sem acento e sem o ramal) entre a equipe do setor no portal; se não estiver cadastrada, o ticket vai para o líder e a equipe vê o aviso interno.
+   - **Interna, ou setor que não usa a carteira:** entra na fila do setor sem responsável e os líderes recebem o aviso (sino, som e e-mail). Se o setor não tiver líder, a equipe inteira recebe.
+3. **Distribuir:** só o **líder do setor** (ou a gestão/supervisão) escolhe ou troca o responsável, a prioridade e o prazo para resposta.
+4. **Iniciar:** o responsável clica em **Iniciar atendimento** e informa o **prazo para conclusão**. Sem ele o ticket não sai de *Novo*. Quem abriu é avisado e vê a previsão. Mudar a data depois exige o motivo, e quem abriu é avisado por e-mail.
+5. **Tratar:** o responsável muda a situação (*Em andamento*, *Aguardando*), conversa com quem abriu e registra **notas internas** (quem abriu não vê). Ao transferir para outro setor, o ticket vai para a pessoa da carteira de lá (se houver) ou para a fila, e a equipe nova define o próprio prazo para conclusão.
+6. **Resolver:** quem abriu é avisado e pode **reabrir** se não ficou resolvido. Também pode cancelar o próprio pedido.
+
+**Prazos**
+
+| Prazo | Quem define | Até quando conta |
+|---|---|---|
+| Para resposta | Automático pelo tipo de demanda ou prioridade (em horas de expediente). Só o líder altera | Até o 1º retorno da equipe: comentário, mudança de situação ou definição do prazo para conclusão |
+| Para conclusão | Quem está com o ticket, ao iniciar o atendimento | Até resolver |
+
+O ticket fica **atrasado** quando passa do prazo para resposta sem nenhum retorno, ou quando passa do prazo para conclusão ainda em aberto.
 
 **Quem faz o quê**
 
 | Perfil | O que pode |
 |---|---|
 | Qualquer pessoa | Abrir tickets, acompanhar os que abriu, comentar, anexar, cancelar ou reabrir os seus |
-| Equipe do setor | Ver a fila do setor, assumir, tratar, mudar situação, prioridade e prazo, transferir, notas internas |
-| Líder do setor (coordenação do setor) | Tudo da equipe, mais distribuir tickets para qualquer pessoa do setor |
+| Equipe do setor | Ver a fila do setor, tratar os tickets, definir o prazo para conclusão dos que estão com ela, mudar a situação, transferir, notas internas |
+| Líder do setor (coordenação do setor) | Tudo da equipe, mais escolher e trocar o responsável, a prioridade e o prazo para resposta |
 | Supervisão / Coordenação | Ver e direcionar os tickets de **todos** os setores, com painel geral. Não dá acesso à administração do portal |
 | Administrador | Tudo, mais montar equipes e tipos de demanda |
 
@@ -160,6 +210,27 @@ Fora do Microsoft 365, dá para usar SMTP comum com as variáveis `SMTP_*`.
 **Anexos:** até 10 MB por arquivo (`LIMITE_ANEXO_MB`), guardados no banco. Por segurança, só imagens abrem no navegador; os demais arquivos são sempre baixados.
 
 **Manuais em PDF:** o Manual Geral e um manual para cada setor ficam em [`docs/manuais`](docs/manuais).
+
+## Central de Links
+
+Página do portal com os links úteis da equipe (a antiga *Central de Links Grupo Apoio Cobrança* do pages.myblue.com.br), no menu **Central de Links**, logo abaixo de *Início*. Todos que entram no portal veem; os links abrem em nova aba.
+
+**Quem edita:** administradores e quem tiver marcado **Marketing — Central de Links** no cadastro (*Usuários e acessos*). Essa marcação não dá acesso à administração do portal. Na página aparece o botão **Editar links e fundo**, com três abas:
+
+- **Fundo da campanha:** cada campanha tem nome, data em que entra no ar, a imagem de fundo para computador (sugestão 1920 × 1080) e, se quiser, uma versão para celular (1080 × 1920). A campanha vale a partir da data de início (meia-noite de Brasília) até começar a próxima, então o marketing pode deixar o fundo do mês seguinte agendado com antecedência. O controle *Escurecer o fundo* garante a leitura dos botões. Imagens JPG, PNG ou WEBP de até 8 MB (`LIMITE_FUNDO_MB`), guardadas no banco. O botão **Ver** mostra como a página fica com aquela campanha antes de ela entrar no ar. Sem campanha, a página usa o fundo padrão MyBlue.
+- **Links:** incluir, mudar o nome do botão, o endereço (link), o grupo, o ícone e a descrição; mudar a ordem com as setas; ocultar sem apagar ou excluir. Links com o mesmo grupo aparecem juntos sob o nome do grupo.
+- **Título da página:** título e subtítulo que aparecem no topo.
+
+Toda alteração fica no *Histórico de atividades* e entra no backup.
+
+## Tutoriais em vídeo
+
+No menu **Tutoriais**, vídeos curtos com o portal sendo usado de verdade (dados fictícios), com legenda e o passo a passo ao lado: clicar num passo leva ao trecho do vídeo. Cada pessoa vê só os vídeos do perfil dela (todos, equipe, líder, coordenador/supervisor, supervisão de tickets, administração) e das ferramentas que abre.
+
+- O catálogo (título, descrição e para quem é cada vídeo) está em `server/tutoriais.js`.
+- Os vídeos ficam no banco, não no repositório. A administração envia em **Administração → Tutoriais em vídeo**: arraste os `.mp4` e `.vtt` de uma vez, e cada arquivo vai para o tutorial com o mesmo nome. Até 150 MB por vídeo (`LIMITE_VIDEO_MB`).
+- O player busca o vídeo aos pedaços, então dá para avançar e voltar sem baixar o arquivo inteiro.
+- Os vídeos são gravados por `docs/tutoriais/fonte/gravar-tutoriais.js` (veja [`docs/tutoriais`](docs/tutoriais)).
 
 ## Colocar no ar
 
@@ -238,6 +309,8 @@ Rode `npm ci --omit=dev` e `npm start` com um gerenciador de processos (pm2, sys
 | `TRUST_PROXY` | 0 (no Railway, 1) | `1` quando houver proxy reverso na frente |
 | `LIMITE_HTML_MB` / `LIMITE_DADOS_MB` | 40 / 25 | Tamanho máximo de HTML enviado e de dados gravados por vez |
 | `LIMITE_ANEXO_MB` | 10 | Tamanho máximo de cada anexo de ticket |
+| `LIMITE_FUNDO_MB` | 8 | Tamanho máximo de cada imagem de fundo da Central de Links |
+| `LIMITE_VIDEO_MB` | 150 | Tamanho máximo de cada vídeo tutorial |
 | `EXPEDIENTE_INICIO` / `EXPEDIENTE_FIM` | 8 / 17 | Horário de expediente usado nos prazos dos tickets |
 | `EXPEDIENTE_DIAS` | 1,2,3,4,5 | Dias com expediente (0 = domingo … 6 = sábado) |
 | `FERIADOS` | — | Dias sem expediente, ex.: `2026-11-02,2026-11-15,2026-11-20,2026-12-25` |
@@ -272,7 +345,8 @@ server/
   notificacoes.js   avisos da Central de Tickets (sino do portal e e-mail)
   email.js          envio de e-mail: Microsoft 365 (Graph) ou SMTP
   expediente.js     prazos em horário de expediente (seg–sex, 8h–17h)
-  rotas/            auth, admin, ferramentas (entrega, armazenamento, protocolo Apps Script) e tickets
+  tutoriais.js      catálogo dos vídeos tutoriais e quem vê cada um
+  rotas/            auth, admin, ferramentas (entrega, armazenamento, protocolo Apps Script), tickets, links (Central de Links) e tutoriais
 public/             portal (login, início, menu, administração)
 scripts/            importar-html e criar-admin
 test/               testes automatizados (npm test)
