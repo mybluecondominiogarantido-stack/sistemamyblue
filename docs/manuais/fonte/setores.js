@@ -87,6 +87,7 @@ const FERRAMENTAS = {
     ],
   },
   parceiros: {
+    video: true,
     nome: 'Prestação de Contas — Comissão de Parceiros',
     descricao: 'Calcula, registra e acompanha a comissão mensal dos parceiros. A <b>competência</b> é o mês dos valores; a comissão é paga no <b>mês seguinte</b>.',
     dados: 'Os lançamentos, os parceiros e os condomínios ficam no banco do portal e são compartilhados pela equipe.',
@@ -117,7 +118,7 @@ const FERRAMENTAS = {
         'Confira, para cada condomínio, <b>Tx. Serviço Recebida</b>, <b>Tarifa Bancária</b>, <b>Multa</b>, <b>Juros</b>, <b>Encargos</b> e <b>Correção</b>. Marque a <b>venda</b> no mês em que ela deve ser paga.',
         'Preencha a <b>tarifa bancária do mês</b>: valor por boleto e quantidade de boletos emitidos.',
         'Confira a <b>comissão prevista</b> e clique em <b>Salvar</b> ou <b>Salvar e ver relatório</b>.',
-      ], atencao: 'A <b>correção</b> fica registrada para conferência, mas nunca entra na base da comissão. O piso do boleto só vale para as regras de excedente.' },
+      ], atencao: 'A <b>correção</b> fica registrada para conferência, mas nunca entra na base da comissão. O piso do boleto só vale para as regras de excedente: o parceiro recebe <b>(valor por boleto − piso) × quantidade de boletos emitidos</b>; a tarifa bancária do balanço não entra nessa conta.' },
       { titulo: 'Gerar, enviar e pagar a prestação de contas', onde: 'aba Prestações do mês', passos: [
         'Escolha a <b>competência</b>. O topo mostra o total de comissão e o mês em que será paga.',
         'Na linha do parceiro, clique em <b>Relatório</b>, confira e use <b>Imprimir</b> ou <b>Baixar PDF</b> (depois, <b>← Voltar</b>). Para todos de uma vez: <b>Baixar todos os PDFs (ZIP)</b>, um PDF por parceiro.',

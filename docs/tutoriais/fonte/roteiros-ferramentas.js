@@ -297,7 +297,7 @@ module.exports = [
     // parceiros, carteira e lançamentos fictícios de janeiro até o mês anterior; dois condomínios
     // da Central Síndicos ficam sem lançamento no último mês, para o vídeo lançar
     preparar: (cen) => basePrestacao(cen, { pular: [6, 7] }),
-    abertura: ['A comissão dos parceiros: a competência do mês, paga no mês seguinte.', ['Lançar o mês de um parceiro', 'O relatório da prestação de contas', 'Marcar envio e pagamento', 'Cadastrar condomínios e parceiros']],
+    abertura: ['A comissão dos parceiros: a competência do mês, paga no mês seguinte.', ['Lançar o mês de um parceiro', 'O relatório da prestação de contas', 'Boletos com excedente', 'Marcar envio e pagamento', 'Cadastrar condomínios e parceiros']],
     async gravar(t) {
       const f = quadro(t, 'parceiros');
       const central = 'p-centralsindicosassociados';
@@ -336,7 +336,22 @@ module.exports = [
       await t.mostrar(f.locator('#btnEditarRel'), 1600);
       await t.clicar(f.locator('#btnVoltar'), { depois: 1500 });
 
-      const E = '4 · Envio e pagamento';
+      // parceiro fictício com regra de excedente (piso de R$ 2,50 por boleto)
+      const B = '4 · Boletos com excedente';
+      await t.legenda('Parceiro com regra de <b>excedente de boleto</b>: em <b>Extras do contrato</b>, informe o <b>valor por boleto</b> e a <b>quantidade de boletos emitidos</b> de cada condomínio.', { etapa: B, ms: 300 });
+      await t.escolher(f.locator('#selParceiro'), { value: 'p-nordestecondominios' }, { depois: 1600 });
+      await t.mostrar(f.locator('h3:has-text("Extras do contrato")'), 1600);
+      await t.mostrar(f.locator('[data-k="valorBoleto"]').first(), 1800);
+      await t.mostrar(f.locator('[data-k="qtdBoletos"]').first(), 1800);
+      await t.legenda('O parceiro recebe <b>(valor por boleto − piso) × quantidade</b>. A tarifa bancária do balanço não entra nessa conta.', { etapa: B, ms: 300 });
+      await t.mostrar(f.locator('#previa'), 3600);
+      await t.clicar(f.locator('#btnSalvarVer'), { depois: 2200 });
+      await t.legenda('No relatório, a seção <b>Boletos</b> mostra a conta de cada condomínio: quantidade, valor por boleto, excedente e repasse.', { etapa: B, ms: 300 });
+      await t.rolar(380, f.locator('text=/Boletos — regra contratual/'));
+      await t.mostrar(f.locator('th:has-text("Excedente por boleto")'), 3800);
+      await t.clicar(f.locator('#btnVoltar'), { depois: 1500 });
+
+      const E = '5 · Envio e pagamento';
       await t.clicar(f.locator('[data-aba=mes]'), { depois: 1500 });
       await t.legenda('De volta ao mês: enviou a prestação ao parceiro? Marque <b>Enviado</b> — a data do envio fica registrada.', { etapa: E, ms: 300 });
       await t.clicar(f.locator(`[data-env="${central}"]`), { depois: 1600 });
@@ -345,18 +360,18 @@ module.exports = [
       await t.mostrar(f.locator('#btnZipMes'), 2000);
       await t.legenda('<b>Baixar todos</b> gera um ZIP com os relatórios do mês.', { etapa: E, ms: 2200 });
 
-      const C = '5 · Condomínios';
+      const C = '6 · Condomínios';
       await t.legenda('Condomínio novo na carteira de um parceiro? Em <b>Condomínios</b>, informe o nome, o parceiro e o percentual.', { etapa: C, ms: 300 });
       await t.clicar(f.locator('[data-aba=condos]'), { depois: 1500 });
       await t.digitar(f.locator('#nCNome'), 'Cond. Serra Azul', { atraso: 34 });
       await t.escolher(f.locator('#nCP1'), { value: 'p-alfaadministradora' });
       await t.digitar(f.locator('#nCR1'), '10');
-      await t.legenda('Se a comissão é dividida, informe o segundo parceiro. O valor do boleto entra no cálculo da tarifa.', { etapa: C, ms: 300 });
+      await t.legenda('Se a comissão é dividida, informe o segundo parceiro. O valor do boleto entra na conta do excedente de boletos.', { etapa: C, ms: 300 });
       await t.digitar(f.locator('#nCBol'), '3,20');
       await t.clicar(f.locator('#btnAddCondo'), { depois: 2000 });
 
-      const P = '6 · Parceiros';
-      await t.legenda('Em <b>Parceiros</b> ficam as regras de cada contrato: percentual, o que entra na base (tarifa, encargos), cláusula de venda e as categorias.', { etapa: P, ms: 300 });
+      const P = '7 · Parceiros';
+      await t.legenda('Em <b>Parceiros</b> ficam as regras de cada contrato: percentual, o que entra na base (tarifa, encargos), a regra de boletos com o piso, cláusula de venda e as categorias.', { etapa: P, ms: 300 });
       await t.clicar(f.locator('[data-aba=parceiros]'), { depois: 1800 });
       await t.mostrar(f.locator('text=/Alfa Administradora/').first(), 1800);
       await t.legenda('Para cadastrar, clique em <b>Novo parceiro</b>.', { etapa: P, ms: 300 });
@@ -367,7 +382,7 @@ module.exports = [
       await t.mostrar(f.locator('#novoParc'), 3600, { dy: 0.3 });
       await t.legenda('Tudo fica salvo no portal, compartilhado com a equipe — e o <b>PartnerChip</b> mostra esses números em painéis.', { etapa: P, ms: 3600 });
     },
-    resumo: ['<b>Lançamento</b>: parceiro → valores de cada condomínio → <b>Salvar e ver relatório</b>', '<b>Prestações do mês</b>: marcar enviado e pago, baixar os relatórios', '<b>Condomínios</b> e <b>Parceiros</b>: a carteira e as regras do contrato'],
+    resumo: ['<b>Lançamento</b>: parceiro → valores de cada condomínio → <b>Salvar e ver relatório</b>', 'Boletos com excedente: <b>(valor por boleto − piso) × quantidade</b>', '<b>Prestações do mês</b>: marcar enviado e pago, baixar os relatórios', '<b>Condomínios</b> e <b>Parceiros</b>: a carteira e as regras do contrato'],
   },
   {
     nome: 'ferramenta-comissoes',
