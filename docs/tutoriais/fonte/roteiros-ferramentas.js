@@ -384,7 +384,7 @@ module.exports = [
 
       const I = '1 · Importar o mês';
       await t.legenda('Comece importando a <b>planilha de implantações</b> do mês (Excel ou CSV): nº do formulário, condomínio, estado, 1º vencimento, ADM e executivo.', { etapa: I, ms: 600 });
-      await t.enviarArquivo(f.locator('text=/Arraste a planilha/').first(), f.locator('#fileInput'), csv, { depois: 1600 });
+      await t.enviarArquivo(f.locator('text=/Importar planilha do mês/').first(), f.locator('#fileInput'), csv, { depois: 1600 });
       await t.legenda('O mês de entrada é sugerido pelo 1º vencimento. Confira e confirme.', { etapa: I, ms: 300 });
       await t.mostrar(f.locator('#iRef'), 1800);
       await t.clicar(f.locator('#iOk'), { depois: 2200 });
@@ -433,7 +433,15 @@ module.exports = [
     ferramenta: 'partnerchip-resultados',
     entrar: 'gil@myblue.com.br',
     inicio: '#/m/partnerchip-resultados',
-    async preparar(cen, base) { await basePrestacao(cen); await pessoaComercial(cen, base); },
+    async preparar(cen, base, br) {
+      await basePrestacao(cen); await pessoaComercial(cen, base);
+      // o painel recebe os números quando alguém com acesso à Prestação de Contas abre a página
+      const ctx = await br.newContext({ viewport: { width: 1280, height: 800 }, locale: 'pt-BR' });
+      const p = await ctx.newPage();
+      await p.goto(base + '/login'); await p.fill('#email', 'admin@myblue.com.br'); await p.fill('#senha', 'Admin1234'); await p.click('#btEntrar'); await p.waitForTimeout(1000);
+      await p.goto(base + '/m/partnerchip-resultados/'); await p.waitForSelector('text=/A PAGAR/i'); await p.waitForTimeout(2500);
+      await ctx.close();
+    },
     abertura: ['O painel dos parceiros: carteira, comissões apuradas e pagas, ao vivo da Prestação de Contas.', ['Visão geral do ano', 'A ficha de cada parceiro', 'Condomínios e filtros', 'Exportar para Excel']],
     async gravar(t) {
       const f = quadro(t, 'partnerchip-resultados');
