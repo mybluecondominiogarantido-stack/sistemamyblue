@@ -1,6 +1,9 @@
 # Manuais do Portal MyBlue
 
+Todos no padrão visual da MyBlue (papel timbrado, capa, sumário por partes, capítulos numerados e histórico de versões).
+
 - `Manual-Geral-Portal-MyBlue.pdf`: acesso e conta, menu, perfis e acessos (perfil + setor no cadastro), Central de Tickets (abrir, acompanhar, atender, líder, supervisão), avisos, painel, Carteira de condomínios, Central de Links, gestão do setor (coordenador e supervisor), administração, quem pode o quê e perguntas frequentes.
+- `Fluxograma-Portal-MyBlue.pdf`: fluxograma operacional (A4 paisagem) da Central de Tickets, do acesso de uma pessoa nova e da ferramenta nova ou atualizada, com a página de atores, formas, prazos e situações.
 - `setores/Manual-Setor-<setor>.pdf`: um por setor (Suprimentos, Parceiros e Comissões de Novos Condomínios estão no manual da Administrativa/Financeira, como subáreas), com as ferramentas do setor (o que cada aba faz e, nas da Administrativa/Financeira, o passo a passo de cada tarefa), como recebe e trata os tickets, a rotina da equipe e do líder, a gestão do setor, os tipos de demanda sugeridos e quando acionar outros setores.
 
 As telas usam dados fictícios. Para atualizar os manuais:
@@ -12,4 +15,6 @@ As telas usam dados fictícios. Para atualizar os manuais:
    As telas do Controle de Pedidos (`sup-*.jpg`) saem de `node docs/manuais/fonte/capturar-suprimentos.js <ferramenta.html> <pasta>`,
    que sobe um portal próprio com banco temporário. O HTML da ferramenta não fica no repositório: use uma cópia local.
    Converta para JPEG em `fonte/img` (ex.: `convert x.png -resize '1800x>' -quality 82 -interlace Plane x.jpg`).
-3. Gere os PDFs: `node docs/manuais/fonte/gerar-manuais.js` (precisa do Playwright com Chromium).
+3. Gere os PDFs: `node docs/manuais/fonte/gerar-manuais.js` (precisa do Playwright com Chromium e do `pypdf` no Python, que aplica o timbrado `fonte/img/timbrado.jpg` por baixo de cada página). Para gerar só alguns: `node docs/manuais/fonte/gerar-manuais.js Geral credito`.
+4. Fluxograma: `node docs/manuais/fonte/gerar-fluxograma.js`.
+5. O padrão visual (cores, capa, capítulos, caixas) está em `fonte/padrao.js`. Registre cada nova versão no histórico (`HISTORICO` em `gerar-manuais.js`).
