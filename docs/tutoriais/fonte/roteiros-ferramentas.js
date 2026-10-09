@@ -266,4 +266,88 @@ module.exports = [
     },
     resumo: ['Cole a extração do Vouch → <b>Comparar com a base</b> → <b>Confirmar</b>', '<b>Base de contatos</b> editável, com atalhos do que falta', '<b>Lista do Marketing</b> em Excel ou CSV'],
   },
+  {
+    nome: 'ferramenta-parceiros',
+    ferramenta: 'parceiros',
+    entrar: 'paula@myblue.com.br',
+    inicio: '#/m/parceiros',
+    async preparar(cen) {
+      // parceiros, carteira e lançamentos fictícios de janeiro até o mês anterior; dois condomínios
+      // da Central Síndicos ficam sem lançamento no último mês, para o vídeo lançar
+      for (const x of D.prestacao(new Date(), { pular: [6, 7] })) {
+        await cen.admin('POST', '/api/gas/parceiros', JSON.stringify({ sheet: x.sheet, action: 'upsert', item: x.item }), 'text/plain');
+      }
+    },
+    abertura: ['A comissão dos parceiros: a competência do mês, paga no mês seguinte.', ['Lançar o mês de um parceiro', 'O relatório da prestação de contas', 'Marcar envio e pagamento', 'Cadastrar condomínios e parceiros']],
+    async gravar(t) {
+      const f = quadro(t, 'parceiros');
+      const central = 'p-centralsindicosassociados';
+
+      const V = '1 · Prestações do mês';
+      await t.clicar(f.locator('[data-aba=mes]'), { depois: 1500 });
+      await t.legenda('Em <b>Prestações do mês</b>, escolha a competência: cada parceiro aparece com o valor da comissão e a situação (lançado, enviado, pago).', { etapa: V, ms: 600 });
+      await t.mostrar(f.locator('[data-mes].ativa, [data-mes].on').first(), 2600);
+      await t.legenda('A competência é o mês do movimento; a comissão dela é paga no mês seguinte.', { etapa: V, ms: 3200 });
+
+      const L = '2 · Lançar o mês';
+      await t.legenda('Para lançar, abra <b>Lançamento</b> e escolha o parceiro. A competência já vem marcada.', { etapa: L, ms: 300 });
+      await t.clicar(f.locator('[data-aba=lancar]'), { depois: 1400 });
+      await t.escolher(f.locator('#selParceiro'), { value: central }, { depois: 1600 });
+      await t.legenda('Aparecem os condomínios do parceiro. Informe, de cada um, TSR, tarifa bancária, multa, juros, encargos e correção.', { etapa: L, ms: 600 });
+      const valores = [['4.215,30', '268,80', '96,40', '41,25', '18,90', '9,60'], ['3.684,75', '232,50', '71,10', '35,80', '22,40', '6,15']];
+      let n = 0;
+      for (let i = 0; i < 3 && n < valores.length; i++) {
+        const tsr = f.locator(`[data-i="${i}"][data-k="tsr"]`);
+        if ((await tsr.inputValue()).replace(/[0,.]/g, '')) continue; // já lançado
+        const ks = ['tsr', 'tarifa', 'multa', 'juros', 'encargos', 'correcao'];
+        for (const [j, k] of ks.entries()) await t.digitar(f.locator(`[data-i="${i}"][data-k="${k}"]`), valores[n][j], { atraso: 30, depois: 200 });
+        n++;
+      }
+      await t.legenda('O balanço da garantidora (PDF) pode ser anexado aqui, para ir junto no relatório. Depois, <b>Salvar e ver relatório</b>.', { etapa: L, ms: 300 });
+      await t.mostrar(f.locator('#dropzone'), 2600);
+      await t.clicar(f.locator('#btnSalvarVer'), { depois: 2200 });
+
+      const R = '3 · Relatório';
+      await t.legenda('O relatório da prestação de contas: cada condomínio, a base de cálculo, o percentual e a comissão total do mês.', { etapa: R, ms: 600 });
+      await t.rolar(420);
+      await t.pausa(1800);
+      await t.rolar(-420);
+      await t.legenda('Daqui você <b>baixa o PDF</b> para enviar ao parceiro, imprime ou volta para corrigir algum valor.', { etapa: R, ms: 300 });
+      await t.mostrar(f.locator('#btnBaixarPdf'), 2000);
+      await t.mostrar(f.locator('#btnEditarRel'), 1600);
+      await t.clicar(f.locator('#btnVoltar'), { depois: 1500 });
+
+      const E = '4 · Envio e pagamento';
+      await t.clicar(f.locator('[data-aba=mes]'), { depois: 1500 });
+      await t.legenda('De volta ao mês: enviou a prestação ao parceiro? Marque <b>Enviado</b> — a data do envio fica registrada.', { etapa: E, ms: 300 });
+      await t.clicar(f.locator(`[data-env="${central}"]`), { depois: 1600 });
+      await t.legenda('Quando o pagamento sair, marque <b>Pago</b>. Os filtros mostram o que falta enviar ou pagar.', { etapa: E, ms: 300 });
+      await t.clicar(f.locator('[data-pag="p-alfaadministradora"]'), { depois: 1800 });
+      await t.mostrar(f.locator('#btnZipMes'), 2000);
+      await t.legenda('<b>Baixar todos</b> gera um ZIP com os relatórios do mês.', { etapa: E, ms: 2200 });
+
+      const C = '5 · Condomínios';
+      await t.legenda('Condomínio novo na carteira de um parceiro? Em <b>Condomínios</b>, informe o nome, o parceiro e o percentual.', { etapa: C, ms: 300 });
+      await t.clicar(f.locator('[data-aba=condos]'), { depois: 1500 });
+      await t.digitar(f.locator('#nCNome'), 'Cond. Serra Azul', { atraso: 34 });
+      await t.escolher(f.locator('#nCP1'), { value: 'p-alfaadministradora' });
+      await t.digitar(f.locator('#nCR1'), '10');
+      await t.legenda('Se a comissão é dividida, informe o segundo parceiro. O valor do boleto entra no cálculo da tarifa.', { etapa: C, ms: 300 });
+      await t.digitar(f.locator('#nCBol'), '3,20');
+      await t.clicar(f.locator('#btnAddCondo'), { depois: 2000 });
+
+      const P = '6 · Parceiros';
+      await t.legenda('Em <b>Parceiros</b> ficam as regras de cada contrato: percentual, o que entra na base (tarifa, encargos), cláusula de venda e as categorias.', { etapa: P, ms: 300 });
+      await t.clicar(f.locator('[data-aba=parceiros]'), { depois: 1800 });
+      await t.mostrar(f.locator('text=/Alfa Administradora/').first(), 1800);
+      await t.legenda('Para cadastrar, clique em <b>Novo parceiro</b>.', { etapa: P, ms: 300 });
+      await t.clicar(f.locator('#novoParc > summary'), { depois: 300 });
+      // a lista se redesenha quando termina de salvar o que foi feito antes; mantém o cadastro aberto
+      await noQuadro(t, 'parceiros', "setInterval(() => { const d = document.getElementById('novoParc'); if (d && !d.open) d.open = true; }, 100);");
+      await t.pausa(900);
+      await t.mostrar(f.locator('#novoParc'), 3600, { dy: 0.3 });
+      await t.legenda('Tudo fica salvo no portal, compartilhado com a equipe — e o <b>PartnerChip</b> mostra esses números em painéis.', { etapa: P, ms: 3600 });
+    },
+    resumo: ['<b>Lançamento</b>: parceiro → valores de cada condomínio → <b>Salvar e ver relatório</b>', '<b>Prestações do mês</b>: marcar enviado e pago, baixar os relatórios', '<b>Condomínios</b> e <b>Parceiros</b>: a carteira e as regras do contrato'],
+  },
 ];
