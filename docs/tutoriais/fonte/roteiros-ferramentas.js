@@ -148,7 +148,7 @@ module.exports = [
       await t.legenda('Na <b>Central de dados</b>: todas as renegociações, com busca, filtro por status e exportação em Excel ou PDF.', { etapa: C, ms: 300 });
       await t.clicar(f.locator('button.tab:has-text("Central de dados")'), { depois: 2400 });
       await t.legenda('<b>Editar</b> corrige um registro. O <b>Relatório mensal</b> gera o PDF do mês.', { etapa: C, ms: 300 });
-      await t.mostrar(f.locator('button:visible:has-text("Editar")').first(), 2000);
+      await t.mostrar(f.locator('button[title="Editar"]:visible').first(), 2000);
       await t.clicar(f.locator('button.tab:has-text("Relatório mensal")'), { depois: 1200 });
       await t.mostrar(f.locator('#relGen'), 2200);
 
