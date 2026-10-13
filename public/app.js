@@ -1767,18 +1767,17 @@
       (adicionar ? '<a href="#/carteira/novos" class="' + (aba === 'novos' ? 'on' : '') + '">Adicionar novos</a>' : '') + '</nav><div id="cCorpo"></div></div>';
 
     var acoes = '<button class="btn ghost" id="btCExportar"' + (conds.length ? '' : ' disabled') + '>' + IC.baixar + 'Exportar CSV</button>' +
-      (admin ? '<button class="btn ghost" id="btCImportar">' + IC.enviar + 'Importar CSV</button><button class="btn primary" id="btCNovo">' + IC.mais + 'Novo condomínio</button>' : '');
+      (admin ? '<button class="btn primary" id="btCNovo">' + IC.mais + 'Novo condomínio</button>' : '');
 
     if (aba === 'novos' && adicionar) { desenharNovos(); return; }
     if (!conds.length) {
-      $('#cCorpo').innerHTML = '<div class="vazio">A carteira ainda está vazia.' + (admin ? '<div class="ajuda" style="margin:8px 0 16px">Importe o CSV da planilha <i>Carteira de Condomínios</i> ou cadastre o primeiro condomínio.</div><div class="linha" style="justify-content:center">' + acoes + '</div>' : ' A administração ainda vai importar a planilha.') + '</div>';
+      $('#cCorpo').innerHTML = '<div class="vazio">A carteira ainda está vazia.' + (admin ? '<div class="ajuda" style="margin:8px 0 16px">Cadastre o primeiro condomínio ou use a aba <b>Adicionar novos</b> com a planilha de implantação.</div><div class="linha" style="justify-content:center">' + acoes + '</div>' : ' A administração ainda vai importar a planilha.') + '</div>';
     } else if (aba === 'condominios') desenharCondominios();
     else desenharResponsaveis();
     ligarAcoes();
 
     function ligarAcoes() {
       if ($('#btCExportar')) $('#btCExportar').onclick = function () { location.href = '/api/carteira/exportar'; };
-      if ($('#btCImportar')) $('#btCImportar').onclick = importarCarteira;
       if ($('#btCNovo')) $('#btCNovo').onclick = function () { editarCondominio(null); };
     }
 
@@ -2032,31 +2031,6 @@
           toast(r.condominios + ' condomínio' + (r.condominios === 1 ? '' : 's') + ' transferido' + (r.condominios === 1 ? '' : 's') + '.', 'ok');
           paginaCarteira('responsaveis');
         } catch (e) { msg.textContent = e.message; msg.hidden = false; }
-      };
-    }
-
-    function importarCarteira() {
-      var m = modal({
-        titulo: 'Importar carteira',
-        corpo: '<div class="pilha"><div><label class="rot" for="ciArq">Arquivo CSV da Carteira de Condomínios</label><input class="campo" id="ciArq" type="file" accept=".csv,text/csv"></div>' +
-          '<div class="ajuda">No Excel: <i>Arquivo → Salvar como → CSV (separado por ponto e vírgula)</i>. Cada condomínio é reconhecido pela coluna <b>ID</b>: os que já existem são atualizados, ' +
-          'os novos são incluídos e os que não estão no arquivo ficam como estão. Toda mudança fica no histórico do condomínio.</div><div id="ciRes"></div></div>',
-        pe: '<button class="btn ghost" data-fechar>Fechar</button><button class="btn primary" id="btCiOk">' + IC.enviar + 'Importar</button>',
-      });
-      var feito = false;
-      $('#btCiOk', m).onclick = async function () {
-        if (feito) { m.fechar(); paginaCarteira(aba); return; }
-        var arq = $('#ciArq', m).files[0];
-        if (!arq) { toast('Escolha o arquivo CSV.', 'erro'); return; }
-        var bt = this; bt.disabled = true;
-        try {
-          var r = await api('POST', '/api/carteira/importar', arq, { bruto: true, headers: { 'Content-Type': 'text/csv' } });
-          $('#ciRes', m).innerHTML = '<div class="tiles" style="grid-template-columns:repeat(3,1fr)">' + tile('Novos', r.novos) + tile('Atualizados', r.atualizados) + tile('Sem mudança', r.iguais) + '</div>' +
-            (r.avisos.length ? '<div class="msg erro" style="margin-top:12px">' + r.avisos.map(esc).join('<br>') + '</div>' : '');
-          feito = true;
-          bt.innerHTML = 'Ver carteira';
-        } catch (e) { toast(e.message, 'erro'); }
-        bt.disabled = false;
       };
     }
 
