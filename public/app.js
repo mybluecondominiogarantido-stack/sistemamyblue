@@ -1835,6 +1835,8 @@
               return '<tr data-i="' + i + '" class="' + (par ? 'parecido' : '') + (respEditaveis.length ? ' comResp' : '') + '"><td><input type="checkbox" class="nvMarca"' + (par ? '' : ' checked') + '></td>' +
                 '<td><input class="campo nvId" inputmode="numeric" maxlength="20" placeholder="ID Vouch"></td>' +
                 '<td><input class="campo nvNome" maxlength="160" value="' + esc(it.nome) + '"><span class="sec corta" title="' + esc(it.nome_planilha) + '">' + esc(it.nome_planilha) + '</span>' +
+                '<input class="campo nvCnpj" maxlength="18" inputmode="numeric" placeholder="CNPJ (opcional)" value="' + esc(it.cnpj) + '" style="margin:4px 0">' +
+                (it.cnpj_aviso ? '<span class="sec" style="color:#9a6512">⚠ ' + esc(it.cnpj_aviso) + '</span>' : '') +
                 (det ? '<span class="sec corta" title="' + esc(det) + '">' + esc(det) + '</span>' : '') + '<span class="sec nvErro" style="color:var(--red)"></span></td>' +
                 '<td>' + esc(it.comarca || '—') + '</td><td>' + esc(it.vencimento || '—') + '</td>' +
                 '<td>' + esc(it.administradora || '—') + (it.forma_envio ? '<span class="sec">' + esc(it.forma_envio) + '</span>' : '') +
@@ -1876,7 +1878,7 @@
             var it = paraAdd[Number(tr.getAttribute('data-i'))];
             var obs = ['Implantação: formulário nº ' + it.formulario, it.implantado_por ? 'implantado por ' + it.implantado_por : '', it.obs].filter(Boolean).join(' · ');
             var item = { codigo: tr.querySelector('.nvId').value.trim(), nome: tr.querySelector('.nvNome').value.trim(), comarca: it.comarca, vencimento: it.vencimento,
-              administradora: it.administradora, forma_envio: it.forma_envio, executivo: it.executivo, inicio_contrato: it.vigencia, observacoes: obs };
+              administradora: it.administradora, forma_envio: it.forma_envio, executivo: it.executivo, cnpj: tr.querySelector('.nvCnpj').value.trim(), razao_social: it.razao_social, inicio_contrato: it.vigencia, observacoes: obs };
             $$('tr[data-r="' + tr.getAttribute('data-i') + '"] .nvPessoa').forEach(function (inp) { item[inp.getAttribute('data-campo')] = inp.value.trim(); });
             return item;
           });
