@@ -670,6 +670,29 @@
   }
 
   /* Coordenador e supervisor: as ferramentas dos setores dele (HTML, versões e quem pode abrir) */
+  /* busca numa tabela: esconde as linhas (tr[data-busca]) que não têm todas as palavras digitadas */
+  function ligarBusca(campo, tbody, rotulo, total, palavra, chave) {
+    function aplicar() {
+      var termos = normal(campo.value).split(/\s+/).filter(Boolean);
+      var n = 0;
+      $$('tr[data-busca]', tbody).forEach(function (tr) {
+        var txt = tr.getAttribute('data-busca');
+        var ok = termos.every(function (t) { return txt.indexOf(t) >= 0; });
+        tr.hidden = !ok;
+        if (ok) n++;
+      });
+      var vazio = $('tr.sem-resultado', tbody);
+      if (vazio) vazio.hidden = n > 0 || !total;
+      if (rotulo) rotulo.textContent = termos.length ? n + ' de ' + total + ' ' + palavra : total + ' ' + palavra;
+      guardar(chave, campo.value);
+    }
+    campo.value = lembrar(chave, '');
+    campo.oninput = aplicar;
+    aplicar();
+  }
+  function textoBuscaModulo(m) { return normal([m.nome, m.slug, m.setor_nome, m.nome_original, m.descricao].filter(Boolean).join(' ')); }
+  var LINHA_SEM_RESULTADO = function (cols) { return '<tr class="sem-resultado" hidden><td colspan="' + cols + '" style="text-align:center;color:var(--muted);font-weight:700;padding:30px">Nenhum módulo encontrado com essa pesquisa.</td></tr>'; };
+
   async function paginaModulosCoord() {
     definirBarra('<span class="setor">Gestão do setor</span><span class="sep">/</span><span class="nome">Ferramentas do setor</span>');
     $('#conteudo').innerHTML = '<div class="pagina"><div class="carregando" style="position:static;background:none"><div><div class="giro"></div>Carregando…</div></div></div>';
@@ -677,13 +700,16 @@
     try { mods = (await api('GET', '/api/admin/modulos')).modulos; pessoas = (await api('GET', '/api/admin/usuarios')).usuarios; } catch (e) { toast(e.message, 'erro'); return; }
     if (location.hash.indexOf('#/admin/modulos') !== 0) return; // a pessoa já foi para outra tela
     $('#conteudo').innerHTML = '<div class="pagina"><h1>Ferramentas do setor</h1><p class="sub">As ferramentas dos seus setores. Envie uma versão nova do HTML, volte para uma anterior e escolha quem do setor pode abrir cada uma.</p>' +
-      '<div class="painel"><div class="tabela-wrap"><table><thead><tr><th>Módulo</th><th>Setor</th><th>Arquivo em uso</th></tr></thead><tbody>' +
+      '<div class="painel"><div class="cab-painel"><b style="font-family:var(--display)" id="qtdMods"></b>' +
+      '<input class="campo" id="buscaMod" type="search" placeholder="Pesquisar módulo, setor ou arquivo…" aria-label="Pesquisar módulo" style="max-width:320px"></div>' +
+      '<div class="tabela-wrap"><table><thead><tr><th>Módulo</th><th>Setor</th><th>Arquivo em uso</th></tr></thead><tbody id="tbMods">' +
       (mods.map(function (x) {
-        return '<tr class="clicavel" data-slug="' + esc(x.slug) + '"><td><div class="linha" style="flex-wrap:nowrap"><div class="icone-mod" style="width:34px;height:34px">' + (IC[x.icone] || IC.app) + '</div><div><b>' + esc(x.nome) + '</b>' + (x.ativo ? '' : ' <span class="etiqueta cinza">desativado</span>') + '</div></div></td>' +
+        return '<tr class="clicavel" data-slug="' + esc(x.slug) + '" data-busca="' + esc(textoBuscaModulo(x)) + '"><td><div class="linha" style="flex-wrap:nowrap"><div class="icone-mod" style="width:34px;height:34px">' + (IC[x.icone] || IC.app) + '</div><div><b>' + esc(x.nome) + '</b>' + (x.ativo ? '' : ' <span class="etiqueta cinza">desativado</span>') + '</div></div></td>' +
           '<td>' + esc(x.setor_nome || '—') + '</td>' +
           '<td>' + (x.tem_arquivo ? quando(x.versao_em) + '<span class="sec">' + tamanho(x.tamanho) + (x.nome_original ? ' · ' + esc(x.nome_original) : '') + '</span>' : '<span class="etiqueta vermelha">sem arquivo</span>') + '</td></tr>';
       }).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--muted);font-weight:700;padding:30px">Nenhuma ferramenta nos seus setores. Peça à administração para conferir o setor no seu cadastro.</td></tr>') +
-      '</tbody></table></div></div></div>';
+      LINHA_SEM_RESULTADO(3) + '</tbody></table></div></div></div>';
+    ligarBusca($('#buscaMod'), $('#tbMods'), $('#qtdMods'), mods.length, mods.length === 1 ? 'ferramenta' : 'ferramentas', 'busca.modulos.setor');
     $$('tr[data-slug]').forEach(function (tr) {
       tr.onclick = function () {
         var mod = mods.find(function (x) { return x.slug === tr.getAttribute('data-slug'); });
@@ -722,23 +748,25 @@
     var mods = j.modulos;
 
     $('#conteudo').innerHTML = '<div class="pagina"><h1>Módulos e dados</h1><p class="sub">Cada módulo é uma das centrais de ferramentas (um arquivo HTML). Envie novas versões, escolha onde os dados ficam e quem pode abrir.</p>' +
-      '<div class="painel"><div class="cab-painel"><b style="font-family:var(--display)">' + mods.length + ' módulos</b><span class="espaco"></span>' +
+      '<div class="painel"><div class="cab-painel"><b style="font-family:var(--display)" id="qtdMods"></b><span class="espaco"></span>' +
       '<button class="btn ghost" id="btSetores">Setores</button>' +
       '<button class="btn ghost" id="btLote">' + IC.enviar + 'Enviar vários HTMLs</button>' +
       '<button class="btn ghost" id="btBackup">' + IC.baixar + 'Backup do banco</button>' +
       '<button class="btn primary" id="btNovoMod">' + IC.mais + 'Novo módulo</button></div>' +
-      '<div class="tabela-wrap"><table><thead><tr><th>Módulo</th><th>Setor</th><th>Arquivo</th><th>Onde ficam os dados</th><th>Situação</th></tr></thead><tbody>' +
+      '<div class="faixa-busca"><input class="campo" id="buscaMod" type="search" placeholder="Pesquisar módulo, setor ou arquivo…" aria-label="Pesquisar módulo"></div>' +
+      '<div class="tabela-wrap"><table><thead><tr><th>Módulo</th><th>Setor</th><th>Arquivo</th><th>Onde ficam os dados</th><th>Situação</th></tr></thead><tbody id="tbMods">' +
       mods.map(function (m) {
         var dados = ROTULO_ARM[m.armazenamento][0];
         if (m.adaptador === 'claude-db') dados = '<span class="etiqueta verde">' + IC.banco + ' banco do portal</span>';
         else if (m.adaptador) dados = (m.fonte_dados === 'interno' ? '<span class="etiqueta verde">' + IC.banco + ' planilha no banco do portal</span>' : '<span class="etiqueta ambar">planilha Google</span>') + (m.armazenamento !== 'navegador' ? '<span class="sec">+ ' + esc(dados) + '</span>' : '');
         else dados = '<span class="etiqueta ' + (m.armazenamento === 'navegador' ? 'cinza' : 'verde') + '">' + esc(dados) + '</span>';
-        return '<tr class="clicavel" data-slug="' + esc(m.slug) + '"><td><div class="linha" style="flex-wrap:nowrap"><div class="icone-mod" style="width:34px;height:34px">' + (IC[m.icone] || IC.app) + '</div><div><b>' + esc(m.nome) + '</b><span class="sec">/' + esc(m.slug) + '</span></div></div></td>' +
+        return '<tr class="clicavel" data-slug="' + esc(m.slug) + '" data-busca="' + esc(textoBuscaModulo(m)) + '"><td><div class="linha" style="flex-wrap:nowrap"><div class="icone-mod" style="width:34px;height:34px">' + (IC[m.icone] || IC.app) + '</div><div><b>' + esc(m.nome) + '</b><span class="sec">/' + esc(m.slug) + '</span></div></div></td>' +
           '<td>' + esc(m.setor_nome || '—') + '</td>' +
           '<td>' + (m.tem_arquivo ? quando(m.versao_em) + '<span class="sec">' + tamanho(m.tamanho) + (m.nome_original ? ' · ' + esc(m.nome_original) : '') + '</span>' : '<span class="etiqueta vermelha">sem arquivo</span>') + '</td>' +
           '<td>' + dados + '</td><td>' + (m.ativo ? '<span class="etiqueta verde">ativo</span>' : '<span class="etiqueta cinza">desativado</span>') + '</td></tr>';
-      }).join('') + '</tbody></table></div></div></div>';
+      }).join('') + LINHA_SEM_RESULTADO(5) + '</tbody></table></div></div></div>';
 
+    ligarBusca($('#buscaMod'), $('#tbMods'), $('#qtdMods'), mods.length, 'módulos', 'busca.modulos');
     $$('tr[data-slug]').forEach(function (tr) { tr.onclick = function () { editarModulo(mods.find(function (m) { return m.slug === tr.getAttribute('data-slug'); })); }; });
     $('#btNovoMod').onclick = novoModulo;
     $('#btSetores').onclick = gerirSetores;
