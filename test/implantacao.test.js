@@ -76,10 +76,10 @@ function zip(arquivos) {
 const XLSX = zip([
   ['xl/workbook.xml', '<workbook><sheets><sheet name="Página2" sheetId="1" r:id="rId9"/></sheets></workbook>'],
   ['xl/_rels/workbook.xml.rels', '<Relationships><Relationship Id="rId9" Target="worksheets/sheet7.xml"/></Relationships>'],
-  ['xl/sharedStrings.xml', '<sst><si><t>CONDOMÍNIO</t></si><si><t>DATA CONTRATO</t></si><si><t>ESTADO</t></si><si><r><t>Edifício </t></r><r><t>Mar &amp; Sol</t></r></si><si><t>PB</t></si></sst>'],
+  ['xl/sharedStrings.xml', '<sst><si><t>CONDOMÍNIO</t></si><si><t>DATA CONTRATO</t></si><si><t>ESTADO</t></si><si><r><t>Edifício </t></r><r><t>Mar &amp; Sol</t></r></si><si><t>PB</t></si><si><t>CNPJ</t></si></sst>'],
   ['xl/worksheets/sheet7.xml', '<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Título</t></is></c></row>' +
-    '<row r="3"><c r="B3" t="s"><v>0</v></c><c r="C3" t="s"><v>2</v></c><c r="D3" t="s"><v>1</v></c></row>' +
-    '<row r="4"><c r="B4" t="s"><v>3</v></c><c r="C4" t="s"><v>4</v></c><c r="D4" s="5"><v>46296</v></c></row></sheetData></worksheet>'],
+    '<row r="3"><c r="B3" t="s"><v>0</v></c><c r="C3" t="s"><v>2</v></c><c r="D3" t="s"><v>1</v></c><c r="E3" t="s"><v>5</v></c></row>' +
+    '<row r="4"><c r="B4" t="s"><v>3</v></c><c r="C4" t="s"><v>4</v></c><c r="D4" s="5"><v>46296</v></c><c r="E4"><v>4.1134270000172E+13</v></c></row></sheetData></worksheet>'],
 ]);
 
 before(async () => {
@@ -145,6 +145,7 @@ test('lê .xlsx do Excel (aba pelo workbook, textos compartilhados, data em núm
   assert.equal(it[0].nome, 'Mar & Sol');
   assert.equal(it[0].comarca, 'PB');
   assert.equal(it[0].vigencia, '10/2026');
+  assert.equal(it[0].cnpj, '41.134.270/0001-72', 'CNPJ guardado como número no .xlsx vem completo');
 });
 
 test('só administrador, coordenador e supervisor usam "Adicionar novos"', async () => {
