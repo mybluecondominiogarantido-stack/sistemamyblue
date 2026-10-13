@@ -38,18 +38,18 @@ async function entrar(email, senha) {
 const CSV = Buffer.from([
   'CONTROLE IMPLANTAÇÕES ;;;;;;;;;;',
   ';2026;;;;;;;;;',
-  'Nº FORMULÁRIO;CONDOMÍNIO;ESTADO;DIA VENC.;ADM.;CONTRATO;DATA CONTRATO;ENVIO E-MAIL/FÍSICO;IMPLANTADO POR;OBS.;MÊS',
-  '10;Condomínio Edifício Jardim Azul;CE;05;Sim. Adm Alfa;SIM;15/10/2026;AMBOS;Ana Teste;;out/26',
-  '11;RESIDENCIAL SOLAR DAS PALMEIRAS II;PB;10;Não;SIM;01/10/2026;DIGITAL;Bia Teste;expedição em andamento;out/26',
-  '12;Edificio Lagoa Verde;RN;10;RB;SIM;01/10/2026;AMBOS;Ana Teste;DESCONSIDERAR - duplicidade;out/26',
-  '13;Condomínio Já Existente;CE;10;RB;SIM;02/10/2026;AMBOS;Ana Teste;;out/26',
-  '14;Condomínio Edifício Jardim Azul;CE;05;Sim. Adm Alfa;SIM;20/10/2026;AMBOS;Ana Teste;;out/26',
-  '15;Residencial Sem Data;CE;10;RB;SIM;;AMBOS;Ana Teste;;',
-  '16;Residencial Setembro;CE;10;RB;SIM;10/09/2026;DIGITAL;Ana Teste;;set/26',
+  'Nº FORMULÁRIO;CONDOMÍNIO;ESTADO;DIA VENC.;ADM.;EXECUTIVO;CONTRATO;DATA CONTRATO;ENVIO E-MAIL/FÍSICO;IMPLANTADO POR;OBS.;MÊS',
+  '10;Condomínio Edifício Jardim Azul;CE;05;Sim. Adm Alfa;Edu Exec;SIM;15/10/2026;AMBOS;Ana Teste;;out/26',
+  '11;RESIDENCIAL SOLAR DAS PALMEIRAS II;PB;10;Não;Edu Exec;SIM;01/10/2026;DIGITAL;Bia Teste;expedição em andamento;out/26',
+  '12;Edificio Lagoa Verde;RN;10;RB;Edu Exec;SIM;01/10/2026;AMBOS;Ana Teste;DESCONSIDERAR - duplicidade;out/26',
+  '13;Condomínio Já Existente;CE;10;RB;Edu Exec;SIM;02/10/2026;AMBOS;Ana Teste;;out/26',
+  '14;Condomínio Edifício Jardim Azul;CE;05;Sim. Adm Alfa;Edu Exec;SIM;20/10/2026;AMBOS;Ana Teste;;out/26',
+  '15;Residencial Sem Data;CE;10;RB;Edu Exec;SIM;;AMBOS;Ana Teste;;',
+  '16;Residencial Setembro;CE;10;RB;Edu Exec;SIM;10/09/2026;DIGITAL;Ana Teste;;set/26',
   ';;;;;;;;;;',
   ';2027;;;;;;;;;',
-  'Nº FORMULÁRIO;CONDOMÍNIO;ESTADO;DIA VENC.;ADM.;CONTRATO;DATA CONTRATO;ENVIO E-MAIL/FÍSICO;IMPLANTADO POR;OBS.;MÊS',
-  '17;Torre do Ano Novo;MA;15;Gama;SIM;05/01/2027;AMBOS;Bia Teste;;jan/27',
+  'Nº FORMULÁRIO;CONDOMÍNIO;ESTADO;DIA VENC.;ADM.;EXECUTIVO;CONTRATO;DATA CONTRATO;ENVIO E-MAIL/FÍSICO;IMPLANTADO POR;OBS.;MÊS',
+  '17;Torre do Ano Novo;MA;15;Gama;Edu Exec;SIM;05/01/2027;AMBOS;Bia Teste;;jan/27',
 ].join('\r\n'), 'latin1');
 
 /* .xlsx mínimo (zip sem compressão + um arquivo comprimido) para testar o leitor */
@@ -121,6 +121,7 @@ test('lê a planilha de implantação: vigência da DATA CONTRATO, apelido e o q
   assert.equal(azul.administradora, 'ADM ALFA');
   assert.equal(azul.forma_envio, 'IMPRESSO/E-MAIL');
   assert.equal(azul.vencimento, '5');
+  assert.equal(azul.executivo, 'Edu Exec');
   assert.equal(it.find((x) => x.formulario === '11').administradora, '');
   assert.match(it.find((x) => x.formulario === '12').ignorar, /desconsiderar/);
   assert.match(it.find((x) => x.formulario === '14').ignorar, /repetido/);
@@ -161,7 +162,7 @@ test('compara com a carteira e adiciona só os escolhidos, com ID Vouch e respon
   assert.equal((await ctx.db.um('SELECT COUNT(*)::int AS n FROM condominios')).n, 1, 'nada gravado');
 
   a = await admin('POST', '/api/carteira/implantacao/adicionar', { itens: [
-    { ...base1, codigo: '501', analista_cobranca: 'ana lima - 4001', assistente_credito: 'CARLA DIAS - 4003', observacoes: 'Implantação: formulário nº 10' },
+    { ...base1, codigo: '501', executivo: 'Edu Exec', analista_cobranca: 'ana lima - 4001', assistente_credito: 'CARLA DIAS - 4003', observacoes: 'Implantação: formulário nº 10' },
     { ...base1, nome: 'Solar das Palmeiras II', comarca: 'PB', codigo: '502' },
   ] });
   assert.equal(a.status, 201, a.texto);
@@ -171,6 +172,7 @@ test('compara com a carteira e adiciona só os escolhidos, com ID Vouch e respon
   assert.equal(c.condominio.situacao, 'ATIVO');
   assert.equal(c.condominio.inicio_contrato, '2026-10-01');
   assert.equal(c.condominio.analista_cobranca, 'ANA LIMA - 4001');
+  assert.equal(c.condominio.executivo, 'Edu Exec');
   assert.equal(c.condominio.analista_extrajudicial, '');
   assert.equal(c.historico[0].acao, 'condominio_criado');
   // lida de novo, a planilha já mostra os dois como existentes

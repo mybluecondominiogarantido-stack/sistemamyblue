@@ -1837,7 +1837,8 @@
                 '<td><input class="campo nvNome" maxlength="160" value="' + esc(it.nome) + '"><span class="sec corta" title="' + esc(it.nome_planilha) + '">' + esc(it.nome_planilha) + '</span>' +
                 (det ? '<span class="sec corta" title="' + esc(det) + '">' + esc(det) + '</span>' : '') + '<span class="sec nvErro" style="color:var(--red)"></span></td>' +
                 '<td>' + esc(it.comarca || '—') + '</td><td>' + esc(it.vencimento || '—') + '</td>' +
-                '<td>' + esc(it.administradora || '—') + (it.forma_envio ? '<span class="sec">' + esc(it.forma_envio) + '</span>' : '') + '</td>' +
+                '<td>' + esc(it.administradora || '—') + (it.forma_envio ? '<span class="sec">' + esc(it.forma_envio) + '</span>' : '') +
+                  (it.executivo ? '<span class="sec" title="Executivo de negócios">exec. ' + esc(it.executivo) + '</span>' : '') + '</td>' +
  '<td><b>' + esc(it.vigencia) + '</b><span class="sec">contrato ' + esc(it.data_contrato) + '</span></td>' +
                 '<td>' + (par ? '<span class="etiqueta ambar" title="Na carteira já existe ' + esc(it.carteira.nome) + ' (ID Vouch ' + esc(it.carteira.codigo) + ') na mesma UF. Marque só se for outro condomínio.">⚠ parecido com ' + esc(it.carteira.nome) + ' (ID ' + esc(it.carteira.codigo) + ')</span>' : '<span class="etiqueta verde">novo</span>') + '</td></tr>' +
                 (respEditaveis.length ? '<tr class="nvResp' + (par ? ' parecido' : '') + '" data-r="' + i + '"><td></td><td colspan="7"><div class="grade-3">' + respEditaveis.map(function (fn) {
@@ -1875,7 +1876,7 @@
             var it = paraAdd[Number(tr.getAttribute('data-i'))];
             var obs = ['Implantação: formulário nº ' + it.formulario, it.implantado_por ? 'implantado por ' + it.implantado_por : '', it.obs].filter(Boolean).join(' · ');
             var item = { codigo: tr.querySelector('.nvId').value.trim(), nome: tr.querySelector('.nvNome').value.trim(), comarca: it.comarca, vencimento: it.vencimento,
-              administradora: it.administradora, forma_envio: it.forma_envio, inicio_contrato: it.vigencia, observacoes: obs };
+              administradora: it.administradora, forma_envio: it.forma_envio, executivo: it.executivo, inicio_contrato: it.vigencia, observacoes: obs };
             $$('tr[data-r="' + tr.getAttribute('data-i') + '"] .nvPessoa').forEach(function (inp) { item[inp.getAttribute('data-campo')] = inp.value.trim(); });
             return item;
           });
@@ -2040,7 +2041,7 @@
       editarCondominio(d.condominio, d.historico);
     }
 
-    var ROTULO_CAMPO = { codigo: 'ID Vouch', nome: 'Condomínio (Apelido Vouch)', situacao: 'Situação', comarca: 'UF', vencimento: 'Vencimento', administradora: 'Administradora', forma_envio: 'Forma de envio',
+    var ROTULO_CAMPO = { codigo: 'ID Vouch', nome: 'Condomínio (Apelido Vouch)', situacao: 'Situação', comarca: 'UF', vencimento: 'Vencimento', administradora: 'Administradora', forma_envio: 'Forma de envio', executivo: 'Executivo de negócios',
       inicio_contrato: 'Vigência', razao_social: 'Razão social', cnpj: 'CNPJ', observacoes: 'Observações' };
     funcoes.forEach(function (fn) { ROTULO_CAMPO[fn.campo] = fn.rotulo; });
 
@@ -2077,10 +2078,12 @@
           campo('cdAdm', 'Administradora', c.administradora, ' maxlength="120" list="cdAdms"') + campo('cdEnvio', 'Forma de envio', c.forma_envio, ' maxlength="60" list="cdEnvios"') + '</div>' +
           '<div class="grade-3">' + funcoes.map(function (fn) { return campo('cd_' + fn.campo, esc(fn.rotulo), c[fn.campo], ' maxlength="120" list="cdl_' + fn.campo + '" placeholder="NOME - RAMAL"', parcial && editavel(fn.campo)); }).join('') + '</div>' +
           (parcial ? '<div class="ajuda">Você altera o responsável do seu setor. Os demais dados do condomínio são da administração.</div>' : '') +
-          '<div class="grade-3">' + campo('cdInicio', 'Vigência do contrato' + (novo ? ' *' : ''), mesAno(c.inicio_contrato), ' maxlength="7" inputmode="numeric" placeholder="mm/aaaa"') + '</div>' +
+          '<div class="grade-3">' + campo('cdInicio', 'Vigência do contrato' + (novo ? ' *' : ''), mesAno(c.inicio_contrato), ' maxlength="7" inputmode="numeric" placeholder="mm/aaaa"') +
+          campo('cdExec', 'Executivo de negócios', c.executivo, ' maxlength="120" list="cdExecs"') + '</div>' +
           '<div><label class="rot" for="cdObs">Observações</label><textarea class="campo" id="cdObs" rows="3" maxlength="4000"' + (ro ? ' readonly' : '') + '>' + esc(c.observacoes || '') + '</textarea></div>' +
           lista('cdUfs', conds.map(function (x) { return x.comarca; })) + lista('cdVencs', conds.map(function (x) { return x.vencimento; })) +
           lista('cdAdms', conds.map(function (x) { return x.administradora; })) + lista('cdEnvios', conds.map(function (x) { return x.forma_envio; })) +
+          lista('cdExecs', conds.map(function (x) { return x.executivo; })) +
           funcoes.map(function (fn) { return lista('cdl_' + fn.campo, conds.map(function (x) { return x[fn.campo]; })); }).join('') +
           '<div id="cdMsg" class="msg erro" hidden></div>' +
           (novo ? '' : '<div class="ajuda">Atualizado em ' + quando(c.atualizado_em) + (c.atualizado_por_nome ? ' por ' + esc(c.atualizado_por_nome) : '') + '.</div>') +
@@ -2107,7 +2110,7 @@
       $('#btCdOk', m).onclick = async function () {
         var corpo = {
           codigo: $('#cdCodigo', m).value, situacao: $('#cdSit', m).value, comarca: $('#cdUf', m).value, nome: $('#cdNome', m).value,
-          razao_social: $('#cdRazao', m).value, cnpj: $('#cdCnpj', m).value, vencimento: $('#cdVenc', m).value, administradora: $('#cdAdm', m).value,
+          razao_social: $('#cdRazao', m).value, cnpj: $('#cdCnpj', m).value, vencimento: $('#cdVenc', m).value, administradora: $('#cdAdm', m).value, executivo: $('#cdExec', m).value,
           forma_envio: $('#cdEnvio', m).value, inicio_contrato: $('#cdInicio', m).value, observacoes: $('#cdObs', m).value,
         };
         funcoes.forEach(function (fn) { corpo[fn.campo] = $('#cd_' + fn.campo, m).value; });
