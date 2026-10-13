@@ -523,7 +523,8 @@ function manualSetor(s) {
   <ul>
     ${ferr.map((f) => `<li><b>${f.nome}</b>${f.area ? ` (${esc(f.area)})` : ''}: ${f.descricao}</li>`).join('')}
     <li><b>Central de Tickets</b>: recebe as demandas que os outros setores pedem para ${art.o} ${esc(s.nome)}, e é por ela que ${art.o} ${esc(s.nome)} pede o que precisa dos outros setores.</li>
-    ${s.carteira ? `<li><b>Carteira de condomínios</b>: ${art.o} ${esc(s.nome)} é o responsável pela coluna <b>${s.carteira}</b>. Os tickets de condomínio para ${art.o} ${esc(s.nome)} vão direto para essa pessoa.</li>` : ''}
+    <li><b>Carteira de condomínios</b>: todos consultam os condomínios atendidos (ID Vouch, apelido, vigência do contrato, executivo de negócios, CNPJ e responsáveis).${s.carteira ? ` ${art.O} ${esc(s.nome)} é o responsável pela coluna <b>${s.carteira}</b>; os tickets de condomínio para ${art.o} ${esc(s.nome)} vão direto para essa pessoa.` : ''}</li>
+    ${(s.tambem || []).map((t) => `<li>${t}</li>`).join('')}
     <li><b>Gestão do setor</b>: o coordenador e o supervisor ${art.do} ${esc(s.nome)} cuidam dos usuários, das ferramentas, da equipe e dos tipos de demanda do setor.</li>
     ${s.supervisao ? '<li><b>Supervisão da Central de Tickets</b>: visão e direcionamento dos tickets de <b>todos</b> os setores (veja o capítulo próprio).</li>' : ''}
   </ul>
@@ -614,11 +615,12 @@ function manualSetor(s) {
   <p class="intro">Quem tem o perfil <b>Coordenador</b> ou <b>Supervisor</b> com o setor ${esc(s.nome)} no cadastro cuida do setor no portal. Os dois têm os mesmos poderes.</p>
   ${tabela(['No menu Gestão do setor', 'O que faz'], [
     ['<b>Usuários do setor</b>', 'Cria, edita, desativa e redefine a senha das pessoas do setor, liberando as ferramentas do setor.'],
-    ['<b>Ferramentas do setor</b>', 'Envia a versão nova do HTML, volta uma versão anterior e escolhe quem do setor abre cada ferramenta.'],
+    ['<b>Ferramentas do setor</b>', 'Envia a versão nova do HTML, volta uma versão anterior e escolhe quem do setor abre cada ferramenta. O campo <b>Pesquisar</b> acha a ferramenta pelo nome, setor ou arquivo.'],
     ['<b>Equipe e tipos de demanda</b>', 'Marca os líderes e cadastra os tipos de demanda com prazo.'],
   ])}
   <ul>
     <li>Nos tickets ${art.do} ${esc(s.nome)}, coordenador e supervisor têm os poderes do líder.</li>
+    <li>Na Carteira de condomínios, <b>adicionam condomínios novos</b> pela planilha de implantação (aba <i>Adicionar novos</i>: vigência, ID Vouch, apelido, executivo de negócios e CNPJ).</li>
     ${s.carteira ? `<li>Na Carteira de condomínios, alteram e transferem o <b>${s.carteira}</b> de cada condomínio.</li>` : ''}
     <li>Coordenadores, supervisores e administradores são cadastrados pela administração.</li>
   </ul>
