@@ -64,8 +64,13 @@ const cnpjValido = (d) => /^\d{14}$/.test(d) && !/^(\d)\1+$/.test(d) && digitoCn
 function lerCnpj(v) {
   const s = limpar(v);
   if (!s) return { cnpj: '', aviso: '' };
-  if (/e\+\d+$/i.test(s)) return { cnpj: '', aviso: `CNPJ cortado pelo Excel (${s}): digite o CNPJ` };
-  const d = s.replace(/\D/g, '');
+  let d = s.replace(/\D/g, '');
+  if (/e\+?\d+$/i.test(s)) {
+    // número guardado pelo Excel: no .xlsx vem completo (6.6036300000127E+13); no CSV vem cortado (6,60363E+13)
+    const n = Number(s.replace(',', '.'));
+    d = Number.isFinite(n) ? n.toLocaleString('fullwide', { useGrouping: false, maximumFractionDigits: 0 }) : '';
+    if (!cnpjValido(d.padStart(14, '0'))) return { cnpj: '', aviso: `CNPJ cortado pelo Excel (${s}): digite o CNPJ ou envie a planilha em .xlsx` };
+  }
   if (/[a-z]{3}/i.test(s.replace(/cnpj/i, '')) && d.length < 11) return { cnpj: '', aviso: `sem CNPJ na planilha: ${s}` };
   const cheio = d.padStart(14, '0');
   if (d.length >= 11 && d.length <= 14 && cnpjValido(cheio)) return { cnpj: `${cheio.slice(0, 2)}.${cheio.slice(2, 5)}.${cheio.slice(5, 8)}/${cheio.slice(8, 12)}-${cheio.slice(12)}`, aviso: '' };
