@@ -1735,12 +1735,12 @@
   function unicos(lista) { return lista.filter(function (v, i, a) { return v && a.indexOf(v) === i; }).sort(function (a, b) { return a.localeCompare(b, 'pt-BR'); }); }
 
   async function paginaCarteira(aba) {
-    aba = aba === 'responsaveis' ? 'responsaveis' : 'condominios';
-    definirBarra('<span class="setor">Carteira</span><span class="sep">/</span><span class="nome">' + (aba === 'responsaveis' ? 'Responsáveis' : 'Condomínios') + '</span>');
+    aba = aba === 'responsaveis' || aba === 'novos' ? aba : 'condominios';
+    definirBarra('<span class="setor">Carteira</span><span class="sep">/</span><span class="nome">' + ({ responsaveis: 'Responsáveis', novos: 'Adicionar novos' }[aba] || 'Condomínios') + '</span>');
     $('#conteudo').innerHTML = carregandoHtml();
     var j;
     try { j = await api('GET', '/api/carteira'); } catch (e) { toast(e.message, 'erro'); return; }
-    var conds = j.condominios, funcoes = j.funcoes, admin = j.pode_editar;
+    var conds = j.condominios, funcoes = j.funcoes, admin = j.pode_editar, adicionar = !!j.pode_adicionar;
     // colunas de responsável que esta pessoa altera e transfere (coordenador/supervisor: as do setor dele)
     var editaveis = j.funcoes_editaveis || [];
     function editavel(campo) { return admin || editaveis.indexOf(campo) >= 0; }
@@ -1763,11 +1763,13 @@
         }).join('') +
         tile('Sem responsável', semResp.length, 'ativos com função em branco', semResp.length > 0) + '</div>' : '') +
       '<nav class="abas"><a href="#/carteira" class="' + (aba === 'condominios' ? 'on' : '') + '">Condomínios</a>' +
-      '<a href="#/carteira/responsaveis" class="' + (aba === 'responsaveis' ? 'on' : '') + '">Responsáveis</a></nav><div id="cCorpo"></div></div>';
+      '<a href="#/carteira/responsaveis" class="' + (aba === 'responsaveis' ? 'on' : '') + '">Responsáveis</a>' +
+      (adicionar ? '<a href="#/carteira/novos" class="' + (aba === 'novos' ? 'on' : '') + '">Adicionar novos</a>' : '') + '</nav><div id="cCorpo"></div></div>';
 
     var acoes = '<button class="btn ghost" id="btCExportar"' + (conds.length ? '' : ' disabled') + '>' + IC.baixar + 'Exportar CSV</button>' +
       (admin ? '<button class="btn ghost" id="btCImportar">' + IC.enviar + 'Importar CSV</button><button class="btn primary" id="btCNovo">' + IC.mais + 'Novo condomínio</button>' : '');
 
+    if (aba === 'novos' && adicionar) { desenharNovos(); return; }
     if (!conds.length) {
       $('#cCorpo').innerHTML = '<div class="vazio">A carteira ainda está vazia.' + (admin ? '<div class="ajuda" style="margin:8px 0 16px">Importe o CSV da planilha <i>Carteira de Condomínios</i> ou cadastre o primeiro condomínio.</div><div class="linha" style="justify-content:center">' + acoes + '</div>' : ' A administração ainda vai importar a planilha.') + '</div>';
     } else if (aba === 'condominios') desenharCondominios();
@@ -1778,6 +1780,122 @@
       if ($('#btCExportar')) $('#btCExportar').onclick = function () { location.href = '/api/carteira/exportar'; };
       if ($('#btCImportar')) $('#btCImportar').onclick = importarCarteira;
       if ($('#btCNovo')) $('#btCNovo').onclick = function () { editarCondominio(null); };
+    }
+
+    /* ---------- adicionar novos: planilha de implantação → escolhe a vigência → digita o ID Vouch ---------- */
+    function desenharNovos() {
+      var itens = null, arquivo = '';
+      $('#cCorpo').innerHTML =
+        '<div class="painel" style="padding:16px;margin-bottom:16px"><div class="titulo-passo"><span class="passo">1</span>Planilha de implantação</div>' +
+        '<div class="arquivo-envio"><input class="campo" id="nvArq" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" style="flex:1;min-width:220px">' +
+        '<button class="btn primary" id="btNvLer">' + IC.enviar + 'Ler planilha</button></div>' +
+        '<div class="ajuda" id="nvResumo">Envie a planilha "Controle de Implantações" do jeito que ela é (.xlsx ou .csv). O portal acha a linha de títulos sozinho e lê a vigência da coluna <b>DATA CONTRATO</b>.</div></div>' +
+        '<div id="nvPasso2"></div><div id="nvPasso3"></div>';
+      $('#btNvLer').onclick = async function () {
+        var arq = $('#nvArq').files[0];
+        if (!arq) { toast('Escolha a planilha.', 'erro'); return; }
+        var bt = this; bt.disabled = true;
+        try {
+          var r = await api('POST', '/api/carteira/implantacao/ler', arq, { bruto: true, headers: { 'Content-Type': 'application/octet-stream' } });
+          itens = r.itens; arquivo = arq.name;
+          passo2();
+        } catch (e) { toast(e.message, 'erro'); }
+        bt.disabled = false;
+      };
+      function passo2() {
+        var meses = {};
+        itens.forEach(function (it) { if (!it.ignorar && it.vigencia) meses[it.vigencia] = (meses[it.vigencia] || 0) + 1; });
+        var lista = Object.keys(meses).sort(function (a, b) { return (b.slice(3) + b.slice(0, 2)).localeCompare(a.slice(3) + a.slice(0, 2)); });
+        var ign = itens.filter(function (it) { return it.ignorar; });
+        $('#nvResumo').innerHTML = '<b>' + esc(arquivo) + '</b>: ' + itens.length + ' condomínios lidos' +
+          (ign.length ? ' · <span title="' + esc(ign.map(function (i) { return i.nome_planilha + ': ' + i.ignorar; }).join('\n')) + '" style="text-decoration:underline dotted;cursor:help">' + ign.length + ' ficaram de fora</span> (desconsiderar, repetidos ou sem data de contrato)' : '') + '.';
+        if (!lista.length) { $('#nvPasso2').innerHTML = '<div class="vazio">Nenhum condomínio com DATA CONTRATO na planilha.</div>'; $('#nvPasso3').innerHTML = ''; return; }
+        $('#nvPasso2').innerHTML = '<div class="painel" style="padding:16px;margin-bottom:16px"><div class="titulo-passo"><span class="passo">2</span>Vigência que vai entrar na carteira</div>' +
+          '<div class="linha"><select class="campo" id="nvVig" style="max-width:260px">' + lista.map(function (m) { return '<option value="' + m + '">' + m + ' · ' + meses[m] + ' condomínio' + (meses[m] === 1 ? '' : 's') + '</option>'; }).join('') + '</select>' +
+          '<span class="ajuda" id="nvConta" style="margin:0"></span></div></div>';
+        $('#nvVig').onchange = passo3;
+        passo3();
+      }
+      function passo3() {
+        var vig = $('#nvVig').value;
+        var doMes = itens.filter(function (it) { return !it.ignorar && it.vigencia === vig; });
+        var paraAdd = doMes.filter(function (it) { return it.carteira.situacao !== 'existe'; });
+        // responsáveis: só as colunas que esta pessoa escolhe (coordenador/supervisor: a do setor dele)
+        var respEditaveis = funcoes.filter(function (fn) { return editavel(fn.campo); });
+        var ja = doMes.filter(function (it) { return it.carteira.situacao === 'existe'; });
+        var parecidos = paraAdd.filter(function (it) { return it.carteira.situacao === 'parecido'; }).length;
+        $('#nvConta').innerHTML = doMes.length + ' com contrato em ' + vig + ': <b>' + (paraAdd.length - parecidos) + ' novo' + (paraAdd.length - parecidos === 1 ? '' : 's') + '</b>' +
+          (parecidos ? ', <b>' + parecidos + ' parecido' + (parecidos === 1 ? '' : 's') + '</b> com condomínio da carteira (confira)' : '') + (ja.length ? ' e ' + ja.length + ' já na carteira' : '') + '.';
+        $('#nvPasso3').innerHTML = '<div class="painel"><div class="cab-painel"><div class="titulo-passo" style="margin:0"><span class="passo">3</span>Condomínios para adicionar</div><span class="espaco"></span>' +
+          '<span class="ajuda" style="margin:0">Digite o <b>ID Vouch</b> de cada um e confira o apelido.</span></div>' +
+          (paraAdd.length ? '<div class="tabela-wrap"><table class="tab-novos"><colgroup><col style="width:38px"><col style="width:110px"><col style="width:31%"><col style="width:50px"><col style="width:56px"><col style="width:16%"><col style="width:108px"><col style="width:17%"></colgroup>' +
+            '<thead><tr><th><input type="checkbox" id="nvTodos"></th><th>ID Vouch *</th><th>Condomínio (Apelido Vouch)</th><th>UF</th><th>Venc.</th><th>Administradora</th><th>Vigência</th><th>Situação</th></tr></thead><tbody>' +
+            paraAdd.map(function (it, i) {
+              var par = it.carteira.situacao === 'parecido';
+              var det = ['form. nº ' + it.formulario, it.implantado_por ? 'implantado por ' + it.implantado_por : '', it.obs].filter(Boolean).join(' · ');
+              return '<tr data-i="' + i + '" class="' + (par ? 'parecido' : '') + (respEditaveis.length ? ' comResp' : '') + '"><td><input type="checkbox" class="nvMarca"' + (par ? '' : ' checked') + '></td>' +
+                '<td><input class="campo nvId" inputmode="numeric" maxlength="20" placeholder="ID Vouch"></td>' +
+                '<td><input class="campo nvNome" maxlength="160" value="' + esc(it.nome) + '"><span class="sec corta" title="' + esc(it.nome_planilha) + '">' + esc(it.nome_planilha) + '</span>' +
+                (det ? '<span class="sec corta" title="' + esc(det) + '">' + esc(det) + '</span>' : '') + '<span class="sec nvErro" style="color:var(--red)"></span></td>' +
+                '<td>' + esc(it.comarca || '—') + '</td><td>' + esc(it.vencimento || '—') + '</td>' +
+                '<td>' + esc(it.administradora || '—') + (it.forma_envio ? '<span class="sec">' + esc(it.forma_envio) + '</span>' : '') + '</td>' +
+ '<td><b>' + esc(it.vigencia) + '</b><span class="sec">contrato ' + esc(it.data_contrato) + '</span></td>' +
+                '<td>' + (par ? '<span class="etiqueta ambar" title="Na carteira já existe ' + esc(it.carteira.nome) + ' (ID Vouch ' + esc(it.carteira.codigo) + ') na mesma UF. Marque só se for outro condomínio.">⚠ parecido com ' + esc(it.carteira.nome) + ' (ID ' + esc(it.carteira.codigo) + ')</span>' : '<span class="etiqueta verde">novo</span>') + '</td></tr>' +
+                (respEditaveis.length ? '<tr class="nvResp' + (par ? ' parecido' : '') + '" data-r="' + i + '"><td></td><td colspan="7"><div class="grade-3">' + respEditaveis.map(function (fn) {
+                  return '<div><label class="rot">' + esc(fn.rotulo) + '</label><input class="campo nvPessoa" data-campo="' + fn.campo + '" list="nvl_' + fn.campo + '" maxlength="120" placeholder="NOME - RAMAL (opcional)"></div>';
+                }).join('') + '</div></td></tr>' : '');
+            }).join('') + '</tbody></table>' + funcoes.map(function (fn) {
+              return '<datalist id="nvl_' + fn.campo + '">' + unicos(conds.map(function (c) { return c[fn.campo]; })).map(function (v) { return '<option value="' + esc(v) + '"></option>'; }).join('') + '</datalist>';
+            }).join('') + '</div>' : '<div class="vazio" style="border:0;padding:30px">Todos os condomínios de ' + vig + ' já estão na carteira.</div>') +
+          (ja.length ? '<details style="padding:10px 16px;border-top:1px solid var(--border)"><summary class="ajuda" style="cursor:pointer;margin:0">' + ja.length + ' já ' + (ja.length === 1 ? 'está' : 'estão') + ' na carteira e não ' + (ja.length === 1 ? 'será adicionado' : 'serão adicionados') + '</summary><div class="sec" style="margin-top:6px">' +
+            ja.map(function (it) { return esc(it.nome_planilha) + ' → ' + esc(it.carteira.nome) + ' (ID ' + esc(it.carteira.codigo) + ')'; }).join('<br>') + '</div></details>' : '') +
+          (paraAdd.length ? '<div class="linha" style="padding:14px 16px;border-top:1px solid var(--border)"><div class="ajuda" style="flex:1;margin:0;min-width:240px">Entram como <b>Ativo</b>, com a vigência ' + vig + '. ' + (respEditaveis.length === funcoes.length ? 'Os responsáveis são opcionais: o que ficar em branco aparece como "sem responsável".' :
+            'Os responsáveis de cada setor são escolhidos pelo coordenador/supervisor do setor' + (respEditaveis.length ? ' (aqui você escolhe o do seu)' : '') + '; o que ficar em branco é preenchido depois na ficha do condomínio.') + '</div>' +
+            '<button class="btn primary" id="btNvAdd">Adicionar <span id="nvQtd"></span></button></div>' : '') + '</div>';
+        if (!paraAdd.length) return;
+        function contar() {
+          var n = $$('.nvMarca').filter(function (c) {
+            var tr = c.closest('tr'), resp = $('tr[data-r="' + tr.getAttribute('data-i') + '"]');
+            tr.classList.toggle('desmarcado', !c.checked); if (resp) resp.classList.toggle('desmarcado', !c.checked);
+            return c.checked;
+          }).length;
+          $('#nvQtd').textContent = n + ' condomínio' + (n === 1 ? '' : 's');
+          $('#btNvAdd').disabled = !n;
+          $('#nvTodos').checked = n === paraAdd.length;
+        }
+        $$('.nvMarca').forEach(function (c) { c.onchange = contar; });
+        $('#nvTodos').onchange = function () { var v = this.checked; $$('.nvMarca').forEach(function (c) { c.checked = v; }); contar(); };
+        $$('.nvId').forEach(function (i) { i.oninput = function () { this.classList.remove('falta'); this.closest('tr').querySelector('.nvErro').textContent = ''; }; });
+        contar();
+        $('#btNvAdd').onclick = async function () {
+          var linhas = $$('#nvPasso3 tbody tr[data-i]').filter(function (tr) { return tr.querySelector('.nvMarca').checked; });
+          var falta = 0;
+          linhas.forEach(function (tr) { var i = tr.querySelector('.nvId'); if (!i.value.trim()) { i.classList.add('falta'); falta++; } });
+          if (falta) { toast('Falta o ID Vouch de ' + falta + ' condomínio' + (falta === 1 ? '' : 's') + '.', 'erro'); return; }
+          var corpo = linhas.map(function (tr) {
+            var it = paraAdd[Number(tr.getAttribute('data-i'))];
+            var obs = ['Implantação: formulário nº ' + it.formulario, it.implantado_por ? 'implantado por ' + it.implantado_por : '', it.obs].filter(Boolean).join(' · ');
+            var item = { codigo: tr.querySelector('.nvId').value.trim(), nome: tr.querySelector('.nvNome').value.trim(), comarca: it.comarca, vencimento: it.vencimento,
+              administradora: it.administradora, forma_envio: it.forma_envio, inicio_contrato: it.vigencia, observacoes: obs };
+            $$('tr[data-r="' + tr.getAttribute('data-i') + '"] .nvPessoa').forEach(function (inp) { item[inp.getAttribute('data-campo')] = inp.value.trim(); });
+            return item;
+          });
+          var bt = this; bt.disabled = true;
+          try {
+            var r = await fetch('/api/carteira/implantacao/adicionar', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ itens: corpo }) });
+            var j2 = await r.json().catch(function () { return {}; });
+            if (!r.ok) {
+              (j2.erros || []).forEach(function (e) {
+                var tr = linhas[e.indice];
+                if (tr) { tr.querySelector('.nvErro').textContent = e.erro; if (/ID Vouch/.test(e.erro)) tr.querySelector('.nvId').classList.add('falta'); }
+              });
+              throw new Error(j2.erro || 'Erro ' + r.status);
+            }
+            toast(j2.criados + ' condomínio' + (j2.criados === 1 ? ' adicionado' : 's adicionados') + ' à carteira.', 'ok');
+            location.hash = '#/carteira';
+          } catch (e) { toast(e.message, 'erro'); bt.disabled = false; }
+        };
+      }
     }
 
     function desenharCondominios() {
