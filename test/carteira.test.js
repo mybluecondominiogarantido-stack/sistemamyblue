@@ -108,14 +108,15 @@ test('importar de novo atualiza pelo ID e registra no histórico', async () => {
 test('administração cadastra, edita e remove; ID é único', async () => {
   assert.equal((await pessoa('POST', '/api/carteira', { nome: 'X' })).status, 403);
   assert.equal((await admin('POST', '/api/carteira', { nome: '' })).status, 400);
-  const semVig = await admin('POST', '/api/carteira', { nome: 'Sem Vigência' });
+  const semVig = await admin('POST', '/api/carteira', { codigo: '900', nome: 'Sem Vigência' });
   assert.equal(semVig.status, 400, 'condomínio novo exige a vigência');
   assert.match(semVig.json.erro, /vigência/);
-  let r = await admin('POST', '/api/carteira', { nome: 'Novo Horizonte', comarca: 'pb', inicio_contrato: '03/2025', assistente_credito: ' iris  melo - 4009 ' });
+  assert.equal((await admin('POST', '/api/carteira', { nome: 'Sem ID', inicio_contrato: '03/2025' })).status, 400, 'ID Vouch é informado, não gerado');
+  let r = await admin('POST', '/api/carteira', { codigo: '311', nome: 'Novo Horizonte', comarca: 'pb', inicio_contrato: '03/2025', assistente_credito: ' iris  melo - 4009 ' });
   assert.equal(r.status, 201, r.texto);
   const id = r.json.id;
   let c = (await admin('GET', `/api/carteira/${id}`)).json.condominio;
-  assert.equal(c.codigo, '311', 'próximo ID livre');
+  assert.equal(c.codigo, '311');
   assert.equal(c.comarca, 'PB');
   assert.equal(c.situacao, 'ATIVO');
   assert.equal(c.inicio_contrato, '2025-03-01', 'vigência é mês/ano');

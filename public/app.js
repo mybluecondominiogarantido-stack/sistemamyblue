@@ -1975,7 +1975,7 @@
       var m = modal({
         titulo: novo ? 'Novo condomínio' : c.nome, largo: true,
         corpo: '<form class="pilha" id="fCond" novalidate>' +
-          '<div class="grade-3">' + campo('cdCodigo', 'ID Vouch', c.codigo, novo ? ' placeholder="automático, não precisa preencher"' : '') +
+          '<div class="grade-3">' + campo('cdCodigo', 'ID Vouch' + (novo ? ' *' : ''), c.codigo, novo ? ' placeholder="número do condomínio no Vouch"' : '') +
           '<div><label class="rot" for="cdSit">Situação</label><select class="campo" id="cdSit"' + (ro ? ' disabled' : '') + '>' +
             unicos(j.situacoes.concat([c.situacao])).map(function (s) { return '<option value="' + esc(s) + '"' + (s === c.situacao ? ' selected' : '') + '>' + esc((CART_SIT[s] || [s])[0]) + '</option>'; }).join('') + '</select></div>' +
           campo('cdUf', 'UF (comarca)', c.comarca, ' maxlength="30" list="cdUfs"') + '</div>' +
@@ -2021,7 +2021,7 @@
         funcoes.forEach(function (fn) { corpo[fn.campo] = $('#cd_' + fn.campo, m).value; });
         var msg = $('#cdMsg', m);
         if (!corpo.nome.trim()) { msg.textContent = 'Informe o nome do condomínio.'; msg.hidden = false; return; }
-        if (!novo && !corpo.codigo.trim()) { msg.textContent = 'Informe o ID Vouch.'; msg.hidden = false; return; }
+        if (!corpo.codigo.trim()) { msg.textContent = 'Informe o ID Vouch do condomínio.'; msg.hidden = false; return; }
         if (novo && !corpo.inicio_contrato.trim()) { msg.textContent = 'Informe a vigência do contrato (mês/ano, ex.: 10/2026).'; msg.hidden = false; return; }
         if (corpo.inicio_contrato.trim() && !/^(0?[1-9]|1[0-2])\/\d{4}$/.test(corpo.inicio_contrato.trim())) { msg.textContent = 'Vigência no formato mês/ano, ex.: 10/2026.'; msg.hidden = false; return; }
         var bt = this; bt.disabled = true;
