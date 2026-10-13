@@ -24,6 +24,8 @@ const CAMPOS = [
   ...FUNCOES.map((f) => ({ campo: f.campo, coluna: f.coluna, max: 120, pessoa: true })),
   { campo: 'administradora', coluna: 'ADMINISTRADORA', max: 120 },
   { campo: 'forma_envio', coluna: 'FORMA DE ENVIO', max: 60 },
+  // executivo de negócios que fechou o contrato (vem da planilha de implantação)
+  { campo: 'executivo', coluna: 'EXECUTIVO', outras: ['EXECUTIVO DE NEGÓCIOS'], max: 120 },
   // vigência do contrato (data de início); planilhas antigas chamavam de INÍCIO DO CONTRATO
   { campo: 'inicio_contrato', coluna: 'VIGÊNCIA', outras: ['INÍCIO DO CONTRATO', 'VIGÊNCIA DO CONTRATO'], data: true },
   { campo: 'razao_social', coluna: 'RAZÃO SOCIAL', max: 200 },

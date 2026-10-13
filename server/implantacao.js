@@ -22,6 +22,7 @@ const COLUNAS = {
   data: ['DATA CONTRATO'],
   envio: ['ENVIO E MAIL FISICO', 'ENVIO', 'FORMA DE ENVIO'],
   implantado: ['IMPLANTADO POR'],
+  executivo: ['EXECUTIVO', 'EXECUTIVO DE NEGOCIOS'],
   obs: ['OBS', 'OBSERVACOES'],
 };
 
@@ -107,6 +108,7 @@ function interpretarImplantacao(buf) {
       administradora: administradora(pega('adm')),
       forma_envio: envio(pega('envio')),
       implantado_por: pega('implantado'),
+      executivo: pega('executivo'),
       obs: pega('obs'),
       data_contrato: dc ? dc.dia : pega('data'),
       vigencia: dc ? dc.vigencia : null,
