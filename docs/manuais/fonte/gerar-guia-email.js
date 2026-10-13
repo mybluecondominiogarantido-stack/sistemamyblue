@@ -5,23 +5,18 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { documento, capa, passos, dica, atencao, tabela } = require('./gerar-manuais');
+const { documento, passos, dica, atencao, tabela, pdfTimbrado, playwright } = require('./padrao');
 
 const CAIXA = 'naoresponda@myblue.com.br';
 const APP = 'Portal MyBlue - avisos';
 
 const pre = (linhas) => `<pre>${linhas}</pre>`;
 const anotar = (rotulo, onde) => `<div class="campo-anotar"><b>${rotulo}</b><span>${onde}</span></div>`;
-let n = 0;
-const cap = (titulo, html, quem, novaPagina = true) => `<section class="${novaPagina ? 'capitulo' : 'segue'}">${quem ? `<span class="quem">${quem}</span>` : ''}<h1><span class="num">${++n}</span>${titulo}</h1>${html}</section>`;
+const est = [];
+// capítulo no padrão dos manuais; "quem" vira a etiqueta de quem executa a etapa
+const cap = (titulo, html, quem) => { est.push({ cap: titulo, html: (quem ? `<span class="quem">${quem}</span>` : '') + html }); return ''; };
 
-const corpo = capa('Guia de configuração · TI', 'E-mail dos avisos do Portal MyBlue', 'Microsoft 365 (Exchange Online) com Microsoft Graph: passo a passo para o TI.', [
-  ['O que é', 'O portal envia e-mails de aviso da Central de Tickets por uma caixa da MyBlue.'],
-  ['Como', 'Aplicativo no Entra ID + permissão restrita à caixa remetente (RBAC para aplicativos).'],
-  ['Tempo', 'Cerca de 20 minutos de trabalho + até 2 horas para a permissão valer.'],
-]) +
-
-`<section><h1>Resumo</h1>
+cap('Resumo', `
 <p class="intro">O Portal MyBlue (Central de Tickets) avisa por e-mail quando uma demanda é passada para alguém, quando chega um ticket novo para um setor e quando um ticket é resolvido ou reaberto. O envio é feito pela <b>API Microsoft Graph</b>, como a caixa <b>${CAIXA}</b>.</p>
 ${tabela(['Item', 'Definição'], [
   ['Caixa remetente', `Caixa <b>compartilhada</b> <code>${CAIXA}</code> (não usa licença)`],
@@ -45,7 +40,7 @@ ${tabela(['Parte', 'Quem', 'O quê'], [
   <li>PowerShell com o módulo <code>ExchangeOnlineManagement</code> (versão 3 ou mais nova).</li>
 </ul>
 ${atencao('<b>Não</b> conceda a permissão <code>Mail.Send</code> em “Permissões de API” do Entra ID. Concedida lá, ela vale para <b>todas</b> as caixas da empresa e se soma ao RBAC. A permissão é dada só pelo Exchange, no passo 5.')}
-</section>` +
+`) +
 
 cap('Criar a caixa compartilhada', `
 ${passos([
@@ -176,24 +171,26 @@ ${tabela(['Ponto', 'Como ficou'], [
   ['Rastreabilidade', 'Os e-mails saem pela caixa compartilhada; o portal registra no histórico o envio de teste.'],
   ['Revogação', 'Apagar o segredo ou a atribuição de papel corta o envio na hora.'],
 ])}
-<p style="font-size:9pt;color:var(--muted)">Referências: Microsoft Learn, “Role Based Access Control for Applications in Exchange Online” e “Limiting application permissions to specific Exchange Online mailboxes” (graph/auth-limit-mailbox-access).</p>`);
+<p style="font-size:9pt;color:var(--suave)">Referências: Microsoft Learn, “Role Based Access Control for Applications in Exchange Online” e “Limiting application permissions to specific Exchange Online mailboxes” (graph/auth-limit-mailbox-access).</p>`);
+
+const CSS_GUIA = `
+pre { background: #10313b; color: #e6f4f8; border-radius: 2mm; padding: 3mm 4mm; font-family: "Liberation Mono", Consolas, monospace; font-size: 8.4pt; line-height: 1.5; white-space: pre-wrap; margin: 2mm 0 4mm; break-inside: avoid; }
+pre .c { color: #8fb4c0; }
+code { font-family: "Liberation Mono", Consolas, monospace; font-size: 9pt; background: var(--azul-bg); padding: .2mm 1.2mm; border-radius: 1mm; }
+.quem { display: inline-block; font-size: 8.4pt; font-weight: 700; letter-spacing: .3mm; text-transform: uppercase; color: #fff; background: var(--escuro); border-radius: 99px; padding: .6mm 3mm; margin-bottom: 3mm; }
+.campo-anotar { border: 1.4px dashed var(--borda); border-radius: 2mm; padding: 2.4mm 3.4mm; margin: 1.5mm 0; display: flex; justify-content: space-between; gap: 4mm; break-inside: avoid; }
+.campo-anotar b { white-space: nowrap; } .campo-anotar span { color: var(--suave); font-size: 9pt; }
+.intro { font-size: 11pt; }
+`;
 
 async function gerar() {
-  const { chromium } = require(require('child_process').execSync('npm root -g').toString().trim() + '/playwright');
-  const html = documento('Guia de configuração do e-mail — Portal MyBlue', corpo);
-  const htmlPath = path.join(__dirname, '_guia-email.html');
-  fs.writeFileSync(htmlPath, html);
+  const html = documento({ chapeu: 'Guia de configuração · TI', titulo: 'E-mail dos avisos do Portal MyBlue', sub: 'Microsoft 365 (Exchange Online) com Microsoft Graph &nbsp;•&nbsp; MyBlue Condomínio Garantido',
+    versao: '1.1', data: 'Outubro de 2026', fim: 'Guia', css: CSS_GUIA }, est);
+  const { chromium } = playwright();
   const br = await chromium.launch();
   const page = await br.newPage();
-  await page.goto('file://' + htmlPath, { waitUntil: 'networkidle' });
-  await page.evaluate(() => document.fonts.ready);
   const destino = path.join(__dirname, '..', 'Guia-TI-Email-Microsoft365.pdf');
-  await page.pdf({
-    path: destino, format: 'A4', printBackground: true, preferCSSPageSize: true, displayHeaderFooter: true, headerTemplate: '<span></span>',
-    footerTemplate: `<div style="width:100%;font-family:Arial,sans-serif;font-size:7.5pt;color:#9db3bc;padding:0 16mm;display:flex;justify-content:space-between">
-      <span>Portal MyBlue · Guia de configuração do e-mail (TI)</span><span><span class="pageNumber"></span> / <span class="totalPages"></span></span></div>`,
-  });
-  fs.unlinkSync(htmlPath);
+  await pdfTimbrado(page, html, destino);
   await br.close();
   console.log('ok', path.relative(process.cwd(), destino));
 }
