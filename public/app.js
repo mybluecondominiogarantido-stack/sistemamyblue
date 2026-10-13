@@ -1729,6 +1729,8 @@
     var p = pessoaCarteira(v);
     return '<b style="font-weight:700">' + esc(p.nome) + '</b>' + (p.ramal ? '<span class="sec">ramal ' + esc(p.ramal) + '</span>' : '');
   }
+  // vigência guardada como 2026-10-01 → "10/2026"
+  function mesAno(v) { var m = String(v || '').match(/^(\d{4})-(\d{2})/); return m ? m[2] + '/' + m[1] : ''; }
   function etqSituacao(s) { var x = CART_SIT[s] || [s || '—', 'ambar']; return '<span class="etiqueta ' + x[1] + '">' + esc(x[0]) + '</span>'; }
   function unicos(lista) { return lista.filter(function (v, i, a) { return v && a.indexOf(v) === i; }).sort(function (a, b) { return a.localeCompare(b, 'pt-BR'); }); }
 
@@ -1786,24 +1788,25 @@
         }).join('') + '</optgroup>';
       }).join('');
       // 5 colunas de largura fixa: cabe na tela sem rolar para o lado (ID, UF, vencimento e situação vão junto do nome)
-      var cols = [['nome', 'Condomínio', '30%']]
+      var cols = [['nome', 'Condomínio (Apelido Vouch)', '30%']]
         .concat(funcoes.map(function (fn) { return [fn.campo, fn.rotulo.replace(' (ApoioCob)', ''), '18%']; }))
         .concat([['administradora', 'Administradora', '16%']]);
       $('#cCorpo').innerHTML = '<div class="painel"><div class="cab-painel">' +
-        '<input class="campo" id="cfQ" type="search" placeholder="Buscar nome, razão social, CNPJ ou ID…" style="max-width:280px">' +
+        '<input class="campo" id="cfQ" type="search" placeholder="Buscar nome, razão social, CNPJ ou ID Vouch…" style="max-width:280px">' +
         '<select class="campo" id="cfSit" style="max-width:150px"><option value="ATIVO">Ativos</option><option value="DISTRATADO">Distratados</option><option value="">Todas as situações</option></select>' +
         '<select class="campo" id="cfUf" style="max-width:130px"><option value="">Todas as UFs</option>' + unicos(conds.map(function (c) { return c.comarca; })).map(function (u) { return '<option>' + esc(u) + '</option>'; }).join('') + '</select>' +
         '<select class="campo" id="cfAdm" style="max-width:190px"><option value="">Todas as administradoras</option>' + unicos(conds.map(function (c) { return c.administradora; })).map(function (u) { return '<option>' + esc(u) + '</option>'; }).join('') + '</select>' +
         '<select class="campo" id="cfPes" style="max-width:220px"><option value="">Todos os responsáveis</option>' + pessoas + '</select>' +
         '<label class="linha" style="font-weight:700;font-size:13px;color:var(--muted)"><input type="checkbox" id="cfSem"> sem responsável</label>' +
+        '<label class="linha" style="font-weight:700;font-size:13px;color:var(--muted)"><input type="checkbox" id="cfSemVig"> sem vigência</label>' +
         '<span class="espaco"></span>' + acoes + '</div>' +
         '<div class="tabela-wrap"><table class="tabela-carteira"><colgroup>' + cols.map(function (c) { return '<col style="width:' + c[2] + '">'; }).join('') + '</colgroup><thead><tr>' + cols.map(function (c) {
           return '<th data-ordem="' + c[0] + '" style="cursor:pointer" title="Ordenar">' + esc(c[1]) + ' <span data-seta="' + c[0] + '"></span></th>';
         }).join('') + '</tr></thead><tbody id="tbC"></tbody></table></div>' +
         '<div class="ajuda" id="cTotal" style="padding:10px 16px;border-top:1px solid var(--border)"></div></div>';
-      $('#cfQ').value = f.q; $('#cfSit').value = f.situacao; $('#cfUf').value = f.uf; $('#cfAdm').value = f.adm; $('#cfPes').value = f.pessoa; $('#cfSem').checked = !!f.semResp;
+      $('#cfQ').value = f.q; $('#cfSit').value = f.situacao; $('#cfUf').value = f.uf; $('#cfAdm').value = f.adm; $('#cfPes').value = f.pessoa; $('#cfSem').checked = !!f.semResp; $('#cfSemVig').checked = !!f.semVig;
       function filtrar() {
-        f = { q: $('#cfQ').value.trim(), situacao: $('#cfSit').value, uf: $('#cfUf').value, adm: $('#cfAdm').value, pessoa: $('#cfPes').value, semResp: $('#cfSem').checked, ordem: f.ordem, desc: f.desc };
+        f = { q: $('#cfQ').value.trim(), situacao: $('#cfSit').value, uf: $('#cfUf').value, adm: $('#cfAdm').value, pessoa: $('#cfPes').value, semResp: $('#cfSem').checked, semVig: $('#cfSemVig').checked, ordem: f.ordem, desc: f.desc };
         guardar('carteira.filtros', f);
         var t = normal(f.q), dig = f.q.replace(/\D/g, '');
         var pes = f.pessoa ? f.pessoa.split('|') : null;
@@ -1813,6 +1816,7 @@
           if (f.adm && c.administradora !== f.adm) return false;
           if (pes && c[pes[0]] !== pes[1]) return false;
           if (f.semResp && !funcoes.some(function (fn) { return !c[fn.campo]; })) return false;
+          if (f.semVig && c.inicio_contrato) return false;
           if (t && normal(c.nome + ' ' + c.razao_social + ' ' + c.codigo + ' ' + c.administradora).indexOf(t) < 0 && !(dig.length >= 4 && c.cnpj.replace(/\D/g, '').indexOf(dig) >= 0)) return false;
           return true;
         });
@@ -1824,7 +1828,8 @@
         $$('[data-seta]').forEach(function (s) { s.textContent = s.getAttribute('data-seta') === f.ordem ? (f.desc ? '↓' : '↑') : ''; });
         $('#tbC').innerHTML = lista.map(function (c) {
           return '<tr class="clicavel" data-id="' + c.id + '"><td><b>' + esc(c.nome) + '</b>' + (c.situacao !== 'ATIVO' ? ' ' + etqSituacao(c.situacao) : '') +
-            '<span class="sec">ID ' + esc(c.codigo) + (c.comarca ? ' · ' + esc(c.comarca) : '') + (c.vencimento ? ' · venc. ' + esc(c.vencimento) : '') + '</span>' +
+            '<span class="sec">ID Vouch ' + esc(c.codigo) + (c.comarca ? ' · ' + esc(c.comarca) : '') + (c.vencimento ? ' · venc. ' + esc(c.vencimento) : '') +
+              (c.inicio_contrato ? ' · vigência ' + mesAno(c.inicio_contrato) : ' · <span style="color:#9a6512">sem vigência</span>') + '</span>' +
             (c.razao_social ? '<span class="sec corta" title="' + esc(c.razao_social + (c.cnpj ? ' · ' + c.cnpj : '')) + '">' + esc(c.razao_social) + '</span>' : '') + '</td>' +
             funcoes.map(function (fn) { return '<td>' + celPessoa(c[fn.campo]) + '</td>'; }).join('') +
             '<td>' + esc(c.administradora && c.administradora !== '-' ? c.administradora : '—') + (c.forma_envio ? '<span class="sec">' + esc(c.forma_envio) + '</span>' : '') + '</td></tr>';
@@ -1834,7 +1839,7 @@
       }
       var espera;
       $('#cfQ').oninput = function () { clearTimeout(espera); espera = setTimeout(filtrar, 200); };
-      $$('#cfSit,#cfUf,#cfAdm,#cfPes,#cfSem').forEach(function (el) { el.onchange = filtrar; });
+      $$('#cfSit,#cfUf,#cfAdm,#cfPes,#cfSem,#cfSemVig').forEach(function (el) { el.onchange = filtrar; });
       $$('th[data-ordem]').forEach(function (th) {
         th.onclick = function () { var o = th.getAttribute('data-ordem'); f.desc = f.ordem === o ? !f.desc : false; f.ordem = o; filtrar(); };
       });
@@ -1943,8 +1948,8 @@
       editarCondominio(d.condominio, d.historico);
     }
 
-    var ROTULO_CAMPO = { codigo: 'ID', nome: 'Condomínio', situacao: 'Situação', comarca: 'UF', vencimento: 'Vencimento', administradora: 'Administradora', forma_envio: 'Forma de envio',
-      inicio_contrato: 'Início do contrato', razao_social: 'Razão social', cnpj: 'CNPJ', observacoes: 'Observações' };
+    var ROTULO_CAMPO = { codigo: 'ID Vouch', nome: 'Condomínio (Apelido Vouch)', situacao: 'Situação', comarca: 'UF', vencimento: 'Vencimento', administradora: 'Administradora', forma_envio: 'Forma de envio',
+      inicio_contrato: 'Vigência', razao_social: 'Razão social', cnpj: 'CNPJ', observacoes: 'Observações' };
     funcoes.forEach(function (fn) { ROTULO_CAMPO[fn.campo] = fn.rotulo; });
 
     function editarCondominio(c, historico) {
@@ -1961,6 +1966,7 @@
         var det = h.detalhe || {};
         var o = h.acao === 'condominio_criado' ? 'cadastrou o condomínio' : Object.keys(det.mudancas || {}).map(function (k) {
           var v = det.mudancas[k];
+          if (k === 'inicio_contrato') v = [mesAno(v[0]), mesAno(v[1])];
           return '<b>' + esc(ROTULO_CAMPO[k] || k) + '</b>: ' + esc(v[0] || '(vazio)') + ' → ' + esc(v[1] || '(vazio)');
         }).join('; ');
         var como = h.acao === 'condominio_importado' ? ' (importação)' : h.acao === 'carteira_transferida' ? ' (transferência de carteira)' : '';
@@ -1969,17 +1975,17 @@
       var m = modal({
         titulo: novo ? 'Novo condomínio' : c.nome, largo: true,
         corpo: '<form class="pilha" id="fCond" novalidate>' +
-          '<div class="grade-3">' + campo('cdCodigo', 'ID', c.codigo, novo ? ' placeholder="automático"' : '') +
+          '<div class="grade-3">' + campo('cdCodigo', 'ID Vouch', c.codigo, novo ? ' placeholder="automático, não precisa preencher"' : '') +
           '<div><label class="rot" for="cdSit">Situação</label><select class="campo" id="cdSit"' + (ro ? ' disabled' : '') + '>' +
             unicos(j.situacoes.concat([c.situacao])).map(function (s) { return '<option value="' + esc(s) + '"' + (s === c.situacao ? ' selected' : '') + '>' + esc((CART_SIT[s] || [s])[0]) + '</option>'; }).join('') + '</select></div>' +
           campo('cdUf', 'UF (comarca)', c.comarca, ' maxlength="30" list="cdUfs"') + '</div>' +
-          campo('cdNome', 'Condomínio', c.nome, ' maxlength="160"') +
+          campo('cdNome', 'Condomínio (Apelido Vouch)', c.nome, ' maxlength="160"') +
           '<div class="grade-2">' + campo('cdRazao', 'Razão social', c.razao_social, ' maxlength="200"') + campo('cdCnpj', 'CNPJ', c.cnpj, ' maxlength="20" inputmode="numeric"') + '</div>' +
           '<div class="grade-3">' + campo('cdVenc', 'Vencimento', c.vencimento, ' maxlength="40" placeholder="10 ou 5º DIA ÚTIL" list="cdVencs"') +
           campo('cdAdm', 'Administradora', c.administradora, ' maxlength="120" list="cdAdms"') + campo('cdEnvio', 'Forma de envio', c.forma_envio, ' maxlength="60" list="cdEnvios"') + '</div>' +
           '<div class="grade-3">' + funcoes.map(function (fn) { return campo('cd_' + fn.campo, esc(fn.rotulo), c[fn.campo], ' maxlength="120" list="cdl_' + fn.campo + '" placeholder="NOME - RAMAL"', parcial && editavel(fn.campo)); }).join('') + '</div>' +
           (parcial ? '<div class="ajuda">Você altera o responsável do seu setor. Os demais dados do condomínio são da administração.</div>' : '') +
-          '<div class="grade-3">' + campo('cdInicio', 'Início do contrato', c.inicio_contrato, ' type="date"') + '</div>' +
+          '<div class="grade-3">' + campo('cdInicio', 'Vigência do contrato' + (novo ? ' *' : ''), mesAno(c.inicio_contrato), ' maxlength="7" inputmode="numeric" placeholder="mm/aaaa"') + '</div>' +
           '<div><label class="rot" for="cdObs">Observações</label><textarea class="campo" id="cdObs" rows="3" maxlength="4000"' + (ro ? ' readonly' : '') + '>' + esc(c.observacoes || '') + '</textarea></div>' +
           lista('cdUfs', conds.map(function (x) { return x.comarca; })) + lista('cdVencs', conds.map(function (x) { return x.vencimento; })) +
           lista('cdAdms', conds.map(function (x) { return x.administradora; })) + lista('cdEnvios', conds.map(function (x) { return x.forma_envio; })) +
@@ -2001,6 +2007,11 @@
         return;
       }
       if (!admin) return;
+      // vigência: digita "102026" e vira "10/2026"
+      $('#cdInicio', m).oninput = function () {
+        var d = this.value.replace(/\D/g, '').slice(0, 6);
+        this.value = d.length > 2 ? d.slice(0, 2) + '/' + d.slice(2) : d;
+      };
       $('#btCdOk', m).onclick = async function () {
         var corpo = {
           codigo: $('#cdCodigo', m).value, situacao: $('#cdSit', m).value, comarca: $('#cdUf', m).value, nome: $('#cdNome', m).value,
@@ -2010,7 +2021,9 @@
         funcoes.forEach(function (fn) { corpo[fn.campo] = $('#cd_' + fn.campo, m).value; });
         var msg = $('#cdMsg', m);
         if (!corpo.nome.trim()) { msg.textContent = 'Informe o nome do condomínio.'; msg.hidden = false; return; }
-        if (!novo && !corpo.codigo.trim()) { msg.textContent = 'Informe o ID.'; msg.hidden = false; return; }
+        if (!novo && !corpo.codigo.trim()) { msg.textContent = 'Informe o ID Vouch.'; msg.hidden = false; return; }
+        if (novo && !corpo.inicio_contrato.trim()) { msg.textContent = 'Informe a vigência do contrato (mês/ano, ex.: 10/2026).'; msg.hidden = false; return; }
+        if (corpo.inicio_contrato.trim() && !/^(0?[1-9]|1[0-2])\/\d{4}$/.test(corpo.inicio_contrato.trim())) { msg.textContent = 'Vigência no formato mês/ano, ex.: 10/2026.'; msg.hidden = false; return; }
         var bt = this; bt.disabled = true;
         try {
           if (novo) await api('POST', '/api/carteira', corpo); else await api('PATCH', '/api/carteira/' + c.id, corpo);

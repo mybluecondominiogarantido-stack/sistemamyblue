@@ -86,6 +86,8 @@ function rotasCarteira({ db, seg }) {
     const v = normalizar({ situacao: 'ATIVO', ...b });
     if (v.erro) return erro(res, 400, v.erro);
     if (!v.dados.nome) return erro(res, 400, 'Informe o nome do condomínio.');
+    // condomínio novo precisa da vigência do contrato (os que já estavam na carteira preenchem ao editar)
+    if (!v.dados.inicio_contrato) return erro(res, 400, 'Informe a vigência do contrato.');
     const cols = Object.keys(v.dados);
     try {
       const { id } = await db.um(`INSERT INTO condominios (${cols.join(', ')}, atualizado_por) VALUES (${cols.map((_, i) => '$' + (i + 1)).join(', ')}, $${cols.length + 1}) RETURNING id`,

@@ -108,17 +108,20 @@ test('importar de novo atualiza pelo ID e registra no histórico', async () => {
 test('administração cadastra, edita e remove; ID é único', async () => {
   assert.equal((await pessoa('POST', '/api/carteira', { nome: 'X' })).status, 403);
   assert.equal((await admin('POST', '/api/carteira', { nome: '' })).status, 400);
-  let r = await admin('POST', '/api/carteira', { nome: 'Novo Horizonte', comarca: 'pb', inicio_contrato: '10/03/2025', assistente_credito: ' iris  melo - 4009 ' });
+  const semVig = await admin('POST', '/api/carteira', { nome: 'Sem Vigência' });
+  assert.equal(semVig.status, 400, 'condomínio novo exige a vigência');
+  assert.match(semVig.json.erro, /vigência/);
+  let r = await admin('POST', '/api/carteira', { nome: 'Novo Horizonte', comarca: 'pb', inicio_contrato: '03/2025', assistente_credito: ' iris  melo - 4009 ' });
   assert.equal(r.status, 201, r.texto);
   const id = r.json.id;
   let c = (await admin('GET', `/api/carteira/${id}`)).json.condominio;
   assert.equal(c.codigo, '311', 'próximo ID livre');
   assert.equal(c.comarca, 'PB');
   assert.equal(c.situacao, 'ATIVO');
-  assert.equal(c.inicio_contrato, '2025-03-10');
+  assert.equal(c.inicio_contrato, '2025-03-01', 'vigência é mês/ano');
   assert.equal(c.assistente_credito, 'IRIS MELO - 4009');
-  assert.equal((await admin('POST', '/api/carteira', { nome: 'Outro', codigo: '311' })).status, 409);
-  assert.equal((await admin('PATCH', `/api/carteira/${id}`, { inicio_contrato: '31/02/2025' })).status, 400);
+  assert.equal((await admin('POST', '/api/carteira', { nome: 'Outro', codigo: '311', inicio_contrato: '2025-04' })).status, 409);
+  assert.equal((await admin('PATCH', `/api/carteira/${id}`, { inicio_contrato: '13/2025' })).status, 400);
   assert.equal((await pessoa('PATCH', `/api/carteira/${id}`, { situacao: 'DISTRATADO' })).status, 403);
   r = await admin('PATCH', `/api/carteira/${id}`, { situacao: 'DISTRATADO', observacoes: 'Encerrou em set/2026' });
   assert.equal(r.status, 200);
