@@ -338,6 +338,9 @@ const SETORES = [
     nome: 'Comercial', arquivo: 'comercial',
     papel: 'Prospecta e fecha novos condomínios clientes e cuida das propostas comerciais.',
     ferramentas: ['partnerchip'],
+    tambem: [
+      '<b>Comissões de Novos Condomínios</b>: o condomínio fechado entra na Carteira com a <b>vigência</b> e o <b>executivo de negócios</b>. No início do mês a gestão comercial clica em <i>Puxar da carteira</i> e escolhe a vigência; cada executivo vê os condomínios dele, informa se tem parceiro (só da lista; parceiro novo é pedido ao Financeiro por ticket) e a gestão aprova. O passo a passo está no <b>Manual do Portal – Setor Administrativa/Financeira</b> (subárea Comissões de Novos Condomínios).',
+    ],
     recebe: [
       ['Proposta comercial', 18, 'media', 'Condomínio, nº de unidades, taxa atual e contato do síndico.'],
       ['Visita / reunião com síndico', 27, 'media', 'Endereço, data sugerida e quem acompanha.'],
@@ -389,6 +392,9 @@ const SETORES = [
     nome: 'Implantação', arquivo: 'implantacao',
     papel: 'Coloca os novos condomínios em operação: cadastro, unidades, moradores e passagem para os setores.',
     ferramentas: [],
+    tambem: [
+      '<b>Carteira de condomínios → Adicionar novos</b>: o coordenador ou supervisor da Implantação envia o <i>Controle de Implantações</i> (.xlsx ou .csv, como está), escolhe a <b>vigência</b> e cadastra cada condomínio novo com <b>ID Vouch</b> (obrigatório), apelido, executivo de negócios e CNPJ. É dessa carteira que a Comissões de Novos Condomínios puxa os condomínios de cada vigência. O passo a passo está no <b>Manual do Portal – Geral</b>, capítulo da Carteira.',
+    ],
     recebe: [
       ['Implantação de novo condomínio', 45, 'alta', 'Contrato assinado, contato do síndico, data de início e documentos.'],
       ['Cadastro de unidades e moradores', 18, 'media', 'Anexe a planilha de unidades/moradores.'],
