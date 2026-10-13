@@ -133,6 +133,7 @@ class Tutorial {
   async abrir() {
     this.ctx = await this.br.newContext({ viewport: { width: 1280, height: 640 }, deviceScaleFactor: 1.5, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
     await this.ctx.addInitScript(sobreposicoes, LOGO);
+    await servirBibliotecas(this.ctx);
     this.p = await this.ctx.newPage();
     this.erros = [];
     this.p.on('pageerror', (e) => this.erros.push(e.message));
@@ -310,8 +311,23 @@ class Tutorial {
   pausa(ms) { return espera(ms); }
 }
 
+/* Bibliotecas que as ferramentas carregam do cdnjs (PDF, Excel, ZIP). Sem acesso à internet na gravação,
+   BIBLIOTECAS aponta para uma pasta com os mesmos pacotes instalados pelo npm (node_modules). */
+const PACOTES = { 'pdf.js': ['pdfjs-dist', 'build'], xlsx: ['xlsx', 'dist'], jspdf: ['jspdf', 'dist'], 'jspdf-autotable': ['jspdf-autotable', 'dist'],
+  'pdf-lib': ['pdf-lib', 'dist'], jszip: ['jszip', 'dist'], pdfobject: ['pdfobject', ''] };
+async function servirBibliotecas(ctx) {
+  const pasta = process.env.BIBLIOTECAS;
+  if (!pasta) return;
+  await ctx.route('https://cdnjs.cloudflare.com/ajax/libs/**', (rota) => {
+    const [lib, , arquivo] = new URL(rota.request().url()).pathname.split('/').slice(3);
+    const local = PACOTES[lib] && path.join(pasta, 'node_modules', PACOTES[lib][0], PACOTES[lib][1], arquivo);
+    if (!local || !fs.existsSync(local)) return rota.abort();
+    return rota.fulfill({ path: local, contentType: 'application/javascript', headers: { 'Access-Control-Allow-Origin': '*' } });
+  });
+}
+
 async function navegador() {
   return chromium.launch({ channel: 'chromium', args: ['--lang=pt-BR', '--font-render-hinting=none'] });
 }
 
-module.exports = { subirPortal, cliente, navegador, Tutorial, espera };
+module.exports = { subirPortal, cliente, navegador, Tutorial, espera, servir: servirBibliotecas };

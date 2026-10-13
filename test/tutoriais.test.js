@@ -125,3 +125,26 @@ test('vídeo sai aos pedaços (Range) e as legendas em .vtt', async () => {
   assert.equal((await admin('DELETE', '/api/admin/tutoriais/portal-primeiro-acesso')).status, 200);
   assert.equal((await admin('GET', '/api/tutoriais/portal-primeiro-acesso/video')).status, 404);
 });
+
+test('a administração vê o tutorial a regravar quando a ferramenta muda, e as ferramentas sem tutorial', async () => {
+  const html = (t) => `<!doctype html><html><head><meta charset="utf-8"><title>${t}</title></head><body>${t}</body></html>`;
+  assert.equal((await admin('PUT', '/api/admin/modulos/suprimentos/arquivo', html('v1'), { 'content-type': 'text/html' })).status, 200);
+  assert.equal((await admin('PUT', '/api/admin/tutoriais/ferramenta-suprimentos/video', mp4Falso(4096))).status, 200);
+  const ver = async () => (await admin('GET', '/api/admin/tutoriais')).json;
+  assert.equal((await ver()).tutoriais.find((t) => t.slug === 'ferramenta-suprimentos').desatualizado, false);
+
+  // HTML novo da ferramenta depois do vídeo: o tutorial fica marcado para regravar
+  await ctx.db.q("UPDATE tutoriais SET enviado_em = now() - interval '1 day' WHERE slug = 'ferramenta-suprimentos'");
+  assert.equal((await admin('PUT', '/api/admin/modulos/suprimentos/arquivo', html('v2'), { 'content-type': 'text/html' })).status, 200);
+  assert.equal((await ver()).tutoriais.find((t) => t.slug === 'ferramenta-suprimentos').desatualizado, true);
+  // vídeo novo enviado: volta a ficar em dia
+  assert.equal((await admin('PUT', '/api/admin/tutoriais/ferramenta-suprimentos/video', mp4Falso(4096))).status, 200);
+  assert.equal((await ver()).tutoriais.find((t) => t.slug === 'ferramenta-suprimentos').desatualizado, false);
+
+  // ferramenta nova, sem tutorial no catálogo
+  assert.equal((await admin('POST', '/api/admin/modulos', { nome: 'Ferramenta Nova', slug: 'ferramenta-nova', setor_id: S('Cobrança') })).status, 201);
+  assert.ok(!(await ver()).sem_tutorial.some((m) => m.slug === 'ferramenta-nova')); // ainda sem HTML
+  assert.equal((await admin('PUT', '/api/admin/modulos/ferramenta-nova/arquivo', html('nova'), { 'content-type': 'text/html' })).status, 200);
+  assert.ok((await ver()).sem_tutorial.some((m) => m.slug === 'ferramenta-nova'));
+  assert.ok(!(await ver()).sem_tutorial.some((m) => m.slug === 'suprimentos'));
+});

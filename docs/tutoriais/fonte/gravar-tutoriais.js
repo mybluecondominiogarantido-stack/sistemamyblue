@@ -7,6 +7,7 @@
  * Sem nomes, grava todos. Ferramentas reais (o HTML não fica no repositório):
  *   FERRAMENTAS='{"suprimentos":"/caminho/Controle_de_Pedidos.html"}' node …
  */
+const fs = require('fs');
 const path = require('path');
 const { subirPortal, navegador, Tutorial } = require('./gravador');
 const { montarCenario, SENHA } = require('./cenario');
@@ -29,6 +30,8 @@ const { porSlug, rotuloPublico } = require('../../../server/tutoriais');
     let t;
     try {
       const cen = await montarCenario(portal.base, { ferramentas });
+      // versão da ferramenta só para a gravação (ex.: troca listas com nomes reais por fictícios); o arquivo original não muda
+      if (r.adaptarHtml) await cen.admin('PUT', `/api/admin/modulos/${r.ferramenta}/arquivo`, r.adaptarHtml(fs.readFileSync(ferramentas[r.ferramenta], 'utf8')));
       if (r.preparar) await r.preparar(cen, portal.base, br);
       t = await new Tutorial(br, portal.base, path.join(saida, r.nome + '.mp4')).abrir();
       if (r.entrar) await t.entrar(r.entrar, r.entrar.startsWith('admin@') ? 'Admin1234' : SENHA);
@@ -50,7 +53,7 @@ const { porSlug, rotuloPublico } = require('../../../server/tutoriais');
     } catch (e) {
       // um roteiro com erro não impede os outros
       falhas.push(r.nome);
-      console.error(`falhou ${r.nome}: ${e.message.split('\n')[0]}`);
+      console.error(`falhou ${r.nome}: ${e.message.split('\n').slice(0, 3).join(' · ')}`);
       if (t) await t.abortar();
     } finally { portal.parar(); }
   }

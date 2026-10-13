@@ -10,17 +10,21 @@
  */
 const FERRAMENTAS = {
   credito: {
+    video: true,
     nome: 'Central de Ferramentas — Crédito',
-    descricao: 'Reúne as ferramentas do dia a dia do Crédito. Cada uma monta um documento na hora, a partir dos dados ou arquivos que você informa.',
-    dados: 'Não guarda dados no servidor: cada documento é montado na hora e baixado ou impresso.',
+    descricao: 'Reúne as automações do dia a dia do Crédito. Cada ferramenta lê o arquivo recebido (PDF ou Excel) e devolve o documento pronto: PDF, planilha no modelo da Vouch ou ZIP.',
+    dados: 'Não guarda dados no servidor: tudo roda no navegador, e cada documento é montado na hora e baixado.',
+    tituloAbas: 'Ferramentas da central',
     abas: [
-      ['Montador de prestação de contas', 'Monta a prestação de contas do condomínio.'],
-      ['Recibos de entrega', 'Gera os recibos de entrega de documentos.'],
-      ['Recibos de motoboy', 'Gera os recibos das entregas feitas por motoboy.'],
-      ['Balancetes', 'Monta os balancetes dos condomínios.'],
-      ['Planilha de moradores', 'Organiza a planilha de moradores do condomínio.'],
-      ['Consumos de água e gás', 'Calcula e distribui os consumos de água e gás por unidade.'],
+      ['Montador de Prestação de Contas', 'Condomínio Garantido e Não Garantido: junta relatórios, comprovantes e protocolos em um único PDF.'],
+      ['Recibo de Entrega (RN)', 'Lê o relatório de garantia e gera um recibo em PDF por condomínio.'],
+      ['Recibos Nobremotoboys', 'Entrega de boletos: lê a planilha e gera um recibo em PDF por condomínio (ZIP).'],
+      ['Automação de Balancetes', 'Organiza o balancete recebido no formato aceito pela Vouch (Padrão / Gestart).'],
+      ['Planilha de Moradores', 'Transforma o cadastro recebido no modelo de importação da Vouch, com a aba de pendências (quem está sem CPF, telefone ou e-mail).'],
+      ['Consumos (Água e Gás)', 'Casa o consumo recebido (PDF ou Excel) com o modelo de unidades da Vouch.'],
+      ['Divisor de Recibos (Gráfica)', 'Separa o PDF de protocolos de entrega e reconcilia os boletos com cada responsável.'],
     ],
+    obs: 'O botão <b>Ferramentas</b> volta para a lista; <b>Abrir em nova aba</b> usa a ferramenta em tela cheia.',
   },
   cobranca: {
     nome: 'Central de Ferramentas — Cobrança / Gestão',
@@ -87,6 +91,7 @@ const FERRAMENTAS = {
     ],
   },
   parceiros: {
+    video: true,
     nome: 'Prestação de Contas — Comissão de Parceiros',
     descricao: 'Calcula, registra e acompanha a comissão mensal dos parceiros. A <b>competência</b> é o mês dos valores; a comissão é paga no <b>mês seguinte</b>.',
     dados: 'Os lançamentos, os parceiros e os condomínios ficam no banco do portal e são compartilhados pela equipe.',
@@ -115,9 +120,9 @@ const FERRAMENTAS = {
         'Escolha a <b>competência</b> (o mês dos valores) e o <b>parceiro</b>. Aparecem os condomínios da carteira dele.',
         'Em <b>Balanços da garantidora</b>, clique para escolher ou arraste os <b>PDFs</b> do mês. Os valores são lidos e preenchidos sozinhos. Condomínios fora da carteira ou PDFs ilegíveis aparecem avisados.',
         'Confira, para cada condomínio, <b>Tx. Serviço Recebida</b>, <b>Tarifa Bancária</b>, <b>Multa</b>, <b>Juros</b>, <b>Encargos</b> e <b>Correção</b>. Marque a <b>venda</b> no mês em que ela deve ser paga.',
-        'Preencha a <b>tarifa bancária do mês</b>: valor por boleto e quantidade de boletos emitidos.',
+        'Se o parceiro tem regra de boleto, preencha, em cada condomínio, o <b>valor por boleto</b> e a <b>quantidade de boletos emitidos</b>.',
         'Confira a <b>comissão prevista</b> e clique em <b>Salvar</b> ou <b>Salvar e ver relatório</b>.',
-      ], atencao: 'A <b>correção</b> fica registrada para conferência, mas nunca entra na base da comissão. O piso do boleto só vale para as regras de excedente.' },
+      ], atencao: 'A <b>correção</b> fica registrada para conferência, mas nunca entra na base da comissão. Nas regras de <b>excedente por boleto</b>, o repasse é (valor por boleto − piso) × quantidade de boletos emitidos: a tarifa bancária do balanço não entra nessa conta. Ao salvar, os valores gravam por cima do que já existia; se um condomínio ficar sem valores, a ferramenta pede confirmação antes de apagar o lançamento dele.' },
       { titulo: 'Gerar, enviar e pagar a prestação de contas', onde: 'aba Prestações do mês', passos: [
         'Escolha a <b>competência</b>. O topo mostra o total de comissão e o mês em que será paga.',
         'Na linha do parceiro, clique em <b>Relatório</b>, confira e use <b>Imprimir</b> ou <b>Baixar PDF</b> (depois, <b>← Voltar</b>). Para todos de uma vez: <b>Baixar todos os PDFs (ZIP)</b>, um PDF por parceiro.',
@@ -167,6 +172,7 @@ const FERRAMENTAS = {
     ],
   },
   comissoes: {
+    video: true,
     nome: 'Comissões de Novos Condomínios',
     descricao: 'O caminho da comissão de cada condomínio novo, do comercial ao financeiro: a gestão comercial importa os condomínios que entraram no mês, o executivo informa se o condomínio veio por parceiro e qual comissão gera, a gestão aprova e o financeiro cadastra na Prestação de Contas.',
     dados: 'Os dados ficam no banco do portal e são compartilhados por quem tem acesso à ferramenta.',
@@ -217,9 +223,39 @@ const FERRAMENTAS = {
     ],
   },
   partnerchip: {
+    video: true,
     nome: 'PartnerChip — Resultados',
-    descricao: 'Painel de resultados dos parceiros.',
-    dados: 'Os dados ficam no banco do portal e são compartilhados por quem tem acesso à ferramenta.',
+    descricao: 'Painel de resultados dos parceiros para o Financeiro, o Comercial e a Diretoria: carteira, comissão apurada, paga e a pagar, por ano, a partir da Prestação de Contas.',
+    dados: 'Os números vêm da Prestação de Contas — Comissão de Parceiros. O painel recalcula quando alguém com acesso à Prestação de Contas o abre; quem tem só o PartnerChip vê a última apuração.',
+    abas: [
+      ['Visão geral', 'Comissão apurada no ano, pago, a pagar, parceiros ativos e condomínios na carteira; o gráfico de apurado e pago por mês.'],
+      ['Parceiros', 'Cada parceiro com carteira, regra, apurado, pago, a pagar e a situação da última competência. Clique no parceiro para abrir a <b>ficha</b>: regras do contrato, condomínios e o histórico de prestações.'],
+      ['Condomínios', 'Cada condomínio com o(s) parceiro(s), a comissão do último mês e do ano.'],
+      ['Filtros e Excel', 'Ano, estado, categoria e busca; <b>Excel</b> exporta o painel.'],
+    ],
+  },
+  patrocinio: {
+    video: true,
+    nome: 'Central de Patrocínio',
+    descricao: 'Recibos de patrocínio de eventos dos condomínios: emite o recibo com a faixa e o valor calculados pelo rateio (VOP) e acompanha envio, assinatura e pagamento.',
+    dados: 'Os recibos ficam no banco do portal e são compartilhados pela equipe.',
+    abas: [
+      ['Novo recibo', 'Anexe o relatório de garantia (PDF) para ler nome, CNPJ e rateio, ou preencha à mão. A faixa VOP e o valor a pagar saem sozinhos (até R$ 15 mil: R$ 150; R$ 15–40 mil: R$ 200; R$ 40–70 mil: R$ 250; R$ 70–100 mil: R$ 350; acima: R$ 400). <b>Salvar e baixar PDF</b> guarda e baixa o recibo; <b>Copiar e-mail</b> monta o texto para o síndico.'],
+      ['Recibos', 'Por mês: o que falta enviar, aguardando assinatura, a pagar e pagos. Em cada linha, marque <b>enviado</b>, <b>assinado</b> e <b>pago</b>; baixe o PDF de novo, edite ou veja o histórico.'],
+      ['Resultados', 'Lançado e pago no ano, a pagar, recibos sem assinatura, condomínios patrocinados, o gráfico por mês e o andamento das etapas. Exporta para Excel.'],
+    ],
+  },
+  viagens: {
+    video: true,
+    nome: 'Gestão de Viagens',
+    descricao: 'Viagens a trabalho, da solicitação ao que foi pago: cotações de hospedagem, passagens e locação, ajuda de custo automática, aprovação e o dashboard de gastos.',
+    dados: 'As viagens ficam no banco do portal e são compartilhadas pela equipe, ao vivo.',
+    abas: [
+      ['Viagens', 'Indicadores (em cotação, aguardando aprovação, viagens e gasto do mês) e a lista com filtros por mês e situação. <b>Nova viagem</b> abre o cadastro: dados da viagem (ou importação do pedido em PDF), itens com uma ou mais <b>cotações</b> (marque a escolhida) e a <b>ajuda de custo</b> (diária pela região do destino × dias).'],
+      ['Etapas', '<b>Em cotação</b> → <b>Enviar para aprovação</b> → quem aprova <b>aprova</b>, <b>reprova</b> (com motivo) ou volta para cotação → depois da viagem, informe o <b>valor pago</b> de cada item e marque <b>Realizada</b>. Viagens aprovadas podem ser canceladas ou editadas (voltam para aprovação).'],
+      ['Dashboard de gastos', 'Gasto total, realizado, previsto e economia nas cotações, por tipo de despesa, setor, colaborador e mês.'],
+      ['Configurações', 'Diária da ajuda de custo por região, como contar os dias e a lista de setores.'],
+    ],
   },
 };
 
@@ -227,8 +263,8 @@ const FERRAMENTAS = {
 const SETORES = [
   {
     nome: 'Administrativa/Financeira', arquivo: 'administrativa-financeira',
-    papel: 'Cuida das rotinas administrativas e financeiras da MyBlue: pagamentos, notas fiscais, reembolsos e contas da empresa. É responsável também por Suprimentos, Parceiros e Comissões de Novos Condomínios.',
-    ferramentas: [],
+    papel: 'Cuida das rotinas administrativas e financeiras da MyBlue: pagamentos, notas fiscais, reembolsos, contas da empresa, patrocínios de eventos dos condomínios e viagens a trabalho. É responsável também por Suprimentos, Parceiros e Comissões de Novos Condomínios.',
+    ferramentas: ['patrocinio', 'viagens'],
     // subáreas sob a responsabilidade da Administrativa/Financeira (no portal, Suprimentos e Parceiros recebem tickets como setores próprios)
     subareas: [
       {

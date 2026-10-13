@@ -158,7 +158,7 @@ test('equipe e tipos de demanda: só os setores dele; escolhe os líderes, não 
 });
 
 test('carteira: coordenador altera e transfere só o responsável do setor dele', async () => {
-  const cond = await admin('POST', '/api/carteira', { nome: 'Cond. Teste', assistente_credito: 'IVO SILVA', analista_cobranca: 'OLGA' });
+  const cond = await admin('POST', '/api/carteira', { codigo: '501', nome: 'Cond. Teste', assistente_credito: 'IVO SILVA', analista_cobranca: 'OLGA', inicio_contrato: '10/2026' });
   const id = cond.json.id;
   const j = (await coord('GET', '/api/carteira')).json;
   assert.deepEqual(j.funcoes_editaveis, ['assistente_credito']);
@@ -183,6 +183,13 @@ test('ferramentas do setor: HTML, versões e quem pode abrir', async () => {
   const v = await coord('GET', '/api/admin/modulos/boletos/versoes');
   assert.equal(v.json.versoes.length, 2);
   assert.equal((await coord('POST', `/api/admin/modulos/boletos/versoes/${v.json.versoes[1].id}/usar`)).status, 200);
+  // baixar o HTML de uma versão: como foi enviado, só para quem gerencia a ferramenta
+  const baixado = await coord('GET', `/api/admin/modulos/boletos/versoes/${v.json.versoes[1].id}/arquivo`);
+  assert.equal(baixado.status, 200);
+  assert.equal(baixado.texto, html('Boletos v1'));
+  const vc = (await admin('GET', '/api/admin/modulos/cobranca/versoes')).json.versoes;
+  if (vc.length) assert.equal((await coord('GET', `/api/admin/modulos/cobranca/versoes/${vc[0].id}/arquivo`)).status, 403, 'outro setor');
+  assert.equal((await coord('GET', `/api/admin/modulos/credito/versoes/${v.json.versoes[0].id}/arquivo`)).status, 404, 'versão de outra ferramenta');
   // quem pode abrir: marca e desmarca só gente do setor dela
   const ivo = ids['ivo@teste.com'];
   await ctx.db.q("INSERT INTO permissoes (usuario_id, modulo_slug) VALUES ($1, 'credito') ON CONFLICT DO NOTHING", [ids['olga@teste.com']]);

@@ -60,7 +60,7 @@ npm run criar-admin -- seu.email@myblue.com.br "Seu Nome"
    npm run importar-html -- ./modulos-originais
    ```
 
-Para atualizar uma ferramenta, basta enviar o HTML novo no módulo dela. Toda versão anterior fica guardada e pode ser restaurada com um clique (*Versões anteriores*).
+Para atualizar uma ferramenta, basta enviar o HTML novo no módulo dela. Toda versão anterior fica guardada e pode ser restaurada com um clique (*Versões anteriores*). Em *Versões anteriores*, **Baixar** devolve o HTML de qualquer versão exatamente como foi enviado (o administrador e o coordenador/supervisor do setor da ferramenta).
 
 Para publicar uma ferramenta nova, use **Novo módulo**, escolha nome, setor e ícone e envie o HTML.
 
@@ -138,7 +138,8 @@ Menu **Carteira → Carteira de condomínios**. Reúne os condomínios atendidos
 - **Condomínios:** indicadores (ativos, comarcas, pessoas por função, ativos sem responsável), busca por nome, razão social, CNPJ ou ID, filtros por situação, UF, administradora e responsável, e ordenação por coluna. Clique no condomínio para ver a ficha completa e o histórico de alterações.
 - **Responsáveis:** quantos condomínios ativos cada pessoa tem, por UF. A administração usa **Transferir** para passar a carteira de uma pessoa (toda ou só alguns condomínios) para outra.
 - **Quem pode o quê:** todos que entram no portal consultam e exportam. Cadastrar, editar, remover, importar e transferir é da administração. Toda alteração fica no histórico do condomínio (o que mudou, quem e quando).
-- **Importar / exportar:** a carga inicial vem do CSV da planilha *Carteira de Condomínios* (no Excel: *Salvar como → CSV separado por ponto e vírgula*). Cada condomínio é reconhecido pelo **ID**: os existentes são atualizados, os novos incluídos e os que não estão no arquivo ficam como estão. O *Exportar CSV* gera o mesmo formato, que abre no Excel e pode ser importado de volta.
+- **Adicionar novos** (aba da Carteira, para administrador, coordenador e supervisor): envie a planilha *Controle de Implantações* do jeito que ela é (.xlsx ou .csv), escolha a **vigência** (mês/ano tirado da coluna **DATA CONTRATO**) e confira a lista. O portal mostra só os condomínios que ainda não estão na carteira (os parecidos com um existente vêm desmarcados), ignora os marcados para desconsiderar, os repetidos e os sem data de contrato. Para cada um: digitar o **ID Vouch** (obrigatório) e conferir o apelido sugerido. Os responsáveis (analista de cobrança, analista extrajudicial, assistente de crédito) podem ser escolhidos ali: o administrador escolhe todos e cada coordenador/supervisor só o do setor dele; o que ficar em branco é preenchido depois na ficha. Entram como Ativo, com UF, vencimento, administradora, forma de envio, **executivo de negócios** (coluna EXECUTIVO) e o nº do formulário e quem implantou nas observações.
+- **Exportar:** o *Exportar CSV* gera a carteira no formato da planilha *Carteira de Condomínios*, que abre no Excel. Condomínios novos entram pela aba **Adicionar novos** (o antigo *Importar CSV* saiu da tela).
 - Os dados da carteira **não vão para o Git** (o repositório é público): entram só pelo portal. Arquivos `.csv` ficam fora do Git.
 
 Na Central de Tickets, a carteira define para quem vai o ticket de um condomínio (veja *Central de Tickets → Fluxo*).
@@ -231,6 +232,7 @@ No menu **Tutoriais**, vídeos curtos com o portal sendo usado de verdade (dados
 - Os vídeos ficam no banco, não no repositório. A administração envia em **Administração → Tutoriais em vídeo**: arraste os `.mp4` e `.vtt` de uma vez, e cada arquivo vai para o tutorial com o mesmo nome. Até 150 MB por vídeo (`LIMITE_VIDEO_MB`).
 - O player busca o vídeo aos pedaços, então dá para avançar e voltar sem baixar o arquivo inteiro.
 - Os vídeos são gravados por `docs/tutoriais/fonte/gravar-tutoriais.js` (veja [`docs/tutoriais`](docs/tutoriais)).
+- **Toda ferramenta nova ganha um tutorial, e toda atualização de ferramenta revê o dela.** A página da administração avisa quando a ferramenta recebeu um HTML novo depois do vídeo ("regravar") e lista as ferramentas que ainda não têm tutorial.
 
 ## Colocar no ar
 

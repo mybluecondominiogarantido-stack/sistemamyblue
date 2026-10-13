@@ -3,13 +3,36 @@
  * Roteiros das ferramentas que guardam os dados no banco do portal. A ferramenta abre dentro
  * do portal (num quadro), e cada passo usa os elementos de dentro dela. Dados fictícios.
  */
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const D = require('./dados-ficticios');
+const { cliente } = require('./gravador');
+const { SENHA } = require('./cenario');
 
 const FUSO = 'America/Sao_Paulo';
 const hoje = () => new Date().toLocaleDateString('sv-SE', { timeZone: FUSO });
 const dataBr = (n) => { const d = new Date(Date.now() + n * 864e5); return d.toLocaleDateString('pt-BR', { timeZone: FUSO }); };
 const quadro = (t, slug) => t.p.frameLocator(`iframe[data-slug="${slug}"]`);
 const noQuadro = (t, slug, fn, arg) => t.p.locator(`iframe[data-slug="${slug}"]`).evaluate((el, [fn, arg]) => new el.contentWindow.Function('arg', fn)(arg), [fn, arg]);
+
+/* a base fictícia da Prestação de Contas (parceiros e carteira), que as ferramentas do Comercial leem */
+async function basePrestacao(cen, opcoes) {
+  for (const x of D.prestacao(new Date(), opcoes)) {
+    await cen.admin('POST', '/api/gas/parceiros', JSON.stringify({ sheet: x.sheet, action: 'upsert', item: x.item }), 'text/plain');
+  }
+}
+
+/* coordenador do Comercial (fictício), com o primeiro acesso já feito */
+async function pessoaComercial(cen, base) {
+  await cen.admin('POST', '/api/admin/usuarios', { nome: 'Gil Martins', email: 'gil@myblue.com.br', senha: 'Senha1234', papel: 'coordenador', setores: [cen.S('Comercial')], modulos: ['parceiros'] });
+  const c = cliente(base);
+  await c('POST', '/api/auth/login', { email: 'gil@myblue.com.br', senha: 'Senha1234' });
+  await c('POST', '/api/auth/senha', { atual: 'Senha1234', nova: SENHA });
+}
+
+/* arquivo de exemplo gravado numa pasta temporária */
+const arquivoTemp = (nome, conteudo) => { const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'tut-')), nome); fs.writeFileSync(f, conteudo); return f; };
 
 module.exports = [
   {
@@ -265,5 +288,416 @@ module.exports = [
       await t.mostrar(f.locator('#btnExport'), 2400);
     },
     resumo: ['Cole a extração do Vouch → <b>Comparar com a base</b> → <b>Confirmar</b>', '<b>Base de contatos</b> editável, com atalhos do que falta', '<b>Lista do Marketing</b> em Excel ou CSV'],
+  },
+  {
+    nome: 'ferramenta-parceiros',
+    ferramenta: 'parceiros',
+    entrar: 'paula@myblue.com.br',
+    inicio: '#/m/parceiros',
+    // parceiros, carteira e lançamentos fictícios de janeiro até o mês anterior; dois condomínios
+    // da Nordeste Condomínios (regra de excedente por boleto) ficam sem lançamento no último mês, para o vídeo lançar
+    preparar: (cen) => basePrestacao(cen, { pular: [8, 9] }),
+    abertura: ['A comissão dos parceiros: a competência do mês, paga no mês seguinte.', ['Lançar o mês de um parceiro', 'O relatório da prestação de contas', 'Marcar envio e pagamento', 'Cadastrar condomínios e parceiros']],
+    async gravar(t) {
+      const f = quadro(t, 'parceiros');
+      const parceiro = 'p-nordestecondominios';
+
+      const V = '1 · Prestações do mês';
+      await t.clicar(f.locator('[data-aba=mes]'), { depois: 1500 });
+      await t.legenda('Em <b>Prestações do mês</b>, escolha a competência: cada parceiro aparece com o valor da comissão e a situação (lançado, enviado, pago).', { etapa: V, ms: 600 });
+      await t.mostrar(f.locator('[data-mes].ativa, [data-mes].on').first(), 2600);
+      await t.legenda('A competência é o mês do movimento; a comissão dela é paga no mês seguinte.', { etapa: V, ms: 3200 });
+
+      const L = '2 · Lançar o mês';
+      await t.legenda('Para lançar, abra <b>Lançamento</b> e escolha o parceiro. A competência já vem marcada.', { etapa: L, ms: 300 });
+      await t.clicar(f.locator('[data-aba=lancar]'), { depois: 1400 });
+      await t.escolher(f.locator('#selParceiro'), { value: parceiro }, { depois: 1600 });
+      await t.legenda('Aparecem os condomínios do parceiro e a regra do contrato. Informe, de cada um, TSR, tarifa bancária, multa, juros, encargos e correção.', { etapa: L, ms: 600 });
+      const valores = [['4.215,30', '268,80', '96,40', '41,25', '18,90', '9,60', '3,20', '118'], ['3.684,75', '232,50', '71,10', '35,80', '22,40', '6,15', '3,10', '96']];
+      const ks = ['tsr', 'tarifa', 'multa', 'juros', 'encargos', 'correcao'];
+      const vazias = [];
+      for (let i = 0; i < 3; i++) if (!(await f.locator(`[data-i="${i}"][data-k="tsr"]`).inputValue()).replace(/[0,.]/g, '')) vazias.push(i); // as já lançadas ficam
+      for (const [n, i] of vazias.slice(0, 2).entries()) {
+        for (const [j, k] of ks.entries()) await t.digitar(f.locator(`[data-i="${i}"][data-k="${k}"]`), valores[n][j], { atraso: 30, depois: 200 });
+      }
+      await t.legenda('Este parceiro recebe o <b>excedente do boleto</b>: (valor por boleto − piso de R$ 2,50) × quantidade de boletos emitidos. A tarifa bancária do balanço não entra nessa conta.', { etapa: L, ms: 300 });
+      for (const [n, i] of vazias.slice(0, 2).entries()) {
+        await t.digitar(f.locator(`[data-i="${i}"][data-k="valorBoleto"]`), valores[n][6], { atraso: 45, depois: 250 });
+        await t.digitar(f.locator(`[data-i="${i}"][data-k="qtdBoletos"]`), valores[n][7], { atraso: 60, depois: 250 });
+      }
+      await t.legenda('O balanço da garantidora (PDF) pode ser anexado aqui, para ir junto no relatório. Depois, <b>Salvar e ver relatório</b>.', { etapa: L, ms: 300 });
+      await t.mostrar(f.locator('#dropzone'), 2600);
+      await t.clicar(f.locator('#btnSalvarVer'), { depois: 2200 });
+
+      const R = '3 · Relatório';
+      await t.legenda('O relatório da prestação de contas: cada condomínio, a base de cálculo, o percentual e a comissão do mês.', { etapa: R, ms: 600 });
+      await t.rolar(420);
+      await t.legenda('O repasse de boletos mostra, por condomínio, a quantidade, o valor por boleto, o excedente e o repasse.', { etapa: R, ms: 300 });
+      await t.mostrar(f.locator('text=/Excedente por boleto/').first(), 3200);
+      await t.rolar(-420);
+      await t.legenda('Daqui você <b>baixa o PDF</b> para enviar ao parceiro, imprime ou volta para corrigir algum valor.', { etapa: R, ms: 300 });
+      await t.mostrar(f.locator('#btnBaixarPdf'), 2000);
+      await t.mostrar(f.locator('#btnEditarRel'), 1600);
+      await t.clicar(f.locator('#btnVoltar'), { depois: 1500 });
+
+      const E = '4 · Envio e pagamento';
+      await t.clicar(f.locator('[data-aba=mes]'), { depois: 1500 });
+      await t.legenda('De volta ao mês: enviou a prestação ao parceiro? Marque <b>Enviado</b> — a data do envio fica registrada.', { etapa: E, ms: 300 });
+      await t.clicar(f.locator(`[data-env="${parceiro}"]`), { depois: 1600 });
+      await t.legenda('Quando o pagamento sair, marque <b>Pago</b>. Os filtros mostram o que falta enviar ou pagar.', { etapa: E, ms: 300 });
+      await t.clicar(f.locator('[data-pag="p-alfaadministradora"]'), { depois: 1800 });
+      await t.mostrar(f.locator('#btnZipMes'), 2000);
+      await t.legenda('<b>Baixar todos</b> gera um ZIP com os relatórios do mês.', { etapa: E, ms: 2200 });
+
+      const C = '5 · Condomínios';
+      await t.legenda('Condomínio novo na carteira de um parceiro? Em <b>Condomínios</b>, informe o nome, o parceiro e o percentual.', { etapa: C, ms: 300 });
+      await t.clicar(f.locator('[data-aba=condos]'), { depois: 1500 });
+      await t.digitar(f.locator('#nCNome'), 'Cond. Serra Azul', { atraso: 34 });
+      await t.escolher(f.locator('#nCP1'), { value: 'p-alfaadministradora' });
+      await t.digitar(f.locator('#nCR1'), '10');
+      await t.legenda('Se a comissão é dividida, informe o segundo parceiro. O valor do boleto entra no cálculo da tarifa.', { etapa: C, ms: 300 });
+      await t.digitar(f.locator('#nCBol'), '3,20');
+      await t.clicar(f.locator('#btnAddCondo'), { depois: 2000 });
+
+      const P = '6 · Parceiros';
+      await t.legenda('Em <b>Parceiros</b> ficam as regras de cada contrato: percentual, o que entra na base (tarifa, encargos), cláusula de venda e as categorias.', { etapa: P, ms: 300 });
+      await t.clicar(f.locator('[data-aba=parceiros]'), { depois: 1800 });
+      await t.mostrar(f.locator('text=/Alfa Administradora/').first(), 1800);
+      await t.legenda('Para cadastrar, clique em <b>Novo parceiro</b>.', { etapa: P, ms: 300 });
+      await t.clicar(f.locator('#novoParc > summary'), { depois: 300 });
+      // a lista se redesenha quando termina de salvar o que foi feito antes; mantém o cadastro aberto
+      await noQuadro(t, 'parceiros', "setInterval(() => { const d = document.getElementById('novoParc'); if (d && !d.open) d.open = true; }, 100);");
+      await t.pausa(900);
+      await t.mostrar(f.locator('#novoParc'), 3600, { dy: 0.3 });
+      await t.legenda('Tudo fica salvo no portal, compartilhado com a equipe — e o <b>PartnerChip</b> mostra esses números em painéis.', { etapa: P, ms: 3600 });
+    },
+    resumo: ['<b>Lançamento</b>: parceiro → valores de cada condomínio (e boletos, se houver excedente) → <b>Salvar e ver relatório</b>', '<b>Prestações do mês</b>: marcar enviado e pago, baixar os relatórios', '<b>Condomínios</b> e <b>Parceiros</b>: a carteira e as regras do contrato'],
+  },
+  {
+    nome: 'ferramenta-comissoes',
+    ferramenta: 'comissoes-de-novos-condominios',
+    entrar: 'gil@myblue.com.br',
+    inicio: '#/m/comissoes-de-novos-condominios',
+    // a lista de parceiros embutida no HTML vira a lista fictícia
+    adaptarHtml: (html) => D.trocarLista(html, 'PARCEIROS_BASE', D.prestacao().filter((x) => x.sheet === 'partners').map(({ item }) => [item.id, item.nome, item.uf])),
+    async preparar(cen, base) { await basePrestacao(cen); await pessoaComercial(cen, base); },
+    abertura: ['Os condomínios que entraram no mês: quem veio por parceiro e qual comissão pagar.', ['Importar a planilha de implantações', 'Comercial: responder a comissão', 'Gestão: aprovar ou devolver', 'Financeiro: cadastrar na Prestação de Contas']],
+    async gravar(t) {
+      const f = quadro(t, 'comissoes-de-novos-condominios');
+      const csv = arquivoTemp('implantacoes.csv', D.implantacoes());
+
+      const I = '1 · Importar o mês';
+      await t.legenda('Comece importando a <b>planilha de implantações</b> do mês (Excel ou CSV): nº do formulário, condomínio, estado, 1º vencimento, ADM e executivo.', { etapa: I, ms: 600 });
+      await t.enviarArquivo(f.locator('text=/Importar planilha do mês/').first(), f.locator('#fileInput'), csv, { depois: 1600 });
+      await t.legenda('O mês de entrada é sugerido pelo 1º vencimento. Confira e confirme.', { etapa: I, ms: 300 });
+      await t.mostrar(f.locator('#iRef'), 1800);
+      await t.clicar(f.locator('#iOk'), { depois: 2200 });
+      await t.legenda('Cada condomínio aparece com o executivo e a ADM informada, aguardando a resposta do comercial. Importar de novo atualiza sem apagar as respostas.', { etapa: I, ms: 600 });
+
+      const C = '2 · Resposta do comercial';
+      await t.legenda('Clique em <b>Responder</b>: o condomínio veio por parceiro?', { etapa: C, ms: 300 });
+      await t.clicar(f.locator('[data-abrir$="-f4101"]'), { depois: 1400 });
+      await t.clicar(f.locator('label:has(input[name=tp][value=sim])'), { depois: 800 });
+      await t.legenda('Confirme o parceiro (a ferramenta sugere pela ADM informada) e marque o tipo de comissão: <b>recorrência</b> e/ou <b>venda</b>.', { etapa: C, ms: 300 });
+      await t.escolher(f.locator('#rP1'), { value: 'p-alfaadministradora' });
+      await t.clicar(f.locator('#rRec'), { depois: 300 });
+      if (!(await f.locator('#rRec').isChecked())) await f.locator('#rRec').check(); // a janela rola enquanto o cursor chega
+      await t.pausa(600);
+      await t.digitar(f.locator('#rObs'), 'Indicação do síndico, contrato assinado em setembro.', { atraso: 22 });
+      await t.clicar(f.locator('#rEnviar'), { depois: 1800 });
+      await t.legenda('Sem parceiro? Marque <b>Não tem parceiro</b> — não gera comissão, mas fica registrado.', { etapa: C, ms: 300 });
+      await t.clicar(f.locator('[data-abrir$="-f4103"]'), { depois: 1300 });
+      await t.clicar(f.locator('label:has(input[name=tp][value=nao])'), { depois: 300 });
+      if (!(await f.locator('input[name=tp][value=nao]').isChecked())) await f.locator('input[name=tp][value=nao]').check();
+      await t.pausa(600);
+      await t.clicar(f.locator('#rEnviar'), { depois: 1800 });
+
+      const A = '3 · Aprovação da gestão';
+      await t.legenda('As respostas vão para <b>Aprovação da gestão</b>: aprove, devolva ao comercial com um motivo ou corrija a resposta.', { etapa: A, ms: 300 });
+      await t.clicar(f.locator('[data-view=aprovacao]'), { depois: 1600 });
+      await t.mostrar(f.locator('[data-dev]').first(), 1800);
+      await t.clicar(f.locator('[data-apr]').first(), { depois: 1600 });
+      await t.clicar(f.locator('[data-apr]').first(), { depois: 1600 });
+
+      const F = '4 · Financeiro';
+      await t.legenda('No <b>Financeiro</b> ficam as comissões aprovadas, pagas no mês seguinte.', { etapa: F, ms: 300 });
+      await t.clicar(f.locator('[data-view=financeiro]'), { depois: 1800 });
+      await t.legenda('<b>Cadastrar</b> cria o condomínio e o vínculo com o parceiro na <b>Prestação de Contas</b> — sem digitar de novo.', { etapa: F, ms: 300 });
+      await t.clicar(f.locator('[data-cad]').first(), { depois: 1400 });
+      await t.digitar(f.locator('#cNome'), 'Cond. Lago Azul', { atraso: 30 });
+      await t.escolher(f.locator('select[data-i="0"]'), { value: 'p-alfaadministradora' });
+      await t.clicar(f.locator('#cOk'), { depois: 2200 });
+
+      const X = '5 · Acessos e Excel';
+      await t.legenda('Em <b>Acessos</b> você define quem é comercial, gestão e financeiro. Enquanto não houver gestor definido, todos veem todas as abas.', { etapa: X, ms: 300 });
+      await t.clicar(f.locator('[data-view=acessos]'), { depois: 3000 });
+      await t.legenda('E o <b>Excel do mês</b> leva a lista completa para uma planilha.', { etapa: X, ms: 300 });
+      await t.mostrar(f.locator('#exportBtn'), 2400);
+    },
+    resumo: ['<b>Importar</b> a planilha de implantações do mês', '<b>Comercial</b> responde: parceiro e tipo de comissão', '<b>Gestão</b> aprova · <b>Financeiro</b> cadastra na Prestação de Contas'],
+  },
+  {
+    nome: 'ferramenta-partnerchip',
+    ferramenta: 'partnerchip-resultados',
+    entrar: 'gil@myblue.com.br',
+    inicio: '#/m/partnerchip-resultados',
+    async preparar(cen, base, br) {
+      await basePrestacao(cen); await pessoaComercial(cen, base);
+      // o painel recebe os números quando alguém com acesso à Prestação de Contas abre a página
+      const ctx = await br.newContext({ viewport: { width: 1280, height: 800 }, locale: 'pt-BR' });
+      const p = await ctx.newPage();
+      await p.goto(base + '/login'); await p.fill('#email', 'admin@myblue.com.br'); await p.fill('#senha', 'Admin1234'); await p.click('#btEntrar'); await p.waitForTimeout(1000);
+      await p.goto(base + '/m/partnerchip-resultados/'); await p.waitForSelector('text=/A PAGAR/i'); await p.waitForTimeout(2500);
+      await ctx.close();
+    },
+    abertura: ['O painel dos parceiros: carteira, comissões apuradas e pagas, ao vivo da Prestação de Contas.', ['Visão geral do ano', 'A ficha de cada parceiro', 'Condomínios e filtros', 'Exportar para Excel']],
+    async gravar(t) {
+      const f = quadro(t, 'partnerchip-resultados');
+
+      const G = '1 · Visão geral';
+      await t.legenda('Os números vêm direto da <b>Prestação de Contas</b>: comissão apurada no ano, quanto já foi pago e quanto falta pagar.', { etapa: G, ms: 600 });
+      await t.mostrar(f.locator('text=/A PAGAR/i').first(), 2600);
+      await t.legenda('O gráfico compara, mês a mês, o apurado e o pago aos parceiros.', { etapa: G, ms: 300 });
+      await t.rolar(380);
+      await t.pausa(2600);
+      await t.rolar(-380);
+
+      const P = '2 · Parceiros';
+      await t.legenda('Em <b>Parceiros</b>: carteira, regra, apurado, pago, a pagar e a situação da última competência.', { etapa: P, ms: 300 });
+      await t.clicar(f.locator('[data-view=parceiros]'), { depois: 2600 });
+      await t.legenda('Clique num parceiro para abrir a <b>ficha</b>: regras do contrato, carteira de condomínios e o histórico de prestações.', { etapa: P, ms: 300 });
+      await t.clicar(f.locator('tr[data-p]:visible').first(), { depois: 2400 });
+      await t.rolar(420);
+      await t.pausa(2400);
+      await t.clicar(f.locator('[data-fechar]:visible').first(), { depois: 1200 });
+
+      const C = '3 · Condomínios e filtros';
+      await t.legenda('Em <b>Condomínios</b>: o parceiro de cada um, a comissão do último mês e do ano.', { etapa: C, ms: 300 });
+      await t.clicar(f.locator('[data-view=condos]'), { depois: 2400 });
+      await t.legenda('Filtre por estado, por categoria (recorrência, venda, condição especial) ou busque pelo nome.', { etapa: C, ms: 300 });
+      await t.escolher(f.locator('#fUf'), 'CE', { depois: 1800 });
+      await t.digitar(f.locator('#fBusca'), 'Nordeste', { atraso: 60, depois: 1800 });
+      await t.digitar(f.locator('#fBusca'), '', { depois: 400 });
+      await t.escolher(f.locator('#fUf'), { index: 0 }, { depois: 800 });
+
+      const X = '4 · Exportar';
+      await t.legenda('<b>Excel</b> exporta o painel. Os dados atualizam sozinhos; <b>Atualizar agora</b> busca na hora.', { etapa: X, ms: 300 });
+      await t.mostrar(f.locator('#exportBtn'), 2200);
+      await t.mostrar(f.locator('#refreshBtn'), 2000);
+    },
+    resumo: ['<b>Visão geral</b>: apurado, pago e a pagar no ano', '<b>Parceiros</b>: clique para abrir a ficha', '<b>Condomínios</b>, filtros e <b>Excel</b>'],
+  },
+  {
+    nome: 'ferramenta-patrocinio',
+    ferramenta: 'central-patrocinio',
+    entrar: 'paula@myblue.com.br',
+    inicio: '#/m/central-patrocinio',
+    async preparar(cen, base, br) {
+      // recibos já emitidos ao longo do ano, lançados pela própria ferramenta
+      const ctx = await br.newContext({ viewport: { width: 1280, height: 800 }, locale: 'pt-BR', acceptDownloads: true });
+      const p = await ctx.newPage();
+      p.on('dialog', (d) => d.accept().catch(() => {}));
+      await p.goto(base + '/login'); await p.fill('#email', 'admin@myblue.com.br'); await p.fill('#senha', 'Admin1234'); await p.click('#btEntrar'); await p.waitForTimeout(1000);
+      await p.goto(base + '/m/central-patrocinio/'); await p.waitForSelector('#condo');
+      const ano = hoje().slice(0, 4);
+      for (const [condo, cnpj, rateio, evento, cidade, data] of [
+        ['Cond. Bela Vista', '11.222.333/0001-01', '12.800,00', 'Festa Junina', 'Fortaleza', '06-14'],
+        ['Res. Primavera', '22.333.444/0001-02', '52.300,00', 'Festa Junina', 'Natal', '06-21'],
+        ['Cond. Vila Rica', '33.444.555/0001-03', '27.400,00', 'Dia das Crianças', 'João Pessoa', '07-12'],
+        ['Ed. Aurora', '44.555.666/0001-04', '86.900,00', 'Festa da Primavera', 'Fortaleza', '08-23'],
+        ['Cond. Monte Verde', '55.666.777/0001-05', '33.150,00', 'Torneio de Futebol', 'Natal', '09-06'],
+        ['Res. Atlântico', '66.777.888/0001-06', '118.000,00', 'Festa de Aniversário do Condomínio', 'Fortaleza', '09-20'],
+      ]) {
+        await p.fill('#condo', condo); await p.fill('#cnpj', cnpj); await p.fill('#rateio', rateio); await p.locator('#rateio').blur();
+        await p.fill('#eventoNome', evento); await p.fill('#cidade', cidade); await p.fill('#data', `${ano}-${data}`);
+        await p.click('#btnSalvar'); await p.waitForTimeout(1500);
+        await p.click('[data-aba=novo]'); await p.waitForTimeout(400);
+      }
+      await p.click('[data-aba=recibos]'); await p.click('[data-ref=todos]'); await p.waitForTimeout(600);
+      for (const [campo, n] of [['env', 5], ['ass', 4], ['pag', 3]]) {
+        for (let i = 0; i < n; i++) { await p.locator(`input[data-${campo}]`).nth(i).click(); await p.waitForTimeout(500); }
+      }
+      await p.waitForTimeout(1500);
+      await ctx.close();
+    },
+    abertura: ['Recibos de patrocínio de eventos dos condomínios: emitir, enviar, assinar e pagar.', ['Emitir um recibo', 'Acompanhar envio, assinatura e pagamento', 'Resultados do ano']],
+    async gravar(t) {
+      const f = quadro(t, 'central-patrocinio');
+
+      const N = '1 · Novo recibo';
+      await t.legenda('Anexe o <b>relatório de garantia</b> (PDF) e o nome, o CNPJ e o rateio são lidos sozinhos — ou preencha à mão.', { etapa: N, ms: 300 });
+      await t.mostrar(f.locator('#drop'), 2600);
+      await t.digitar(f.locator('#condo'), 'Cond. Jardim Azul', { atraso: 32 });
+      await t.digitar(f.locator('#cnpj'), '12.345.678/0001-90', { atraso: 28 });
+      await t.legenda('Informe o <b>Total Rateio (VOP)</b>: a faixa e o valor a pagar são preenchidos sozinhos.', { etapa: N, ms: 300 });
+      await t.digitar(f.locator('#rateio'), '38.500,00', { atraso: 40 });
+      await t.clicar(f.locator('#eventoNome'), { depois: 1400 });
+      await t.mostrar(f.locator('#valor'), 2200);
+      await t.digitar(f.locator('#eventoNome'), 'Festa da Primavera', { atraso: 30 });
+      await t.digitar(f.locator('#cidade'), 'Fortaleza', { atraso: 34 });
+      await t.preencherCampo(f.locator('#data'), hoje());
+      await t.legenda('<b>Salvar e baixar PDF</b> guarda o recibo e baixa o PDF para enviar ao síndico. <b>Copiar e-mail</b> monta o texto do e-mail.', { etapa: N, ms: 300 });
+      await t.clicar(f.locator('#btnSalvar'), { depois: 2200 });
+
+      const R = '2 · Recibos';
+      await t.legenda('Em <b>Recibos</b>, por mês: o que falta enviar, aguardando assinatura, a pagar e os pagos.', { etapa: R, ms: 300 });
+      await t.clicar(f.locator('[data-aba=recibos]'), { depois: 2200 });
+      await t.legenda('Enviou por e-mail? Marque <b>enviado</b>. Recebeu assinado? Marque <b>assinado</b> — o pagamento sai em até 7 dias.', { etapa: R, ms: 300 });
+      await t.clicar(f.locator('input[data-env]:visible').first(), { depois: 1500 });
+      await t.clicar(f.locator('input[data-ass]:visible').first(), { depois: 1500 });
+      await t.legenda('Em cada linha: baixar o PDF de novo, o e-mail para o síndico, editar e o histórico.', { etapa: R, ms: 300 });
+      await t.mostrar(f.locator('[data-hist]:visible').first(), 2200);
+      await t.legenda('Veja todos os meses e use os filtros para achar o que está pendente.', { etapa: R, ms: 300 });
+      await t.clicar(f.locator('[data-ref=todos]'), { depois: 1800 });
+      await t.clicar(f.locator('[data-f=assinado]'), { depois: 2000 });
+      await t.clicar(f.locator('[data-f=todos]'), { depois: 800 });
+
+      const S = '3 · Resultados';
+      await t.legenda('<b>Resultados</b>: lançado e pago no ano, o que está a pagar, recibos sem assinatura e o andamento de cada etapa.', { etapa: S, ms: 300 });
+      await t.clicar(f.locator('[data-aba=resultados]'), { depois: 2800 });
+      await t.rolar(400);
+      await t.pausa(2400);
+      await t.rolar(-400);
+      await t.mostrar(f.locator('#btnXls'), 2200);
+    },
+    resumo: ['<b>Novo recibo</b>: VOP → faixa e valor automáticos → <b>Salvar e baixar PDF</b>', '<b>Recibos</b>: marcar enviado, assinado e pago', '<b>Resultados</b> do ano e Excel'],
+  },
+  {
+    nome: 'ferramenta-credito',
+    ferramenta: 'credito',
+    entrar: 'bruna@myblue.com.br',
+    inicio: '#/m/credito',
+    abertura: ['As automações do setor de Crédito, num lugar só — tudo roda no navegador.', ['As ferramentas da central', 'Exemplo: Planilha de Moradores', 'Voltar e abrir em nova aba']],
+    async gravar(t) {
+      const f = quadro(t, 'credito');
+      const xlsx = require(path.join(process.env.BIBLIOTECAS || '', 'node_modules', 'xlsx'));
+      const wb = xlsx.utils.book_new();
+      xlsx.utils.book_append_sheet(wb, xlsx.utils.aoa_to_sheet(D.moradores()), 'Moradores');
+      const planilha = arquivoTemp('Cadastro_Cond_Jardim_Azul.xlsx', xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' }));
+
+      const H = '1 · As ferramentas';
+      await t.legenda('Cada cartão é uma ferramenta: prestação de contas, recibos de entrega, balancetes, moradores, consumos e o divisor de recibos.', { etapa: H, ms: 600 });
+      for (const v of ['montador', 'nobre', 'balancetes', 'consumos']) await t.mostrar(f.locator(`[data-view=${v}]`), 1500);
+      await t.legenda('Os arquivos são processados no seu navegador: nada é enviado para fora.', { etapa: H, ms: 2600 });
+
+      const M = '2 · Planilha de Moradores';
+      await t.legenda('Exemplo: a <b>Planilha de Moradores</b> transforma o cadastro recebido no modelo de importação da Vouch.', { etapa: M, ms: 300 });
+      await t.clicar(f.locator('[data-view=moradores]'), { depois: 2000 });
+      const m = f.frameLocator('#frame-moradores');
+      await t.legenda('Solte a planilha (ou o PDF de contatos) na área indicada.', { etapa: M, ms: 300 });
+      await t.enviarArquivo(m.locator('#drop'), m.locator('#file'), planilha, { depois: 2200 });
+      await t.legenda('Confira os contatos lidos — qualquer campo pode ser corrigido — e informe o nome do condomínio.', { etapa: M, ms: 300 });
+      await t.digitar(m.locator('#condoNomeInput'), 'Cond. Jardim Azul', { atraso: 32 });
+      await t.rolar(300);
+      await t.clicar(m.locator('#btnGerarFinal'), { depois: 2200 });
+      await t.legenda('Pronto: unidades, contatos e as <b>pendências</b> (quem está sem CPF, telefone ou e-mail).', { etapa: M, ms: 300 });
+      await t.mostrar(m.locator('text=/Pendências/').first(), 2400);
+      await t.legenda('<b>Baixar planilha Vouch</b> gera o Excel com as abas Listagem e Pendências; o relatório de pendências também sai em PDF.', { etapa: M, ms: 300 });
+      await t.clicar(m.locator('#btnBaixar'), { depois: 1800 });
+      await t.mostrar(m.locator('#btnPdf'), 1800);
+
+      const V = '3 · Navegar';
+      await t.legenda('<b>Abrir em nova aba</b> usa a ferramenta em tela cheia. <b>Ferramentas</b> volta para a lista.', { etapa: V, ms: 300 });
+      await t.mostrar(f.locator('#openNewTab'), 1800);
+      await t.clicar(f.locator('#btnHome'), { depois: 1600 });
+      await t.legenda('As outras funcionam do mesmo jeito: abra o cartão, envie o arquivo recebido e baixe o resultado.', { etapa: V, ms: 300 });
+      await t.clicar(f.locator('[data-view=balancetes]'), { depois: 2600 });
+      await t.clicar(f.locator('#btnHome'), { depois: 1400 });
+    },
+    resumo: ['Escolha a ferramenta pelo <b>cartão</b>', 'Envie o arquivo recebido, confira e <b>baixe o resultado</b>', '<b>Ferramentas</b> volta para a lista · tudo roda no navegador'],
+  },
+  {
+    nome: 'ferramenta-viagens',
+    ferramenta: 'gestao-de-viagens',
+    entrar: 'paula@myblue.com.br',
+    inicio: '#/m/gestao-de-viagens',
+    async preparar(cen) {
+      // viagens fictícias em todas as etapas, registradas pela coordenadora
+      const r = await cen.admin('POST', '/api/admin/modulos/gestao-de-viagens/documentos',
+        { modulo: 'gestao-de-viagens', documentos: D.viagens(new Date(), { por: 'mb-' + cen.id['paula@myblue.com.br'] }) });
+      if (!r || !r.total) throw new Error('não gravou as viagens de exemplo');
+    },
+    abertura: ['Cotações de hospedagem, passagens e ajuda de custo, da solicitação ao que foi pago.', ['Cadastrar a viagem e as cotações', 'Enviar e aprovar', 'Lançar o que foi pago', 'Dashboard de gastos']],
+    async gravar(t) {
+      const f = quadro(t, 'gestao-de-viagens');
+      const ida = new Date(Date.now() + 18 * 864e5).toISOString().slice(0, 10);
+      const volta = new Date(Date.now() + 20 * 864e5).toISOString().slice(0, 10);
+
+      const V = '1 · Visão geral';
+      await t.legenda('No topo: viagens <b>em cotação</b>, <b>aguardando aprovação</b> e o gasto do mês. A lista mostra cada viagem com o previsto, o realizado e a situação.', { etapa: V, ms: 600 });
+      await t.mostrar(f.locator('#kpisViagens'), 2400, { dy: 0.5 });
+      await t.legenda('Filtre pelo mês da ida, pela situação ou busque pelo colaborador e destino.', { etapa: V, ms: 300 });
+      await t.clicar(f.locator('[data-st=todas]'), { depois: 2000 });
+
+      const N = '2 · Nova viagem';
+      await t.legenda('Clique em <b>Nova viagem</b>. Recebeu o pedido por e-mail? Salve em PDF e arraste aqui: os dados são lidos sozinhos. Ou preencha à mão.', { etapa: N, ms: 300 });
+      await t.clicar(f.locator('#btnNova'), { depois: 1200 });
+      await t.mostrar(f.locator('#dz'), 2000);
+      await t.digitar(f.locator('#f-colaborador'), 'Davi Rocha', { atraso: 40 });
+      await t.digitar(f.locator('#f-setor'), 'Crédito', { atraso: 40 });
+      await t.digitar(f.locator('#f-destino'), 'Natal/RN', { atraso: 45 });
+      await t.preencherCampo(f.locator('#f-dataIda'), ida);
+      await t.preencherCampo(f.locator('#f-dataVolta'), volta);
+      await t.digitar(f.locator('#f-solicitante'), 'Caio Mendes', { atraso: 36 });
+      await t.digitar(f.locator('#f-motivo'), 'Visita a condomínios da carteira', { atraso: 26 });
+
+      const C = '3 · Cotações';
+      await t.legenda('Cada item (hospedagem, passagem, locação) recebe uma ou mais <b>cotações</b>. Marque a escolhida em cada item — a economia em relação à mais cara aparece no resumo.', { etapa: C, ms: 300 });
+      await t.digitar(f.locator('[data-it=descricao]').first(), '2 diárias, quarto single', { atraso: 28 });
+      await t.digitar(f.locator('[data-cot=fornecedor]').first(), 'Hotel Ponta Negra', { atraso: 30 });
+      await t.digitar(f.locator('[data-cot=valor]').first(), '480,00', { atraso: 50 });
+      // o valor é confirmado ao sair do campo (a tela se redesenha); só então o próximo clique
+      const garantir = async (alvo, conta, n) => { await t.clicar(alvo, { depois: 900 }); if ((await conta.count()) < n) { await alvo.click(); await t.pausa(600); } };
+      await f.locator('[data-cot=valor]').first().press('Tab'); await t.pausa(500);
+      await garantir(f.locator('[data-addcot="0"]'), f.locator('[data-cot=fornecedor]'), 2);
+      await t.digitar(f.locator('[data-cot=fornecedor]').nth(1), 'Pousada Mar Azul', { atraso: 30 });
+      await t.digitar(f.locator('[data-cot=valor]').nth(1), '390,00', { atraso: 50 });
+      await f.locator('[data-cot=valor]').nth(1).press('Tab'); await t.pausa(500);
+      await t.clicar(f.locator('input[type=radio][data-esc]').nth(1), { depois: 1200 });
+      if (!(await f.locator('input[type=radio][data-esc]').nth(1).isChecked())) await f.locator('input[type=radio][data-esc]').nth(1).check();
+      await t.legenda('Mais um item: a passagem rodoviária.', { etapa: C, ms: 300 });
+      await garantir(f.locator('[data-additem=rodoviario]'), f.locator('[data-it=descricao]'), 2);
+      await t.digitar(f.locator('[data-it=descricao]').nth(1), 'Ida e volta', { atraso: 30 });
+      await t.digitar(f.locator('[data-cot=fornecedor]').nth(2), 'Viação Litoral', { atraso: 30 });
+      await t.digitar(f.locator('[data-cot=valor]').nth(2), '210,00', { atraso: 50 });
+      await f.locator('[data-cot=valor]').nth(2).press('Tab'); await t.pausa(500);
+      await t.clicar(f.locator('input[type=radio][data-esc]').nth(2), { depois: 1000 });
+      if (!(await f.locator('input[type=radio][data-esc]').nth(2).isChecked())) await f.locator('input[type=radio][data-esc]').nth(2).check();
+      await t.legenda('A <b>ajuda de custo</b> vem sozinha: a diária pela região do destino e os dias pela ida e volta. Dá para ajustar ou marcar "sem ajuda de custo".', { etapa: C, ms: 300 });
+      await t.mostrar(f.locator('#aj-total'), 2600);
+      await t.mostrar(f.locator('#resumo'), 2600);
+      await t.legenda('<b>Salvar cotação</b> guarda para continuar depois. Pronto? <b>Enviar para aprovação</b>.', { etapa: C, ms: 300 });
+      await t.clicar(f.locator('[data-act=enviar]'), { depois: 2200 });
+
+      const A = '4 · Aprovação';
+      await t.legenda('Quem aprova abre a viagem em <b>Aguardando aprovação</b>, confere as cotações e decide: aprovar, reprovar (com o motivo) ou voltar para cotação.', { etapa: A, ms: 300 });
+      await t.clicar(f.locator('[data-st=aprovacao]'), { depois: 1600 });
+      await t.clicar(f.locator('tr[data-id]:has-text("Davi Rocha")').first(), { depois: 1600 });
+      await t.mostrar(f.locator('[data-act=reprovar]'), 1600);
+      await t.clicar(f.locator('[data-act=aprovar]'), { depois: 1000 });
+      await t.digitar(f.locator('#cf-txt'), 'Aprovado. Priorizar a pousada.', { atraso: 26 });
+      await t.clicar(f.locator('#cf [data-r="1"]'), { depois: 2000 });
+
+      const R = '5 · Realizada';
+      await t.legenda('Depois da viagem, abra a viagem aprovada e informe o <b>valor pago</b> de cada item. Sem valor informado, entra o previsto.', { etapa: R, ms: 300 });
+      await t.clicar(f.locator('[data-st=aprovada]'), { depois: 1600 });
+      await t.clicar(f.locator('tr[data-id="vdemo4"]'), { depois: 1600 });
+      await t.digitar(f.locator('[data-it=realizado]').first(), '440,00', { atraso: 50 });
+      await f.locator('[data-it=realizado]').first().press('Tab'); await t.pausa(500);
+      await t.digitar(f.locator('[data-it=realizado]').nth(1), '196,00', { atraso: 50 });
+      await f.locator('[data-it=realizado]').nth(1).press('Tab'); await t.pausa(500);
+      await t.clicar(f.locator('[data-act=realizar]'), { depois: 1200 });
+      await t.clicar(f.locator('#cf [data-r="1"]'), { depois: 2000 });
+
+      const D2 = '6 · Dashboard e configurações';
+      await t.legenda('O <b>Dashboard de gastos</b> soma o que foi aprovado e realizado: por mês, por tipo de gasto, por setor e por colaborador.', { etapa: D2, ms: 300 });
+      await t.clicar(f.locator('#tab-dash'), { depois: 2600 });
+      await t.rolar(420);
+      await t.pausa(2400);
+      await t.rolar(-420);
+      await t.legenda('Em <b>Configurações</b>: o valor da diária por região, como contar os dias e a lista de setores.', { etapa: D2, ms: 300 });
+      await t.clicar(f.locator('#tab-config'), { depois: 3000 });
+    },
+    resumo: ['<b>Nova viagem</b>: dados, itens e cotações (marque a escolhida)', 'Ajuda de custo automática → <b>Enviar para aprovação</b> → aprovar', 'Informe o <b>valor pago</b> → <b>Realizada</b> · Dashboard de gastos'],
   },
 ];

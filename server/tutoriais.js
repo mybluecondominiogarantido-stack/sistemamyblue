@@ -48,6 +48,8 @@ const TUTORIAIS = [
     descricao: 'Importar os condomínios do mês, informar a comissão, aprovar e cadastrar na Prestação de Contas.' },
   { slug: 'ferramenta-patrocinio', grupo: 'Ferramentas', publico: { modulo: 'central-patrocinio' }, titulo: 'Central de Patrocínio',
     descricao: 'Como usar a Central de Patrocínio.' },
+  { slug: 'ferramenta-viagens', grupo: 'Ferramentas', publico: { modulo: 'gestao-de-viagens' }, titulo: 'Gestão de Viagens',
+    descricao: 'Cotar hospedagem, passagens e ajuda de custo, aprovar a viagem, lançar o que foi pago e ver os gastos.' },
   { slug: 'ferramenta-credito', grupo: 'Ferramentas', publico: { modulo: 'credito' }, titulo: 'Central de Ferramentas — Crédito',
     descricao: 'As ferramentas do setor de Crédito.' },
   { slug: 'ferramenta-boletos', grupo: 'Ferramentas', publico: { modulo: 'boletos' }, titulo: 'Controle de Emissão de Boletos',

@@ -15,8 +15,8 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
 
   // Coordenador e supervisor gerenciam o(s) setor(es) do cadastro deles: usuários, ferramentas (HTML e quem abre),
   // equipe e tipos de demanda (rotas da Central de Tickets). O resto da administração é só do administrador.
-  const FERRAMENTA_SETOR = /^\/modulos\/([a-z0-9][a-z0-9-]{1,40})\/(arquivo|versoes|versoes\/\d+\/usar|acesso)$/;
-  const METODO = { arquivo: 'PUT', versoes: 'GET', acesso: 'PUT' };
+  const FERRAMENTA_SETOR = /^\/modulos\/([a-z0-9][a-z0-9-]{1,40})\/(arquivo|versoes|versoes\/\d+\/usar|versoes\/\d+\/arquivo|acesso)$/;
+  const metodoDe = (acao) => (acao === 'arquivo' || acao === 'acesso' ? 'PUT' : acao === 'versoes' || acao.endsWith('/arquivo') ? 'GET' : 'POST');
   r.use('/api/admin', seg.exigirLogin, async (req, res, next) => {
     try {
       if (req.usuario.papel === 'admin') return next();
@@ -26,7 +26,7 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
       if (/^\/(equipes|categorias)(\/|$)/.test(req.path) && req.path !== '/equipes/email-teste') return next(); // o escopo é conferido lá
       if (req.path === '/modulos' && req.method === 'GET') return next();
       const x = FERRAMENTA_SETOR.exec(req.path);
-      if (x && req.method === (METODO[x[2]] || 'POST')) {
+      if (x && req.method === metodoDe(x[2])) {
         const m = await modulos.obter(x[1]);
         if (m && m.setor_id && req.setoresGeridos.has(m.setor_id)) { req.moduloSetor = m; return next(); }
         return erro(res, 403, 'Esta ferramenta não é de um setor seu.');
@@ -330,6 +330,12 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
     const aviso = reconhecido && reconhecido !== m.slug ? `Atenção: este arquivo parece ser da ferramenta "${(await modulos.obter(reconhecido)).nome}".` : null;
     let avisoPatch = null;
     let fonteAutomatica = null;
+    if (!m.adaptador && /claude\.use\(\s*["']db["']/.test(buf.toString('utf8'))) {
+      // ferramenta feita como artefato do Claude (window.claude.use('db')): os documentos ficam no banco do portal
+      await db.q("UPDATE modulos SET adaptador = 'claude-db', fonte_dados = 'interno', atualizado_em = now() WHERE slug = $1", [m.slug]);
+      await seg.auditar(req, 'modulo_editado', m.slug, { adaptador: 'claude-db', motivo: 'HTML usa o banco do Claude' });
+      fonteAutomatica = 'interno';
+    }
     if (m.adaptador && /SHEET_URL_BUILTIN\s*=\s*\\?["']\/api\/gas\//.test(buf.toString('utf8'))) {
       // HTML já ligado ao banco do portal (sem planilha Google): o módulo passa a usar a planilha interna
       if (m.fonte_dados !== 'interno') {
@@ -373,6 +379,17 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
   });
 
   r.get('/api/admin/modulos/:slug/versoes', async (req, res) => res.json({ versoes: await modulos.listarVersoes(req.params.slug) }));
+
+  /* baixa o HTML de uma versão, como foi enviado (cópia de segurança da ferramenta) */
+  r.get('/api/admin/modulos/:slug/versoes/:id/arquivo', async (req, res) => {
+    const v = await db.um('SELECT conteudo, nome_original FROM modulo_versoes WHERE id = $1 AND modulo_slug = $2', [Number(req.params.id) || 0, req.params.slug]);
+    if (!v) return erro(res, 404, 'Versão não encontrada.');
+    const nome = String(v.nome_original || `${req.params.slug}-versao-${req.params.id}.html`).replace(/["\\\r\n]/g, '_');
+    res.set('Content-Disposition', `attachment; filename="${nome.replace(/[^\x20-\x7e]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(nome)}`);
+    res.set('Content-Security-Policy', "default-src 'none'; sandbox");
+    await seg.auditar(req, 'versao_baixada', req.params.slug, { versao: Number(req.params.id) });
+    res.type('application/octet-stream').send(v.conteudo);
+  });
 
   r.post('/api/admin/modulos/:slug/versoes/:id/usar', async (req, res) => {
     if (!(await modulos.restaurarVersao(req.params.slug, Number(req.params.id)))) return erro(res, 404, 'Versão não encontrada.');

@@ -175,3 +175,17 @@ test('importar arquivo de dados do Claude substitui tudo e avisa quem está com 
   assert.equal((await admin('POST', '/api/admin/modulos/renegociacoes/documentos', { documentos: {} })).status, 404);
   assert.equal((await beto.c('POST', '/api/admin/modulos/sindicos/documentos', { documentos: {} })).status, 403);
 });
+
+test('ferramenta nova feita como artefato do Claude passa a usar o banco de documentos ao enviar o HTML', async () => {
+  assert.equal((await admin('POST', '/api/admin/modulos', { nome: 'Viagens Teste', slug: 'viagens-teste' })).status, 201);
+  const html = '<!doctype html><html><head><meta charset="utf-8"><title>Viagens</title></head><body><script>const db = window.claude.use(\'db\');</script></body></html>';
+  const r = await admin('PUT', '/api/admin/modulos/viagens-teste/arquivo', html, { headers: { 'content-type': 'text/html' } });
+  assert.equal(r.status, 200, r.texto);
+  const m = (await admin('GET', '/api/admin/modulos')).json.modulos.find((x) => x.slug === 'viagens-teste');
+  assert.equal(m.adaptador, 'claude-db');
+  assert.equal(m.fonte_dados, 'interno');
+  // HTML comum não muda nada
+  assert.equal((await admin('POST', '/api/admin/modulos', { nome: 'Comum', slug: 'comum-teste' })).status, 201);
+  await admin('PUT', '/api/admin/modulos/comum-teste/arquivo', '<!doctype html><html><head><title>Comum</title></head><body>oi</body></html>', { headers: { 'content-type': 'text/html' } });
+  assert.equal((await admin('GET', '/api/admin/modulos')).json.modulos.find((x) => x.slug === 'comum-teste').adaptador, null);
+});
