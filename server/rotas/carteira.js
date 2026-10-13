@@ -201,6 +201,7 @@ function rotasCarteira({ db, seg }) {
       if (!d.codigo) return falha('Informe o ID Vouch.');
       if (!d.nome) return falha('Informe o nome do condomínio.');
       if (!d.inicio_contrato) return falha('Informe a vigência.');
+      if (d.cnpj && d.cnpj.replace(/\D/g, '').length !== 14) return falha(`CNPJ incompleto (${d.cnpj}): são 14 dígitos.`);
       const fora = FUNCOES.filter((f) => d[f.campo] && !editaveis.includes(f.campo));
       if (fora.length) return falha(`${fora.map((f) => f.rotulo).join(', ')}: quem escolhe é o coordenador/supervisor do setor.`);
       if (existentes.has(d.codigo)) return falha(`O ID Vouch ${d.codigo} já está na carteira.`);

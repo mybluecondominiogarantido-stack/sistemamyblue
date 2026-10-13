@@ -23,6 +23,8 @@ const COLUNAS = {
   envio: ['ENVIO E MAIL FISICO', 'ENVIO', 'FORMA DE ENVIO'],
   implantado: ['IMPLANTADO POR'],
   executivo: ['EXECUTIVO', 'EXECUTIVO DE NEGOCIOS'],
+  cnpj: ['CNPJ', 'CNPJ DO CONDOMINIO'],
+  razao: ['RAZAO SOCIAL'],
   obs: ['OBS', 'OBSERVACOES'],
 };
 
@@ -49,6 +51,31 @@ function administradora(v) {
 }
 const ENVIO = { AMBOS: 'IMPRESSO/E-MAIL', DIGITAL: 'E-MAIL', 'E MAIL': 'E-MAIL', EMAIL: 'E-MAIL', FISICO: 'IMPRESSO', IMPRESSO: 'IMPRESSO' };
 const envio = (v) => ENVIO[titulo(v)] || limpar(v).toUpperCase();
+
+/* CNPJ da planilha: 14 dígitos com dígito verificador certo. O Excel às vezes tira os zeros da frente
+   (completa) ou escreve em notação científica "6,60363E+13" (perde dígitos: não dá para usar). */
+function digitoCnpj(base) {
+  let soma = 0;
+  for (let i = 0; i < base.length; i++) soma += +base[base.length - 1 - i] * ((i % 8) + 2);
+  const r = soma % 11;
+  return r < 2 ? 0 : 11 - r;
+}
+const cnpjValido = (d) => /^\d{14}$/.test(d) && !/^(\d)\1+$/.test(d) && digitoCnpj(d.slice(0, 12)) === +d[12] && digitoCnpj(d.slice(0, 13)) === +d[13];
+function lerCnpj(v) {
+  const s = limpar(v);
+  if (!s) return { cnpj: '', aviso: '' };
+  let d = s.replace(/\D/g, '');
+  if (/e\+?\d+$/i.test(s)) {
+    // número guardado pelo Excel: no .xlsx vem completo (6.6036300000127E+13); no CSV vem cortado (6,60363E+13)
+    const n = Number(s.replace(',', '.'));
+    d = Number.isFinite(n) ? n.toLocaleString('fullwide', { useGrouping: false, maximumFractionDigits: 0 }) : '';
+    if (!cnpjValido(d.padStart(14, '0'))) return { cnpj: '', aviso: `CNPJ cortado pelo Excel (${s}): digite o CNPJ ou envie a planilha em .xlsx` };
+  }
+  if (/[a-z]{3}/i.test(s.replace(/cnpj/i, '')) && d.length < 11) return { cnpj: '', aviso: `sem CNPJ na planilha: ${s}` };
+  const cheio = d.padStart(14, '0');
+  if (d.length >= 11 && d.length <= 14 && cnpjValido(cheio)) return { cnpj: `${cheio.slice(0, 2)}.${cheio.slice(2, 5)}.${cheio.slice(5, 8)}/${cheio.slice(8, 12)}-${cheio.slice(12)}`, aviso: '' };
+  return { cnpj: '', aviso: `CNPJ inválido na planilha (${s}): confira` };
+}
 
 /* "15/10/2026", "2026-10-15" ou número de série do Excel → { dia, vigencia: "10/2026" } */
 function dataContrato(v) {
@@ -109,6 +136,8 @@ function interpretarImplantacao(buf) {
       forma_envio: envio(pega('envio')),
       implantado_por: pega('implantado'),
       executivo: pega('executivo'),
+      ...(() => { const c = lerCnpj(pega('cnpj')); return { cnpj: c.cnpj, cnpj_aviso: c.aviso }; })(),
+      razao_social: pega('razao').toUpperCase(),
       obs: pega('obs'),
       data_contrato: dc ? dc.dia : pega('data'),
       vigencia: dc ? dc.vigencia : null,
@@ -155,4 +184,4 @@ function compararComCarteira(itens, carteira) {
   return itens;
 }
 
-module.exports = { interpretarImplantacao, compararComCarteira, dataContrato, apelido, chaveNome };
+module.exports = { interpretarImplantacao, compararComCarteira, dataContrato, apelido, chaveNome, lerCnpj, cnpjValido };
