@@ -61,7 +61,7 @@ async function montarCenario(base, { ferramentas = {} } = {}) {
   const conds = [['Cond. Jardim Azul', 'SP'], ['Ed. Solar das Palmeiras', 'SP'], ['Res. Primavera', 'CE'], ['Cond. Vila Rica', 'PE'], ['Ed. Aurora', 'SP'], ['Res. Bela Vista', 'BA']];
   const cond = {};
   for (const [i, [nome, uf]] of conds.entries()) {
-    cond[nome] = (await a('POST', '/api/carteira', { nome, comarca: uf, situacao: i === 5 ? 'DISTRATADO' : 'ATIVO', vencimento: 'Dia 10', administradora: i % 2 ? 'Própria' : 'Adm. Exemplo',
+    cond[nome] = (await a('POST', '/api/carteira', { codigo: String(301 + i), inicio_contrato: `2026-0${4 + i}-01`, executivo: i % 2 ? 'Bruna Reis' : 'Davi Rocha', nome, comarca: uf, situacao: i === 5 ? 'DISTRATADO' : 'ATIVO', vencimento: 'Dia 10', administradora: i % 2 ? 'Própria' : 'Adm. Exemplo',
       analista_cobranca: i < 4 ? 'MARCOS LIMA - 4701' : 'ANA COSTA - 4702', assistente_credito: i % 2 ? 'DAVI ROCHA - 4711' : 'BRUNA REIS - 4710',
       analista_extrajudicial: i % 2 ? 'APOIOCOB — ANA' : '', razao_social: nome.toUpperCase(), cnpj: `12.345.678/000${i + 1}-9${i}` })).id;
   }

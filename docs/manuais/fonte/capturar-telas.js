@@ -48,7 +48,7 @@ const HTML = (t) => `<!doctype html><html><head><meta charset="utf-8"><title>${t
   const conds = [['Cond. Jardim Azul', 'SP'], ['Ed. Solar das Palmeiras', 'SP'], ['Res. Primavera', 'CE'], ['Cond. Vila Rica', 'PE'], ['Ed. Aurora', 'SP'], ['Res. Bela Vista', 'BA']];
   const condId = {};
   for (const [i, [nome, uf]] of conds.entries()) {
-    condId[nome] = (await api(a, 'POST', '/api/carteira', { nome, comarca: uf, situacao: i === 5 ? 'DISTRATADO' : 'ATIVO', vencimento: 'Dia 10', administradora: i % 2 ? 'Própria' : 'Adm. Exemplo',
+    condId[nome] = (await api(a, 'POST', '/api/carteira', { codigo: String(301 + i), inicio_contrato: `2026-0${4 + i}-01`, executivo: i % 2 ? 'Bruna Reis' : 'Davi Rocha', nome, comarca: uf, situacao: i === 5 ? 'DISTRATADO' : 'ATIVO', vencimento: 'Dia 10', administradora: i % 2 ? 'Própria' : 'Adm. Exemplo',
       analista_cobranca: 'MARCOS LIMA', assistente_credito: 'CAIO MENDES', analista_extrajudicial: i % 2 ? 'APOIOCOB — ANA' : '', razao_social: nome.toUpperCase(), cnpj: `12.345.678/000${i + 1}-9${i}` })).id;
   }
 
