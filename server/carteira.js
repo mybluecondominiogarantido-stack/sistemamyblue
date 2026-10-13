@@ -16,15 +16,16 @@ const FUNCOES = [
 
 // todos os campos editáveis, na ordem das colunas da planilha
 const CAMPOS = [
-  { campo: 'codigo', coluna: 'ID', max: 30 },
+  { campo: 'codigo', coluna: 'ID', outras: ['ID VOUCH'], max: 30 },
   { campo: 'situacao', coluna: 'SITUAÇÃO', max: 30 },
   { campo: 'comarca', coluna: 'COMARCA', max: 30 },
-  { campo: 'nome', coluna: 'CONDOMÍNIO', max: 160 },
+  { campo: 'nome', coluna: 'CONDOMÍNIO', outras: ['APELIDO VOUCH', 'CONDOMÍNIO (APELIDO VOUCH)'], max: 160 },
   { campo: 'vencimento', coluna: 'VENCIMENTO', max: 40 },
   ...FUNCOES.map((f) => ({ campo: f.campo, coluna: f.coluna, max: 120, pessoa: true })),
   { campo: 'administradora', coluna: 'ADMINISTRADORA', max: 120 },
   { campo: 'forma_envio', coluna: 'FORMA DE ENVIO', max: 60 },
-  { campo: 'inicio_contrato', coluna: 'INÍCIO DO CONTRATO', data: true },
+  // vigência do contrato (data de início); planilhas antigas chamavam de INÍCIO DO CONTRATO
+  { campo: 'inicio_contrato', coluna: 'VIGÊNCIA', outras: ['INÍCIO DO CONTRATO', 'VIGÊNCIA DO CONTRATO'], data: true },
   { campo: 'razao_social', coluna: 'RAZÃO SOCIAL', max: 200 },
   { campo: 'cnpj', coluna: 'CNPJ', max: 20 },
   { campo: 'observacoes', coluna: 'OBSERVAÇÕES', max: 4000 },
@@ -65,17 +66,22 @@ function lerCsv(texto) {
 }
 
 /* "05/03/2024", "2024-03-05" → "2024-03-05"; vazio → null; inválido → undefined */
+/* vigência é mês/ano: "10/2026", "2026-10", "10/26" (ou uma data completa) → "2026-10-01"; vazio → null; inválido → undefined */
 function data(v) {
   const s = limpar(v);
   if (!s) return null;
-  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-  if (!m) return undefined;
-  const ano = m[3].length === 2 ? '20' + m[3] : m[3];
-  const d = new Date(Date.UTC(+ano, +m[2] - 1, +m[1]));
-  if (d.getUTCMonth() !== +m[2] - 1) return undefined;
-  return `${ano}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  let ano, mes;
+  let m = s.match(/^(\d{4})-(\d{1,2})(?:-(\d{1,2}))?/);
+  if (m) [ano, mes] = [m[1], m[2]];
+  else if ((m = s.match(/^(\d{1,2})\/(\d{2}|\d{4})$/))) [mes, ano] = [m[1], m[2]];
+  else if ((m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/))) {
+    const d = new Date(Date.UTC(+(m[3].length === 2 ? '20' + m[3] : m[3]), +m[2] - 1, +m[1]));
+    if (d.getUTCMonth() !== +m[2] - 1) return undefined;
+    [mes, ano] = [m[2], m[3]];
+  } else return undefined;
+  if (ano.length === 2) ano = '20' + ano;
+  if (+mes < 1 || +mes > 12 || +ano < 1990 || +ano > 2100) return undefined;
+  return `${ano}-${String(mes).padStart(2, '0')}-01`;
 }
 
 /* 14 dígitos → 00.000.000/0000-00; outro formato fica como foi digitado */
@@ -92,7 +98,7 @@ function normalizar(b) {
     if (b[c.campo] === undefined) continue;
     if (c.data) {
       const d = data(b[c.campo]);
-      if (d === undefined) return { erro: 'Data de início do contrato inválida (use dd/mm/aaaa).' };
+      if (d === undefined) return { erro: 'Vigência do contrato inválida: use mês/ano (ex.: 10/2026).' };
       out[c.campo] = d;
     } else if (c.campo === 'observacoes') {
       out[c.campo] = String(b[c.campo] == null ? '' : b[c.campo]).trim().slice(0, c.max);
@@ -116,7 +122,7 @@ function interpretar(buf) {
   if (linhas.length < 2) throw new Error('O arquivo não tem condomínios. Envie o CSV da Carteira de Condomínios.');
   const cab = linhas[0].map(cabecalho);
   const indice = {};
-  for (const c of CAMPOS) indice[c.campo] = cab.indexOf(cabecalho(c.coluna));
+  for (const c of CAMPOS) indice[c.campo] = [c.coluna, ...(c.outras || [])].map((n) => cab.indexOf(cabecalho(n))).find((i) => i >= 0) ?? -1;
   if (indice.nome < 0) throw new Error('Não achei a coluna CONDOMÍNIO no arquivo. Confira se é o CSV da Carteira de Condomínios (separado por ponto e vírgula).');
   if (indice.codigo < 0) throw new Error('Não achei a coluna ID no arquivo: ela identifica cada condomínio.');
   const condominios = [];
@@ -141,8 +147,8 @@ const aspas = (v) => (/[;"\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v
 const dataBr = (d) => {
   if (!d) return '';
   const s = d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10);
-  const [a, m, dia] = s.split('-');
-  return `${dia}/${m}/${a}`;
+  const [a, m] = s.split('-');
+  return `${m}/${a}`;
 };
 
 /* CSV no mesmo formato da planilha (abre no Excel e pode ser importado de volta) */
