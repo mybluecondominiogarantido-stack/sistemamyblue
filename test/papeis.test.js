@@ -158,7 +158,7 @@ test('equipe e tipos de demanda: só os setores dele; escolhe os líderes, não 
 });
 
 test('carteira: coordenador altera e transfere só o responsável do setor dele', async () => {
-  const cond = await admin('POST', '/api/carteira', { nome: 'Cond. Teste', assistente_credito: 'IVO SILVA', analista_cobranca: 'OLGA', inicio_contrato: '10/2026' });
+  const cond = await admin('POST', '/api/carteira', { codigo: '501', nome: 'Cond. Teste', assistente_credito: 'IVO SILVA', analista_cobranca: 'OLGA', inicio_contrato: '10/2026' });
   const id = cond.json.id;
   const j = (await coord('GET', '/api/carteira')).json;
   assert.deepEqual(j.funcoes_editaveis, ['assistente_credito']);

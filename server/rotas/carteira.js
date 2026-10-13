@@ -78,11 +78,8 @@ function rotasCarteira({ db, seg }) {
   /* ===================== cadastro e edição (administração) ===================== */
   r.post('/api/carteira', soAdmin, json, async (req, res) => {
     const b = req.body || {};
-    if (!b.codigo) {
-      // próximo ID numérico livre
-      const { n } = await db.um(`SELECT COALESCE(MAX(codigo::int), 0) + 1 AS n FROM condominios WHERE codigo ~ '^[0-9]{1,9}$'`);
-      b.codigo = String(n);
-    }
+    // o ID Vouch vem do Vouch: quem cadastra informa (não é gerado aqui)
+    if (!String(b.codigo || '').trim()) return erro(res, 400, 'Informe o ID Vouch do condomínio.');
     const v = normalizar({ situacao: 'ATIVO', ...b });
     if (v.erro) return erro(res, 400, v.erro);
     if (!v.dados.nome) return erro(res, 400, 'Informe o nome do condomínio.');
