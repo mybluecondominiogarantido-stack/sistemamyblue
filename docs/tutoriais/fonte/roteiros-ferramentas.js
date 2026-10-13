@@ -380,25 +380,36 @@ module.exports = [
     inicio: '#/m/comissoes-de-novos-condominios',
     // a lista de parceiros embutida no HTML vira a lista fictícia
     adaptarHtml: (html) => D.trocarLista(html, 'PARCEIROS_BASE', D.prestacao().filter((x) => x.sheet === 'partners').map(({ item }) => [item.id, item.nome, item.uf])),
-    async preparar(cen, base) { await basePrestacao(cen); await pessoaComercial(cen, base); },
-    abertura: ['Os condomínios que entraram no mês: quem veio por parceiro e qual comissão pagar.', ['Importar a planilha de implantações', 'Comercial: responder a comissão', 'Gestão: aprovar ou devolver', 'Financeiro: cadastrar na Prestação de Contas']],
+    async preparar(cen, base) {
+      await basePrestacao(cen); await pessoaComercial(cen, base);
+      // os condomínios novos já estão na Carteira (entraram pela implantação), com vigência no mês atual
+      const agora = new Date();
+      const vig = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-01`;
+      const [, ...linhas] = D.implantacoes(agora).trim().split('\n').map((l) => l.split(';'));
+      for (const [form, nome, uf, venc, adm, exec] of linhas) {
+        await cen.admin('POST', '/api/carteira', { codigo: form, nome, comarca: uf, vencimento: String(Number(venc.slice(0, 2))), administradora: adm, executivo: exec, inicio_contrato: vig });
+      }
+    },
+    abertura: ['Os condomínios que entraram no mês: quem veio por parceiro e qual comissão pagar.', ['Puxar da carteira os condomínios da vigência', 'Comercial: responder a comissão', 'Gestão: aprovar ou devolver', 'Financeiro: cadastrar na Prestação de Contas']],
     async gravar(t) {
       const f = quadro(t, 'comissoes-de-novos-condominios');
-      const csv = arquivoTemp('implantacoes.csv', D.implantacoes());
-
-      const I = '1 · Importar o mês';
-      await t.legenda('Comece importando a <b>planilha de implantações</b> do mês (Excel ou CSV): nº do formulário, condomínio, estado, 1º vencimento, ADM e executivo.', { etapa: I, ms: 600 });
-      await t.enviarArquivo(f.locator('text=/Importar planilha do mês/').first(), f.locator('#fileInput'), csv, { depois: 1600 });
-      await t.legenda('O mês de entrada é sugerido pelo 1º vencimento. Confira e confirme.', { etapa: I, ms: 300 });
-      await t.mostrar(f.locator('#iRef'), 1800);
-      await t.clicar(f.locator('#iOk'), { depois: 2200 });
-      await t.legenda('Cada condomínio aparece com o executivo e a ADM informada, aguardando a resposta do comercial. Importar de novo atualiza sem apagar as respostas.', { etapa: I, ms: 600 });
+      const I = '1 · Puxar da carteira';
+      await t.legenda('Os condomínios novos já estão na <b>Carteira de condomínios</b>: entraram pela implantação, com a vigência do contrato.', { etapa: I, ms: 600 });
+      await t.clicar(f.locator('[data-view=aprovacao]'), { depois: 1200 });
+      await t.legenda('Na <b>Aprovação da gestão</b>, clique em <b>Puxar da carteira</b> e escolha a <b>vigência</b> (o mês de entrada).', { etapa: I, ms: 300 });
+      await t.clicar(f.locator('#puxarCart'), { depois: 1800 });
+      await t.mostrar(f.locator('#pRef'), 1800);
+      await t.legenda('Confira a lista: ID Vouch, condomínio, UF, vencimento, ADM e executivo vêm da carteira, sem digitar de novo.', { etapa: I, ms: 300 });
+      await t.mostrar(f.locator('#pTb'), 2400);
+      await t.clicar(f.locator('#pOk'), { depois: 2000 });
+      await t.legenda('Cada executivo passa a ver os condomínios dele. Puxar de novo atualiza os dados sem apagar as respostas.', { etapa: I, ms: 600 });
+      await t.clicar(f.locator('[data-view=comercial]'), { depois: 1600 });
 
       const C = '2 · Resposta do comercial';
       await t.legenda('Clique em <b>Responder</b>: o condomínio veio por parceiro?', { etapa: C, ms: 300 });
-      await t.clicar(f.locator('[data-abrir$="-f4101"]'), { depois: 1400 });
+      await t.clicar(f.locator('[data-abrir$="-v4101"]'), { depois: 1400 });
       await t.clicar(f.locator('label:has(input[name=tp][value=sim])'), { depois: 800 });
-      await t.legenda('Confirme o parceiro (a ferramenta sugere pela ADM informada) e marque o tipo de comissão: <b>recorrência</b> e/ou <b>venda</b>.', { etapa: C, ms: 300 });
+      await t.legenda('Escolha o parceiro <b>na lista</b> (a ferramenta sugere pela ADM informada). Se ele não estiver lá, peça ao Financeiro, por ticket, para cadastrá-lo. Depois marque <b>recorrência</b> e/ou <b>venda</b>.', { etapa: C, ms: 300 });
       await t.escolher(f.locator('#rP1'), { value: 'p-alfaadministradora' });
       await t.clicar(f.locator('#rRec'), { depois: 300 });
       if (!(await f.locator('#rRec').isChecked())) await f.locator('#rRec').check(); // a janela rola enquanto o cursor chega
@@ -406,7 +417,7 @@ module.exports = [
       await t.digitar(f.locator('#rObs'), 'Indicação do síndico, contrato assinado em setembro.', { atraso: 22 });
       await t.clicar(f.locator('#rEnviar'), { depois: 1800 });
       await t.legenda('Sem parceiro? Marque <b>Não tem parceiro</b> — não gera comissão, mas fica registrado.', { etapa: C, ms: 300 });
-      await t.clicar(f.locator('[data-abrir$="-f4103"]'), { depois: 1300 });
+      await t.clicar(f.locator('[data-abrir$="-v4103"]'), { depois: 1300 });
       await t.clicar(f.locator('label:has(input[name=tp][value=nao])'), { depois: 300 });
       if (!(await f.locator('input[name=tp][value=nao]').isChecked())) await f.locator('input[name=tp][value=nao]').check();
       await t.pausa(600);
@@ -434,7 +445,7 @@ module.exports = [
       await t.legenda('E o <b>Excel do mês</b> leva a lista completa para uma planilha.', { etapa: X, ms: 300 });
       await t.mostrar(f.locator('#exportBtn'), 2400);
     },
-    resumo: ['<b>Importar</b> a planilha de implantações do mês', '<b>Comercial</b> responde: parceiro e tipo de comissão', '<b>Gestão</b> aprova · <b>Financeiro</b> cadastra na Prestação de Contas'],
+    resumo: ['<b>Puxar da carteira</b> os condomínios da vigência', '<b>Comercial</b> responde: parceiro e tipo de comissão', '<b>Gestão</b> aprova · <b>Financeiro</b> cadastra na Prestação de Contas'],
   },
   {
     nome: 'ferramenta-partnerchip',

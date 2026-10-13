@@ -1,6 +1,6 @@
 'use strict';
 /*
- * Gera os manuais do Portal MyBlue em PDF (Manual Geral + um por setor).
+ * Gera os manuais do Portal MyBlue em PDF (Manual do Portal – Geral + um Manual do Portal – Setor … por setor).
  *
  *   node docs/manuais/fonte/gerar-manuais.js
  *
@@ -14,7 +14,7 @@ const { SETORES, FERRAMENTAS } = require('./setores');
 const { esc, fig, passos, dica, atencao, tabela, etq, documento, capVersoes, pdfTimbrado, playwright } = require('./padrao');
 
 const SAIDA = path.join(__dirname, '..');
-const VERSAO = '2.0';
+const VERSAO = '2.1';
 const DATA = 'Outubro de 2026';
 
 const PRIO = { urgente: 'Urgente', alta: 'Alta', media: 'Média', baixa: 'Baixa' };
@@ -30,6 +30,7 @@ const HISTORICO = [
   ['1.2', '08/10/2026', 'Perfis Coordenador e Supervisor, acessos centralizados no cadastro (perfil + setor), gestão do setor; Suprimentos, Parceiros e Comissões como subáreas da Administrativa/Financeira; o que cada aba das ferramentas faz.'],
   ['1.3', '09/10/2026', 'Passo a passo das ferramentas da Administrativa/Financeira; Tutoriais em vídeo; baixar o HTML de versões anteriores.'],
   ['2.0', '09/10/2026', 'Manuais no padrão visual da MyBlue (timbrado, partes e capítulos); catálogo das ferramentas; Central de Patrocínio e Gestão de Viagens; Central de Ferramentas do Crédito com as sete automações; regra de excedente por boleto da Prestação de Contas (v7); regra de tutoriais sempre em dia.'],
+  ['2.1', '13/10/2026', 'Títulos no padrão <b>Manual do Portal – Geral</b> e <b>Manual do Portal – Setor …</b>. Carteira: <i>Adicionar novos</i> pela planilha de implantação (ID Vouch, vigência, executivo de negócios e CNPJ), sem importação de CSV. Comissões de Novos Condomínios: a gestão <i>puxa da carteira</i> os condomínios da vigência, parceiro só da lista e cadastro de parceiro novo pelo financeiro. Pesquisa em Módulos e dados e em Ferramentas do setor.'],
 ];
 const VERSOES = (doc) => capVersoes({
   titulo: `Manutenção e controle de versão deste manual`,
@@ -228,7 +229,7 @@ ${passos([
 </ul>
 <div class="grade2"><div>${fig('20-coord-usuarios', 'Usuários do setor.')}</div><div>${fig('20b-coord-novo', 'Cadastro de usuário pelo coordenador.')}</div></div>
 <h2>Ferramentas do setor</h2>
-<p>Clique numa ferramenta para:</p>
+<p>Use o campo <b>Pesquisar</b> para achar a ferramenta pelo nome, setor ou arquivo. Clique numa ferramenta para:</p>
 <ul>
   <li><b>Enviar uma versão nova do HTML</b> quando a ferramenta for alterada. A versão anterior fica guardada.</li>
   <li><b>Voltar para uma versão anterior</b>, em <i>Versões anteriores → Usar esta</i>, se algo der errado.</li>
@@ -252,13 +253,29 @@ const CARTEIRA = `
 <ul>
   <li><b>Condomínios:</b> indicadores (ativos, comarcas, pessoas por função, ativos sem responsável), busca por nome, razão social, CNPJ ou ID, filtros por situação, UF, administradora e responsável. Clique no condomínio para ver a ficha completa e o histórico de alterações.</li>
   <li><b>Responsáveis:</b> quantos condomínios ativos cada pessoa tem, por UF. Clique no número para ver a lista.</li>
+  <li><b>Adicionar novos:</b> a implantação envia o <i>Controle de Implantações</i> (.xlsx ou .csv, como está), escolhe a <b>vigência</b> (mês/ano da data do contrato) e confere os condomínios que ainda não estão na carteira.</li>
   <li><b>Exportar CSV:</b> baixa a carteira no formato da planilha, que abre no Excel.</li>
 </ul>
+<h2>Cadastro do condomínio</h2>
+<ul>
+  <li><b>ID Vouch</b> (o código do condomínio no Vouch) é informado no cadastro, não é gerado pelo portal. <b>Condomínio (Apelido Vouch)</b> é o nome curto usado no Vouch.</li>
+  <li><b>Vigência do contrato</b> (mês/ano) é obrigatória para condomínio novo. Os que já estavam na carteira preenchem ao editar (filtro <i>sem vigência</i>).</li>
+  <li><b>Executivo de negócios</b> e <b>CNPJ</b> vêm da planilha de implantação. O CNPJ é conferido pelo dígito verificador; quando o Excel corta o número (6,60363E+13), o portal avisa para digitar.</li>
+  <li>A vigência e o executivo alimentam a <b>Comissões de Novos Condomínios</b>: a gestão comercial puxa de lá os condomínios de cada vigência.</li>
+</ul>
+<h2>Adicionar condomínios novos</h2>
+${passos([
+  'Em <b>Carteira de condomínios → Adicionar novos</b>, envie o <b>Controle de Implantações</b> (.xlsx ou .csv, como está).',
+  'Escolha a <b>vigência</b>. O portal mostra só os condomínios que ainda não estão na carteira; os parecidos com um existente vêm desmarcados, e os marcados para desconsiderar, repetidos ou sem data de contrato ficam de fora.',
+  'Para cada condomínio, informe o <b>ID Vouch</b> (obrigatório), confira o apelido, o executivo de negócios e o CNPJ e, se quiser, os responsáveis do seu setor.',
+  'Clique em <b>Adicionar</b>.',
+])}
 ${fig('18-carteira', 'Carteira de condomínios: indicadores, filtros e a lista com os responsáveis.')}
 ${tabela(['Quem', 'O que pode'], [
   ['Todos', 'Consultar e exportar.'],
   ['Coordenador e supervisor de Cobrança ou Crédito', 'Alterar e <b>transferir</b> o responsável do setor deles (aba Responsáveis → Transferir).'],
-  ['Administração', 'Cadastrar, editar, remover, importar o CSV da planilha e transferir qualquer função.'],
+  ['Coordenador e supervisor', '<b>Adicionar novos</b> pela planilha de implantação (os responsáveis só do setor deles).'],
+  ['Administração', 'Cadastrar, editar, remover, adicionar novos e transferir qualquer função.'],
 ])}
 ${dica('A carteira também decide para quem vai o ticket de condomínio em Cobrança e Crédito. Mantenha os responsáveis em dia.')}`;
 
@@ -284,7 +301,7 @@ function CATALOGO() {
   ${tabela(['Setor', 'Ferramenta', 'Para que serve'], linhas.map(([setor, k]) => [setor, `<b>${FERRAMENTAS[k].nome}</b>${FERRAMENTAS[k].video ? '<br><span class="etq azul" style="margin-top:1mm">vídeo</span>' : ''}`, FERRAMENTAS[k].descricao]))}
   <h2>Onde ficam os dados de cada ferramenta</h2>
   ${tabela(['Ferramenta', 'Dados'], linhas.map(([, k]) => [`<b>${FERRAMENTAS[k].nome}</b>`, FERRAMENTAS[k].dados]))}
-  ${dica('O passo a passo de cada ferramenta (o que cada aba faz e como fazer cada tarefa) está no <b>manual do setor</b> dela. As marcadas com <b>vídeo</b> têm tutorial no menu <b>Tutoriais</b>.')}
+  ${dica('O passo a passo de cada ferramenta (o que cada aba faz e como fazer cada tarefa) está no <b>Manual do Portal – Setor</b> dela. As marcadas com <b>vídeo</b> têm tutorial no menu <b>Tutoriais</b>.')}
   <h2>Atualização das ferramentas</h2>
   <ul>
     <li>Quando uma ferramenta muda, o coordenador ou supervisor do setor envia o HTML novo em <b>Gestão do setor → Ferramentas do setor</b> (a administração, em <b>Módulos e dados</b>). Todos passam a usar a versão nova.</li>
@@ -310,7 +327,7 @@ ${tabela(['Grupo', 'Vídeos'], [
 </ul>
 ${atencao('A página da administração avisa quando uma ferramenta recebeu um HTML novo <b>depois</b> do vídeo dela (<i>ferramenta atualizada — regravar</i>) e lista as ferramentas que ainda não têm tutorial.')}`;
 
-/* ---------- Manual Geral ---------- */
+/* ---------- Manual do Portal – Geral ---------- */
 function manualGeral() {
   const est = [];
   const cap = (titulo, html) => { est.push({ cap: titulo, html }); return ''; };
@@ -427,6 +444,7 @@ function manualGeral() {
   <h2>Módulos e dados</h2>
   <ul>
     <li>Cada ferramenta é um <b>módulo</b> (um arquivo HTML) com nome, setor, ícone e situação. Envie novas versões e volte versões anteriores.</li>
+    <li><b>Pesquisar:</b> o campo abaixo dos botões filtra por nome, setor, identificador, nome do arquivo ou descrição, sem acento e com várias palavras (mostra <i>x de y módulos</i>).</li>
     <li>Escolha <b>onde ficam os dados</b> e, nas ferramentas que usavam planilha Google, importe os dados e passe a usar o banco do portal.</li>
     <li>Nas ferramentas que vieram do Claude (Boletos, Síndicos), use <b>Importar dados (JSON)</b> e <b>Baixar tudo (JSON)</b>.</li>
     <li>Em <b>Setores</b>, crie, renomeie ou remova setores. Em <b>Backup do banco</b>, baixe um arquivo com todas as tabelas.</li>
@@ -475,11 +493,11 @@ function manualGeral() {
     ['Que tamanho de arquivo posso anexar?', 'Até 10 MB por arquivo. Imagens abrem no navegador; os demais arquivos são baixados.'],
   ].map(([q, r]) => `<h3>${q}</h3><p>${r}</p>`).join('')}`);
   void corpo;
-  est.push(VERSOES('Cada setor também tem o seu <b>manual do setor</b>, com as ferramentas, a rotina e os tipos de demanda que atende.'));
-  return documento({ chapeu: 'Manual de utilização', titulo: 'Portal MyBlue', versao: VERSAO, data: DATA, fim: 'Manual' }, est);
+  est.push(VERSOES('Cada setor também tem o seu <b>Manual do Portal – Setor</b>, com as ferramentas, a rotina e os tipos de demanda que atende.'));
+  return documento({ chapeu: 'Manual do Portal MyBlue', titulo: 'Manual do Portal – Geral', sub: 'Acesso, menu, Central de Tickets, carteira e administração &nbsp;•&nbsp; MyBlue Condomínio Garantido', versao: VERSAO, data: DATA, fim: 'Manual' }, est);
 }
 
-/* ---------- Manual do setor ---------- */
+/* ---------- Manual do Portal – Setor … ---------- */
 function manualSetor(s) {
   // artigo certo para o nome do setor ("da Cobrança", "do Crédito")
   const fem = ['Administrativa/Financeira', 'Cobrança', 'Implantação', 'Máquina de Vendas', 'Supervisão', 'Gerência'].includes(s.nome);
@@ -510,7 +528,7 @@ function manualSetor(s) {
     ${s.supervisao ? '<li><b>Supervisão da Central de Tickets</b>: visão e direcionamento dos tickets de <b>todos</b> os setores (veja o capítulo próprio).</li>' : ''}
   </ul>
   ${fig('02-inicio', 'Tela inicial: atalho da Central de Tickets e as ferramentas liberadas para você.', 100, subs.length ? 'pequena' : '')}
-  ${dica('O passo a passo de acesso, senha e menu está no <b>Manual Geral do Portal MyBlue</b>.')}`) +
+  ${dica('O passo a passo de acesso, senha e menu está no <b>Manual do Portal – Geral</b>.')}`) +
 
   (subs.length ? cap('Subáreas do setor', `
   <p class="intro">Ficam sob a responsabilidade ${art.do} ${esc(s.nome)}:</p>
@@ -604,7 +622,7 @@ function manualSetor(s) {
     ${s.carteira ? `<li>Na Carteira de condomínios, alteram e transferem o <b>${s.carteira}</b> de cada condomínio.</li>` : ''}
     <li>Coordenadores, supervisores e administradores são cadastrados pela administração.</li>
   </ul>
-  ${dica('O passo a passo completo está no <b>Manual Geral</b>, capítulo <i>Gestão do setor</i>.')}`) +
+  ${dica('O passo a passo completo está no <b>Manual do Portal – Geral</b>, capítulo <i>Gestão do setor</i>.')}`) +
 
   cap('Quando o setor precisa de outro setor', `
   <p>Quando ${art.o} ${esc(s.nome)} depende de outro setor, <b>abra um ticket</b> em vez de pedir por mensagem ou e-mail. Assim fica registrado, com prazo e responsável.</p>
@@ -640,8 +658,8 @@ function manualSetor(s) {
   <p>Dúvidas sobre acesso, equipe ou tipos de demanda: fale com o coordenador do setor ou com a administração do portal.</p>`);
 
   void corpo;
-  est.push(VERSOES('O Manual Geral do Portal MyBlue traz o passo a passo de acesso, senha, menu e da Central de Tickets.'));
-  return documento({ chapeu: 'Manual do setor', titulo: esc(s.nome), sub: 'Portal MyBlue &nbsp;•&nbsp; MyBlue Condomínio Garantido', versao: VERSAO, data: DATA, fim: 'Manual' }, est);
+  est.push(VERSOES('O Manual do Portal – Geral traz o passo a passo de acesso, senha, menu e da Central de Tickets.'));
+  return documento({ chapeu: 'Manual do Portal MyBlue', titulo: `Manual do Portal – Setor ${esc(s.nome)}`, sub: 'Portal MyBlue &nbsp;•&nbsp; MyBlue Condomínio Garantido', versao: VERSAO, data: DATA, fim: 'Manual' }, est);
 }
 
 /* ---------- PDF ---------- */
@@ -650,13 +668,15 @@ async function gerar() {
   const br = await chromium.launch();
   const page = await br.newPage();
   const destino = process.env.SAIDA_MANUAIS || SAIDA;
-  const lista = [['Manual-Geral-Portal-MyBlue', manualGeral()]];
-  for (const s of SETORES) lista.push([`Manual-Setor-${s.arquivo}`, manualSetor(s)]);
+  // nomes: "Manual do Portal – Geral" e "Manual do Portal – Setor Crédito" (sem acento, para links e e-mail)
+  const arq = (t) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const lista = [['Manual-do-Portal-Geral', manualGeral()]];
+  for (const s of SETORES) lista.push([`Manual-do-Portal-Setor-${arq(s.nome)}`, manualSetor(s)]);
   fs.mkdirSync(path.join(destino, 'setores'), { recursive: true });
   const pedidos = process.argv.slice(2);
   for (const [arquivo, html] of lista) {
     if (pedidos.length && !pedidos.some((x) => arquivo.includes(x))) continue;
-    const pdf = path.join(destino, arquivo.startsWith('Manual-Setor') ? 'setores' : '', arquivo + '.pdf');
+    const pdf = path.join(destino, arquivo.startsWith('Manual-do-Portal-Setor') ? 'setores' : '', arquivo + '.pdf');
     await pdfTimbrado(page, html, pdf);
     console.log('ok', path.relative(destino, pdf));
   }

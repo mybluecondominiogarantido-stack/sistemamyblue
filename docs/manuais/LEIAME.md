@@ -2,10 +2,10 @@
 
 Todos no padrão visual da MyBlue (papel timbrado, capa, sumário por partes, capítulos numerados e histórico de versões).
 
-- `Manual-Geral-Portal-MyBlue.pdf`: acesso e conta, menu, perfis e acessos (perfil + setor no cadastro), Central de Tickets (abrir, acompanhar, atender, líder, supervisão), avisos, painel, Carteira de condomínios, Central de Links, gestão do setor (coordenador e supervisor), administração, quem pode o quê e perguntas frequentes.
+- `Manual-do-Portal-Geral.pdf` (Manual do Portal – Geral): acesso e conta, menu, perfis e acessos (perfil + setor no cadastro), Central de Tickets (abrir, acompanhar, atender, líder, supervisão), avisos, painel, Carteira de condomínios, Central de Links, gestão do setor (coordenador e supervisor), administração, quem pode o quê e perguntas frequentes.
 - `Fluxograma-Portal-MyBlue.pdf`: fluxograma operacional (A4 paisagem) da Central de Tickets, do acesso de uma pessoa nova e da ferramenta nova ou atualizada, com a página de atores, formas, prazos e situações.
 - `Guia-TI-Email-Microsoft365.pdf`: passo a passo para o TI ligar o e-mail dos avisos pelo Microsoft 365 (gerado por `fonte/gerar-guia-email.js`).
-- `setores/Manual-Setor-<setor>.pdf`: um por setor (Suprimentos, Parceiros e Comissões de Novos Condomínios estão no manual da Administrativa/Financeira, como subáreas), com as ferramentas do setor (o que cada aba faz e, nas da Administrativa/Financeira, o passo a passo de cada tarefa), como recebe e trata os tickets, a rotina da equipe e do líder, a gestão do setor, os tipos de demanda sugeridos e quando acionar outros setores.
+- `setores/Manual-do-Portal-Setor-<Setor>.pdf` (Manual do Portal – Setor X): um por setor (Suprimentos, Parceiros e Comissões de Novos Condomínios estão no manual da Administrativa/Financeira, como subáreas), com as ferramentas do setor (o que cada aba faz e, nas da Administrativa/Financeira, o passo a passo de cada tarefa), como recebe e trata os tickets, a rotina da equipe e do líder, a gestão do setor, os tipos de demanda sugeridos e quando acionar outros setores.
 
 As telas usam dados fictícios. Para atualizar os manuais:
 
