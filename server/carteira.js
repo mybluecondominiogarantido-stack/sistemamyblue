@@ -206,4 +206,4 @@ async function responsavelDoCondominio(db, condominioId, setorId) {
   return achado ? { id: achado.id, nome: achado.nome, carteira: c.pessoa } : { id: null, carteira: c.pessoa };
 }
 
-module.exports = { acharPessoa, funcoesPorSetor, responsavelDoCondominio, FUNCOES, CAMPOS, SITUACOES, interpretar, normalizar, exportar, lerCsv };
+module.exports = { acharPessoa, funcoesPorSetor, responsavelDoCondominio, FUNCOES, CAMPOS, SITUACOES, interpretar, normalizar, exportar, lerCsv, decodificar, semAcento };
