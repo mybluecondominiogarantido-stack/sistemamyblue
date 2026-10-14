@@ -307,13 +307,37 @@ CREATE TABLE IF NOT EXISTS comissao_leitores (
   PRIMARY KEY (relatorio_id, usuario_id)
 );
 CREATE INDEX IF NOT EXISTS idx_comissao_leitores_usuario ON comissao_leitores(usuario_id);
+
+-- planilhas que a gestão da comissão pede a cada pessoa no mês (Crédito, Cobrança, metas…) e o arquivo que ela envia
+CREATE TABLE IF NOT EXISTS comissao_planilhas (
+  id SERIAL PRIMARY KEY,
+  modulo_slug TEXT NOT NULL,
+  competencia TEXT NOT NULL,
+  chave TEXT NOT NULL,
+  usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  tipo TEXT NOT NULL DEFAULT '',
+  titulo TEXT NOT NULL DEFAULT '',
+  nome TEXT NOT NULL DEFAULT '',
+  pedido_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  pedido_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  cancelado_em TIMESTAMPTZ,
+  arquivo_nome TEXT,
+  arquivo_tipo TEXT,
+  arquivo BYTEA,
+  tamanho INTEGER,
+  enviado_em TIMESTAMPTZ,
+  importado_em TIMESTAMPTZ,
+  importado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_comissao_plan_usuario ON comissao_planilhas(usuario_id, competencia);
+CREATE INDEX IF NOT EXISTS idx_comissao_plan_chave ON comissao_planilhas(modulo_slug, competencia, chave);
 `;
 
 /* Supabase publica o schema "public" pela API dele (PostgREST). Com RLS ligado e sem
    políticas, ninguém lê nem grava por lá; o portal conecta como dono das tabelas e não é afetado. */
 const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 'permissoes', 'armazenamento', 'colecoes', 'registros', 'documentos', 'auditoria',
   'setor_membros', 'ticket_categorias', 'tickets', 'ticket_eventos', 'ticket_anexos', 'notificacoes', 'condominios',
-  'links_pagina', 'links', 'links_campanhas', 'tutoriais', 'comissao_relatorios', 'comissao_leitores'];
+  'links_pagina', 'links', 'links_campanhas', 'tutoriais', 'comissao_relatorios', 'comissao_leitores', 'comissao_planilhas'];
 const RLS = TABELAS.map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`).join(';\n');
 
 /* Ajustes em bancos já existentes (rodam a cada início e não fazem nada se já estiverem aplicados). */
