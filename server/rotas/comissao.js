@@ -9,6 +9,10 @@
  *   - quem abre a ferramenta de Comissionamento (o gestor da comissão e a administração do portal, que abre todas).
  * Ninguém mais: nem a supervisão de tickets, nem coordenadores de outros setores, nem os colegas.
  * Reenviar cria uma nova versão; a anterior fica guardada e sai das listas.
+ *
+ * Planilhas do mês: a gestão pede a planilha a quem tem de mandar (Crédito, Cobrança, metas dos setores…).
+ * A pessoa vê só o pedido dela em "Minhas comissões" e envia o arquivo; quem pediu recebe o aviso no sino
+ * e importa o arquivo na ferramenta. A pessoa nunca vê a ferramenta, as regras ou a comissão de ninguém.
  */
 const express = require('express');
 
@@ -142,7 +146,8 @@ function rotasComissao({ db, seg, cfg, avisos }) {
       FROM comissao_relatorios WHERE usuario_id = $1 AND substituido_em IS NULL`, [u.id]);
     const e = await db.um(`SELECT COUNT(*)::int AS n FROM comissao_relatorios r JOIN comissao_leitores l ON l.relatorio_id = r.id
       WHERE l.usuario_id = $1 AND r.substituido_em IS NULL`, [u.id]);
-    res.json({ meus: a.meus, pendentes: a.pendentes, equipe: e.n });
+    const pl = await db.um(`SELECT COUNT(*)::int AS n FROM comissao_planilhas WHERE usuario_id = $1 AND cancelado_em IS NULL AND enviado_em IS NULL`, [u.id]);
+    res.json({ meus: a.meus, pendentes: a.pendentes, equipe: e.n, planilhas: pl.n });
   });
 
   /* um demonstrativo: a pessoa, quem está na lista de leitores dele ou quem usa a ferramenta que o enviou */
@@ -185,6 +190,129 @@ function rotasComissao({ db, seg, cfg, avisos }) {
     await db.q('UPDATE comissao_relatorios SET ciente_em = COALESCE(ciente_em, now()), aberto_em = COALESCE(aberto_em, now()) WHERE id = $1', [rel.id]);
     await seg.auditar(req, 'comissao_ciente', rel.modulo_slug, { competencia: rel.competencia, relatorio: rel.id });
     res.json({ ok: true });
+  });
+
+  /* ===================== planilhas do mês ===================== */
+  const limiteArquivo = (cfg.limiteAnexoMb || 10) * 1024 * 1024;
+  const corpoArquivo = express.raw({ type: () => true, limit: limiteArquivo });
+  const EXT_PLANILHA = /\.(xlsx|xlsm|xls|csv)$/i;
+  const CAMPOS_PLAN = `p.id, p.competencia, p.chave, p.usuario_id, p.tipo, p.titulo, p.nome, p.pedido_em, p.enviado_em, p.arquivo_nome, p.tamanho, p.importado_em`;
+
+  /* a gestão pede as planilhas do mês (ou renova o pedido de quem já tinha) */
+  r.post('/api/comissao/planilhas', json, async (req, res) => {
+    const b = req.body || {};
+    const slug = String(b.modulo || '');
+    if (!(await podeEnviar(req.usuario, slug))) return erro(res, 403, 'Só quem usa a ferramenta de Comissionamento pede planilhas.');
+    const comp = String(b.competencia || '');
+    if (!COMP_RE.test(comp)) return erro(res, 400, 'Competência inválida (use aaaa-mm).');
+    const lista = Array.isArray(b.pedidos) ? b.pedidos : [];
+    if (!lista.length) return erro(res, 400, 'Escolha quem deve enviar a planilha.');
+    if (lista.length > 300) return erro(res, 400, 'No máximo 300 pedidos por vez.');
+    const ativos = new Set((await db.q('SELECT id FROM usuarios WHERE ativo')).rows.map((x) => x.id));
+    const itens = [];
+    for (const x of lista) {
+      const chave = texto(x.chave, 80), uid = Number(x.usuario_id);
+      if (!chave) return erro(res, 400, 'Pedido sem identificação da pessoa.');
+      if (!ativos.has(uid)) return erro(res, 400, `${texto(x.nome, 80) || chave}: usuário do portal inválido ou inativo.`);
+      itens.push({ chave, uid, tipo: texto(x.tipo, 30), titulo: texto(x.titulo, 160) || 'Planilha de comissão', nome: texto(x.nome, 160) || chave });
+    }
+    const feitos = await db.tx(async (t) => {
+      const out = [];
+      for (const it of itens) {
+        const ant = await t.um(`SELECT id FROM comissao_planilhas WHERE modulo_slug = $1 AND competencia = $2 AND chave = $3 AND cancelado_em IS NULL ORDER BY id DESC LIMIT 1`, [slug, comp, it.chave]);
+        if (ant) {
+          await t.q('UPDATE comissao_planilhas SET usuario_id = $2, tipo = $3, titulo = $4, nome = $5, pedido_por = $6 WHERE id = $1', [ant.id, it.uid, it.tipo, it.titulo, it.nome, req.usuario.id]);
+          out.push({ id: ant.id, uid: it.uid, novo: false });
+        } else {
+          const { id } = await t.um(`INSERT INTO comissao_planilhas (modulo_slug, competencia, chave, usuario_id, tipo, titulo, nome, pedido_por)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`, [slug, comp, it.chave, it.uid, it.tipo, it.titulo, it.nome, req.usuario.id]);
+          out.push({ id, uid: it.uid, novo: true });
+        }
+      }
+      return out;
+    });
+    const rot = nomeComp(comp);
+    for (const f of feitos.filter((x) => x.novo)) {
+      const it = itens[feitos.indexOf(f)];
+      await avisos.notificar([f.uid], {
+        tipo: 'comissao', link: '#/comissoes/enviar', email: b.avisar_email !== false, autor_id: req.usuario.id,
+        titulo: `Envie sua planilha de comissão de ${rot}`,
+        texto: `A gestão da comissão pediu: ${it.titulo}. Envie o arquivo em Minhas comissões, no portal.`,
+      });
+    }
+    await seg.auditar(req, 'comissao_planilhas_pedidas', slug, { competencia: comp, pedidos: feitos.length });
+    res.status(201).json({ pedidos: feitos.map((f) => ({ id: f.id, novo: f.novo })) });
+  });
+
+  /* situação dos pedidos de uma competência (para a ferramenta) */
+  r.get('/api/comissao/planilhas', async (req, res) => {
+    const slug = String(req.query.modulo || '');
+    if (!(await podeEnviar(req.usuario, slug))) return erro(res, 403, 'Só quem usa a ferramenta de Comissionamento vê os pedidos.');
+    const comp = String(req.query.competencia || '');
+    if (!COMP_RE.test(comp)) return erro(res, 400, 'Competência inválida.');
+    const { rows } = await db.q(`SELECT ${CAMPOS_PLAN}, u.nome AS usuario_nome FROM comissao_planilhas p JOIN usuarios u ON u.id = p.usuario_id
+      WHERE p.modulo_slug = $1 AND p.competencia = $2 AND p.cancelado_em IS NULL ORDER BY p.nome`, [slug, comp]);
+    res.json({ planilhas: rows });
+  });
+
+  async function pedidoDaGestao(req, res) {
+    const p = await db.um('SELECT * FROM comissao_planilhas WHERE id = $1 AND cancelado_em IS NULL', [Number(req.params.id) || 0]);
+    if (!p || !(await podeEnviar(req.usuario, p.modulo_slug))) { erro(res, 404, 'Pedido não encontrado.'); return null; }
+    return p;
+  }
+  // o arquivo é sempre baixado (nunca aberto no navegador)
+  r.get('/api/comissao/planilhas/:id/arquivo', async (req, res) => {
+    const p = await pedidoDaGestao(req, res);
+    if (!p) return;
+    if (!p.arquivo) return erro(res, 404, 'A pessoa ainda não enviou a planilha.');
+    res.set('Content-Type', 'application/octet-stream');
+    res.set('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(p.arquivo_nome || 'planilha.xlsx')}`);
+    res.set('Content-Security-Policy', "default-src 'none'; sandbox");
+    res.set('Cache-Control', 'private, no-store');
+    res.send(p.arquivo);
+  });
+  r.post('/api/comissao/planilhas/:id/importado', async (req, res) => {
+    const p = await pedidoDaGestao(req, res);
+    if (!p) return;
+    if (!p.enviado_em) return erro(res, 409, 'A pessoa ainda não enviou a planilha.');
+    await db.q('UPDATE comissao_planilhas SET importado_em = now(), importado_por = $2 WHERE id = $1', [p.id, req.usuario.id]);
+    res.json({ ok: true });
+  });
+  r.delete('/api/comissao/planilhas/:id', async (req, res) => {
+    const p = await pedidoDaGestao(req, res);
+    if (!p) return;
+    await db.q('UPDATE comissao_planilhas SET cancelado_em = now() WHERE id = $1', [p.id]);
+    res.json({ ok: true });
+  });
+
+  /* a pessoa: os pedidos dela e o envio do arquivo */
+  r.get('/api/comissao/minhas-planilhas', async (req, res) => {
+    const { rows } = await db.q(`SELECT p.id, p.competencia, p.tipo, p.titulo, p.pedido_em, p.enviado_em, p.arquivo_nome, p.tamanho, p.importado_em
+      FROM comissao_planilhas p WHERE p.usuario_id = $1 AND p.cancelado_em IS NULL ORDER BY p.competencia DESC, p.id DESC LIMIT 24`, [req.usuario.id]);
+    res.json({ planilhas: rows });
+  });
+  r.post('/api/comissao/minhas-planilhas/:id', corpoArquivo, async (req, res) => {
+    const p = await db.um('SELECT * FROM comissao_planilhas WHERE id = $1 AND cancelado_em IS NULL', [Number(req.params.id) || 0]);
+    if (!p || p.usuario_id !== req.usuario.id) return erro(res, 404, 'Pedido não encontrado.');
+    const buf = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+    if (!buf.length) return erro(res, 400, 'Arquivo vazio.');
+    let nome = 'planilha.xlsx';
+    try { nome = decodeURIComponent(String(req.headers['x-nome-arquivo'] || nome)); } catch { /* mantém padrão */ }
+    nome = nome.replace(/[\\/\r\n"]/g, '_').slice(0, 200);
+    if (!EXT_PLANILHA.test(nome)) return erro(res, 400, 'Envie a planilha em Excel (.xlsx ou .xls) ou CSV.');
+    const reenvio = !!p.enviado_em;
+    await db.q(`UPDATE comissao_planilhas SET arquivo = $2, arquivo_nome = $3, arquivo_tipo = $4, tamanho = $5, enviado_em = now(), importado_em = NULL, importado_por = NULL WHERE id = $1`,
+      [p.id, buf, nome, String(req.headers['content-type'] || 'application/octet-stream').slice(0, 120), buf.length]);
+    // aviso no sino para quem pediu (e, se ninguém pediu, para quem usa a ferramenta não há como saber: fica na lista)
+    if (p.pedido_por && p.pedido_por !== req.usuario.id) {
+      await avisos.notificar([p.pedido_por], {
+        tipo: 'comissao', link: `#/m/${p.modulo_slug}`, email: false, autor_id: req.usuario.id,
+        titulo: `${req.usuario.nome} ${reenvio ? 'enviou de novo' : 'enviou'} a planilha de comissão de ${nomeComp(p.competencia)}`,
+        texto: `${p.titulo}: ${nome}. Abra o Comissionamento → Planilhas do mês para importar e conferir.`,
+      });
+    }
+    await seg.auditar(req, 'comissao_planilha_enviada', p.modulo_slug, { competencia: p.competencia, pedido: p.id, reenvio });
+    res.status(201).json({ ok: true, enviado_em: new Date().toISOString() });
   });
 
   return r;

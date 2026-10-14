@@ -350,3 +350,19 @@ input[type=checkbox],input[type=radio]{accent-color:var(--teal);width:16px;heigh
 .aviso-demo.ok{background:var(--green-bg);color:#16744f}
 .aviso-demo.alerta{background:var(--amber-bg);color:#7a5a1c}
 .palco .frame-demo{position:static;display:block;width:100%;height:900px;min-height:320px;border:1px solid var(--border);border-radius:var(--r);background:#e9eef2}
+
+/* Minhas comissões: planilhas que a gestão da comissão pediu */
+.planilhas-mes { margin: 4px 0 22px; }
+.planilhas-mes h2 { display: flex; align-items: center; gap: 8px; font-size: 16px; margin: 0 0 2px; }
+.planilhas-mes h2 svg { width: 18px; height: 18px; }
+.planilhas-mes .sub { margin-bottom: 10px; }
+.pedido-plan { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; background: var(--surface, #fff);
+  border: 1px solid var(--border, #dde8ec); border-left: 4px solid var(--amber, #d98a1b); border-radius: 12px; padding: 12px 16px; margin-bottom: 8px; }
+.pedido-plan.enviada { border-left-color: var(--blue, #0b76ba); }
+.pedido-plan.ok { border-left-color: var(--green, #1f9d6b); }
+.pedido-plan .info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.pedido-plan .info > span:not(.etiqueta) { color: var(--muted, #5d7179); font-size: 12.5px; }
+.pedido-plan .etiqueta { align-self: flex-start; }
+.pedido-plan .arq { display: inline-flex; align-items: center; gap: 5px; }
+.pedido-plan .arq svg { width: 14px; height: 14px; }
+.pedido-plan label.btn { cursor: pointer; }

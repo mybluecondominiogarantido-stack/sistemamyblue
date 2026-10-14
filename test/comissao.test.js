@@ -10,11 +10,11 @@ const emails = [];
 
 function cliente() {
   let cookie = '';
-  return async function req(metodo, url, corpo) {
-    const headers = {};
+  return async function req(metodo, url, corpo, extra = {}) {
+    const headers = { ...extra };
     if (cookie) headers.cookie = cookie;
     let body;
-    if (typeof corpo === 'string') { body = corpo; headers['content-type'] = 'text/html'; }
+    if (typeof corpo === 'string' || Buffer.isBuffer(corpo)) { body = corpo; headers['content-type'] = headers['content-type'] || 'text/html'; }
     else if (corpo !== undefined) { body = JSON.stringify(corpo); headers['content-type'] = 'application/json'; }
     const r = await fetch(base + url, { method: metodo, headers, body, redirect: 'manual' });
     const sc = r.headers.get('set-cookie');
@@ -120,7 +120,7 @@ test('a pessoa vê só o seu; o líder e a diretoria veem a equipe; colegas não
   const m = (await ana('GET', '/api/comissao/meus')).json;
   assert.deepEqual(m.meus.map((x) => x.id), [relAna]);
   assert.equal(m.equipe.length, 0);
-  assert.deepEqual((await ana('GET', '/api/comissao/resumo')).json, { meus: 1, pendentes: 1, equipe: 0 });
+  assert.deepEqual((await ana('GET', '/api/comissao/resumo')).json, { meus: 1, pendentes: 1, equipe: 0, planilhas: 0 });
 
   const l = (await lia('GET', '/api/comissao/meus')).json;
   assert.deepEqual(l.meus.map((x) => x.id), [relLia]);
@@ -172,7 +172,7 @@ test('reenvio cria versão nova, avisa a atualização e a versão antiga sai da
 test('“Estou ciente”: só a própria pessoa confirma e o gestor acompanha', async () => {
   assert.equal((await lia('POST', `/api/comissao/relatorios/${relAna}/ciente`)).status, 403);
   assert.equal((await ana('POST', `/api/comissao/relatorios/${relAna}/ciente`)).status, 200);
-  assert.deepEqual((await ana('GET', '/api/comissao/resumo')).json, { meus: 1, pendentes: 0, equipe: 0 });
+  assert.deepEqual((await ana('GET', '/api/comissao/resumo')).json, { meus: 1, pendentes: 0, equipe: 0, planilhas: 0 });
   const st = (await gestor('GET', '/api/comissao/relatorios?modulo=comissionamento&competencia=2026-09')).json.relatorios;
   assert.ok(st.find((x) => x.id === relAna).ciente_em);
   assert.equal(st.find((x) => x.id === relLia).ciente_em, null);
@@ -193,4 +193,51 @@ test('Comissionamento: o HTML fica fora do repositório e só abre depois que a 
   assert.match(p.texto, /"modulo":"comissionamento"/);
   assert.match(p.texto, /"modo":"compartilhado"/);
   assert.equal((await ana('GET', '/m/comissionamento/')).status, 403);
+});
+
+test('Planilhas do mês: a gestão pede, a pessoa envia só a dela e quem pediu é avisado', async () => {
+  const pedido = { modulo: 'comissionamento', competencia: '2026-10', pedidos: [{ chave: 'p-ana', usuario_id: ids['ana@teste.com'], nome: 'Ana Analista', tipo: 'credito', titulo: 'Planilha de envio de boletos' }] };
+  assert.equal((await ana('POST', '/api/comissao/planilhas', pedido)).status, 403, 'quem não usa a ferramenta não pede');
+  const r = await gestor('POST', '/api/comissao/planilhas', pedido);
+  assert.equal(r.status, 201, r.texto);
+  const id = r.json.pedidos[0].id;
+  // a pessoa: aviso no sino + e-mail curto, o pedido em Minhas comissões e o contador no menu
+  const nAna = (await ana('GET', '/api/notificacoes')).json.notificacoes.find((n) => /Envie sua planilha/.test(n.titulo));
+  assert.ok(nAna && nAna.link === '#/comissoes/enviar');
+  assert.ok(emails.some((e) => /Envie sua planilha/.test(JSON.stringify(e))));
+  assert.equal((await ana('GET', '/api/comissao/resumo')).json.planilhas, 1);
+  const minhas = (await ana('GET', '/api/comissao/minhas-planilhas')).json.planilhas;
+  assert.equal(minhas.length, 1);
+  assert.equal(minhas[0].titulo, 'Planilha de envio de boletos');
+  assert.equal(minhas[0].enviado_em, null);
+  // outra pessoa não vê nem envia o pedido dela; a gestão não envia pela pessoa
+  assert.equal((await caio('GET', '/api/comissao/minhas-planilhas')).json.planilhas.length, 0);
+  const arq = Buffer.from('Nome do Cliente;Vencimento;Data Envio\nCond. Teste;10/10/2026;30/09/2026\n');
+  assert.equal((await caio('POST', `/api/comissao/minhas-planilhas/${id}`, arq, { 'x-nome-arquivo': 'p.csv', 'content-type': 'text/csv' })).status, 404);
+  assert.equal((await ana('POST', `/api/comissao/minhas-planilhas/${id}`, arq, { 'x-nome-arquivo': 'virus.exe', 'content-type': 'application/octet-stream' })).status, 400, 'só Excel ou CSV');
+  assert.equal((await gestor('GET', `/api/comissao/planilhas/${id}/arquivo`)).status, 404, 'ainda não enviada');
+  // envio
+  const env = await ana('POST', `/api/comissao/minhas-planilhas/${id}`, arq, { 'x-nome-arquivo': encodeURIComponent('Crédito Ana.csv'), 'content-type': 'text/csv' });
+  assert.equal(env.status, 201, env.texto);
+  assert.equal((await ana('GET', '/api/comissao/resumo')).json.planilhas, 0);
+  const nGil = (await gestor('GET', '/api/notificacoes')).json.notificacoes.find((n) => /Ana Analista enviou a planilha/.test(n.titulo));
+  assert.ok(nGil && nGil.link === '#/m/comissionamento', 'quem pediu recebe o aviso no sino');
+  // a gestão acompanha, baixa e marca como importada
+  const lista = (await gestor('GET', '/api/comissao/planilhas?modulo=comissionamento&competencia=2026-10')).json.planilhas;
+  assert.equal(lista[0].arquivo_nome, 'Crédito Ana.csv');
+  assert.ok(lista[0].enviado_em);
+  assert.equal((await ana('GET', '/api/comissao/planilhas?modulo=comissionamento&competencia=2026-10')).status, 403);
+  assert.equal((await ana('GET', `/api/comissao/planilhas/${id}/arquivo`)).status, 404);
+  const down = await gestor('GET', `/api/comissao/planilhas/${id}/arquivo`);
+  assert.equal(down.status, 200);
+  assert.match(down.headers.get('content-disposition'), /attachment/);
+  assert.match(down.texto, /Cond\. Teste/);
+  assert.equal((await gestor('POST', `/api/comissao/planilhas/${id}/importado`)).status, 200);
+  assert.ok((await ana('GET', '/api/comissao/minhas-planilhas')).json.planilhas[0].importado_em, 'a pessoa vê que a gestão recebeu');
+  // pedir de novo não duplica; cancelar tira o pedido da pessoa
+  const r2 = await gestor('POST', '/api/comissao/planilhas', pedido);
+  assert.equal(r2.json.pedidos[0].id, id);
+  assert.equal(r2.json.pedidos[0].novo, false);
+  assert.equal((await gestor('DELETE', `/api/comissao/planilhas/${id}`)).status, 200);
+  assert.equal((await ana('GET', '/api/comissao/minhas-planilhas')).json.planilhas.length, 0);
 });
