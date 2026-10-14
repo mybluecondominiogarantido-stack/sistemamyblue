@@ -220,14 +220,12 @@
         '<a href="#/carteira" class="' + (rota.indexOf('#/carteira') === 0 ? 'on' : '') + '">' + IC.casa + 'Carteira de condomínios</a>';
       // Comissões: a ferramenta (só para quem tem acesso) e os demonstrativos de cada pessoa
       var modCom = modulos.find(function (m) { return m.slug === MOD_COMISSAO; });
-      var temMinhas = resumoComissao && (resumoComissao.meus || resumoComissao.equipe);
-      if (modCom || temMinhas) {
-        html += '<div class="grupo">Comissões</div>' +
-          (modCom ? '<a href="#/m/' + MOD_COMISSAO + '" data-slug="' + MOD_COMISSAO + '" class="' + (atual === MOD_COMISSAO && rota.indexOf('#/m/') === 0 ? 'on ' : '') + (modCom.ativo ? '' : 'inativo') + '">' +
-            IC.grafico + '<span>' + esc(modCom.nome) + '</span>' + (quadros[MOD_COMISSAO] ? '<i class="aberto" title="Aberta"></i>' : '') + '</a>' : '') +
-          (temMinhas ? '<a href="#/comissoes" class="' + (rota.indexOf('#/comissoes') === 0 ? 'on' : '') + '">' + IC.documento + '<span>Minhas comissões</span>' +
-            '<i class="contador"' + (resumoComissao.pendentes ? '' : ' hidden') + ' title="Demonstrativos esperando o seu “Estou ciente”">' + resumoComissao.pendentes + '</i></a>' : '');
-      }
+      var pendC = resumoComissao ? resumoComissao.pendentes : 0;
+      html += '<div class="grupo">Comissões</div>' +
+        (modCom ? '<a href="#/m/' + MOD_COMISSAO + '" data-slug="' + MOD_COMISSAO + '" class="' + (atual === MOD_COMISSAO && rota.indexOf('#/m/') === 0 ? 'on ' : '') + (modCom.ativo ? '' : 'inativo') + '">' +
+          IC.grafico + '<span>' + esc(modCom.nome) + '</span>' + (quadros[MOD_COMISSAO] ? '<i class="aberto" title="Aberta"></i>' : '') + '</a>' : '') +
+        '<a href="#/comissoes" class="' + (rota.indexOf('#/comissoes') === 0 ? 'on' : '') + '">' + IC.documento + '<span>Minhas comissões</span>' +
+          '<i class="contador"' + (pendC ? '' : ' hidden') + ' title="Demonstrativos esperando o seu “Estou ciente”">' + pendC + '</i></a>';
     }
     porSetor(termo ? lista : lista.filter(function (m) { return m.slug !== MOD_COMISSAO; })).forEach(function (g) {
       html += '<div class="grupo">' + esc(g.setor) + '</div>';
