@@ -583,10 +583,20 @@ module.exports = [
       // cadastro e mês fictícios no banco do portal (as regras ficam na própria ferramenta)
       const ids = cen.id;
       const logins = { cr1: ids['bruna@myblue.com.br'], cr2: ids['davi@myblue.com.br'], cb1: ids['marcos@myblue.com.br'], sc: ids['caio@myblue.com.br'], sb: ids['lia@myblue.com.br'] };
-      const { chaves } = D.comissionamento(new Date(), logins, [ids['sueli@myblue.com.br']]);
+      const { chaves, comp } = D.comissionamento(new Date(), logins, [ids['sueli@myblue.com.br']]);
+      // a planilha da Bruna chega pelo portal (Planilhas do mês): o quadro dela começa vazio
+      const mes = JSON.parse(chaves[`comissao:mes:${comp}`]); mes.credito.cr1 = []; chaves[`comissao:mes:${comp}`] = JSON.stringify(mes);
       await cen.admin('POST', '/api/armazenamento/comissionamento', { set: chaves });
+      const pedidos = await cen.admin('POST', '/api/comissao/planilhas', { modulo: 'comissionamento', competencia: comp, avisar_email: false, pedidos: [
+        { chave: 'cr1', usuario_id: logins.cr1, nome: 'Bruna Reis', tipo: 'credito', titulo: 'Planilha de envio de boletos' },
+        { chave: 'cr2', usuario_id: logins.cr2, nome: 'Davi Rocha', tipo: 'credito', titulo: 'Planilha de envio de boletos' },
+        { chave: 'cb1', usuario_id: logins.cb1, nome: 'Marcos Lima', tipo: 'cobranca', titulo: 'Controle de cobrança (devedores do período)' }] });
+      const xlsx = require(path.join(process.env.BIBLIOTECAS || '', 'node_modules', 'xlsx'));
+      const wb = xlsx.utils.book_new();
+      xlsx.utils.book_append_sheet(wb, xlsx.utils.aoa_to_sheet(D.planilhaCredito(new Date(), 'Bruna Reis'), { cellDates: true }), 'Acompanhamento');
+      await cen.sessao.bruna('POST', `/api/comissao/minhas-planilhas/${pedidos.pedidos[0].id}`, xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' }), 'application/octet-stream');
     },
-    abertura: ['Metas e comissões de todos os setores, do lançamento ao demonstrativo.', ['Dashboard e resumo', 'Comercial: contratos e relatórios de garantia', 'Crédito, Implantação e Sucesso do Cliente', 'Fechar e enviar os demonstrativos']],
+    abertura: ['Metas e comissões de todos os setores, do lançamento ao demonstrativo.', ['Dashboard e resumo', 'Planilhas do mês: pedir e importar', 'Comercial: contratos e relatórios de garantia', 'Fechar e enviar os demonstrativos']],
     async gravar(t) {
       const f = quadro(t, 'comissionamento');
       const aba = (id) => f.locator(`[data-aba="${id}"]`);
@@ -603,7 +613,16 @@ module.exports = [
       await t.legenda('As abas ficam em grupos: <b>Visão geral</b>, <b>Setores</b> (uma para cada setor) e <b>Configuração</b>.', { etapa: P, ms: 300 });
       await t.mostrar(f.locator('#abas'), 2600);
 
-      const K = '2 · Comercial';
+      const PL = '2 · Planilhas do mês';
+      await t.legenda('Em <b>Planilhas do mês</b>, peça a planilha a quem precisa mandar. A pessoa vê <b>só o pedido dela</b> em Minhas comissões.', { etapa: PL, ms: 300 });
+      await t.clicar(aba('coleta'), { depois: 1800 });
+      await t.mostrar(f.locator('.card table').first(), 3200);
+      await t.legenda('Quando ela envia, chega o aviso no sino. Aqui, <b>Importar e conferir</b> leva a planilha para o quadro dela.', { etapa: PL, ms: 300 });
+      await t.clicar(f.locator('[data-coleta-importar]').first(), { depois: 2600 });
+      await t.legenda('A planilha entrou no quadro da assistente, no Crédito: confira o resultado de cada condomínio e a comissão.', { etapa: PL, ms: 300 });
+      await t.mostrar(f.locator('.resumo-pessoa').first(), 3000);
+
+      const K = '3 · Comercial';
       await t.clicar(aba('comercial'), { depois: 1200 });
       await t.legenda('No <b>Comercial</b>, 1º a <b>planilha de implantações</b>: entram os contratos com <b>Data contrato</b> no mês, já com o executivo de cada um.', { etapa: K, ms: 300 });
       await t.mostrar(f.locator('[data-drop="vouch"]'), 3600);
@@ -621,7 +640,7 @@ module.exports = [
       const coord = f.locator('.card', { has: f.locator('h2', { hasText: 'Coordenação comercial' }) });
       await coord.scrollIntoViewIfNeeded(); await t.mostrar(coord, 3600);
 
-      const L = '3 · Outros setores';
+      const L = '4 · Outros setores';
       await t.legenda('No <b>Crédito</b>: o envio de cada boleto. Fora do prazo com justificativa? <b>Pedir abono</b>: a supervisão aprova.', { etapa: L, ms: 300 });
       await t.clicar(aba('credito'), { depois: 1400 });
       await t.mostrar(f.locator('.resumo-pessoa'), 2600);
@@ -632,14 +651,14 @@ module.exports = [
       await t.clicar(aba('setor:Sucesso do Cliente'), { depois: 1400 });
       await t.mostrar(f.locator('table').first(), 3400);
 
-      const C = '4 · Pessoas e regras';
+      const C = '5 · Pessoas e regras';
       await t.legenda('Em <b>Pessoas e salários</b>: cadastro, salário, regra de cada pessoa e o <b>login no portal</b> (para onde vai o demonstrativo).', { etapa: C, ms: 300 });
       await t.clicar(aba('pessoas'), { depois: 1600 });
       await t.mostrar(f.locator('table').first(), 3000);
       await t.legenda('<b>Escolher diretoria</b> define quem vê os demonstrativos de todos. As regras e percentuais ficam em <b>Parâmetros</b>.', { etapa: C, ms: 300 });
       await t.mostrar(f.locator('[data-acao="diretoria"]'), 2600);
 
-      const E = '5 · Fechar e enviar';
+      const E = '6 · Fechar e enviar';
       await t.legenda('No <b>Resumo</b>: o valor de cada pessoa e a origem, o fechamento por setor e os ajustes.', { etapa: E, ms: 300 });
       await t.clicar(aba('resumo'), { depois: 1600 });
       await t.mostrar(f.locator('table').first(), 2600);
@@ -648,7 +667,7 @@ module.exports = [
       await t.legenda('O quadro mostra quem já abriu e quem clicou em <b>Estou ciente</b>. <b>Reenviar</b> manda uma versão corrigida.', { etapa: E, ms: 300 });
       await t.mostrar(f.locator('[data-enviar]').first(), 3000);
     },
-    resumo: ['Dashboard e resumo do mês', 'Comercial: planilha de implantações + relatórios de garantia', 'Crédito, Implantação e Sucesso do Cliente', 'Pessoas, logins e diretoria', '<b>Enviar para todos</b> e acompanhar quem confirmou'],
+    resumo: ['Dashboard e resumo do mês', '<b>Planilhas do mês</b>: pedir, receber o aviso e importar', 'Comercial: planilha de implantações + relatórios de garantia', 'Crédito, Implantação e Sucesso do Cliente', 'Pessoas, logins e diretoria', '<b>Enviar para todos</b> e acompanhar quem confirmou'],
   },
   {
     nome: 'ferramenta-credito',

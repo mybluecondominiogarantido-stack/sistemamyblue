@@ -263,6 +263,14 @@ function comissionamento(agora = new Date(), logins = {}, diretoria = []) {
   return { comp, chaves: { 'comissao:cadastro': JSON.stringify(cadastro), [`comissao:mes:${comp}`]: JSON.stringify(mes), 'comissao:meses': JSON.stringify([comp]), 'comissao:ultimo': comp } };
 }
 
+/* planilha de envio de boletos de uma assistente (como ela manda para a gestão), com datas do mês anterior */
+function planilhaCredito(agora = new Date(), nome = 'Assistente') {
+  const comp = compAnterior(agora), [a, m] = comp.split('-').map(Number);
+  const dt = (d) => new Date(Date.UTC(a, m - 1, d, 12));
+  return [['👤 ' + nome], [], ['#', 'Nome do Cliente', 'Vencimento', 'Data Envio', 'Data Expedição', 'Observações'],
+    ...[3, 6, 9, 12, 15, 18, 21, 24].map((d, i) => [i + 1, 'Cond. ' + CONDS[i], dt(d), new Date(dt(d).getTime() - (i === 5 ? 6 : 12) * 864e5), new Date(dt(d).getTime() - (i === 5 ? 5 : 11) * 864e5), ''])];
+}
+
 /* um demonstrativo pronto (como a ferramenta envia para "Minhas comissões"), para o vídeo da tela das pessoas */
 function demonstrativo({ nome, cargo, setor, comp, titulo, nota, linhas, total }) {
   const [a, m] = comp.split('-');
@@ -285,7 +293,7 @@ table{width:100%;border-collapse:collapse;font-size:9.3px}th{background:#1d4a6e;
 <div class="r"><span>Exemplo com dados fictícios · Portal MyBlue</span><span>${nome} · pág. 1</span></div></section></body></html>`;
 }
 
-module.exports = { boletos, sindicos, extracaoVouch, prestacao, implantacoes, moradores, viagens, comissionamento, relatorioGarantia, demonstrativo, compAnterior, CONDS };
+module.exports = { boletos, sindicos, extracaoVouch, prestacao, implantacoes, moradores, viagens, comissionamento, relatorioGarantia, planilhaCredito, demonstrativo, compAnterior, CONDS };
 
 /* troca o valor de uma constante de lista embutida no HTML (casando os colchetes), mantendo o resto do arquivo */
 function trocarLista(html, nome, valor) {

@@ -267,6 +267,7 @@ const FERRAMENTAS = {
     abas: [
       ['Dashboard', 'Total do mês, comissão e % atingido por setor, evolução mês a mês, metas do Comercial e a carteira de Crédito e Cobrança. Pendências do mês num quadro só.'],
       ['Resumo', 'O que cada pessoa recebe e de onde vem cada valor, o fechamento por setor (rascunho, conferido, aprovado, pago), os ajustes manuais com motivo e o envio dos demonstrativos.'],
+      ['Planilhas do mês', 'Pedir a planilha a quem precisa mandar (Crédito, Cobrança, metas dos setores): a pessoa envia em Minhas comissões, a gestão recebe o aviso no sino e importa a planilha no quadro da pessoa com <b>Importar e conferir</b>.'],
       ['Comercial', 'Em dois passos: a <b>planilha de implantações</b> (entram os contratos com data de contrato no mês, com o executivo de cada um) e os <b>relatórios de garantia</b> da Vouch (os valores entram no contrato pelo CNPJ). Cada executivo abre a lista dos condomínios dele, com a média ponderada da taxa adm. e a faixa; também a gerência e a coordenação comercial.'],
       ['Crédito, Cobrança e Implantação', 'O envio dos boletos (quem é da Implantação e emite boletos anexa a mesma planilha, com prazo próprio), os devedores da Cobrança e a documentação e o onboarding da Implantação.'],
       ['Supervisão e coordenação', 'Calculada sozinha a partir das equipes.'],
@@ -274,7 +275,8 @@ const FERRAMENTAS = {
       ['Configuração', '<b>Pessoas e salários</b> (login de cada pessoa no portal, diretoria e o atalho <b>lançar ›</b> para o quadro da pessoa), <b>Parâmetros</b> com as regras e <b>Importar</b> (cópia de segurança e começar do zero).'],
     ],
     rotina: [
-      'Abra o mês na competência e lance cada setor: no Comercial, a planilha de implantações e depois os relatórios de garantia; nos outros, as planilhas recebidas.',
+      'Abra o mês na competência e, em <b>Planilhas do mês</b>, peça as planilhas a quem precisa mandar.',
+      'Conforme chegam os avisos, <b>Importar e conferir</b> cada planilha. No Comercial, envie a planilha de implantações e depois os relatórios de garantia.',
       'Confira no Dashboard e no Resumo; cada setor passa por conferido e aprovado.',
       'Feche o mês e clique em <b>Enviar para todos</b>: cada pessoa recebe o aviso e vê o demonstrativo em Minhas comissões.',
       'Acompanhe quem abriu e quem clicou em <b>Estou ciente</b> no quadro de envio do Resumo.',

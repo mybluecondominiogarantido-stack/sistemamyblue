@@ -135,14 +135,24 @@ module.exports = [
         { chave: 'cb2', usuario_id: ids['sara@myblue.com.br'], nome: 'Sara Alves', cargo: 'Analista de Cobrança', setor: 'Cobrança', valor: 540,
           html: doc({ nome: 'Sara Alves', cargo: 'Analista de Cobrança', setor: 'Cobrança', linhas: conds(12, -1), total: 540 }), leitores: [{ usuario_id: ids['lia@myblue.com.br'], motivo: 'lider' }] },
       ] });
+      // a gestão pede o controle do mês seguinte (Planilhas do mês)
+      await cen.admin('POST', '/api/comissao/planilhas', { modulo: 'comissionamento', competencia: comp, avisar_email: false, pedidos: [
+        { chave: 'cb1', usuario_id: ids['marcos@myblue.com.br'], nome: 'Marcos Lima', tipo: 'cobranca', titulo: 'Controle de cobrança (devedores do período)' }] });
     },
-    abertura: ['O seu demonstrativo de comissão, todo mês, no portal.', ['Onde fica', 'Conferir e baixar em PDF', 'Estou ciente', 'Líderes: a equipe']],
+    abertura: ['O seu demonstrativo de comissão, todo mês, no portal.', ['Enviar a planilha do mês', 'Conferir e baixar em PDF', 'Estou ciente', 'Líderes: a equipe']],
     async gravar(t) {
-      const O = '1 · Onde fica';
-      await t.legenda('Quando o demonstrativo do mês é enviado, chega um <b>aviso no sino</b> e um e-mail curto (sem valores).', { etapa: O, ms: 600 });
+      const O = '1 · Enviar a planilha';
+      await t.legenda('Quando a gestão da comissão pede a sua planilha, ou envia o demonstrativo, chega um <b>aviso no sino</b> e um e-mail curto.', { etapa: O, ms: 600 });
       await t.mostrar('#btSino', 2600);
-      await t.legenda('No menu, em <b>Comissões</b>, abra <b>Minhas comissões</b>. O número mostra quantos esperam o seu “Estou ciente”.', { etapa: O, ms: 300 });
+      await t.legenda('No menu, em <b>Comissões</b>, abra <b>Minhas comissões</b>. O número mostra o que espera por você.', { etapa: O, ms: 300 });
       await t.clicar(menu('#/comissoes'), { depois: 1600 });
+      await t.legenda('Em <b>Planilhas para enviar</b> fica o pedido da gestão. Clique em <b>Enviar planilha</b> e escolha o arquivo (Excel ou CSV).', { etapa: O, ms: 300 });
+      const pasta = require('fs').mkdtempSync(require('path').join(require('os').tmpdir(), 'tut-'));
+      const arq = require('path').join(pasta, 'controle-cobranca.csv');
+      require('fs').writeFileSync(arq, 'Condomínio;Vencimento;Devedores inicial;Devedores atual\nCond. Jardim Azul;5;12;7\nCond. Primavera;10;30;17\n');
+      await t.enviarArquivo('.pedido-plan label.btn', 'input[data-plan]', arq, { depois: 2400 });
+      await t.legenda('Pronto: a gestão recebe o aviso. Você vê quando ela <b>recebe e confere</b>. Enviou errado? <b>Enviar de novo</b>.', { etapa: O, ms: 300 });
+      await t.mostrar('.pedido-plan', 3200);
       await t.legenda('Cada mês tem um cartão com o valor e a situação: <b>Novo</b>, <b>Aberto</b> ou <b>Ciente</b>.', { etapa: O, ms: 300 });
       await t.mostrar('.cartao', 3000);
 
@@ -167,7 +177,7 @@ module.exports = [
       await t.mostrar('.tiles', 2800);
       await t.mostrar('tr.clicavel', 2800);
     },
-    resumo: ['Aviso no sino e por e-mail quando sai o demonstrativo', 'Abrir, conferir e baixar em <b>PDF</b>', '<b>Estou ciente</b> depois de conferir', 'Líderes e diretoria: aba <b>Minha equipe</b>'],
+    resumo: ['<b>Enviar a planilha do mês</b> quando a gestão pedir', 'Aviso no sino e por e-mail quando sai o demonstrativo', 'Abrir, conferir e baixar em <b>PDF</b>', '<b>Estou ciente</b> depois de conferir', 'Líderes e diretoria: aba <b>Minha equipe</b>'],
   },
   {
     nome: 'central-de-links',

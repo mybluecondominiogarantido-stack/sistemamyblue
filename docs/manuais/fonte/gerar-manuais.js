@@ -31,7 +31,7 @@ const HISTORICO = [
   ['1.3', '09/10/2026', 'Passo a passo das ferramentas da Administrativa/Financeira; Tutoriais em vídeo; baixar o HTML de versões anteriores.'],
   ['2.0', '09/10/2026', 'Manuais no padrão visual da MyBlue (timbrado, partes e capítulos); catálogo das ferramentas; Central de Patrocínio e Gestão de Viagens; Central de Ferramentas do Crédito com as sete automações; regra de excedente por boleto da Prestação de Contas (v7); regra de tutoriais sempre em dia.'],
   ['2.1', '13/10/2026', 'Títulos no padrão <b>Manual do Portal – Geral</b> e <b>Manual do Portal – Setor …</b>. Carteira: <i>Adicionar novos</i> pela planilha de implantação (ID Vouch, vigência, executivo de negócios e CNPJ), sem importação de CSV. Comissões de Novos Condomínios: a gestão <i>puxa da carteira</i> os condomínios da vigência, parceiro só da lista e cadastro de parceiro novo pelo financeiro. Pesquisa em Módulos e dados e em Ferramentas do setor.'],
-  ['2.2', '14/10/2026', '<b>Minhas comissões</b> (demonstrativo de cada pessoa, <i>Estou ciente</i>, equipe para coordenação e gerência, diretoria) e a ferramenta <b>Comissionamento MyBlue</b> no menu <i>Comissões</i>: Comercial pela planilha de implantações e relatórios de garantia, coordenação comercial, boletos da Implantação e metas do Sucesso do Cliente.'],
+  ['2.2', '14/10/2026', '<b>Minhas comissões</b> (demonstrativo de cada pessoa, <i>Estou ciente</i>, equipe para coordenação e gerência, diretoria, <b>envio da planilha do mês</b> pelo portal) e a ferramenta <b>Comissionamento MyBlue</b> no menu <i>Comissões</i>: planilhas do mês, Comercial pela planilha de implantações e relatórios de garantia, coordenação comercial, boletos da Implantação e metas do Sucesso do Cliente.'],
 ];
 const VERSOES = (doc) => capVersoes({
   titulo: `Manutenção e controle de versão deste manual`,
@@ -297,7 +297,16 @@ ${tabela(['Quem', 'O que vê'], [
   <li>Se um demonstrativo for corrigido e reenviado, a versão nova substitui a anterior e aparece a marca <i>atualizado</i>. Confirme de novo.</li>
   <li>A ferramenta <b>Comissionamento MyBlue</b>, no mesmo grupo do menu, aparece só para quem a administração liberar (a gestão da comissão).</li>
 </ul>
-${dica('Dúvida sobre um valor? Fale com a gestão da comissão antes de clicar em <b>Estou ciente</b>.')}`;
+${dica('Dúvida sobre um valor? Fale com a gestão da comissão antes de clicar em <b>Estou ciente</b>.')}
+<h2>Enviar a planilha do mês</h2>
+<p>Quem manda planilha para a comissão (Crédito, Cobrança, metas dos setores…) envia o arquivo pelo próprio portal, em vez do e-mail:</p>
+${passos([
+  'Quando a gestão da comissão pede, chega um aviso no <b>sino</b> e um e-mail curto: <i>Envie sua planilha de comissão de …</i>.',
+  'Em <b>Minhas comissões</b>, no quadro <b>Planilhas para enviar</b>, clique em <b>Enviar planilha</b> e escolha o arquivo (Excel ou CSV).',
+  'A gestão recebe o aviso e confere. Você acompanha a situação: <i>Aguardando o seu envio</i>, <i>Enviada</i> ou <i>Recebida e conferida pela gestão</i>.',
+  'Enviou o arquivo errado? <b>Enviar de novo</b> substitui o anterior e avisa a gestão outra vez.',
+])}
+<p>Você vê só o seu pedido: nada da ferramenta de comissão, das regras ou dos valores dos colegas.</p>`;
 
 const LINKS = `
 <p class="intro">A <b>Central de Links</b> reúne os links úteis da equipe, por grupos. Fica no menu, logo abaixo de <i>Início</i>, e os links abrem em nova aba.</p>
