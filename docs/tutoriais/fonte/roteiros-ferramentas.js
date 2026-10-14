@@ -574,6 +574,58 @@ module.exports = [
     resumo: ['<b>Novo recibo</b>: VOP → faixa e valor automáticos → <b>Salvar e baixar PDF</b>', '<b>Recibos</b>: marcar enviado, assinado e pago', '<b>Resultados</b> do ano e Excel'],
   },
   {
+    // a ferramenta não fica no repositório: FERRAMENTAS='{"comissionamento":"/caminho/Comissionamento.html"}'
+    nome: 'ferramenta-comissionamento',
+    ferramenta: 'comissionamento',
+    entrar: 'paula@myblue.com.br',
+    inicio: '#/m/comissionamento',
+    async preparar(cen) {
+      // cadastro e mês fictícios no banco do portal (as regras ficam na própria ferramenta)
+      const ids = cen.id;
+      const logins = { cr1: ids['bruna@myblue.com.br'], cr2: ids['davi@myblue.com.br'], cb1: ids['marcos@myblue.com.br'], sc: ids['caio@myblue.com.br'], sb: ids['lia@myblue.com.br'] };
+      const { chaves } = D.comissionamento(new Date(), logins, [ids['sueli@myblue.com.br']]);
+      await cen.admin('POST', '/api/armazenamento/comissionamento', { set: chaves });
+    },
+    abertura: ['Metas e comissões de todos os setores, do lançamento ao demonstrativo.', ['Dashboard e resumo', 'Lançar um setor', 'Pessoas, logins e regras', 'Fechar e enviar os demonstrativos']],
+    async gravar(t) {
+      const f = quadro(t, 'comissionamento');
+      const aba = (id) => f.locator(`[data-aba="${id}"]`);
+      const P = '1 · Visão geral';
+      await t.legenda('O <b>Dashboard</b> mostra o total do mês, a comissão e o % atingido de cada setor, a evolução e as pendências.', { etapa: P, ms: 600 });
+      await t.mostrar(f.locator('.kpi').first(), 2600);
+      await t.mostrar(f.locator('.g-cards'), 3000);
+      await t.legenda('As abas ficam em grupos: <b>Visão geral</b>, <b>Setores</b> (uma para cada setor) e <b>Configuração</b>.', { etapa: P, ms: 300 });
+      await t.mostrar(f.locator('#abas'), 3000);
+
+      const L = '2 · Lançar um setor';
+      await t.legenda('Em cada setor, lance o mês ou importe a planilha recebida. No Crédito: o envio de cada boleto.', { etapa: L, ms: 300 });
+      await t.clicar(aba('credito'), { depois: 1400 });
+      await t.mostrar(f.locator('.resumo-pessoa'), 2600);
+      await t.legenda('Fora do prazo com justificativa? <b>Pedir abono</b>: a supervisão aprova e fica registrado.', { etapa: L, ms: 300 });
+      await t.mostrar(f.locator('text=Pedir abono').first(), 2600);
+      await t.legenda('No <b>Comercial</b>: a meta da equipe e de cada executivo, e o relatório da Vouch.', { etapa: L, ms: 300 });
+      await t.clicar(aba('comercial'), { depois: 1400 });
+      await t.mostrar(f.locator('.metas-cards'), 3000);
+
+      const C = '3 · Pessoas e regras';
+      await t.legenda('Em <b>Pessoas e salários</b>: cadastro, salário, regra de cada pessoa e o <b>login no portal</b> (para onde vai o demonstrativo).', { etapa: C, ms: 300 });
+      await t.clicar(aba('pessoas'), { depois: 1600 });
+      await t.mostrar(f.locator('table').first(), 3000);
+      await t.legenda('<b>Escolher diretoria</b> define quem vê os demonstrativos de todos.', { etapa: C, ms: 300 });
+      await t.mostrar(f.locator('[data-acao="diretoria"]'), 2400);
+
+      const E = '4 · Fechar e enviar';
+      await t.legenda('No <b>Resumo</b>: o valor de cada pessoa e a origem, o fechamento por setor e os ajustes.', { etapa: E, ms: 300 });
+      await t.clicar(aba('resumo'), { depois: 1600 });
+      await t.mostrar(f.locator('table').first(), 2600);
+      await t.legenda('Com tudo aprovado, <b>Enviar para todos</b>: cada pessoa recebe o aviso e vê o dela em Minhas comissões.', { etapa: E, ms: 300 });
+      await t.clicar(f.locator('[data-acao="enviar-todos"]'), { depois: 2600 });
+      await t.legenda('O quadro mostra quem já abriu e quem clicou em <b>Estou ciente</b>. <b>Reenviar</b> manda uma versão corrigida.', { etapa: E, ms: 300 });
+      await t.mostrar(f.locator('[data-enviar]').first(), 3000);
+    },
+    resumo: ['Dashboard e resumo do mês', 'Uma aba para cada setor', 'Pessoas, logins e diretoria', '<b>Enviar para todos</b> e acompanhar quem confirmou'],
+  },
+  {
     nome: 'ferramenta-credito',
     ferramenta: 'credito',
     entrar: 'bruna@myblue.com.br',

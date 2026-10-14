@@ -17,6 +17,7 @@ const { rotasTickets, rotasAdminTickets } = require('./rotas/tickets');
 const { rotasCarteira } = require('./rotas/carteira');
 const { rotasLinks } = require('./rotas/links');
 const { rotasTutoriais } = require('./rotas/tutoriais');
+const { rotasComissao } = require('./rotas/comissao');
 
 function carregarEnv(arquivo) {
   if (!fs.existsSync(arquivo)) return;
@@ -105,6 +106,7 @@ async function criarApp(cfg) {
   app.use(rotasCarteira(ctx));
   app.use(rotasLinks(ctx));
   app.use(rotasTutoriais(ctx));
+  app.use(rotasComissao(ctx));
 
   const publico = path.join(__dirname, '..', 'public');
   app.get('/login', (req, res) => res.sendFile(path.join(publico, 'login.html')));

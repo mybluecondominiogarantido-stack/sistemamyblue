@@ -1,6 +1,6 @@
 'use strict';
 /*
- * Avisos da Central de Tickets.
+ * Avisos do portal (Central de Tickets e demonstrativos de comissão).
  *  - No portal: cada aviso vira uma linha em "notificacoes" (sino com contador, som e alerta do navegador).
  *  - Por e-mail: Microsoft 365 (Graph) ou SMTP, quando configurado (veja server/email.js). Sem isso, só o aviso no portal.
  * Nada aqui derruba a requisição: falha de e-mail só vai para o log.
@@ -40,9 +40,23 @@ function criarNotificador(db, cfg) {
     return { subject: assunto, text: linhas.join('\n'), html };
   }
 
+  /* aviso que não é de ticket: e-mail curto com o botão para a tela do portal (n.link, ex.: "#/comissoes") */
+  function montarEmailSimples(n) {
+    const link = urlPortal() && n.link ? `${urlPortal()}/${n.link.replace(/^\/+/, '')}` : urlPortal() || null;
+    return {
+      subject: n.titulo,
+      text: [n.texto, link ? `\nAbrir no portal: ${link}` : null].filter((x) => x !== null).join('\n'),
+      html: `<div style="font-family:Arial,sans-serif;color:#13323a;max-width:560px">
+      <p style="font-size:16px;font-weight:bold">${escHtml(n.titulo)}</p>
+      <p style="font-size:15px">${escHtml(n.texto)}</p>
+      ${link ? `<p><a href="${escHtml(link)}" style="background:#199cb1;color:#fff;padding:10px 18px;border-radius:999px;text-decoration:none;font-weight:bold">Abrir no portal</a></p>` : ''}
+      <p style="font-size:12px;color:#9db3bc">Portal MyBlue</p></div>`,
+    };
+  }
+
   /*
    * usuarios: ids de quem recebe (quem fez a ação é retirado)
-   * n: { ticket_id, tipo, titulo, texto, email (bool), autor_id }
+   * n: { ticket_id, link, tipo, titulo, texto, email (bool), autor_id }
    */
   async function notificar(usuarios, n) {
     try {
@@ -50,13 +64,16 @@ function criarNotificador(db, cfg) {
       if (!ids.length) return;
       const destino = (await db.q('SELECT id, nome, email FROM usuarios WHERE id = ANY($1::int[]) AND ativo', [ids])).rows;
       for (const u of destino) {
-        await db.q('INSERT INTO notificacoes (usuario_id, ticket_id, tipo, titulo, texto) VALUES ($1, $2, $3, $4, $5)',
-          [u.id, n.ticket_id, n.tipo, n.titulo, n.texto]);
+        await db.q('INSERT INTO notificacoes (usuario_id, ticket_id, tipo, titulo, texto, link) VALUES ($1, $2, $3, $4, $5, $6)',
+          [u.id, n.ticket_id || null, n.tipo, n.titulo, n.texto, n.link || null]);
       }
       if (!n.email || !enviar) return;
-      const ticket = await db.um('SELECT t.id, t.titulo, t.descricao, t.prazo, s.nome AS setor_nome FROM tickets t JOIN setores s ON s.id = t.setor_id WHERE t.id = $1', [n.ticket_id]);
-      if (!ticket) return;
-      const msg = montarEmail(n, ticket);
+      let msg;
+      if (n.ticket_id) {
+        const ticket = await db.um('SELECT t.id, t.titulo, t.descricao, t.prazo, s.nome AS setor_nome FROM tickets t JOIN setores s ON s.id = t.setor_id WHERE t.id = $1', [n.ticket_id]);
+        if (!ticket) return;
+        msg = montarEmail(n, ticket);
+      } else msg = montarEmailSimples(n);
       // e-mail sai em segundo plano: a tela não espera o servidor de e-mail
       for (const u of destino) {
         Promise.resolve(enviar({ para: { nome: u.nome, email: u.email }, ...msg }))

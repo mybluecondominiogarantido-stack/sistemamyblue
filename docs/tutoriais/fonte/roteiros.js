@@ -119,6 +119,57 @@ module.exports = [
   },
 
   {
+    nome: 'minhas-comissoes',
+    entrar: 'marcos@myblue.com.br',
+    inicio: '#/',
+    async preparar(cen) {
+      // demonstrativos fictícios do mês anterior, enviados como a ferramenta de Comissionamento envia
+      const D = require('./dados-ficticios');
+      const comp = D.compAnterior(new Date());
+      const conds = (n, falha) => D.CONDS.slice(0, n).map((c, i) => ['Cond. ' + c, i !== falha]);
+      const doc = (x) => D.demonstrativo({ comp, titulo: 'Memória de cálculo — Condomínios com meta de redução de inadimplência', nota: 'Valor por condomínio que bate a meta.', ...x });
+      const ids = cen.id;
+      await cen.admin('POST', '/api/comissao/relatorios', { modulo: 'comissionamento', competencia: comp, relatorios: [
+        { chave: 'cb1', usuario_id: ids['marcos@myblue.com.br'], nome: 'Marcos Lima', cargo: 'Analista de Cobrança', setor: 'Cobrança', valor: 495,
+          html: doc({ nome: 'Marcos Lima', cargo: 'Analista de Cobrança', setor: 'Cobrança', linhas: conds(12, 4), total: 495 }), leitores: [{ usuario_id: ids['lia@myblue.com.br'], motivo: 'lider' }] },
+        { chave: 'cb2', usuario_id: ids['sara@myblue.com.br'], nome: 'Sara Alves', cargo: 'Analista de Cobrança', setor: 'Cobrança', valor: 540,
+          html: doc({ nome: 'Sara Alves', cargo: 'Analista de Cobrança', setor: 'Cobrança', linhas: conds(12, -1), total: 540 }), leitores: [{ usuario_id: ids['lia@myblue.com.br'], motivo: 'lider' }] },
+      ] });
+    },
+    abertura: ['O seu demonstrativo de comissão, todo mês, no portal.', ['Onde fica', 'Conferir e baixar em PDF', 'Estou ciente', 'Líderes: a equipe']],
+    async gravar(t) {
+      const O = '1 · Onde fica';
+      await t.legenda('Quando o demonstrativo do mês é enviado, chega um <b>aviso no sino</b> e um e-mail curto (sem valores).', { etapa: O, ms: 600 });
+      await t.mostrar('#btSino', 2600);
+      await t.legenda('No menu, em <b>Comissões</b>, abra <b>Minhas comissões</b>. O número mostra quantos esperam o seu “Estou ciente”.', { etapa: O, ms: 300 });
+      await t.clicar(menu('#/comissoes'), { depois: 1600 });
+      await t.legenda('Cada mês tem um cartão com o valor e a situação: <b>Novo</b>, <b>Aberto</b> ou <b>Ciente</b>.', { etapa: O, ms: 300 });
+      await t.mostrar('.cartao', 3000);
+
+      const C = '2 · Conferir';
+      await t.legenda('Clique no cartão para abrir o demonstrativo: o valor a receber e a memória de cálculo, condomínio por condomínio.', { etapa: C, ms: 300 });
+      await t.clicar('.cartao', { depois: 2200 });
+      await t.mostrar('#frDemo', 3600, { dy: 0.3 });
+      await t.legenda('<b>Imprimir / PDF</b> imprime ou salva o demonstrativo em PDF.', { etapa: C, ms: 300 });
+      await t.mostrar('#btImprimirC', 2600);
+
+      const E = '3 · Estou ciente';
+      await t.legenda('Conferiu? Clique em <b>Estou ciente</b>. Se tiver dúvida, fale com a sua liderança antes.', { etapa: E, ms: 300 });
+      await t.clicar('#btCienteC', { depois: 2400 });
+      await t.legenda('Pronto: o demonstrativo fica marcado como ciente e a gestão da comissão acompanha quem já confirmou.', { etapa: E, ms: 3000 });
+
+      const L = '4 · Líderes';
+      await t.legenda('Coordenação, supervisão, gerência e diretoria veem também os demonstrativos da equipe.', { etapa: L, ms: 300 });
+      await t.ctx.clearCookies(); // sai da sessão do analista para entrar como coordenadora
+      await t.entrar('lia@myblue.com.br', require('./cenario').SENHA);
+      await t.ir('#/comissoes/equipe', 1600);
+      await t.legenda('Na aba <b>Minha equipe</b>: o total, quantos já confirmaram e a situação de cada pessoa. Clique na linha para abrir o demonstrativo.', { etapa: L, ms: 300 });
+      await t.mostrar('.tiles', 2800);
+      await t.mostrar('tr.clicavel', 2800);
+    },
+    resumo: ['Aviso no sino e por e-mail quando sai o demonstrativo', 'Abrir, conferir e baixar em <b>PDF</b>', '<b>Estou ciente</b> depois de conferir', 'Líderes e diretoria: aba <b>Minha equipe</b>'],
+  },
+  {
     nome: 'central-de-links',
     entrar: 'marcos@myblue.com.br',
     inicio: '#/links',
