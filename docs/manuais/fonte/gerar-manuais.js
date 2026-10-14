@@ -354,7 +354,7 @@ ${tabela(['Grupo', 'Vídeos'], [
   <li>O vídeo carrega aos pedaços: dá para avançar e voltar sem esperar baixar o arquivo inteiro.</li>
   <li>A administração envia os vídeos em <b>Administração → Tutoriais em vídeo</b> (arraste os <code>.mp4</code> e <code>.vtt</code>; cada arquivo vai para o tutorial com o mesmo nome).</li>
 </ul>
-${atencao('A página da administração avisa quando uma ferramenta recebeu um HTML novo <b>depois</b> do vídeo dela (<i>ferramenta atualizada — regravar</i>) e lista as ferramentas que ainda não têm tutorial.')}`;
+${atencao('A página da administração avisa quando uma ferramenta recebeu um HTML novo <b>depois</b> do vídeo dela (<i>ferramenta atualizada — regravar</i>) e lista as ferramentas que ainda não têm tutorial. Se o HTML novo não mudou a tela nem o fluxo do vídeo, o botão <b>Continua valendo</b> tira o aviso.')}`;
 
 /* ---------- Manual do Portal – Geral ---------- */
 function manualGeral() {

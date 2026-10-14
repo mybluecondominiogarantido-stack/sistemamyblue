@@ -137,6 +137,14 @@ test('a administração vê o tutorial a regravar quando a ferramenta muda, e as
   await ctx.db.q("UPDATE tutoriais SET enviado_em = now() - interval '1 day' WHERE slug = 'ferramenta-suprimentos'");
   assert.equal((await admin('PUT', '/api/admin/modulos/suprimentos/arquivo', html('v2'), { 'content-type': 'text/html' })).status, 200);
   assert.equal((await ver()).tutoriais.find((t) => t.slug === 'ferramenta-suprimentos').desatualizado, true);
+  // a tela não mudou: a administração confirma que o vídeo continua valendo
+  assert.equal((await admin('POST', '/api/admin/tutoriais/ferramenta-suprimentos/conferido')).status, 200);
+  assert.equal((await ver()).tutoriais.find((t) => t.slug === 'ferramenta-suprimentos').desatualizado, false);
+  assert.equal((await admin('POST', '/api/admin/tutoriais/ticket-supervisao/conferido')).status, 404); // sem vídeo
+  // outra versão depois da confirmação: volta a pedir
+  await ctx.db.q("UPDATE tutoriais SET conferido_em = now() - interval '1 hour' WHERE slug = 'ferramenta-suprimentos'");
+  assert.equal((await admin('PUT', '/api/admin/modulos/suprimentos/arquivo', html('v3'), { 'content-type': 'text/html' })).status, 200);
+  assert.equal((await ver()).tutoriais.find((t) => t.slug === 'ferramenta-suprimentos').desatualizado, true);
   // vídeo novo enviado: volta a ficar em dia
   assert.equal((await admin('PUT', '/api/admin/tutoriais/ferramenta-suprimentos/video', mp4Falso(4096))).status, 200);
   assert.equal((await ver()).tutoriais.find((t) => t.slug === 'ferramenta-suprimentos').desatualizado, false);

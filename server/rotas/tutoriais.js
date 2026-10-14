@@ -23,7 +23,7 @@ function rotasTutoriais({ db, seg, cfg }) {
     duracao: linha ? linha.duracao_s : null, tamanho: linha ? linha.tamanho : null,
     enviado_em: linha ? linha.enviado_em : null, v: linha ? new Date(linha.enviado_em).getTime() : null,
   });
-  const LINHAS = 'SELECT slug, video IS NOT NULL AS tem_video, legendas IS NOT NULL AS tem_legendas, duracao_s, tamanho, enviado_em FROM tutoriais';
+  const LINHAS = 'SELECT slug, video IS NOT NULL AS tem_video, legendas IS NOT NULL AS tem_legendas, duracao_s, tamanho, enviado_em, conferido_em FROM tutoriais';
   async function linhas() {
     const m = new Map();
     for (const l of (await db.q(LINHAS)).rows) m.set(l.slug, l);
@@ -80,7 +80,7 @@ function rotasTutoriais({ db, seg, cfg }) {
   /* ---------- administração (o acesso só do administrador é conferido em rotasAdmin) ---------- */
   r.get('/api/admin/tutoriais', async (req, res) => {
     const l = await linhas();
-    // a versão em uso de cada ferramenta: se entrou depois do vídeo, o tutorial precisa ser atualizado
+    // a versão em uso de cada ferramenta: se entrou depois do vídeo (e de "continua valendo"), o tutorial precisa ser atualizado
     const mods = (await db.q(`SELECT m.slug, m.nome, v.enviado_em AS versao_em FROM modulos m
       LEFT JOIN modulo_versoes v ON v.id = m.versao_id WHERE m.ativo ORDER BY m.nome`)).rows;
     const versao = new Map(mods.map((m) => [m.slug, m.versao_em]));
@@ -91,7 +91,9 @@ function rotasTutoriais({ db, seg, cfg }) {
         const x = resumo(t, l.get(t.slug));
         const v = x.modulo ? versao.get(x.modulo) : null;
         x.ferramenta_atualizada_em = v || null;
-        x.desatualizado = !!(x.tem_video && v && new Date(v) > new Date(x.enviado_em));
+        const linha = l.get(t.slug);
+        const emDia = Math.max(new Date(x.enviado_em).getTime(), linha && linha.conferido_em ? new Date(linha.conferido_em).getTime() : 0);
+        x.desatualizado = !!(x.tem_video && v && new Date(v).getTime() > emDia);
         return x;
       }),
       sem_tutorial: mods.filter((m) => m.versao_em && !comTutorial.has(m.slug)) // só as que já têm HTML.map((m) => ({ slug: m.slug, nome: m.nome })),
@@ -115,6 +117,14 @@ function rotasTutoriais({ db, seg, cfg }) {
     if (!/^WEBVTT/.test(txt)) return erro(res, 400, 'Envie as legendas em .vtt (WEBVTT).');
     await db.q(`INSERT INTO tutoriais (slug, legendas, enviado_por) VALUES ($1, $2, $3)
       ON CONFLICT (slug) DO UPDATE SET legendas = EXCLUDED.legendas`, [req.params.slug, txt, req.usuario.id]);
+    res.json({ ok: true });
+  });
+
+  // a ferramenta mudou só por dentro (cálculo, regra): o vídeo segue certo e sai da lista "regravar"
+  r.post('/api/admin/tutoriais/:slug/conferido', slugValido, async (req, res) => {
+    const l = await db.um('UPDATE tutoriais SET conferido_em = now() WHERE slug = $1 AND video IS NOT NULL RETURNING slug', [req.params.slug]);
+    if (!l) return erro(res, 404, 'Este tutorial ainda não tem vídeo.');
+    await seg.auditar(req, 'tutorial_conferido', null, { slug: req.params.slug });
     res.json({ ok: true });
   });
 

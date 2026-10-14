@@ -2708,7 +2708,7 @@
     var pendencias = '';
     if (desatualizados.length) {
       pendencias += '<div class="msg aviso" style="margin-bottom:10px"><b>' + desatualizados.length + ' tutorial(is) para atualizar:</b> a ferramenta recebeu um HTML novo depois do vídeo — ' +
-        desatualizados.map(function (t) { return esc(t.titulo); }).join(', ') + '.</div>';
+        desatualizados.map(function (t) { return esc(t.titulo); }).join(', ') + '. Se a tela ou o fluxo mudou, regrave; se não, clique em “Continua valendo” na linha do tutorial.</div>';
     }
     if ((j.sem_tutorial || []).length) {
       pendencias += '<div class="msg aviso" style="margin-bottom:10px"><b>Ferramentas sem tutorial:</b> ' +
@@ -2728,7 +2728,7 @@
           itens.map(function (t) {
             return '<tr><td><b>' + esc(t.titulo) + '</b><div class="ajuda" style="margin:2px 0 0">' + esc(t.slug) + '</div></td><td>' + esc(t.publico) + (t.modulo ? '<div class="ajuda" style="margin:2px 0 0">' + esc(t.modulo) + '</div>' : '') + '</td>' +
               '<td>' + (t.desatualizado ? '<span class="etiqueta ambar">ferramenta atualizada em ' + quando(t.ferramenta_atualizada_em) + ' — regravar</span><br>' : '') + (t.tem_video ? '<span class="etiqueta verde">enviado</span> <span class="ajuda" style="display:inline">' + duracaoTxt(t.duracao) + ' · ' + tamanho(t.tamanho) + ' · ' + quando(t.enviado_em) + (t.tem_legendas ? '' : ' · sem passo a passo') + '</span>' : '<span class="etiqueta cinza">falta enviar</span>') + '</td>' +
-              '<td style="text-align:right;white-space:nowrap">' + (t.tem_video ? '<a class="btn ghost sm" href="#/tutoriais/' + esc(t.slug) + '">Ver</a> <button class="btn ghost sm" data-tirar="' + esc(t.slug) + '">Remover</button>' : '') + '</td></tr>';
+              '<td style="text-align:right;white-space:nowrap">' + (t.desatualizado ? '<button class="btn ghost sm" data-valendo="' + esc(t.slug) + '">Continua valendo</button> ' : '') + (t.tem_video ? '<a class="btn ghost sm" href="#/tutoriais/' + esc(t.slug) + '">Ver</a> <button class="btn ghost sm" data-tirar="' + esc(t.slug) + '">Remover</button>' : '') + '</td></tr>';
           }).join('');
       }).join('') + '</tbody></table></div></div></div>';
 
@@ -2770,6 +2770,13 @@
       res.appendChild(bt);
     }
     ligarZona($('#zTut'), $('#inTut'), processar, /\.(mp4|vtt)$/i, 'Envie arquivos .mp4 ou .vtt');
+    $$('[data-valendo]').forEach(function (b) {
+      b.onclick = async function () {
+        var t = slugs[b.getAttribute('data-valendo')];
+        if (!(await confirmar('Vídeo continua valendo', 'O HTML novo de "' + esc(t.titulo) + '" não mudou a tela nem o fluxo mostrados no vídeo? O aviso de regravar sai até a próxima versão da ferramenta.', 'Continua valendo'))) return;
+        try { await api('POST', '/api/admin/tutoriais/' + t.slug + '/conferido'); toast('Tutorial em dia.', 'ok'); paginaAdminTutoriais(); } catch (e) { toast(e.message, 'erro'); }
+      };
+    });
     $$('[data-tirar]').forEach(function (b) {
       b.onclick = async function () {
         var t = slugs[b.getAttribute('data-tirar')];

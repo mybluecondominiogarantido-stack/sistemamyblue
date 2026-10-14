@@ -382,7 +382,9 @@ ALTER TABLE notificacoes ADD COLUMN IF NOT EXISTS link TEXT;
 -- o vídeo já vem comprimido: guardado sem compressão, o banco lê só o pedaço pedido pelo player
 ALTER TABLE tutoriais ALTER COLUMN video SET STORAGE EXTERNAL;
 -- planilhas do mês: a gestão é avisada uma vez, quando quem envia termina todas as planilhas pedidas a ele
-ALTER TABLE comissao_planilhas ADD COLUMN IF NOT EXISTS avisado_em TIMESTAMPTZ
+ALTER TABLE comissao_planilhas ADD COLUMN IF NOT EXISTS avisado_em TIMESTAMPTZ;
+-- HTML novo da ferramenta que não mudou a tela nem o fluxo: a administração confirma que o vídeo continua valendo
+ALTER TABLE tutoriais ADD COLUMN IF NOT EXISTS conferido_em TIMESTAMPTZ
 `;
 
 async function abrir(cfg) {
