@@ -218,8 +218,18 @@
         (souEquipe() ? '<a href="#/tickets/painel" class="' + (rota.indexOf('#/tickets/painel') === 0 ? 'on' : '') + '">' + IC.grafico + 'Painel de tickets</a>' : '') +
         '<div class="grupo">Carteira</div>' +
         '<a href="#/carteira" class="' + (rota.indexOf('#/carteira') === 0 ? 'on' : '') + '">' + IC.casa + 'Carteira de condomínios</a>';
+      // Comissões: a ferramenta (só para quem tem acesso) e os demonstrativos de cada pessoa
+      var modCom = modulos.find(function (m) { return m.slug === MOD_COMISSAO; });
+      var temMinhas = resumoComissao && (resumoComissao.meus || resumoComissao.equipe);
+      if (modCom || temMinhas) {
+        html += '<div class="grupo">Comissões</div>' +
+          (modCom ? '<a href="#/m/' + MOD_COMISSAO + '" data-slug="' + MOD_COMISSAO + '" class="' + (atual === MOD_COMISSAO && rota.indexOf('#/m/') === 0 ? 'on ' : '') + (modCom.ativo ? '' : 'inativo') + '">' +
+            IC.grafico + '<span>' + esc(modCom.nome) + '</span>' + (quadros[MOD_COMISSAO] ? '<i class="aberto" title="Aberta"></i>' : '') + '</a>' : '') +
+          (temMinhas ? '<a href="#/comissoes" class="' + (rota.indexOf('#/comissoes') === 0 ? 'on' : '') + '">' + IC.documento + '<span>Minhas comissões</span>' +
+            '<i class="contador"' + (resumoComissao.pendentes ? '' : ' hidden') + ' title="Demonstrativos esperando o seu “Estou ciente”">' + resumoComissao.pendentes + '</i></a>' : '');
+      }
     }
-    porSetor(lista).forEach(function (g) {
+    porSetor(termo ? lista : lista.filter(function (m) { return m.slug !== MOD_COMISSAO; })).forEach(function (g) {
       html += '<div class="grupo">' + esc(g.setor) + '</div>';
       g.itens.forEach(function (m) {
         html += '<a href="#/m/' + esc(m.slug) + '" data-slug="' + esc(m.slug) + '" class="' + (atual === m.slug && rota.indexOf('#/m/') === 0 ? 'on ' : '') + (m.ativo ? '' : 'inativo') + '" title="' + esc(m.nome) + '">' +
@@ -273,6 +283,7 @@
       return paginaTickets(lembrar('tickets.visao', 'minha'));
     }
     if (partes[0] === 'carteira') return paginaCarteira(partes[1]);
+    if (partes[0] === 'comissoes') return paginaComissoes(partes[1]);
     if (partes[0] === 'links') {
       if (partes[1] === 'gestao' && editorLinks()) return paginaGestaoLinks(partes[2]);
       if (partes[1] === 'previa' && editorLinks()) return paginaLinks(Number(partes[2]) || null);
@@ -1199,7 +1210,7 @@
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
     try {
       var a = new Notification(n.titulo, { body: n.texto || '', icon: '/img/icone.png', tag: 'myblue-' + n.id });
-      a.onclick = function () { window.focus(); if (n.ticket_id) location.hash = '#/tickets/' + n.ticket_id; a.close(); };
+      a.onclick = function () { window.focus(); if (n.link) location.hash = n.link; else if (n.ticket_id) location.hash = '#/tickets/' + n.ticket_id; a.close(); };
     } catch (e) { /* navegador sem suporte */ }
   }
   function desenharSino() {
@@ -1237,7 +1248,7 @@
         '<span class="espaco"></span><button class="btn ghost sm" id="btLerTodos">Marcar todos como lidos</button></div>' +
         (avisosCache.email_ativo === false ? '<div class="ajuda" style="margin-top:-6px">O envio de e-mails ainda não foi configurado no servidor: por enquanto os avisos aparecem só aqui.</div>' : '') +
         '<div class="lista-avisos">' + (avisosCache.notificacoes.map(function (n) {
-          return '<a href="' + (n.ticket_id ? '#/tickets/' + n.ticket_id : '#/tickets') + '" class="aviso' + (n.lida ? '' : ' nao-lido') + '" data-id="' + n.id + '">' +
+          return '<a href="' + esc(n.link || (n.ticket_id ? '#/tickets/' + n.ticket_id : '#/tickets')) + '" class="aviso' + (n.lida ? '' : ' nao-lido') + '" data-id="' + n.id + '">' +
             '<b>' + esc(n.titulo) + '</b><span>' + esc(n.texto || '') + '</span><span class="sec">' + quando(n.criado_em) + '</span></a>';
         }).join('') || '<div class="vazio" style="padding:24px">Nenhum aviso por enquanto.</div>') + '</div></div>',
     });
@@ -2663,9 +2674,9 @@
     ol.innerHTML = cues.map(function (c, i) {
       var cab = c.etapa && c.etapa !== etapaAnt ? '<li class="etapa">' + esc(c.etapa) + '</li>' : '';
       etapaAnt = c.etapa || etapaAnt;
-      return cab + '<li class="passo" data-i="' + i + '"><span class="t">' + duracaoTxt(Math.floor(c.ini)).replace(' min', '').replace(' s', 's') + '</span><span>' + esc(c.texto) + '</span></li>';
+      return cab + '<li class="passo-item" data-i="' + i + '"><span class="t">' + duracaoTxt(Math.floor(c.ini)).replace(' min', '').replace(' s', 's') + '</span><span>' + esc(c.texto) + '</span></li>';
     }).join('') || '<li class="ajuda">Sem passo a passo para este vídeo.</li>';
-    $$('li.passo', ol).forEach(function (li) {
+    $$('li.passo-item', ol).forEach(function (li) {
       li.addEventListener('click', function () { v.currentTime = cues[Number(li.getAttribute('data-i'))].ini + 0.05; v.play(); });
     });
     var ativo = -1;
@@ -2674,8 +2685,8 @@
       cues.forEach(function (c, k) { if (v.currentTime >= c.ini && v.currentTime < c.fim) i = k; });
       if (i === ativo) return;
       ativo = i;
-      $$('li.passo', ol).forEach(function (li) { li.classList.toggle('on', Number(li.getAttribute('data-i')) === i); });
-      var on = $('li.passo.on', ol);
+      $$('li.passo-item', ol).forEach(function (li) { li.classList.toggle('on', Number(li.getAttribute('data-i')) === i); });
+      var on = $('li.passo-item.on', ol);
       if (on) ol.scrollTop = on.offsetTop - ol.offsetTop - 60;
     });
   }
@@ -2763,6 +2774,96 @@
   }
 
   /* ======================= partida ======================= */
+  /* ======================= Minhas comissões ======================= */
+  // demonstrativos enviados pela ferramenta de Comissionamento: cada pessoa vê o seu; líderes e diretoria, os da equipe
+  var MOD_COMISSAO = 'comissionamento';
+  var resumoComissao = null;
+  var MESES_C = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+  function nomeCompC(c) { var p = String(c).split('-'); return MESES_C[Number(p[1]) - 1] + '/' + p[0]; }
+  function reais(v) { return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+  function diaC(s) { return s ? new Date(s).toLocaleDateString('pt-BR') : ''; }
+  async function atualizarComissao() {
+    var r;
+    try { r = await api('GET', '/api/comissao/resumo'); } catch (e) { return; }
+    var mudou = !resumoComissao || resumoComissao.meus !== r.meus || resumoComissao.equipe !== r.equipe || resumoComissao.pendentes !== r.pendentes;
+    resumoComissao = r;
+    if (mudou && $('#nav')) desenharMenu();
+  }
+  function situacaoComissao(x, meu) {
+    if (x.ciente_em) return '<span class="etiqueta verde">✓ Ciente em ' + diaC(x.ciente_em) + '</span>';
+    if (x.aberto_em) return '<span class="etiqueta azul">' + (meu ? 'Aberto · falta confirmar' : 'Abriu, não confirmou') + '</span>';
+    return '<span class="etiqueta ambar">' + (meu ? 'Novo' : 'Ainda não abriu') + '</span>';
+  }
+  async function paginaComissoes(sub) {
+    if (/^\d+$/.test(sub || '')) return paginaDemonstrativo(Number(sub));
+    definirBarra('<span class="nome">Minhas comissões</span>');
+    $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">Carregando…</div></div>';
+    var j;
+    try { j = await api('GET', '/api/comissao/meus'); } catch (e) { $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">' + esc(e.message) + '</div></div>'; return; }
+    if (location.hash.indexOf('#/comissoes') !== 0) return;
+    var aba = sub === 'equipe' && j.equipe.length ? 'equipe' : (j.meus.length || !j.equipe.length ? 'meus' : 'equipe');
+    var html = '<div class="pagina"><h1>Minhas comissões</h1><p class="sub">' + (aba === 'meus' ? 'Seus demonstrativos de comissão, mês a mês. Abra, confira os valores e clique em “Estou ciente”.' : 'Os demonstrativos das pessoas que você acompanha. Só você, a pessoa e a gestão da comissão veem.') + '</p>';
+    if (j.equipe.length) html += '<nav class="abas"><a href="#/comissoes" class="' + (aba === 'meus' ? 'on' : '') + '">Meus demonstrativos</a><a href="#/comissoes/equipe" class="' + (aba === 'equipe' ? 'on' : '') + '">Minha equipe</a></nav>';
+    if (aba === 'meus') {
+      html += j.meus.length ? '<div class="cartoes">' + j.meus.map(function (x) {
+        return '<a class="cartao" href="#/comissoes/' + x.id + '"><div class="cab"><div class="icone-mod">' + IC.documento + '</div><div><h3>' + nomeCompC(x.competencia) + '</h3>' +
+          '<span class="ajuda" style="margin:0">' + esc([x.cargo, x.setor].filter(Boolean).join(' · ')) + '</span></div></div>' +
+          '<div class="valor-comissao">' + reais(x.valor) + '</div><div class="linha">' + situacaoComissao(x, true) +
+          (x.versao > 1 ? '<span class="etiqueta cinza">atualizado · versão ' + x.versao + '</span>' : '') + '</div></a>';
+      }).join('') + '</div>' : '<div class="vazio">Nenhum demonstrativo enviado para você ainda.</div>';
+    } else {
+      var comps = j.equipe.map(function (x) { return x.competencia; }).filter(function (c, i, a) { return a.indexOf(c) === i; });
+      var sel = lembrar('comissao.competencia', comps[0]);
+      if (comps.indexOf(sel) < 0) sel = comps[0];
+      var lista = j.equipe.filter(function (x) { return x.competencia === sel; });
+      var cientes = lista.filter(function (x) { return x.ciente_em; }).length;
+      var total = lista.reduce(function (t, x) { return t + Number(x.valor || 0); }, 0);
+      html += '<div class="linha" style="margin-bottom:14px"><label for="selCompC" style="font-weight:800;color:var(--muted);font-size:12.5px">COMPETÊNCIA</label>' +
+        '<select class="campo" id="selCompC" style="width:auto">' + comps.map(function (c) { return '<option value="' + esc(c) + '"' + (c === sel ? ' selected' : '') + '>' + nomeCompC(c) + '</option>'; }).join('') + '</select></div>' +
+        '<div class="tiles" style="margin-bottom:16px"><div class="tile"><span class="rot-tile">Pessoas</span><b>' + lista.length + '</b></div>' +
+        '<div class="tile"><span class="rot-tile">Total da equipe</span><b style="font-size:22px">' + reais(total) + '</b></div>' +
+        '<div class="tile' + (cientes < lista.length ? ' alerta' : '') + '"><span class="rot-tile">Cientes</span><b>' + cientes + ' de ' + lista.length + '</b></div></div>' +
+        '<div class="painel"><div class="tabela-wrap"><table><thead><tr><th>Pessoa</th><th>Setor</th><th style="text-align:right">Comissão</th><th>Situação</th></tr></thead><tbody>' +
+        lista.map(function (x) {
+          return '<tr class="clicavel" data-id="' + x.id + '"><td><b>' + esc(x.nome) + '</b><span class="sec">' + esc(x.cargo || '') + '</span></td><td>' + esc(x.setor || '—') + '</td>' +
+            '<td style="text-align:right;font-weight:800;font-variant-numeric:tabular-nums">' + reais(x.valor) + '</td><td>' + situacaoComissao(x, false) + '</td></tr>';
+        }).join('') + '</tbody></table></div></div>';
+    }
+    $('#conteudo').innerHTML = html + '</div>';
+    $$('tr.clicavel[data-id]').forEach(function (tr) { tr.onclick = function () { location.hash = '#/comissoes/' + tr.getAttribute('data-id'); }; });
+    if ($('#selCompC')) $('#selCompC').onchange = function () { guardar('comissao.competencia', this.value); paginaComissoes('equipe'); };
+  }
+  async function paginaDemonstrativo(id) {
+    $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">Carregando…</div></div>';
+    var x;
+    try { x = (await api('GET', '/api/comissao/relatorios/' + id)).relatorio; } catch (e) {
+      definirBarra('<span class="nome">Minhas comissões</span>');
+      $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">' + esc(e.message) + '<br><a class="btn ghost" style="margin-top:14px" href="#/comissoes">Voltar</a></div></div>';
+      return;
+    }
+    var podeCiente = x.meu && !x.ciente_em && !x.substituido;
+    definirBarra('<a class="setor" href="#/comissoes">Minhas comissões</a><span class="sep">/</span><span class="nome">' + esc((x.meu ? '' : x.nome + ' · ') + nomeCompC(x.competencia)) + '</span>',
+      '<button class="btn ghost sm" id="btImprimirC">' + IC.baixar + '<span class="so-desktop">Imprimir / PDF</span></button>' +
+      (podeCiente ? '<button class="btn primary sm" id="btCienteC">Estou ciente</button>' : '') + '<a class="btn ghost sm" href="#/comissoes">Voltar</a>');
+    var faixa = x.substituido ? '<div class="aviso-demo alerta">Este demonstrativo foi atualizado. Abra a versão nova em <a href="#/comissoes">Minhas comissões</a>.</div>'
+      : x.meu ? (x.ciente_em ? '<div class="aviso-demo ok">✓ Você confirmou este demonstrativo em ' + diaC(x.ciente_em) + '.</div>'
+        : '<div class="aviso-demo">Confira os valores. Se estiver tudo certo, clique em <b>Estou ciente</b>; se tiver dúvida, fale com a sua liderança antes.</div>')
+        : '<div class="aviso-demo">Demonstrativo de <b>' + esc(x.nome) + '</b> (' + esc(x.setor || '—') + ') · versão ' + x.versao + ' · enviado em ' + diaC(x.enviado_em) + ' · ' + situacaoComissao(x, false) + '</div>';
+    $('#conteudo').innerHTML = '<div class="pagina pagina-demo">' + faixa + '<iframe id="frDemo" class="frame-demo" src="/api/comissao/relatorios/' + id + '/ver" title="Demonstrativo de comissão"></iframe></div>';
+    var fr = $('#frDemo');
+    // a altura acompanha o demonstrativo (a folha ou, sem ela, o corpo da página)
+    fr.onload = function () {
+      try { var d = fr.contentDocument, f = d.querySelector('.rel'); fr.style.height = Math.ceil((f ? f.getBoundingClientRect().bottom : d.body.scrollHeight) + 20) + 'px'; } catch (e) { /* mantém a altura padrão */ }
+    };
+    $('#btImprimirC').onclick = function () { try { fr.contentWindow.focus(); fr.contentWindow.print(); } catch (e) { window.open(fr.src, '_blank'); } };
+    if (podeCiente) $('#btCienteC').onclick = async function () {
+      this.disabled = true;
+      try { await api('POST', '/api/comissao/relatorios/' + id + '/ciente'); toast('Obrigado! Demonstrativo confirmado.', 'ok'); atualizarComissao(); paginaDemonstrativo(id); }
+      catch (e) { toast(e.message, 'erro'); this.disabled = false; }
+    };
+    if (x.meu) setTimeout(atualizarComissao, 800);
+  }
+
   async function iniciar() {
     try {
       var r = await fetch('/api/auth/eu', { credentials: 'same-origin' });
@@ -2780,9 +2881,10 @@
     montarCasca();
     carregarTutoriais();
     atualizarResumo();
+    atualizarComissao();
     buscarAvisos();
     $('#btSino').onclick = abrirAvisos;
-    setInterval(function () { atualizarResumo(); buscarAvisos(); }, 30 * 1000);
+    setInterval(function () { atualizarResumo(); atualizarComissao(); buscarAvisos(); }, 30 * 1000);
     window.addEventListener('hashchange', rotear);
     rotear();
   }

@@ -514,7 +514,7 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
   /* ===================== avisos (sino) ===================== */
   r.get('/api/notificacoes', seg.exigirLogin, async (req, res) => {
     const desde = Number(req.query.desde) || 0;
-    const lista = (await db.q(`SELECT id, ticket_id, tipo, titulo, texto, lida, criado_em FROM notificacoes WHERE usuario_id = $1
+    const lista = (await db.q(`SELECT id, ticket_id, link, tipo, titulo, texto, lida, criado_em FROM notificacoes WHERE usuario_id = $1
       ${desde ? 'AND id > $2' : ''} ORDER BY id DESC LIMIT 30`, desde ? [req.usuario.id, desde] : [req.usuario.id])).rows;
     const { n } = await db.um('SELECT COUNT(*)::int AS n FROM notificacoes WHERE usuario_id = $1 AND NOT lida', [req.usuario.id]);
     res.json({ notificacoes: lista, nao_lidas: n, email_ativo: avisos.emailAtivo });

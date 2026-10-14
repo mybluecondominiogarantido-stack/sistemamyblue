@@ -258,6 +258,26 @@ const FERRAMENTAS = {
       ['Configurações', 'Diária da ajuda de custo por região, como contar os dias e a lista de setores.'],
     ],
   },
+  // as regras e os percentuais ficam só na ferramenta (fora do repositório) e no banco do portal: aqui, nada de valores
+  comissionamento: {
+    video: true,
+    nome: 'Comissionamento MyBlue',
+    descricao: 'Metas e comissões de todos os setores num lugar só: o lançamento do mês, o dashboard, o resumo por pessoa, o fechamento e o envio dos demonstrativos para cada pessoa em Minhas comissões.',
+    dados: 'Os dados ficam no banco do portal. Só abre quem a administração liberar; cada pessoa vê o próprio demonstrativo em Minhas comissões.',
+    abas: [
+      ['Dashboard', 'Total do mês, comissão e % atingido por setor, evolução mês a mês, metas do Comercial e a carteira de Crédito e Cobrança. Pendências do mês num quadro só.'],
+      ['Resumo', 'O que cada pessoa recebe e de onde vem cada valor, o fechamento por setor (rascunho, conferido, aprovado, pago), os ajustes manuais com motivo e o envio dos demonstrativos.'],
+      ['Setores', 'Uma aba por setor com o lançamento do mês: relatório da Vouch no Comercial, envio dos boletos no Crédito, devedores na Cobrança, documentação e onboarding na Implantação e as metas dos demais setores.'],
+      ['Supervisão e coordenação', 'Calculada sozinha a partir das equipes.'],
+      ['Configuração', '<b>Pessoas e salários</b> (inclui o login de cada pessoa no portal e a diretoria), <b>Parâmetros</b> com as regras e <b>Importar</b>.'],
+    ],
+    rotina: [
+      'Abra o mês na competência e lance cada setor (ou importe as planilhas recebidas).',
+      'Confira no Dashboard e no Resumo; cada setor passa por conferido e aprovado.',
+      'Feche o mês e clique em <b>Enviar para todos</b>: cada pessoa recebe o aviso e vê o demonstrativo em Minhas comissões.',
+      'Acompanhe quem abriu e quem clicou em <b>Estou ciente</b> no quadro de envio do Resumo.',
+    ],
+  },
 };
 
 // p: prioridade sugerida; h: prazo em horas de expediente
@@ -265,7 +285,7 @@ const SETORES = [
   {
     nome: 'Administrativa/Financeira', arquivo: 'administrativa-financeira',
     papel: 'Cuida das rotinas administrativas e financeiras da MyBlue: pagamentos, notas fiscais, reembolsos, contas da empresa, patrocínios de eventos dos condomínios e viagens a trabalho. É responsável também por Suprimentos, Parceiros e Comissões de Novos Condomínios.',
-    ferramentas: ['patrocinio', 'viagens'],
+    ferramentas: ['patrocinio', 'viagens', 'comissionamento'],
     // subáreas sob a responsabilidade da Administrativa/Financeira (no portal, Suprimentos e Parceiros recebem tickets como setores próprios)
     subareas: [
       {

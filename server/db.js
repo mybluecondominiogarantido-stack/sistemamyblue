@@ -276,13 +276,44 @@ CREATE TABLE IF NOT EXISTS tutoriais (
   enviado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
   enviado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- demonstrativos de comissão enviados pela ferramenta de Comissionamento (uma linha por versão)
+CREATE TABLE IF NOT EXISTS comissao_relatorios (
+  id SERIAL PRIMARY KEY,
+  modulo_slug TEXT NOT NULL,
+  competencia TEXT NOT NULL,
+  chave TEXT NOT NULL,
+  usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  nome TEXT NOT NULL,
+  cargo TEXT NOT NULL DEFAULT '',
+  setor TEXT NOT NULL DEFAULT '',
+  valor NUMERIC(14,2) NOT NULL DEFAULT 0,
+  html TEXT NOT NULL,
+  versao INTEGER NOT NULL DEFAULT 1,
+  enviado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  enviado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  substituido_em TIMESTAMPTZ,
+  aberto_em TIMESTAMPTZ,
+  ciente_em TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_comissao_rel_usuario ON comissao_relatorios(usuario_id, competencia);
+CREATE INDEX IF NOT EXISTS idx_comissao_rel_chave ON comissao_relatorios(modulo_slug, competencia, chave);
+
+-- quem mais pode ler cada demonstrativo: líderes da pessoa (supervisão, coordenação, gerência) e a diretoria
+CREATE TABLE IF NOT EXISTS comissao_leitores (
+  relatorio_id INTEGER NOT NULL REFERENCES comissao_relatorios(id) ON DELETE CASCADE,
+  usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  motivo TEXT NOT NULL DEFAULT 'lider',
+  PRIMARY KEY (relatorio_id, usuario_id)
+);
+CREATE INDEX IF NOT EXISTS idx_comissao_leitores_usuario ON comissao_leitores(usuario_id);
 `;
 
 /* Supabase publica o schema "public" pela API dele (PostgREST). Com RLS ligado e sem
    políticas, ninguém lê nem grava por lá; o portal conecta como dono das tabelas e não é afetado. */
 const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 'permissoes', 'armazenamento', 'colecoes', 'registros', 'documentos', 'auditoria',
   'setor_membros', 'ticket_categorias', 'tickets', 'ticket_eventos', 'ticket_anexos', 'notificacoes', 'condominios',
-  'links_pagina', 'links', 'links_campanhas', 'tutoriais'];
+  'links_pagina', 'links', 'links_campanhas', 'tutoriais', 'comissao_relatorios', 'comissao_leitores'];
 const RLS = TABELAS.map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`).join(';\n');
 
 /* Ajustes em bancos já existentes (rodam a cada início e não fazem nada se já estiverem aplicados). */
@@ -310,6 +341,8 @@ ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto_em TIMESTAMPTZ;
 ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_papel_check;
 ALTER TABLE usuarios ADD CONSTRAINT usuarios_papel_check CHECK (papel IN ('admin','coordenador','supervisor','usuario'));
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS criado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL;
+-- avisos que não são de ticket (ex.: demonstrativo de comissão) levam o endereço da tela no portal
+ALTER TABLE notificacoes ADD COLUMN IF NOT EXISTS link TEXT;
 -- o vídeo já vem comprimido: guardado sem compressão, o banco lê só o pedaço pedido pelo player
 ALTER TABLE tutoriais ALTER COLUMN video SET STORAGE EXTERNAL
 `;
