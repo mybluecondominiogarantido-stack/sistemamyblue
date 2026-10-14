@@ -194,6 +194,20 @@ function viagens(agora = new Date(), { por = '' } = {}) {
    O mês anterior ao de hoje, aprovado em todos os setores. As regras (percentuais, prazos) NÃO vêm daqui:
    ficam na própria ferramenta, que não está no repositório. "logins": id do usuário do portal de cada pessoa. */
 function compAnterior(agora) { const d = new Date(agora.getFullYear(), agora.getMonth() - 1, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; }
+const cnpjFicticio = (i) => `12.345.678/00${String(10 + i).padStart(2, '0')}-0${i % 10}`;
+
+/* relatório de garantia da Vouch (fictício), no mesmo texto do PDF de antecipação, para os contratos que esperam valores */
+function relatorioGarantia(agora = new Date()) {
+  const comp = compAnterior(agora), ref = `${comp.slice(5)}/${comp.slice(0, 4)}`;
+  const brl = (v) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return [[4, 48300, 3.5, 62.4], [3, 38900, 3.3, 54], [5, 55200, 2.9, 70]].map(([i, rateio, taxa, tarifa]) => `
+    <section style="page-break-after:always;font:12px Arial;padding:20mm"><p>MYBLUE · RELATÓRIO DE GARANTIA CONSOLIDADO (EXEMPLO FICTÍCIO)</p>
+    <p>Condomínio Cond. ${CONDS[i]} - CNPJ ${cnpjFicticio(i)}</p>
+    <h3>Resumo da Antecipação - ${ref} (Venc. 10/${ref})</h3>
+    <p>Total Rateio: R$ ${brl(rateio)}</p><p>(-) Tarifa Bancária R$ ${brl(tarifa)}</p>
+    <p>(-) Taxa de Serviço (${String(taxa).replace('.', ',')} %) R$ ${brl(rateio * taxa / 100)}</p></section>`).join('');
+}
+
 function comissionamento(agora = new Date(), logins = {}, diretoria = []) {
   const comp = compAnterior(agora);
   const dia = (n) => `${comp}-${String(n).padStart(2, '0')}`;
@@ -203,27 +217,42 @@ function comissionamento(agora = new Date(), logins = {}, diretoria = []) {
     P('ger', 'Gil Martins', 'Gerente Comercial', 'Comercial', 'gerente', 5000),
     P('ex1', 'Elisa Costa', 'Executiva de Negócios', 'Comercial', 'executivo', 3000),
     P('ex2', 'Bruno Teles', 'Executivo de Negócios', 'Comercial', 'executivo', 3000),
+    P('kc', 'Rita Moura', 'Coordenadora Comercial', 'Comercial', 'coordcom', 4000, { subordinados: ['ex1', 'ex2'] }),
     P('cr1', 'Bruna Reis', 'Assistente de Crédito', 'Crédito', 'credito', 2000),
     P('cr2', 'Davi Rocha', 'Assistente de Crédito', 'Crédito', 'credito', 2000),
     P('cb1', 'Marcos Lima', 'Analista de Cobrança', 'Cobrança', 'cobranca', 2000),
     P('sc', 'Caio Mendes', 'Coordenador de Crédito', 'Supervisão', 'lideranca', 3200, { subordinados: ['cr1', 'cr2'] }),
     P('sb', 'Lia Souza', 'Coordenadora de Cobrança', 'Supervisão', 'lideranca', 3200, { subordinados: ['cb1'] }),
     P('mk', 'Mel Andrade', 'Designer', 'Marketing', 'metas', 3000),
+    P('im1', 'Nina Prado', 'Assistente de Implantação', 'Implantação', 'implantacao', 2000, { emiteBoletos: true }),
+    P('cs1', 'Téo Ramos', 'Analista de Sucesso do Cliente', 'Sucesso do Cliente', 'metas', 3000),
   ];
   const mesRef = `${comp.slice(5)}/${comp.slice(0, 4)}`;
-  const V = (i, exec, vop, pct, tarifa) => ({ id: 'v' + i, cond: 'Cond. ' + CONDS[i], cnpj: `12.345.678/00${String(10 + i).padStart(2, '0')}-0${i % 10}`, exec, tipo: 'Garantido', mesRef, vop, pct, tarifa, financ: 0, origem: 'Vouch' });
+  // contrato da planilha de implantações (Data contrato no mês); com vop = '' ainda espera o relatório de garantia da Vouch
+  const V = (i, exec, d, vop, pct, tarifa) => ({ id: 'v' + i, cond: 'Cond. ' + CONDS[i], cnpj: cnpjFicticio(i), exec, tipo: 'Garantido', mesRef, vop, pct, tarifa, financ: 0,
+    origem: vop === '' ? 'Planilha' : 'Planilha + Vouch', dataContrato: dia(d), obs: `contrato ${dia(d).split('-').reverse().join('/')}` });
   const credito = (base, falha) => [2, 5, 8, 10, 12, 15, 18, 20, 22, 25].map((d, i) => {
     const venc = dia(d);
     return { id: base + i, cond: 'Cond. ' + CONDS[(base === 'b' ? 0 : 10) + i], venc, envio: menos(venc, i === falha ? 6 : 12 + (i % 3)), exped: menos(venc, i === falha ? 5 : 11), obs: '' };
   });
+  // 1º boleto dos condomínios novos (Implantação): vale até o dia do vencimento
+  const boletosImplantacao = () => [3, 6, 9, 13, 17, 24].map((d, i) => ({ id: 'n' + i, cond: 'Cond. ' + CONDS[16 + i], venc: dia(d), envio: menos(dia(d), i === 4 ? -2 : 1 + (i % 3)), exped: '', obs: '' }));
   const mes = {
-    comp, criadoEm: dia(1), fechado: false, status: { Comercial: 'aprovado', 'Crédito': 'aprovado', 'Cobrança': 'aprovado', 'Supervisão': 'aprovado', Marketing: 'aprovado' },
-    metasCom: { equipe: { contratos: 4, vop: 300000 }, exec: { ex1: { contratos: 2, vop: 150000 }, ex2: { contratos: 3, vop: 160000 } } },
-    comercial: [V(0, 'ex1', 92400, 0.028, 132), V(1, 'ex1', 71200, 0.031, 96), V(2, 'ex2', 64800, 0.026, 88), V(3, 'ex2', 38900, 0.033, 54)],
-    vendasGerente: {}, credito: { cr1: credito('b', 7), cr2: credito('d', -1) },
+    comp, criadoEm: dia(1), fechado: false, status: { Comercial: 'aprovado', 'Crédito': 'aprovado', 'Cobrança': 'aprovado', 'Supervisão': 'aprovado', Marketing: 'aprovado', 'Implantação': 'aprovado', 'Sucesso do Cliente': 'aprovado' },
+    metasCom: { equipe: { contratos: 6, vop: 310000 }, exec: { ex1: { contratos: 3, vop: 150000 }, ex2: { contratos: 3, vop: 160000 } }, coord: { kc: { vop: 300000, contratos: 6 } } },
+    comercial: [V(0, 'ex1', 3, 92400, 0.028, 132), V(1, 'ex1', 8, 71200, 0.031, 96), V(4, 'ex1', 20, '', '', 0),
+      V(2, 'ex2', 5, 64800, 0.026, 88), V(3, 'ex2', 14, '', '', 0), V(5, 'ex2', 22, '', '', 0)],
+    vendasGerente: {}, credito: { cr1: credito('b', 7), cr2: credito('d', -1), im1: boletosImplantacao() },
     cobranca: { cb1: [12, 7, 30, 4, 18, 9, 22, 5].map((ini, i) => ({ id: 'm' + i, cond: 'Cond. ' + CONDS[4 + i], venc: String([5, 10, 15][i % 3]), inad: '', devIni: ini, devAtual: i === 3 ? 4 : Math.round(ini * 0.55), obs: '' })) },
     implantacao: {}, manual: {}, satisf: {}, ajustes: [], log: [],
-    metas: { mk: [
+    metas: { cs1: [
+      { id: 's1', tipo: 'num', nome: 'Churn da base', meta: 0.02, alc: 0.01, sentido: '<=', fmt: 'pct', pct: 0.08 },
+      { id: 's2', tipo: 'num', nome: 'Indicações', meta: 15, alc: 17, sentido: '>=', fmt: '', pct: 0.08 },
+      { id: 's3', tipo: 'num', nome: 'Cross-selling', meta: 4, alc: 2, sentido: '>=', fmt: '', pct: 0.08 },
+      { id: 's4', tipo: 'num', nome: 'Valor em financiamentos', meta: 90000, alc: 76000, sentido: '>=', fmt: 'brl', pct: 0.08 },
+      { id: 's5', tipo: 'num', nome: 'Reuniões com clientes', meta: 10, alc: 11, sentido: '>=', fmt: '', pct: 0.08 },
+      { id: 's6', tipo: 'base', nome: 'Comissão sobre financiamentos', pct: 0.004, baseDe: 3, alc: '' },
+    ], mk: [
       { id: 'k1', tipo: 'num', nome: 'Peças entregues', meta: 60, alc: 71, sentido: '>=', fmt: '', pct: 0.08 },
       { id: 'k2', tipo: 'num', nome: 'Entregas no prazo', meta: 0.85, alc: 0.92, sentido: '>=', fmt: 'pct', pct: 0.08 },
       { id: 'k3', tipo: 'num', nome: 'Retrabalho', meta: 0.1, alc: 0.14, sentido: '<=', fmt: 'pct', pct: 0.08 },
@@ -255,7 +284,7 @@ table{width:100%;border-collapse:collapse;font-size:9.3px}th{background:#1d4a6e;
 <div class="r"><span>Exemplo com dados fictícios · Portal MyBlue</span><span>${nome} · pág. 1</span></div></section></body></html>`;
 }
 
-module.exports = { boletos, sindicos, extracaoVouch, prestacao, implantacoes, moradores, viagens, comissionamento, demonstrativo, compAnterior, CONDS };
+module.exports = { boletos, sindicos, extracaoVouch, prestacao, implantacoes, moradores, viagens, comissionamento, relatorioGarantia, demonstrativo, compAnterior, CONDS };
 
 /* troca o valor de uma constante de lista embutida no HTML (casando os colchetes), mantendo o resto do arquivo */
 function trocarLista(html, nome, valor) {

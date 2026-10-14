@@ -263,21 +263,24 @@ const FERRAMENTAS = {
     video: true,
     nome: 'Comissionamento MyBlue',
     descricao: 'Metas e comissões de todos os setores num lugar só: o lançamento do mês, o dashboard, o resumo por pessoa, o fechamento e o envio dos demonstrativos para cada pessoa em Minhas comissões.',
-    dados: 'Os dados ficam no banco do portal. Só abre quem a administração liberar; cada pessoa vê o próprio demonstrativo em Minhas comissões.',
+    dados: 'Os dados ficam no banco do portal. Só abre quem a administração liberar; cada pessoa vê o próprio demonstrativo em Minhas comissões. As regras e percentuais ficam na própria ferramenta (aba Parâmetros) e no manual da ferramenta, entregue à gestão da comissão.',
     abas: [
       ['Dashboard', 'Total do mês, comissão e % atingido por setor, evolução mês a mês, metas do Comercial e a carteira de Crédito e Cobrança. Pendências do mês num quadro só.'],
       ['Resumo', 'O que cada pessoa recebe e de onde vem cada valor, o fechamento por setor (rascunho, conferido, aprovado, pago), os ajustes manuais com motivo e o envio dos demonstrativos.'],
-      ['Setores', 'Uma aba por setor com o lançamento do mês: relatório da Vouch no Comercial, envio dos boletos no Crédito, devedores na Cobrança, documentação e onboarding na Implantação e as metas dos demais setores.'],
+      ['Comercial', 'Em dois passos: a <b>planilha de implantações</b> (entram os contratos com data de contrato no mês, com o executivo de cada um) e os <b>relatórios de garantia</b> da Vouch (os valores entram no contrato pelo CNPJ). Cada executivo abre a lista dos condomínios dele, com a média ponderada da taxa adm. e a faixa; também a gerência e a coordenação comercial.'],
+      ['Crédito, Cobrança e Implantação', 'O envio dos boletos (quem é da Implantação e emite boletos anexa a mesma planilha, com prazo próprio), os devedores da Cobrança e a documentação e o onboarding da Implantação.'],
       ['Supervisão e coordenação', 'Calculada sozinha a partir das equipes.'],
-      ['Configuração', '<b>Pessoas e salários</b> (inclui o login de cada pessoa no portal e a diretoria), <b>Parâmetros</b> com as regras e <b>Importar</b>.'],
+      ['Metas dos setores', 'Uma aba por setor (Sucesso do Cliente, Marketing, Jurídico, Administrativo…) com as métricas do mês; a do Sucesso do Cliente importa a planilha “Para Preencher”.'],
+      ['Configuração', '<b>Pessoas e salários</b> (login de cada pessoa no portal, diretoria e o atalho <b>lançar ›</b> para o quadro da pessoa), <b>Parâmetros</b> com as regras e <b>Importar</b> (cópia de segurança e começar do zero).'],
     ],
     rotina: [
-      'Abra o mês na competência e lance cada setor (ou importe as planilhas recebidas).',
+      'Abra o mês na competência e lance cada setor: no Comercial, a planilha de implantações e depois os relatórios de garantia; nos outros, as planilhas recebidas.',
       'Confira no Dashboard e no Resumo; cada setor passa por conferido e aprovado.',
       'Feche o mês e clique em <b>Enviar para todos</b>: cada pessoa recebe o aviso e vê o demonstrativo em Minhas comissões.',
       'Acompanhe quem abriu e quem clicou em <b>Estou ciente</b> no quadro de envio do Resumo.',
     ],
   },
+
 };
 
 // p: prioridade sugerida; h: prazo em horas de expediente

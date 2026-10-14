@@ -586,35 +586,58 @@ module.exports = [
       const { chaves } = D.comissionamento(new Date(), logins, [ids['sueli@myblue.com.br']]);
       await cen.admin('POST', '/api/armazenamento/comissionamento', { set: chaves });
     },
-    abertura: ['Metas e comissões de todos os setores, do lançamento ao demonstrativo.', ['Dashboard e resumo', 'Lançar um setor', 'Pessoas, logins e regras', 'Fechar e enviar os demonstrativos']],
+    abertura: ['Metas e comissões de todos os setores, do lançamento ao demonstrativo.', ['Dashboard e resumo', 'Comercial: contratos e relatórios de garantia', 'Crédito, Implantação e Sucesso do Cliente', 'Fechar e enviar os demonstrativos']],
     async gravar(t) {
       const f = quadro(t, 'comissionamento');
       const aba = (id) => f.locator(`[data-aba="${id}"]`);
+      // relatório de garantia fictício em PDF (mesmo texto do PDF de antecipação da Vouch)
+      const pg = await t.p.context().browser().newPage();
+      await pg.setContent(`<!doctype html><html><body>${D.relatorioGarantia(new Date())}</body></html>`);
+      const relatorio = arquivoTemp('relatorio-de-garantia.pdf', await pg.pdf({ format: 'A4' }));
+      await pg.close();
+
       const P = '1 · Visão geral';
       await t.legenda('O <b>Dashboard</b> mostra o total do mês, a comissão e o % atingido de cada setor, a evolução e as pendências.', { etapa: P, ms: 600 });
       await t.mostrar(f.locator('.kpi').first(), 2600);
-      await t.mostrar(f.locator('.g-cards'), 3000);
+      await t.mostrar(f.locator('.g-cards'), 2600);
       await t.legenda('As abas ficam em grupos: <b>Visão geral</b>, <b>Setores</b> (uma para cada setor) e <b>Configuração</b>.', { etapa: P, ms: 300 });
-      await t.mostrar(f.locator('#abas'), 3000);
+      await t.mostrar(f.locator('#abas'), 2600);
 
-      const L = '2 · Lançar um setor';
-      await t.legenda('Em cada setor, lance o mês ou importe a planilha recebida. No Crédito: o envio de cada boleto.', { etapa: L, ms: 300 });
+      const K = '2 · Comercial';
+      await t.clicar(aba('comercial'), { depois: 1200 });
+      await t.legenda('No <b>Comercial</b>, 1º a <b>planilha de implantações</b>: entram os contratos com <b>Data contrato</b> no mês, já com o executivo de cada um.', { etapa: K, ms: 300 });
+      await t.mostrar(f.locator('[data-drop="vouch"]'), 3600);
+      await t.legenda('Abra o executivo (▸) para ver os condomínios dele. Sem relatório ainda, o contrato fica <b>aguardando relatório</b>.', { etapa: K, ms: 300 });
+      await t.mostrar(f.locator('.det-exec').first(), 3400);
+      await t.legenda('2º os <b>relatórios de garantia</b> da Vouch (PDF): VOP = Total Rateio, taxa adm. = Taxa de Serviço, boletos = Tarifa Bancária.', { etapa: K, ms: 300 });
+      await t.enviarArquivo(f.locator('[data-drop="vouch"]'), f.locator('input[data-arquivo="vouch"]'), relatorio, { depois: 2600 });
+      await t.legenda('Os valores entram no contrato certo pelo CNPJ. Relatório de condomínio fora da planilha do mês fica fora da conta.', { etapa: K, ms: 300 });
+      await t.mostrar(f.locator('.cond-exec').first(), 3400);
+      await t.legenda('No rodapé, a <b>média ponderada</b> da taxa adm. (VOP × % ÷ VOP) e a faixa: Bronze, Prata, Ouro ou Safira.', { etapa: K, ms: 300 });
+      await t.mostrar(f.locator('.media-pond').first(), 3400);
+      await t.legenda('A <b>Coordenação comercial</b> ganha sobre a 1ª taxa adm. e os boletos dos contratos da equipe, pela faixa da equipe.', { etapa: K, ms: 300 });
+      const coord = f.locator('.card', { has: f.locator('h2', { hasText: 'Coordenação comercial' }) });
+      await coord.scrollIntoViewIfNeeded(); await t.mostrar(coord, 3600);
+
+      const L = '3 · Outros setores';
+      await t.legenda('No <b>Crédito</b>: o envio de cada boleto. Fora do prazo com justificativa? <b>Pedir abono</b>: a supervisão aprova.', { etapa: L, ms: 300 });
       await t.clicar(aba('credito'), { depois: 1400 });
       await t.mostrar(f.locator('.resumo-pessoa'), 2600);
-      await t.legenda('Fora do prazo com justificativa? <b>Pedir abono</b>: a supervisão aprova e fica registrado.', { etapa: L, ms: 300 });
-      await t.mostrar(f.locator('text=Pedir abono').first(), 2600);
-      await t.legenda('No <b>Comercial</b>: a meta da equipe e de cada executivo, e o relatório da Vouch.', { etapa: L, ms: 300 });
-      await t.clicar(aba('comercial'), { depois: 1400 });
-      await t.mostrar(f.locator('.metas-cards'), 3000);
+      await t.legenda('Quem é da <b>Implantação</b> e emite boletos anexa a mesma planilha, com o prazo próprio da Implantação.', { etapa: L, ms: 300 });
+      await t.clicar(f.locator('[data-sel="credito"][data-id="im1"]'), { depois: 1400 });
+      await t.mostrar(f.locator('.regra').first(), 3200);
+      await t.legenda('No <b>Sucesso do Cliente</b>: as metas sobre o salário e a comissão sobre o VOP de financiamentos.', { etapa: L, ms: 300 });
+      await t.clicar(aba('setor:Sucesso do Cliente'), { depois: 1400 });
+      await t.mostrar(f.locator('table').first(), 3400);
 
-      const C = '3 · Pessoas e regras';
+      const C = '4 · Pessoas e regras';
       await t.legenda('Em <b>Pessoas e salários</b>: cadastro, salário, regra de cada pessoa e o <b>login no portal</b> (para onde vai o demonstrativo).', { etapa: C, ms: 300 });
       await t.clicar(aba('pessoas'), { depois: 1600 });
       await t.mostrar(f.locator('table').first(), 3000);
-      await t.legenda('<b>Escolher diretoria</b> define quem vê os demonstrativos de todos.', { etapa: C, ms: 300 });
-      await t.mostrar(f.locator('[data-acao="diretoria"]'), 2400);
+      await t.legenda('<b>Escolher diretoria</b> define quem vê os demonstrativos de todos. As regras e percentuais ficam em <b>Parâmetros</b>.', { etapa: C, ms: 300 });
+      await t.mostrar(f.locator('[data-acao="diretoria"]'), 2600);
 
-      const E = '4 · Fechar e enviar';
+      const E = '5 · Fechar e enviar';
       await t.legenda('No <b>Resumo</b>: o valor de cada pessoa e a origem, o fechamento por setor e os ajustes.', { etapa: E, ms: 300 });
       await t.clicar(aba('resumo'), { depois: 1600 });
       await t.mostrar(f.locator('table').first(), 2600);
@@ -623,7 +646,7 @@ module.exports = [
       await t.legenda('O quadro mostra quem já abriu e quem clicou em <b>Estou ciente</b>. <b>Reenviar</b> manda uma versão corrigida.', { etapa: E, ms: 300 });
       await t.mostrar(f.locator('[data-enviar]').first(), 3000);
     },
-    resumo: ['Dashboard e resumo do mês', 'Uma aba para cada setor', 'Pessoas, logins e diretoria', '<b>Enviar para todos</b> e acompanhar quem confirmou'],
+    resumo: ['Dashboard e resumo do mês', 'Comercial: planilha de implantações + relatórios de garantia', 'Crédito, Implantação e Sucesso do Cliente', 'Pessoas, logins e diretoria', '<b>Enviar para todos</b> e acompanhar quem confirmou'],
   },
   {
     nome: 'ferramenta-credito',
