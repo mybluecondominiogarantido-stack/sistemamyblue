@@ -2663,9 +2663,9 @@
     ol.innerHTML = cues.map(function (c, i) {
       var cab = c.etapa && c.etapa !== etapaAnt ? '<li class="etapa">' + esc(c.etapa) + '</li>' : '';
       etapaAnt = c.etapa || etapaAnt;
-      return cab + '<li class="passo" data-i="' + i + '"><span class="t">' + duracaoTxt(Math.floor(c.ini)).replace(' min', '').replace(' s', 's') + '</span><span>' + esc(c.texto) + '</span></li>';
+      return cab + '<li class="passo-item" data-i="' + i + '"><span class="t">' + duracaoTxt(Math.floor(c.ini)).replace(' min', '').replace(' s', 's') + '</span><span>' + esc(c.texto) + '</span></li>';
     }).join('') || '<li class="ajuda">Sem passo a passo para este vídeo.</li>';
-    $$('li.passo', ol).forEach(function (li) {
+    $$('li.passo-item', ol).forEach(function (li) {
       li.addEventListener('click', function () { v.currentTime = cues[Number(li.getAttribute('data-i'))].ini + 0.05; v.play(); });
     });
     var ativo = -1;
@@ -2674,8 +2674,8 @@
       cues.forEach(function (c, k) { if (v.currentTime >= c.ini && v.currentTime < c.fim) i = k; });
       if (i === ativo) return;
       ativo = i;
-      $$('li.passo', ol).forEach(function (li) { li.classList.toggle('on', Number(li.getAttribute('data-i')) === i); });
-      var on = $('li.passo.on', ol);
+      $$('li.passo-item', ol).forEach(function (li) { li.classList.toggle('on', Number(li.getAttribute('data-i')) === i); });
+      var on = $('li.passo-item.on', ol);
       if (on) ol.scrollTop = on.offsetTop - ol.offsetTop - 60;
     });
   }
