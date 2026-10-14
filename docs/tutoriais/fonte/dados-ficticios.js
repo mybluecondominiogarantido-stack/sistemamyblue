@@ -217,7 +217,7 @@ function comissionamento(agora = new Date(), logins = {}, diretoria = []) {
     P('ger', 'Gil Martins', 'Gerente Comercial', 'Comercial', 'gerente', 5000),
     P('ex1', 'Elisa Costa', 'Executiva de Negócios', 'Comercial', 'executivo', 3000),
     P('ex2', 'Bruno Teles', 'Executivo de Negócios', 'Comercial', 'executivo', 3000),
-    P('kc', 'Rita Moura', 'Coordenadora Comercial', 'Comercial', 'coordcom', 4000, { subordinados: ['ex1', 'ex2'] }),
+    P('kc', 'Rita Moura', 'Coordenadora Comercial', 'Comercial', 'coordcom', 4000),
     P('cr1', 'Bruna Reis', 'Assistente de Crédito', 'Crédito', 'credito', 2000),
     P('cr2', 'Davi Rocha', 'Assistente de Crédito', 'Crédito', 'credito', 2000),
     P('cb1', 'Marcos Lima', 'Analista de Cobrança', 'Cobrança', 'cobranca', 2000),
@@ -239,9 +239,10 @@ function comissionamento(agora = new Date(), logins = {}, diretoria = []) {
   const boletosImplantacao = () => [3, 6, 9, 13, 17, 24].map((d, i) => ({ id: 'n' + i, cond: 'Cond. ' + CONDS[16 + i], venc: dia(d), envio: menos(dia(d), i === 4 ? -2 : 1 + (i % 3)), exped: '', obs: '' }));
   const mes = {
     comp, criadoEm: dia(1), fechado: false, status: { Comercial: 'aprovado', 'Crédito': 'aprovado', 'Cobrança': 'aprovado', 'Supervisão': 'aprovado', Marketing: 'aprovado', 'Implantação': 'aprovado', 'Sucesso do Cliente': 'aprovado' },
-    metasCom: { equipe: { contratos: 6, vop: 310000 }, exec: { ex1: { contratos: 3, vop: 150000 }, ex2: { contratos: 3, vop: 160000 } }, coord: { kc: { vop: 300000, contratos: 6 } } },
-    comercial: [V(0, 'ex1', 3, 92400, 0.028, 132), V(1, 'ex1', 8, 71200, 0.031, 96), V(4, 'ex1', 20, '', '', 0),
-      V(2, 'ex2', 5, 64800, 0.026, 88), V(3, 'ex2', 14, '', '', 0), V(5, 'ex2', 22, '', '', 0)],
+    metasCom: { equipe: { contratos: 6, vop: 310000 }, exec: { ex1: { contratos: 3, vop: 150000 }, ex2: { contratos: 3, vop: 160000 } }, coord: { kc: { vop: 130000, contratos: 2 } } },
+    // indicação de parceiro da coordenação comercial marcada em dois condomínios; a coordenadora também vende (V6)
+    comercial: [V(0, 'ex1', 3, 92400, 0.028, 132), { ...V(1, 'ex1', 8, 71200, 0.031, 96), coordInc: { kc: true } }, V(4, 'ex1', 20, '', '', 0),
+      { ...V(2, 'ex2', 5, 64800, 0.026, 88), coordInc: { kc: true } }, V(3, 'ex2', 14, '', '', 0), V(5, 'ex2', 22, '', '', 0), V(6, 'kc', 12, 41000, 0.032, 58)],
     vendasGerente: {}, credito: { cr1: credito('b', 7), cr2: credito('d', -1), im1: boletosImplantacao() },
     cobranca: { cb1: [12, 7, 30, 4, 18, 9, 22, 5].map((ini, i) => ({ id: 'm' + i, cond: 'Cond. ' + CONDS[4 + i], venc: String([5, 10, 15][i % 3]), inad: '', devIni: ini, devAtual: i === 3 ? 4 : Math.round(ini * 0.55), obs: '' })) },
     implantacao: {}, manual: {}, satisf: {}, ajustes: [], log: [],

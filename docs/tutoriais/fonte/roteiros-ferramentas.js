@@ -615,7 +615,9 @@ module.exports = [
       await t.mostrar(f.locator('.cond-exec').first(), 3400);
       await t.legenda('No rodapé, a <b>média ponderada</b> da taxa adm. (VOP × % ÷ VOP) e a faixa: Bronze, Prata, Ouro ou Safira.', { etapa: K, ms: 300 });
       await t.mostrar(f.locator('.media-pond').first(), 3400);
-      await t.legenda('A <b>Coordenação comercial</b> ganha sobre a 1ª taxa adm. e os boletos dos contratos da equipe, pela faixa da equipe.', { etapa: K, ms: 300 });
+      await t.legenda('Em cada condomínio dá para marcar <b>Indicação parceiro da coordenação</b>: esses contratos entram na conta da <b>Coordenação comercial</b>.', { etapa: K, ms: 300 });
+      await t.mostrar(f.locator('.ind-coord.on').first(), 3200);
+      await t.legenda('Ela ganha pela faixa desses contratos (1ª taxa adm. + boletos) e também pelas <b>vendas próprias</b>.', { etapa: K, ms: 300 });
       const coord = f.locator('.card', { has: f.locator('h2', { hasText: 'Coordenação comercial' }) });
       await coord.scrollIntoViewIfNeeded(); await t.mostrar(coord, 3600);
 
