@@ -25,6 +25,12 @@ function criarRegistros(db) {
     return r && r.inserido ? 'inserido' : 'atualizado';
   }
 
+  /* um registro (null se não existe) */
+  async function obter(slug, colecao, id) {
+    const r = await db.um('SELECT dados FROM registros WHERE modulo_slug = $1 AND colecao = $2 AND item_id = $3', [slug, colecao, String(id)]);
+    return r ? r.dados : null;
+  }
+
   const apagar = async (slug, colecao, id) =>
     (await db.q('DELETE FROM registros WHERE modulo_slug = $1 AND colecao = $2 AND item_id = $3', [slug, colecao, String(id)])).n;
 
@@ -47,7 +53,7 @@ function criarRegistros(db) {
   const salvarCabecalho = (slug, colecao, cab) => db.q(`INSERT INTO colecoes (modulo_slug, colecao, cabecalho) VALUES ($1, $2, $3::jsonb)
     ON CONFLICT (modulo_slug, colecao) DO UPDATE SET cabecalho = excluded.cabecalho`, [slug, colecao, JSON.stringify(cab)]);
 
-  return { listar, listarComIds, upsert, apagar, substituirTudo, lote, resumo, cabecalho, salvarCabecalho };
+  return { listar, listarComIds, upsert, apagar, substituirTudo, lote, resumo, cabecalho, salvarCabecalho, obter };
 }
 
 module.exports = { criarRegistros };
