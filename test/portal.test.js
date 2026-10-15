@@ -7,6 +7,7 @@ const os = require('os');
 const path = require('path');
 const http = require('http');
 const { criarApp, lerConfig } = require('../server/index');
+const { abrirZip } = require('../server/planilha');
 
 let servidor, base, ctx, dataDir;
 
@@ -221,6 +222,18 @@ test('armazenamento no servidor: equipe e por usuário', async () => {
   assert.match(pag.texto, /"versoes":\{"pedidos":\d+\}/);
 });
 
+test('baixar todas as ferramentas em uso num .zip', async () => {
+  const { c } = await logar('admin@teste.com', 'Admin1234');
+  await c('POST', '/api/admin/modulos', { slug: 'zip-x', nome: 'Zip X', armazenamento: 'navegador' });
+  await c('PUT', '/api/admin/modulos/zip-x/arquivo', '<!doctype html><title>Zip X</title><p>olá</p>', { headers: { 'content-type': 'text/html' } });
+  const r = await c('GET', '/api/admin/modulos-em-uso.zip', undefined, { bruto: true });
+  assert.equal(r.status, 200);
+  assert.equal(r.headers.get('content-type'), 'application/zip');
+  const z = abrirZip(r.buffer, () => true);
+  assert.equal(z.get('zip-x.html').toString('utf8'), '<!doctype html><title>Zip X</title><p>olá</p>');
+  assert.match(z.get('LEIAME.txt').toString('utf8'), /zip-x\.html — Zip X · versão \d+/);
+});
+
 test('bibliotecas das CDNs vêm do portal', async () => {
   const { c } = await logar('admin@teste.com', 'Admin1234');
   await c('POST', '/api/admin/modulos', { slug: 'cdn-x', nome: 'CDN X', armazenamento: 'navegador' });
@@ -264,6 +277,10 @@ test('planilha interna em linhas (Renegociações): protocolo do Apps Script', a
   assert.equal((await post({ action: 'add', row: ['a1', 'Residencial Alfa', 'Fechado'] })).json.ok, true);
   await post({ action: 'addMany', rows: [['a2', 'Residencial Beta', 'Em negociação'], ['a3', 'Residencial Gama', 'Fechado']] });
   await post({ action: 'update', id: 'a2', row: ['a2', 'Residencial Beta Atualizado', 'Fechado'] });
+  // conferência "antes": com a linha velha, recusa; com a atual, grava
+  assert.equal((await post({ action: 'update', id: 'a2', row: ['a2', 'Beta', 'Em negociação'], antes: ['a2', 'Residencial Beta', 'Em negociação'] })).status, 409);
+  assert.equal((await post({ action: 'delete', id: 'a2', antes: ['a2', 'Residencial Beta', 'Em negociação'] })).status, 409);
+  assert.equal((await post({ action: 'update', id: 'a2', row: ['a2', 'Residencial Beta Atualizado', 'Fechado'], antes: ['a2', 'Residencial Beta Atualizado', 'Fechado'] })).json.ok, true);
   await post({ action: 'delete', id: 'a3' });
   r = await c('GET', '/api/gas/renegociacoes');
   assert.deepEqual(r.json, [['ID', 'Condomínio', 'Status'], ['a1', 'Residencial Alfa', 'Fechado'], ['a2', 'Residencial Beta Atualizado', 'Fechado']]);
@@ -311,6 +328,19 @@ test('planilha interna em objetos (Parceiros): upsert/delete via JSONP', async (
   assert.deepEqual(r.json, [{ key: '2026-09_p1', pago: false }]);
   r = await c('GET', '/api/gas/parceiros?sheet=partners');
   assert.deepEqual(r.json, [{ id: 'p1', nome: 'Parceiro Um', tags: '["venda"]' }]);
+  // conferência "antes" (JSONB reordena as chaves: a comparação ignora a ordem)
+  const gravar = (corpo) => c('POST', '/api/gas/parceiros', JSON.stringify(corpo), { headers: { 'content-type': 'text/plain;charset=utf-8' } });
+  r = await gravar({ sheet: 'partners', action: 'upsert', item: { id: 'p1', nome: 'Parceiro 1', tags: '["venda"]' }, antes: { tags: '["venda"]', nome: 'Parceiro Um', id: 'p1' } });
+  assert.equal(r.json.ok, true);
+  r = await gravar({ sheet: 'partners', action: 'upsert', item: { id: 'p1', nome: 'Outro nome', tags: '[]' }, antes: { id: 'p1', nome: 'Parceiro Um', tags: '["venda"]' } });
+  assert.equal(r.status, 409);
+  assert.deepEqual(r.json.atual, { id: 'p1', nome: 'Parceiro 1', tags: '["venda"]' });
+  // registro novo: antes = null; se outra pessoa já criou, conflito
+  assert.equal((await gravar({ sheet: 'partners', action: 'upsert', item: { id: 'p9', nome: 'Novo' }, antes: null })).json.ok, true);
+  assert.equal((await gravar({ sheet: 'partners', action: 'upsert', item: { id: 'p9', nome: 'Outro' }, antes: null })).status, 409);
+  assert.equal((await gravar({ sheet: 'partners', action: 'delete', id: 'p9', antes: { id: 'p9', nome: 'Velho' } })).status, 409);
+  assert.equal((await gravar({ sheet: 'partners', action: 'delete', id: 'p9', antes: { id: 'p9', nome: 'Novo' } })).json.ok, true);
+  await gravar({ sheet: 'partners', action: 'upsert', item: { id: 'p1', nome: 'Parceiro Um', tags: '["venda"]' } });
   r = await c('GET', '/api/gas/parceiros?sheet=partners&action=delete&id=p1', undefined, mesmoSite);
   assert.equal(r.json.ok, true);
   assert.deepEqual((await c('GET', '/api/gas/parceiros?sheet=partners')).json, []);
@@ -365,6 +395,17 @@ test('planilha posicional (Controle de Pedidos): incluir, alterar pela linha e m
   assert.equal((await c('GET', '/api/gas/suprimentos')).json.length, 3); // cabeçalho + 2 linhas (repetidas são mantidas)
   assert.equal((await post({ action: 'setStatus', row: 99, num: '200', venc: '20/11/2026', status: 'Pago' })).json.ok, true);
   assert.equal((await post({ action: 'setStatus', row: 2, num: '999', venc: '20/11/2026', status: 'Pago' })).status, 409);
+  // conferência "antes": quem edita com a tela velha não desfaz o "Pago" de outra pessoa
+  const conf = await post({ action: 'update', row: 2, num: '200', desc: 'Limpeza geral', valor: 80, venc: '20/11/2026', status: 'Em aberto',
+    antes: { num: '200', desc: 'Limpeza', valor: 80, venc: '20/11/2026', status: 'Em aberto' } });
+  assert.equal(conf.status, 409);
+  assert.equal(conf.json.conflito, true);
+  // com o estado atual certo, grava
+  assert.equal((await post({ action: 'setStatus', row: 2, num: '200', venc: '20/11/2026', status: 'Em aberto', antes: { status: 'Pago' } })).json.ok, true);
+  // excluir: pelo nº do pedido + vencimento; sem nº não apaga
+  assert.equal((await post({ action: 'delete', row: 2 })).status, 400);
+  assert.equal((await post({ action: 'delete', row: 2, num: '200', venc: '20/11/2026', antes: { status: 'Em aberto' } })).json.ok, true);
+  assert.equal((await c('GET', '/api/gas/suprimentos')).json.length, 2);
   const csv = await c('GET', '/api/admin/modulos/suprimentos/dados/pedidos.csv');
   assert.match(csv.texto, /Nº do Pedido;Descrição;Valor/);
 

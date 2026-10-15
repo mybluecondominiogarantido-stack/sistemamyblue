@@ -827,6 +827,7 @@
       '<div class="painel"><div class="cab-painel"><b style="font-family:var(--display)" id="qtdMods"></b><span class="espaco"></span>' +
       '<button class="btn ghost" id="btSetores">Setores</button>' +
       '<button class="btn ghost" id="btLote">' + IC.enviar + 'Enviar vários HTMLs</button>' +
+      '<button class="btn ghost" id="btZipMods" title="A versão em uso de cada ferramenta, num arquivo .zip">' + IC.baixar + 'Baixar ferramentas (.zip)</button>' +
       '<button class="btn ghost" id="btBackup">' + IC.baixar + 'Backup do banco</button>' +
       '<button class="btn primary" id="btNovoMod">' + IC.mais + 'Novo módulo</button></div>' +
       '<div class="faixa-busca"><input class="campo" id="buscaMod" type="search" placeholder="Pesquisar módulo, setor ou arquivo…" aria-label="Pesquisar módulo"></div>' +
@@ -848,6 +849,7 @@
     $('#btSetores').onclick = gerirSetores;
     $('#btLote').onclick = envioEmLote;
     $('#btBackup').onclick = function () { location.href = '/api/admin/backup'; };
+    $('#btZipMods').onclick = function () { location.href = '/api/admin/modulos-em-uso.zip'; };
 
     function opcoesSetor(sel) {
       return '<option value="">— sem setor —</option>' + setores.map(function (s) { return '<option value="' + s.id + '"' + (s.id === sel ? ' selected' : '') + '>' + esc(s.nome) + '</option>'; }).join('');
@@ -2913,7 +2915,8 @@
             headers: { 'Content-Type': f.type || 'application/octet-stream', 'X-Nome-Arquivo': encodeURIComponent(f.name) } });
           var x = await r.json().catch(function () { return {}; });
           if (!r.ok) throw new Error(x.erro || 'Não foi possível enviar.');
-          toast('Planilha enviada. A gestão de premiações foi avisada.');
+          toast(x.faltam ? 'Planilha enviada. Falta' + (x.faltam > 1 ? 'm ' + x.faltam + ' planilhas' : ' 1 planilha') + ': a gestão de premiações recebe o aviso quando todas forem enviadas.'
+            : 'Planilha enviada. A gestão de premiações foi avisada.');
           atualizarComissao(); paginaComissoes(sub);
         } catch (e) { toast(e.message, 'erro'); paginaComissoes(sub); }
       };
@@ -2925,14 +2928,16 @@
     if (!lista.length) return '';
     var dataHora = function (s) { var d = new Date(s); return d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); };
     var daEquipe = lista.some(function (x) { return x.nome && x.nome !== eu.nome; });
-    return '<section class="planilhas-mes"><h2>' + IC.documento + 'Planilhas para enviar</h2>' +
-      '<p class="sub">' + (daEquipe ? 'A gestão de premiações pediu as planilhas do mês da sua equipe. Envie o arquivo de cada pessoa (Excel ou CSV); quem pediu recebe o aviso.' : 'A gestão de premiações pediu a sua planilha do mês. Envie o arquivo aqui (Excel ou CSV); quem pediu recebe o aviso.') + '</p>' +
+    var doMes = lista.filter(function (x) { return x.competencia === lista[0].competencia; });
+    var enviadas = doMes.filter(function (x) { return x.enviado_em; }).length;
+    return '<section class="planilhas-mes"><h2>' + IC.documento + 'Planilhas para enviar' + (doMes.length > 1 ? ' <span class="etiqueta ' + (enviadas === doMes.length ? 'verde' : 'ambar') + '">' + enviadas + ' de ' + doMes.length + ' enviadas</span>' : '') + '</h2>' +
+      '<p class="sub">' + (daEquipe ? 'A gestão de premiações pediu as planilhas do mês da sua equipe. Envie um arquivo por pessoa (Excel, CSV ou PDF); quem pediu recebe um aviso só, quando todas estiverem enviadas.' : 'A gestão de premiações pediu a sua planilha do mês. Envie o arquivo aqui (Excel, CSV ou PDF); quem pediu recebe o aviso.') + '</p>' +
       lista.map(function (x) {
         var st = x.importado_em ? ['ok', 'Recebida e conferida pela gestão'] : x.enviado_em ? ['enviada', 'Enviada em ' + dataHora(x.enviado_em)] : ['pendente', 'Aguardando envio'];
         return '<div class="pedido-plan ' + st[0] + '"><div class="info"><b>' + (x.nome && x.nome !== eu.nome ? esc(x.nome) + ' · ' : '') + esc(x.titulo) + '</b><span>Premiação de ' + nomeCompC(x.competencia) + ' · pedido em ' + diaC(x.pedido_em) + '</span>' +
           '<span class="etiqueta ' + ({ ok: 'verde', enviada: 'azul', pendente: 'ambar' })[st[0]] + '">' + st[1] + '</span>' +
           (x.arquivo_nome ? '<span class="arq">' + IC.documento + esc(x.arquivo_nome) + '</span>' : '') + '</div>' +
-          '<label class="btn ' + (x.enviado_em ? 'ghost' : 'primary') + '"><input type="file" hidden accept=".xlsx,.xls,.xlsm,.csv" data-plan="' + x.id + '">' + (x.enviado_em ? 'Enviar de novo' : 'Enviar planilha') + '</label></div>';
+          '<label class="btn ' + (x.enviado_em ? 'ghost' : 'primary') + '"><input type="file" hidden accept=".xlsx,.xls,.xlsm,.csv,.pdf" data-plan="' + x.id + '">' + (x.enviado_em ? 'Enviar de novo' : 'Enviar planilha') + '</label></div>';
       }).join('') + '</section>';
   }
   async function paginaDemonstrativo(id) {

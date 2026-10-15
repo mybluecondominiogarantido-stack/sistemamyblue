@@ -2,6 +2,7 @@
 const express = require('express');
 const { hashSenha, validarNovaSenha, senhaAleatoria } = require('../seguranca');
 const { SLUG_RE } = require('../modulos');
+const { criarZip } = require('../zip');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ICONES = ['app', 'calculadora', 'grafico', 'aperto', 'caixa', 'carteira', 'documento', 'pessoas', 'ticket', 'casa', 'calendario', 'escudo'];
@@ -406,6 +407,20 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
   });
 
   r.get('/api/admin/modulos/:slug/versoes', async (req, res) => res.json({ versoes: await modulos.listarVersoes(req.params.slug) }));
+
+  /* todas as ferramentas, na versão em uso, num .zip (para revisar ou corrigir fora do portal) */
+  r.get('/api/admin/modulos-em-uso.zip', async (req, res) => {
+    if (req.usuario.papel !== 'admin') return erro(res, 403, 'Só a administração baixa todas as ferramentas.');
+    const { rows } = await db.q(`SELECT m.slug, m.nome, v.id, v.conteudo, v.nome_original, v.sha256, v.enviado_em
+      FROM modulos m JOIN modulo_versoes v ON v.id = m.versao_id ORDER BY m.slug`);
+    const arquivos = rows.map((x) => ({ nome: `${x.slug}.html`, dados: Buffer.from(x.conteudo) }));
+    arquivos.push({ nome: 'LEIAME.txt', dados: ['Ferramentas do Portal MyBlue — versão em uso de cada uma', `Gerado em ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`, '',
+      ...rows.map((x) => `${x.slug}.html — ${x.nome} · versão ${x.id} · enviada em ${new Date(x.enviado_em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} · arquivo original "${x.nome_original || ''}" · sha256 ${x.sha256 || ''}`)].join('\r\n') });
+    await seg.auditar(req, 'versoes_exportadas', null, { modulos: rows.map((x) => `${x.slug}#${x.id}`) });
+    res.set('Content-Disposition', `attachment; filename="ferramentas-myblue-${new Date().toISOString().slice(0, 10)}.zip"`);
+    res.set('Cache-Control', 'no-store');
+    res.type('application/zip').send(criarZip(arquivos));
+  });
 
   /* baixa o HTML de uma versão, como foi enviado (cópia de segurança da ferramenta) */
   r.get('/api/admin/modulos/:slug/versoes/:id/arquivo', async (req, res) => {

@@ -76,4 +76,4 @@ function lerPlanilha(buf) {
   return lerCsv(decodificar(buf));
 }
 
-module.exports = { lerPlanilha, lerXlsx };
+module.exports = { lerPlanilha, lerXlsx, abrirZip };

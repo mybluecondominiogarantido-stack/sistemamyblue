@@ -189,6 +189,16 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, cfg }) {
     try { return hostsDoPortal(req).has(new URL(ref).host); } catch { return false; }
   }
 
+  /* Conferência opcional "o registro ainda está como eu vi?": a ferramenta manda em `antes` o registro como ela o
+     mostrou (null = não existia). Se outra pessoa alterou depois, a gravação é recusada (409, conflito: true) e
+     volta o registro atual. Sem `antes`, grava como sempre. JSONB reordena as chaves: a comparação ignora a ordem. */
+  const canon = (v) => (Array.isArray(v) ? '[' + v.map(canon).join(',') + ']'
+    : v && typeof v === 'object' ? '{' + Object.keys(v).sort().map((k) => JSON.stringify(k) + ':' + canon(v[k])).join(',') + '}'
+      : JSON.stringify(v === undefined ? null : v));
+  const temAntes = (p) => Object.prototype.hasOwnProperty.call(p, 'antes');
+  const antesDe = (p) => { let a = p.antes; if (typeof a === 'string') { try { a = JSON.parse(a); } catch { /* texto puro */ } } return a; };
+  const conflitoGas = (res, cb, atual) => responder(res, cb, { ok: false, conflito: true, error: 'Outra pessoa alterou este registro depois que você abriu a tela. Atualize e tente de novo.', atual }, 409);
+
   /* ---------- planilha "posicional" (Controle de Pedidos): as alterações apontam a linha pela posição ---------- */
   const semAcento = (x) => String(x == null ? '' : x).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   // mesma regra que a ferramenta usa para achar as colunas pelo cabeçalho
@@ -221,7 +231,7 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, cfg }) {
       await log({ total: rows.length });
       return responder(res, cb, { ok: true });
     }
-    if (acao === 'update' || acao === 'setStatus') {
+    if (acao === 'update' || acao === 'setStatus' || acao === 'delete') {
       const idx = colunas(cab);
       const linhas = await registros.listarComIds(m.slug, colecao);
       const igual = (a, b) => String(a == null ? '' : a).trim() === String(b == null ? '' : b).trim();
@@ -233,9 +243,22 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, cfg }) {
       const mesmaData = (a, b) => dia(a) === dia(b);
       // a ferramenta envia a linha da planilha (cabeçalho = linha 1); confere pelo nº do pedido antes de alterar
       let alvo = linhas[Number(p.row) - 2];
+      // excluir exige nº do pedido e vencimento iguais (nunca apaga pela posição sozinha)
+      if (acao === 'delete' && (p.num == null || String(p.num).trim() === '')) return responder(res, cb, { ok: false, error: 'informe o nº do pedido' }, 400);
       const confere = (l) => l && (idx.num === undefined || igual(l.dados[idx.num], p.num)) && (!p.venc || idx.venc === undefined || mesmaData(l.dados[idx.venc], p.venc) || acao === 'update');
       if (!confere(alvo)) alvo = linhas.find((l) => idx.num !== undefined && igual(l.dados[idx.num], p.num) && (!p.venc || idx.venc === undefined || mesmaData(l.dados[idx.venc], p.venc)));
       if (!alvo) return responder(res, cb, { ok: false, error: 'linha não encontrada' }, 409);
+      if (temAntes(p) && p.antes && typeof p.antes === 'object') {
+        const a = antesDe(p);
+        const mudou = ['num', 'desc', 'valor', 'venc', 'status'].some((c) => a[c] !== undefined && idx[c] !== undefined
+          && !(c === 'venc' ? mesmaData(alvo.dados[idx[c]], a[c]) : igual(alvo.dados[idx[c]], a[c])));
+        if (mudou) return conflitoGas(res, cb, alvo.dados);
+      }
+      if (acao === 'delete') {
+        await registros.apagar(m.slug, colecao, alvo.id);
+        await log({ linha: Number(p.row), pedido: p.num });
+        return responder(res, cb, { ok: true });
+      }
       const dados = [...alvo.dados];
       while (dados.length < cab.length) dados.push('');
       const por = (campo, valor) => { if (idx[campo] !== undefined && valor !== undefined) dados[idx[campo]] = valor; };
@@ -286,11 +309,19 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, cfg }) {
           case 'update': {
             if (!Array.isArray(p.row)) break;
             const id = p.id != null ? String(p.id) : idDaLinha(p.row);
+            if (temAntes(p)) {
+              const atual = await registros.obter(m.slug, colecao, id);
+              if (canon(atual) !== canon(antesDe(p)) && canon(atual) !== canon(p.row)) return conflitoGas(res, cb, atual);
+            }
             await registros.upsert(m.slug, colecao, id, p.row, uid); await log({ id });
             return responder(res, cb, { ok: true });
           }
           case 'delete':
             if (p.id == null) break;
+            if (temAntes(p)) {
+              const atual = await registros.obter(m.slug, colecao, p.id);
+              if (atual && canon(atual) !== canon(antesDe(p))) return conflitoGas(res, cb, atual);
+            }
             await registros.apagar(m.slug, colecao, p.id); await log({ id: p.id });
             return responder(res, cb, { ok: true });
           case 'addMany':
@@ -320,11 +351,19 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, cfg }) {
         if (!item || typeof item !== 'object' || Array.isArray(item)) return responder(res, cb, { ok: false, error: 'item inválido' }, 400);
         const id = item.id != null && item.id !== '' ? item.id : item.key;
         if (id == null || id === '') return responder(res, cb, { ok: false, error: 'item sem id' }, 400);
+        if (temAntes(p)) {
+          const atual = await registros.obter(m.slug, colecao, id);
+          if (canon(atual) !== canon(antesDe(p)) && canon(atual) !== canon(item)) return conflitoGas(res, cb, atual);
+        }
         const r2 = await registros.upsert(m.slug, colecao, id, item, uid); await log({ id, resultado: r2 });
         return responder(res, cb, { ok: true });
       }
       if (acao === 'delete') {
         if (p.id == null || p.id === '') return responder(res, cb, { ok: false, error: 'id ausente' }, 400);
+        if (temAntes(p)) {
+          const atual = await registros.obter(m.slug, colecao, p.id);
+          if (atual && canon(atual) !== canon(antesDe(p))) return conflitoGas(res, cb, atual);
+        }
         await registros.apagar(m.slug, colecao, p.id); await log({ id: p.id });
         return responder(res, cb, { ok: true });
       }
