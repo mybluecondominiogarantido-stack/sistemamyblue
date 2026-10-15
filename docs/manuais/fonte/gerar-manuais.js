@@ -31,7 +31,7 @@ const HISTORICO = [
   ['1.3', '09/10/2026', 'Passo a passo das ferramentas da Administrativa/Financeira; Tutoriais em vídeo; baixar o HTML de versões anteriores.'],
   ['2.0', '09/10/2026', 'Manuais no padrão visual da MyBlue (timbrado, partes e capítulos); catálogo das ferramentas; Central de Patrocínio e Gestão de Viagens; Central de Ferramentas do Crédito com as sete automações; regra de excedente por boleto da Prestação de Contas (v7); regra de tutoriais sempre em dia.'],
   ['2.1', '13/10/2026', 'Títulos no padrão <b>Manual do Portal – Geral</b> e <b>Manual do Portal – Setor …</b>. Carteira: <i>Adicionar novos</i> pela planilha de implantação (ID Vouch, vigência, executivo de negócios e CNPJ), sem importação de CSV. Comissões de Novos Condomínios: a gestão <i>puxa da carteira</i> os condomínios da vigência, parceiro só da lista e cadastro de parceiro novo pelo financeiro. Pesquisa em Módulos e dados e em Ferramentas do setor.'],
-  ['2.2', '14/10/2026', '<b>Minhas comissões</b> (demonstrativo de cada pessoa, <i>Estou ciente</i>, equipe para coordenação e gerência, diretoria, <b>envio da planilha do mês</b> pelo portal) e a ferramenta <b>Comissionamento MyBlue</b> no menu <i>Comissões</i>: planilhas do mês, Comercial pela planilha de implantações e relatórios de garantia, coordenação comercial, boletos da Implantação e metas do Sucesso do Cliente.'],
+  ['2.2', '15/10/2026', 'Menu <b>Premiações</b>: <b>Minhas Premiações</b> (demonstrativo de cada pessoa, só para leitura, <i>Estou ciente</i>, equipe para coordenação e gerência, diretoria) e a ferramenta <b>Gestão de Premiações</b> (antes Comissionamento MyBlue): planilhas do mês enviadas pelo coordenador do setor, Comercial pela planilha de implantações e relatórios de garantia, coordenação comercial, boletos da Implantação e metas do Sucesso do Cliente.'],
 ];
 const VERSOES = (doc) => capVersoes({
   titulo: `Manutenção e controle de versão deste manual`,
@@ -281,11 +281,11 @@ ${tabela(['Quem', 'O que pode'], [
 ${dica('A carteira também decide para quem vai o ticket de condomínio em Cobrança e Crédito. Mantenha os responsáveis em dia.')}`;
 
 const COMISSOES = `
-<p class="intro">No menu <b>Comissões → Minhas comissões</b> cada pessoa recebe o <b>demonstrativo de comissão</b> do mês, no mesmo formato do PDF de prestação de contas. Não vai mais por e-mail.</p>
+<p class="intro">No menu <b>Premiações → Minhas Premiações</b> cada pessoa recebe o <b>demonstrativo de premiação</b> do mês, no mesmo formato da prestação de contas. Não vai mais por e-mail.</p>
 ${passos([
-  'Quando a gestão da comissão envia, chega um aviso no <b>sino</b> e um <b>e-mail curto</b>, só avisando que o demonstrativo está disponível (o e-mail não traz valores).',
-  'Em <b>Minhas comissões</b>, clique no mês para abrir o demonstrativo. O contador no menu mostra quantos esperam a sua confirmação.',
-  'Confira os valores. Para guardar, use <b>Imprimir / PDF</b>.',
+  'Quando a gestão de premiações envia, chega um aviso no <b>sino</b> e um <b>e-mail curto</b>, só avisando que o demonstrativo está disponível (o e-mail não traz valores).',
+  'Em <b>Minhas Premiações</b>, clique no mês para abrir o demonstrativo. O contador no menu mostra o que espera por você.',
+  'Confira os valores. O demonstrativo fica no portal para consultar quando quiser; ele é só para leitura (não é impresso nem baixado).',
   'Clique em <b>Estou ciente</b>. A gestão vê quem abriu e quem confirmou.',
 ])}
 ${tabela(['Quem', 'O que vê'], [
@@ -295,18 +295,18 @@ ${tabela(['Quem', 'O que vê'], [
 ])}
 <ul>
   <li>Se um demonstrativo for corrigido e reenviado, a versão nova substitui a anterior e aparece a marca <i>atualizado</i>. Confirme de novo.</li>
-  <li>A ferramenta <b>Comissionamento MyBlue</b>, no mesmo grupo do menu, aparece só para quem a administração liberar (a gestão da comissão).</li>
+  <li>A ferramenta <b>Gestão de Premiações</b>, no mesmo grupo do menu, aparece só para quem a administração liberar (a gestão de premiações).</li>
 </ul>
-${dica('Dúvida sobre um valor? Fale com a gestão da comissão antes de clicar em <b>Estou ciente</b>.')}
-<h2>Enviar a planilha do mês</h2>
-<p>Quem manda planilha para a comissão (Crédito, Cobrança, metas dos setores…) envia o arquivo pelo próprio portal, em vez do e-mail:</p>
+${dica('Dúvida sobre um valor? Fale com a gestão de premiações antes de clicar em <b>Estou ciente</b>.')}
+<h2>Coordenação: enviar as planilhas do mês da equipe</h2>
+<p>As planilhas que entram no cálculo (Crédito, Cobrança, metas dos setores…) são enviadas pelo <b>coordenador do setor</b>, pelo próprio portal, em vez do e-mail:</p>
 ${passos([
-  'Quando a gestão da comissão pede, chega um aviso no <b>sino</b> e um e-mail curto: <i>Envie sua planilha de comissão de …</i>.',
-  'Em <b>Minhas comissões</b>, no quadro <b>Planilhas para enviar</b>, clique em <b>Enviar planilha</b> e escolha o arquivo (Excel ou CSV).',
-  'A gestão recebe o aviso e confere. Você acompanha a situação: <i>Aguardando o seu envio</i>, <i>Enviada</i> ou <i>Recebida e conferida pela gestão</i>.',
+  'Quando a gestão de premiações pede, o coordenador recebe <b>um aviso</b> no <b>sino</b> e um e-mail curto, com a lista das pessoas da equipe.',
+  'Em <b>Minhas Premiações</b>, no quadro <b>Planilhas para enviar</b>, há uma linha por pessoa. Em cada uma, clique em <b>Enviar planilha</b> e escolha o arquivo dela (Excel ou CSV).',
+  'A gestão recebe o aviso e confere. A situação de cada linha mostra <i>Aguardando envio</i>, <i>Enviada</i> ou <i>Recebida e conferida pela gestão</i>.',
   'Enviou o arquivo errado? <b>Enviar de novo</b> substitui o anterior e avisa a gestão outra vez.',
 ])}
-<p>Você vê só o seu pedido: nada da ferramenta de comissão, das regras ou dos valores dos colegas.</p>`;
+<p>O coordenador vê só os pedidos dele: nada da ferramenta de premiações, das regras ou dos valores.</p>`;
 
 const LINKS = `
 <p class="intro">A <b>Central de Links</b> reúne os links úteis da equipe, por grupos. Fica no menu, logo abaixo de <i>Início</i>, e os links abrem em nova aba.</p>
@@ -342,7 +342,7 @@ function CATALOGO() {
 const TUTORIAIS = `
 <p class="intro">No menu <b>Tutoriais</b> ficam vídeos curtos com o portal e as ferramentas sendo usados de verdade, com dados fictícios, legenda e o <b>passo a passo</b> ao lado: clique num passo para ir direto ao trecho.</p>
 ${tabela(['Grupo', 'Vídeos'], [
-  ['<b>Primeiros passos</b>', 'Primeiro acesso e o portal · Carteira de condomínios · Central de Links · Minhas comissões.'],
+  ['<b>Primeiros passos</b>', 'Primeiro acesso e o portal · Carteira de condomínios · Central de Links · Minhas Premiações.'],
   ['<b>Central de Tickets</b>', 'Abrir e acompanhar um ticket · Atender um ticket · Líder: distribuir a fila · Supervisão.'],
   ['<b>Central de Links</b>', 'Editar a Central de Links (quem tem a marcação de Marketing).'],
   ['<b>Ferramentas</b>', 'Um vídeo por ferramenta, para quem abre a ferramenta.'],
@@ -449,7 +449,7 @@ function manualGeral() {
   parte('Carteira, links, ferramentas e tutoriais') +
   cap('Carteira de condomínios', CARTEIRA) +
   cap('Central de Links', LINKS) +
-  cap('Minhas comissões', COMISSOES) +
+  cap('Minhas Premiações', COMISSOES) +
   cap('Ferramentas dos setores', CATALOGO()) +
   cap('Tutoriais em vídeo', TUTORIAIS) +
   parte('Gestão e administração') +

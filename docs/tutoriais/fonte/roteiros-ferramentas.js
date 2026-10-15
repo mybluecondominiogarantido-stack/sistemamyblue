@@ -574,11 +574,11 @@ module.exports = [
     resumo: ['<b>Novo recibo</b>: VOP → faixa e valor automáticos → <b>Salvar e baixar PDF</b>', '<b>Recibos</b>: marcar enviado, assinado e pago', '<b>Resultados</b> do ano e Excel'],
   },
   {
-    // a ferramenta não fica no repositório: FERRAMENTAS='{"comissionamento":"/caminho/Comissionamento.html"}'
-    nome: 'ferramenta-comissionamento',
-    ferramenta: 'comissionamento',
+    // a ferramenta não fica no repositório: FERRAMENTAS='{"premiacoes":"/caminho/Comissionamento.html"}'
+    nome: 'ferramenta-premiacoes',
+    ferramenta: 'premiacoes',
     entrar: 'paula@myblue.com.br',
-    inicio: '#/m/comissionamento',
+    inicio: '#/m/premiacoes',
     async preparar(cen) {
       // cadastro e mês fictícios no banco do portal (as regras ficam na própria ferramenta)
       const ids = cen.id;
@@ -586,19 +586,20 @@ module.exports = [
       const { chaves, comp } = D.comissionamento(new Date(), logins, [ids['sueli@myblue.com.br']]);
       // a planilha da Bruna chega pelo portal (Planilhas do mês): o quadro dela começa vazio
       const mes = JSON.parse(chaves[`comissao:mes:${comp}`]); mes.credito.cr1 = []; chaves[`comissao:mes:${comp}`] = JSON.stringify(mes);
-      await cen.admin('POST', '/api/armazenamento/comissionamento', { set: chaves });
-      const pedidos = await cen.admin('POST', '/api/comissao/planilhas', { modulo: 'comissionamento', competencia: comp, avisar_email: false, pedidos: [
-        { chave: 'cr1', usuario_id: logins.cr1, nome: 'Bruna Reis', tipo: 'credito', titulo: 'Planilha de envio de boletos' },
-        { chave: 'cr2', usuario_id: logins.cr2, nome: 'Davi Rocha', tipo: 'credito', titulo: 'Planilha de envio de boletos' },
-        { chave: 'cb1', usuario_id: logins.cb1, nome: 'Marcos Lima', tipo: 'cobranca', titulo: 'Controle de cobrança (devedores do período)' }] });
+      await cen.admin('POST', '/api/armazenamento/premiacoes', { set: chaves });
+      const pedidos = await cen.admin('POST', '/api/comissao/planilhas', { modulo: 'premiacoes', competencia: comp, avisar_email: false, pedidos: [
+        { chave: 'cr1', usuario_id: logins.sc, nome: 'Bruna Reis', tipo: 'credito', titulo: 'Planilha de envio de boletos' },
+        { chave: 'cr2', usuario_id: logins.sc, nome: 'Davi Rocha', tipo: 'credito', titulo: 'Planilha de envio de boletos' },
+        { chave: 'cb1', usuario_id: logins.sb, nome: 'Marcos Lima', tipo: 'cobranca', titulo: 'Controle de cobrança (devedores do período)' }] });
       const xlsx = require(path.join(process.env.BIBLIOTECAS || '', 'node_modules', 'xlsx'));
       const wb = xlsx.utils.book_new();
       xlsx.utils.book_append_sheet(wb, xlsx.utils.aoa_to_sheet(D.planilhaCredito(new Date(), 'Bruna Reis'), { cellDates: true }), 'Acompanhamento');
-      await cen.sessao.bruna('POST', `/api/comissao/minhas-planilhas/${pedidos.pedidos[0].id}`, xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' }), 'application/octet-stream');
+      // o coordenador do Crédito (Caio) envia a planilha da Bruna
+      await cen.sessao.caio('POST', `/api/comissao/minhas-planilhas/${pedidos.pedidos[0].id}`, xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' }), 'application/octet-stream');
     },
     abertura: ['Metas e comissões de todos os setores, do lançamento ao demonstrativo.', ['Dashboard e resumo', 'Planilhas do mês: pedir e importar', 'Comercial: contratos e relatórios de garantia', 'Fechar e enviar os demonstrativos']],
     async gravar(t) {
-      const f = quadro(t, 'comissionamento');
+      const f = quadro(t, 'premiacoes');
       const aba = (id) => f.locator(`[data-aba="${id}"]`);
       // relatório de garantia fictício em PDF (mesmo texto do PDF de antecipação da Vouch)
       const pg = await t.p.context().browser().newPage();
@@ -614,10 +615,10 @@ module.exports = [
       await t.mostrar(f.locator('#abas'), 2600);
 
       const PL = '2 · Planilhas do mês';
-      await t.legenda('Em <b>Planilhas do mês</b>, peça a planilha a quem precisa mandar. A pessoa vê <b>só o pedido dela</b> em Minhas comissões.', { etapa: PL, ms: 300 });
+      await t.legenda('Em <b>Planilhas do mês</b>, peça as planilhas. O pedido vai para <b>quem envia</b>: o coordenador do setor, com um aviso só para a equipe.', { etapa: PL, ms: 300 });
       await t.clicar(aba('coleta'), { depois: 1800 });
       await t.mostrar(f.locator('.card table').first(), 3200);
-      await t.legenda('Quando ela envia, chega o aviso no sino. Aqui, <b>Importar e conferir</b> leva a planilha para o quadro dela.', { etapa: PL, ms: 300 });
+      await t.legenda('Quando o coordenador envia, chega o aviso no sino. Aqui, <b>Importar e conferir</b> leva a planilha para o quadro da pessoa.', { etapa: PL, ms: 300 });
       await t.clicar(f.locator('[data-coleta-importar]').first(), { depois: 2600 });
       await t.legenda('A planilha entrou no quadro da assistente, no Crédito: confira o resultado de cada condomínio e a comissão.', { etapa: PL, ms: 300 });
       await t.mostrar(f.locator('.resumo-pessoa').first(), 3000);
@@ -662,7 +663,7 @@ module.exports = [
       await t.legenda('No <b>Resumo</b>: o valor de cada pessoa e a origem, o fechamento por setor e os ajustes.', { etapa: E, ms: 300 });
       await t.clicar(aba('resumo'), { depois: 1600 });
       await t.mostrar(f.locator('table').first(), 2600);
-      await t.legenda('Com tudo aprovado, <b>Enviar para todos</b>: cada pessoa recebe o aviso e vê o dela em Minhas comissões.', { etapa: E, ms: 300 });
+      await t.legenda('Com tudo aprovado, <b>Enviar para todos</b>: cada pessoa recebe o aviso e vê o dela em Minhas Premiações.', { etapa: E, ms: 300 });
       await t.clicar(f.locator('[data-acao="enviar-todos"]'), { depois: 2600 });
       await t.legenda('O quadro mostra quem já abriu e quem clicou em <b>Estou ciente</b>. <b>Reenviar</b> manda uma versão corrigida.', { etapa: E, ms: 300 });
       await t.mostrar(f.locator('[data-enviar]').first(), 3000);
