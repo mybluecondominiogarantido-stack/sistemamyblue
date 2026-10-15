@@ -54,19 +54,48 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, cfg }) {
   r.get('/api/armazenamento/:slug', seg.exigirLogin, async (req, res) => {
     const x = await moduloComArmazenamento(req, res);
     if (!x) return;
-    const { rows } = await db.q('SELECT chave, valor FROM armazenamento WHERE modulo_slug = $1 AND escopo = $2', [x.m.slug, x.escopo]);
+    const { rows } = await db.q('SELECT chave, valor, versao FROM armazenamento WHERE modulo_slug = $1 AND escopo = $2', [x.m.slug, x.escopo]);
     res.set('Cache-Control', 'no-store');
-    res.json({ dados: Object.fromEntries(rows.map((l) => [l.chave, l.valor])) });
+    res.json({ dados: Object.fromEntries(rows.map((l) => [l.chave, l.valor])), versoes: Object.fromEntries(rows.map((l) => [l.chave, Number(l.versao)])) });
   });
 
+  /* Grava o lote. Com `base` ({ chave: versão que a página conhece; 0 = não existia }), confere antes:
+     se outra pessoa gravou a chave depois, nada do lote é gravado e volta { conflito } com o que está no banco.
+     Gravar o mesmo valor que já está no banco nunca é conflito. Devolve a versão nova de cada chave gravada. */
   const gravarArmazenamento = (slug, escopo, corpo, usuarioId) => db.tx(async (t) => {
-    if (corpo.limpar) await t.q('DELETE FROM armazenamento WHERE modulo_slug = $1 AND escopo = $2', [slug, escopo]);
-    for (const k of corpo.del || []) await t.q('DELETE FROM armazenamento WHERE modulo_slug = $1 AND escopo = $2 AND chave = $3', [slug, escopo, String(k)]);
-    for (const [k, v] of Object.entries(corpo.set || {})) {
-      await t.q(`INSERT INTO armazenamento (modulo_slug, escopo, chave, valor, atualizado_por) VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT (modulo_slug, escopo, chave) DO UPDATE SET valor = excluded.valor, atualizado_em = now(), atualizado_por = excluded.atualizado_por`,
-      [slug, escopo, String(k), String(v), usuarioId]);
+    const base = corpo.base && typeof corpo.base === 'object' && !corpo.limpar ? corpo.base : null;
+    const set = Object.entries(corpo.set || {}).map(([k, v]) => [String(k), String(v)]);
+    const del = (corpo.del || []).map(String);
+    if (base) {
+      const chaves = set.map(([k]) => k).concat(del).filter((k) => Object.prototype.hasOwnProperty.call(base, k));
+      if (chaves.length) {
+        // uma gravação conferida por vez em cada ferramenta (inclui chaves novas, que ainda não têm linha para travar)
+        await t.q('SELECT pg_advisory_xact_lock(hashtext($1))', [slug + '|' + escopo]);
+        const { rows } = await t.q('SELECT chave, valor, versao FROM armazenamento WHERE modulo_slug = $1 AND escopo = $2 AND chave = ANY($3::text[]) FOR UPDATE',
+          [slug, escopo, chaves]);
+        const atual = Object.fromEntries(rows.map((r) => [r.chave, r]));
+        const novo = Object.fromEntries(set);
+        const conflito = {};
+        for (const k of chaves) {
+          const a = atual[k];
+          if (Number(base[k]) === (a ? Number(a.versao) : 0)) continue;
+          if (k in novo ? (a && a.valor === novo[k]) : !a) continue; // o banco já está como a página quer
+          conflito[k] = a ? { valor: a.valor, versao: Number(a.versao) } : { valor: null, versao: 0 };
+        }
+        if (Object.keys(conflito).length) return { conflito };
+      }
     }
+    if (corpo.limpar) await t.q('DELETE FROM armazenamento WHERE modulo_slug = $1 AND escopo = $2', [slug, escopo]);
+    const versoes = {};
+    for (const k of del) { await t.q('DELETE FROM armazenamento WHERE modulo_slug = $1 AND escopo = $2 AND chave = $3', [slug, escopo, k]); versoes[k] = 0; }
+    for (const [k, v] of set) {
+      const r = await t.um(`INSERT INTO armazenamento (modulo_slug, escopo, chave, valor, atualizado_por) VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (modulo_slug, escopo, chave) DO UPDATE SET valor = excluded.valor, atualizado_em = now(), atualizado_por = excluded.atualizado_por,
+          versao = CASE WHEN armazenamento.valor = excluded.valor THEN armazenamento.versao ELSE armazenamento.versao + 1 END
+        RETURNING versao`, [slug, escopo, k, v, usuarioId]);
+      versoes[k] = Number(r.versao);
+    }
+    return { versoes };
   });
 
   r.post('/api/armazenamento/:slug', seg.exigirLogin, express.json({ limit: `${cfg.limiteDadosMb}mb` }), async (req, res) => {
@@ -74,10 +103,15 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, cfg }) {
     if (!x) return;
     const corpo = req.body || {};
     if ((corpo.set && typeof corpo.set !== 'object') || (corpo.del && !Array.isArray(corpo.del))) return res.status(400).json({ erro: 'Formato inválido.' });
-    await gravarArmazenamento(x.m.slug, x.escopo, corpo, req.usuario.id);
+    if (corpo.base && typeof corpo.base !== 'object') return res.status(400).json({ erro: 'Formato inválido.' });
+    const r = await gravarArmazenamento(x.m.slug, x.escopo, corpo, req.usuario.id);
+    if (r.conflito) {
+      await seg.auditar(req, 'dados_conflito', x.m.slug, { chaves: Object.keys(r.conflito).slice(0, 20) });
+      return res.status(409).json({ erro: 'Outra pessoa alterou estes dados depois que a página foi aberta.', conflito: r.conflito });
+    }
     const chaves = Object.keys(corpo.set || {});
     await seg.auditar(req, 'dados_gravados', x.m.slug, { chaves: chaves.slice(0, 20), removidas: (corpo.del || []).slice(0, 20), limpar: !!corpo.limpar, escopo: x.escopo === '*' ? 'equipe' : 'usuario' });
-    res.json({ ok: true });
+    res.json({ ok: true, versoes: r.versoes });
   });
 
   /* ---------- banco de documentos das ferramentas feitas como artefato do Claude ---------- */

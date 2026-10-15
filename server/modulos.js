@@ -2,6 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { trocarCdns } = require('./rotas/cdn');
 
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,40}$/;
 const BRIDGE_JS = fs.readFileSync(path.join(__dirname, 'bridge.js'), 'utf8');
@@ -109,18 +110,23 @@ function criarServicoModulos(db, cfg) {
       }
     }
 
+    // bibliotecas das CDNs passam a vir do próprio portal (funciona mesmo com a CDN bloqueada na rede)
+    html = trocarCdns(html);
+
     const conf = {
       modulo: m.slug,
       modo: m.armazenamento,
       locais: m.config.chaves_locais || [],
+      livres: m.config.chaves_livres || [],
       usuario: { id: usuario.id, nome: usuario.nome, email: usuario.email, admin: usuario.papel === 'admin', foto_v: usuario.foto_v || null },
       claudeDb: m.adaptador === 'claude-db',
       avisos,
     };
     if (m.armazenamento !== 'navegador') {
       const escopo = m.armazenamento === 'compartilhado' ? '*' : `u:${usuario.id}`;
-      const { rows } = await db.q('SELECT chave, valor FROM armazenamento WHERE modulo_slug = $1 AND escopo = $2', [m.slug, escopo]);
+      const { rows } = await db.q('SELECT chave, valor, versao FROM armazenamento WHERE modulo_slug = $1 AND escopo = $2', [m.slug, escopo]);
       conf.dados = Object.fromEntries(rows.map((r) => [r.chave, r.valor]));
+      conf.versoes = Object.fromEntries(rows.map((r) => [r.chave, Number(r.versao)]));
     }
     const injecao = `<script>window.__MYBLUE__=${jsonEmScript(conf)};\n${BRIDGE_JS}</script>`;
 
