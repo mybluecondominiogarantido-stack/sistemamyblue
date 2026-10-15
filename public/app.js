@@ -2776,7 +2776,7 @@
 
   /* ======================= partida ======================= */
   /* ======================= Minhas Premiações ======================= */
-  // demonstrativos enviados pela ferramenta de Comissionamento: cada pessoa vê o seu; líderes e diretoria, os da equipe
+  // demonstrativos enviados pela Gestão de Premiações: cada pessoa vê o seu; líderes e diretoria, os da equipe
   var MOD_COMISSAO = 'premiacoes';
   var resumoComissao = null;
   var MESES_C = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
