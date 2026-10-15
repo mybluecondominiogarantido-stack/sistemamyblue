@@ -44,7 +44,7 @@ async function montarCenario(base, { ferramentas = {} } = {}) {
 
   const titulos = { credito: 'Central de Ferramentas — Crédito', cobranca: 'Central de Ferramentas — Cobrança', renegociacoes: 'Controle de Renegociações',
     suprimentos: 'Controle de Pedidos', parceiros: 'Prestação de Contas — Parceiros', boletos: 'Controle de Emissão de Boletos', sindicos: 'Controle de Síndicos',
-    comissionamento: 'Comissionamento MyBlue' };
+    premiacoes: 'Gestão de Premiações' };
   for (const [slug, t] of Object.entries(titulos)) {
     await a('PUT', `/api/admin/modulos/${slug}/arquivo`, ferramentas[slug] ? fs.readFileSync(ferramentas[slug]) : exemplo(t));
   }

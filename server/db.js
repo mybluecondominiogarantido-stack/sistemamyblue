@@ -389,6 +389,7 @@ async function abrir(cfg) {
     await t.q('SELECT pg_advisory_xact_lock(7240513)');
     for (const cmd of (SCHEMA + ';' + RLS + ';' + AJUSTES).split(';').map((s) => s.trim()).filter(Boolean)) await t.q(cmd);
     await semear(t);
+    await renomearPremiacoes(t); // antes de semear os módulos novos do catálogo
     await semearSetores(t);
     await semearNovosModulos(t);
     await sincronizarCatalogo(t);
@@ -463,6 +464,31 @@ async function migrarCarteira(t) {
   for (const [campo, coluna] of [['analista_cobranca', 'ANALISTA ADMINISTRATIVA'], ['analista_extrajudicial', 'ANALISTA EXTRAJUDICIAL'], ['assistente_credito', 'ASSISTENTE CREDITO']]) {
     await t.q(`UPDATE condominios SET ${campo} = UPPER(TRIM(pessoas->>$1)) WHERE ${campo} = '' AND COALESCE(pessoas->>$1, '') <> ''`, [coluna]);
   }
+}
+
+/* "Comissionamento MyBlue" (módulo "comissionamento") passou a ser "Gestão de Premiações" (módulo "premiacoes").
+   Como as tabelas apontam para modulos(slug) sem ON UPDATE CASCADE, cria o módulo novo com os mesmos dados, leva tudo
+   o que era do antigo (versões do HTML, acessos, dados salvos, demonstrativos, pedidos de planilha, histórico) e apaga o
+   antigo. Os tutoriais e os links dos avisos também mudam. Roda uma vez: depois o módulo antigo já não existe. */
+async function renomearPremiacoes(t) {
+  const velho = await t.um("SELECT nome FROM modulos WHERE slug = 'comissionamento'");
+  if (!velho || await t.um("SELECT 1 FROM modulos WHERE slug = 'premiacoes'")) return;
+  const cols = (await t.q("SELECT column_name FROM information_schema.columns WHERE table_name = 'modulos' AND table_schema = current_schema() ORDER BY ordinal_position"))
+    .rows.map((c) => c.column_name).filter((c) => c !== 'slug');
+  const lista = cols.map((c) => `"${c}"`).join(', ');
+  await t.q(`INSERT INTO modulos (slug, ${lista}) SELECT 'premiacoes', ${lista} FROM modulos WHERE slug = 'comissionamento'`);
+  // o nome muda só se ainda for o antigo (não desfaz um nome escolhido pela administração)
+  await t.q(`UPDATE modulos SET nome = CASE WHEN nome = 'Comissionamento MyBlue' THEN 'Gestão de Premiações' ELSE nome END,
+    config = config || '{"titulo":"Gestão de Premiações"}'::jsonb WHERE slug = 'premiacoes'`);
+  for (const tab of ['modulo_versoes', 'permissoes', 'armazenamento', 'colecoes', 'registros', 'documentos', 'auditoria', 'comissao_relatorios', 'comissao_planilhas']) {
+    await t.q(`UPDATE ${tab} SET modulo_slug = 'premiacoes' WHERE modulo_slug = 'comissionamento'`);
+  }
+  await t.q("DELETE FROM modulos WHERE slug = 'comissionamento'");
+  await t.q("INSERT INTO auditoria (acao, modulo_slug, detalhe) VALUES ('modulo_semeado', 'premiacoes', '{\"de\":\"comissionamento\"}'::jsonb)");
+  for (const [de, para] of [['minhas-comissoes', 'minhas-premiacoes'], ['ferramenta-comissionamento', 'ferramenta-premiacoes']]) {
+    if (!(await t.um('SELECT 1 FROM tutoriais WHERE slug = $1', [para]))) await t.q('UPDATE tutoriais SET slug = $2 WHERE slug = $1', [de, para]);
+  }
+  await t.q("UPDATE notificacoes SET link = replace(replace(link, '#/m/comissionamento', '#/m/premiacoes'), '#/comissoes', '#/premiacoes') WHERE link LIKE '#/m/comissionamento%' OR link LIKE '#/comissoes%'");
 }
 
 module.exports = { abrir, SCHEMA, RLS };

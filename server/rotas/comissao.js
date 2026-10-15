@@ -1,18 +1,19 @@
 'use strict';
 /*
- * Demonstrativos de comissão ("Minhas comissões").
+ * Demonstrativos de premiação ("Minhas Premiações").
  *
- * A ferramenta de Comissionamento (módulo com config.relatorios_comissao) envia, depois do mês aprovado,
+ * A ferramenta Gestão de Premiações (módulo com config.relatorios_comissao) envia, depois do mês aprovado,
  * o demonstrativo de cada pessoa. Quem vê cada demonstrativo:
  *   - a própria pessoa (dona do demonstrativo), que confirma com "Estou ciente";
  *   - os leitores enviados junto: líderes dela (supervisão, coordenação, gerência) e a diretoria;
- *   - quem abre a ferramenta de Comissionamento (o gestor da comissão e a administração do portal, que abre todas).
+ *   - quem abre a Gestão de Premiações (o gestor da comissão e a administração do portal, que abre todas).
  * Ninguém mais: nem a supervisão de tickets, nem coordenadores de outros setores, nem os colegas.
  * Reenviar cria uma nova versão; a anterior fica guardada e sai das listas.
  *
- * Planilhas do mês: a gestão pede a planilha a quem tem de mandar (Crédito, Cobrança, metas dos setores…).
- * A pessoa vê só o pedido dela em "Minhas comissões" e envia o arquivo; quem pediu recebe o aviso no sino
- * e importa o arquivo na ferramenta. A pessoa nunca vê a ferramenta, as regras ou a comissão de ninguém.
+ * Planilhas do mês: a gestão pede a planilha de cada pessoa (Crédito, Cobrança, metas dos setores…) a quem
+ * envia — normalmente o coordenador do setor, que recebe um aviso só com a lista da equipe. Ele envia os arquivos
+ * em "Minhas Premiações"; quem pediu recebe o aviso no sino e importa na ferramenta. Quem envia nunca vê a
+ * ferramenta, as regras ou valores.
  */
 const express = require('express');
 
@@ -25,6 +26,8 @@ const LIMITE_HTML = 1.5 * 1024 * 1024;
 // o demonstrativo é exibido sem scripts, formulários nem recursos de fora (só as fontes do Google)
 const CSP_RELATORIO = "default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data:; "
   + "frame-ancestors 'self'; form-action 'none'; base-uri 'none'";
+const SO_LEITURA = '<style>@media print{html,body{display:none!important}}html,body{-webkit-user-select:none;user-select:none}</style>';
+const semImpressao = (html) => (/<\/head>/i.test(html) ? html.replace(/<\/head>/i, SO_LEITURA + '</head>') : SO_LEITURA + html);
 const semScripts = (html) => String(html).replace(/<script\b[\s\S]*?<\/script\s*>/gi, '').replace(/<script\b[^>]*>/gi, '');
 
 function rotasComissao({ db, seg, cfg, avisos }) {
@@ -42,7 +45,7 @@ function rotasComissao({ db, seg, cfg, avisos }) {
 
   /* usuários do portal, para ligar cada pessoa da ferramenta ao login dela */
   r.get('/api/comissao/usuarios', async (req, res) => {
-    if (!(await podeEnviar(req.usuario, req.query.modulo))) return erro(res, 403, 'Só quem usa a ferramenta de Comissionamento vê esta lista.');
+    if (!(await podeEnviar(req.usuario, req.query.modulo))) return erro(res, 403, 'Só quem usa a Gestão de Premiações vê esta lista.');
     const { rows } = await db.q(`SELECT u.id, u.nome, u.email, u.papel, COALESCE(string_agg(s.nome, ', ' ORDER BY s.ordem), '') AS setores
       FROM usuarios u LEFT JOIN setor_membros sm ON sm.usuario_id = u.id LEFT JOIN setores s ON s.id = sm.setor_id
       WHERE u.ativo GROUP BY u.id ORDER BY u.nome`);
@@ -53,7 +56,7 @@ function rotasComissao({ db, seg, cfg, avisos }) {
   r.post('/api/comissao/relatorios', json, async (req, res) => {
     const b = req.body || {};
     const slug = String(b.modulo || '');
-    if (!(await podeEnviar(req.usuario, slug))) return erro(res, 403, 'Só quem usa a ferramenta de Comissionamento envia demonstrativos.');
+    if (!(await podeEnviar(req.usuario, slug))) return erro(res, 403, 'Só quem usa a Gestão de Premiações envia demonstrativos.');
     const comp = String(b.competencia || '');
     if (!COMP_RE.test(comp)) return erro(res, 400, 'Competência inválida (use aaaa-mm).');
     const lista = Array.isArray(b.relatorios) ? b.relatorios : [];
@@ -97,17 +100,17 @@ function rotasComissao({ db, seg, cfg, avisos }) {
     const rot = nomeComp(comp);
     for (const e of enviados) {
       await avisos.notificar([e.dono], {
-        tipo: 'comissao', link: `#/comissoes/${e.id}`, email: b.avisar_email !== false, autor_id: req.usuario.id,
-        titulo: e.versao > 1 ? `Seu demonstrativo de comissão de ${rot} foi atualizado` : `Seu demonstrativo de comissão de ${rot} está disponível`,
-        texto: `Confira o demonstrativo de ${rot} em Minhas comissões, no portal, e clique em “Estou ciente”.`,
+        tipo: 'comissao', link: `#/premiacoes/${e.id}`, email: b.avisar_email !== false, autor_id: req.usuario.id,
+        titulo: e.versao > 1 ? `Seu demonstrativo de premiação de ${rot} foi atualizado` : `Seu demonstrativo de premiação de ${rot} está disponível`,
+        texto: `Confira o demonstrativo de ${rot} em Minhas Premiações, no portal, e clique em “Estou ciente”.`,
       });
     }
     const porLeitor = new Map();
     for (const e of enviados) for (const l of e.leitores) porLeitor.set(l, (porLeitor.get(l) || 0) + 1);
     for (const [l, n] of porLeitor) {
       await avisos.notificar([l], {
-        tipo: 'comissao', link: '#/comissoes/equipe', email: false, autor_id: req.usuario.id,
-        titulo: `Demonstrativos de comissão de ${rot}`, texto: `${n} demonstrativo(s) de comissão de ${rot} da sua equipe estão em Minhas comissões.`,
+        tipo: 'comissao', link: '#/premiacoes/equipe', email: false, autor_id: req.usuario.id,
+        titulo: `Demonstrativos de premiação de ${rot}`, texto: `${n} demonstrativo(s) de comissão de ${rot} da sua equipe estão em Minhas Premiações.`,
       });
     }
     await seg.auditar(req, 'comissao_enviada', slug, { competencia: comp, demonstrativos: enviados.length, reenvios: enviados.filter((e) => e.versao > 1).length });
@@ -117,7 +120,7 @@ function rotasComissao({ db, seg, cfg, avisos }) {
   /* situação dos demonstrativos de uma competência (para a ferramenta) */
   r.get('/api/comissao/relatorios', async (req, res) => {
     const slug = String(req.query.modulo || '');
-    if (!(await podeEnviar(req.usuario, slug))) return erro(res, 403, 'Só quem usa a ferramenta de Comissionamento vê esta lista.');
+    if (!(await podeEnviar(req.usuario, slug))) return erro(res, 403, 'Só quem usa a Gestão de Premiações vê esta lista.');
     const comp = String(req.query.competencia || '');
     if (!COMP_RE.test(comp)) return erro(res, 400, 'Competência inválida.');
     const { rows } = await db.q(`SELECT r.id, r.chave, r.usuario_id, u.nome AS usuario_nome, r.valor, r.versao, r.enviado_em, r.aberto_em, r.ciente_em,
@@ -179,7 +182,8 @@ function rotasComissao({ db, seg, cfg, avisos }) {
     }
     res.set('Content-Security-Policy', CSP_RELATORIO);
     res.set('Cache-Control', 'private, no-store');
-    res.type('html').send(semScripts(rel.html));
+    // em Minhas Premiações o demonstrativo é só para ler: impressão em branco e sem seleção de texto
+    res.type('html').send(semImpressao(semScripts(rel.html)));
   });
 
   r.post('/api/comissao/relatorios/:id/ciente', async (req, res) => {
@@ -202,7 +206,7 @@ function rotasComissao({ db, seg, cfg, avisos }) {
   r.post('/api/comissao/planilhas', json, async (req, res) => {
     const b = req.body || {};
     const slug = String(b.modulo || '');
-    if (!(await podeEnviar(req.usuario, slug))) return erro(res, 403, 'Só quem usa a ferramenta de Comissionamento pede planilhas.');
+    if (!(await podeEnviar(req.usuario, slug))) return erro(res, 403, 'Só quem usa a Gestão de Premiações pede planilhas.');
     const comp = String(b.competencia || '');
     if (!COMP_RE.test(comp)) return erro(res, 400, 'Competência inválida (use aaaa-mm).');
     const lista = Array.isArray(b.pedidos) ? b.pedidos : [];
@@ -231,13 +235,16 @@ function rotasComissao({ db, seg, cfg, avisos }) {
       }
       return out;
     });
+    // um aviso por quem envia (normalmente o coordenador do setor, que manda as planilhas da equipe)
     const rot = nomeComp(comp);
-    for (const f of feitos.filter((x) => x.novo)) {
-      const it = itens[feitos.indexOf(f)];
-      await avisos.notificar([f.uid], {
-        tipo: 'comissao', link: '#/comissoes/enviar', email: b.avisar_email !== false, autor_id: req.usuario.id,
-        titulo: `Envie sua planilha de comissão de ${rot}`,
-        texto: `A gestão da comissão pediu: ${it.titulo}. Envie o arquivo em Minhas comissões, no portal.`,
+    const porQuem = new Map();
+    feitos.forEach((f, k) => { if (f.novo) porQuem.set(f.uid, (porQuem.get(f.uid) || []).concat(itens[k])); });
+    for (const [uid, lista] of porQuem) {
+      const nomes = lista.map((x) => x.nome);
+      await avisos.notificar([uid], {
+        tipo: 'comissao', link: '#/premiacoes/enviar', email: b.avisar_email !== false, autor_id: req.usuario.id,
+        titulo: lista.length > 1 ? `Envie ${lista.length} planilhas de premiação de ${rot}` : `Envie a planilha de premiação de ${rot}`,
+        texto: `A gestão de premiações pediu: ${lista.length > 1 ? nomes.join(', ') : `${lista[0].titulo}${lista[0].nome ? ' (' + lista[0].nome + ')' : ''}`}. Envie em Minhas Premiações, no portal.`,
       });
     }
     await seg.auditar(req, 'comissao_planilhas_pedidas', slug, { competencia: comp, pedidos: feitos.length });
@@ -247,7 +254,7 @@ function rotasComissao({ db, seg, cfg, avisos }) {
   /* situação dos pedidos de uma competência (para a ferramenta) */
   r.get('/api/comissao/planilhas', async (req, res) => {
     const slug = String(req.query.modulo || '');
-    if (!(await podeEnviar(req.usuario, slug))) return erro(res, 403, 'Só quem usa a ferramenta de Comissionamento vê os pedidos.');
+    if (!(await podeEnviar(req.usuario, slug))) return erro(res, 403, 'Só quem usa a Gestão de Premiações vê os pedidos.');
     const comp = String(req.query.competencia || '');
     if (!COMP_RE.test(comp)) return erro(res, 400, 'Competência inválida.');
     const { rows } = await db.q(`SELECT ${CAMPOS_PLAN}, u.nome AS usuario_nome FROM comissao_planilhas p JOIN usuarios u ON u.id = p.usuario_id
@@ -287,7 +294,7 @@ function rotasComissao({ db, seg, cfg, avisos }) {
 
   /* a pessoa: os pedidos dela e o envio do arquivo */
   r.get('/api/comissao/minhas-planilhas', async (req, res) => {
-    const { rows } = await db.q(`SELECT p.id, p.competencia, p.tipo, p.titulo, p.pedido_em, p.enviado_em, p.arquivo_nome, p.tamanho, p.importado_em
+    const { rows } = await db.q(`SELECT p.id, p.competencia, p.tipo, p.titulo, p.nome, p.pedido_em, p.enviado_em, p.arquivo_nome, p.tamanho, p.importado_em
       FROM comissao_planilhas p WHERE p.usuario_id = $1 AND p.cancelado_em IS NULL ORDER BY p.competencia DESC, p.id DESC LIMIT 24`, [req.usuario.id]);
     res.json({ planilhas: rows });
   });
@@ -307,8 +314,8 @@ function rotasComissao({ db, seg, cfg, avisos }) {
     if (p.pedido_por && p.pedido_por !== req.usuario.id) {
       await avisos.notificar([p.pedido_por], {
         tipo: 'comissao', link: `#/m/${p.modulo_slug}`, email: false, autor_id: req.usuario.id,
-        titulo: `${req.usuario.nome} ${reenvio ? 'enviou de novo' : 'enviou'} a planilha de comissão de ${nomeComp(p.competencia)}`,
-        texto: `${p.titulo}: ${nome}. Abra o Comissionamento → Planilhas do mês para importar e conferir.`,
+        titulo: `${req.usuario.nome} ${reenvio ? 'enviou de novo' : 'enviou'} a planilha${p.nome && p.nome !== req.usuario.nome ? ' de ' + p.nome : ''} (${nomeComp(p.competencia)})`,
+        texto: `${p.titulo}: ${nome}. Abra a Gestão de Premiações → Planilhas do mês para importar e conferir.`,
       });
     }
     await seg.auditar(req, 'comissao_planilha_enviada', p.modulo_slug, { competencia: p.competencia, pedido: p.id, reenvio });
