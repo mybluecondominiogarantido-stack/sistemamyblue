@@ -195,7 +195,7 @@ test('Comissionamento: o HTML fica fora do repositório e só abre depois que a 
   assert.equal((await ana('GET', '/m/premiacoes/')).status, 403);
 });
 
-test('Planilhas do mês: a gestão pede ao coordenador, ele envia as planilhas da equipe e quem pediu é avisado', async () => {
+test('Planilhas do mês: a gestão pede ao coordenador, ele envia uma por pessoa e quem pediu recebe um aviso só no fim', async () => {
   const pedido = { modulo: 'premiacoes', competencia: '2026-10', pedidos: [
     { chave: 'p-ana', usuario_id: ids['lia@teste.com'], nome: 'Ana Analista', tipo: 'credito', titulo: 'Planilha de envio de boletos' },
     { chave: 'p-caio', usuario_id: ids['lia@teste.com'], nome: 'Caio Colega', tipo: 'credito', titulo: 'Planilha de envio de boletos' }] };
@@ -222,9 +222,10 @@ test('Planilhas do mês: a gestão pede ao coordenador, ele envia as planilhas d
   // envio da planilha da Ana pelo coordenador
   const env = await lia('POST', `/api/comissao/minhas-planilhas/${idAna}`, arq, { 'x-nome-arquivo': encodeURIComponent('Crédito Ana.csv'), 'content-type': 'text/csv' });
   assert.equal(env.status, 201, env.texto);
+  assert.equal(env.json.faltam, 1);
   assert.equal((await lia('GET', '/api/comissao/resumo')).json.planilhas, 1);
-  const nGil = (await gestor('GET', '/api/notificacoes')).json.notificacoes.find((n) => /Lia Líder enviou a planilha de Ana Analista/.test(n.titulo));
-  assert.ok(nGil && nGil.link === '#/m/premiacoes', 'quem pediu recebe o aviso no sino');
+  const avisosGil = async () => (await gestor('GET', '/api/notificacoes')).json.notificacoes.filter((n) => /Lia Líder enviou/.test(n.titulo));
+  assert.equal((await avisosGil()).length, 0, 'enquanto falta planilha da equipe, a gestão não é avisada');
   // a gestão acompanha, baixa e marca como importada
   const lista = (await gestor('GET', '/api/comissao/planilhas?modulo=premiacoes&competencia=2026-10')).json.planilhas;
   const la = lista.find((x) => x.id === idAna);
@@ -237,14 +238,35 @@ test('Planilhas do mês: a gestão pede ao coordenador, ele envia as planilhas d
   assert.equal(down.status, 200);
   assert.match(down.headers.get('content-disposition'), /attachment/);
   assert.match(down.texto, /Cond\. Teste/);
+  // a última da equipe: um aviso só, com todas
+  const env2 = await lia('POST', `/api/comissao/minhas-planilhas/${idCaio}`, arq, { 'x-nome-arquivo': 'caio.xlsx', 'content-type': 'application/octet-stream' });
+  assert.equal(env2.json.faltam, 0);
+  let nGil = await avisosGil();
+  assert.equal(nGil.length, 1);
+  assert.match(nGil[0].titulo, /Lia Líder enviou as 2 planilhas da equipe \(Outubro\/2026\)/);
+  assert.match(nGil[0].texto, /Ana Analista, Caio Colega/);
+  assert.equal(nGil[0].link, '#/m/premiacoes');
   assert.equal((await gestor('POST', `/api/comissao/planilhas/${idAna}/importado`)).status, 200);
   assert.ok((await lia('GET', '/api/comissao/minhas-planilhas')).json.planilhas.find((x) => x.id === idAna).importado_em, 'o coordenador vê que a gestão recebeu');
+  // corrigir uma depois de tudo enviado: aviso só daquela
+  await lia('POST', `/api/comissao/minhas-planilhas/${idCaio}`, arq, { 'x-nome-arquivo': 'caio-v2.xlsx', 'content-type': 'application/octet-stream' });
+  nGil = await avisosGil();
+  assert.equal(nGil.length, 2);
+  assert.match(nGil[0].titulo, /Lia Líder enviou de novo a planilha de Caio Colega/);
   // pedir de novo não duplica; cancelar tira o pedido
   const r2 = await gestor('POST', '/api/comissao/planilhas', pedido);
   assert.equal(r2.json.pedidos[0].id, idAna);
   assert.equal(r2.json.pedidos[0].novo, false);
   assert.equal((await gestor('DELETE', `/api/comissao/planilhas/${idCaio}`)).status, 200);
   assert.deepEqual((await lia('GET', '/api/comissao/minhas-planilhas')).json.planilhas.map((x) => x.nome), ['Ana Analista']);
+  // cancelar a única que faltava: as já enviadas não ficam sem aviso
+  const r3 = await gestor('POST', '/api/comissao/planilhas', { modulo: 'premiacoes', competencia: '2026-11', pedidos: [
+    { chave: 'p-ana', usuario_id: ids['lia@teste.com'], nome: 'Ana Analista', titulo: 'Planilha' },
+    { chave: 'p-caio', usuario_id: ids['lia@teste.com'], nome: 'Caio Colega', titulo: 'Planilha' }] });
+  const [a11, c11] = r3.json.pedidos.map((x) => x.id);
+  assert.equal((await lia('POST', `/api/comissao/minhas-planilhas/${a11}`, arq, { 'x-nome-arquivo': 'a.csv', 'content-type': 'text/csv' })).json.faltam, 1);
+  assert.equal((await gestor('DELETE', `/api/comissao/planilhas/${c11}`)).status, 200);
+  assert.match((await avisosGil())[0].titulo, /Lia Líder enviou a planilha de Ana Analista \(Novembro\/2026\)/);
 });
 
 test('Minhas Premiações: o demonstrativo é só para ler (sem impressão)', async () => {

@@ -336,7 +336,8 @@ CREATE TABLE IF NOT EXISTS comissao_planilhas (
   tamanho INTEGER,
   enviado_em TIMESTAMPTZ,
   importado_em TIMESTAMPTZ,
-  importado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
+  importado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  avisado_em TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_comissao_plan_usuario ON comissao_planilhas(usuario_id, competencia);
 CREATE INDEX IF NOT EXISTS idx_comissao_plan_chave ON comissao_planilhas(modulo_slug, competencia, chave);
@@ -379,7 +380,9 @@ ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS criado_por INTEGER REFERENCES usua
 -- avisos que não são de ticket (ex.: demonstrativo de comissão) levam o endereço da tela no portal
 ALTER TABLE notificacoes ADD COLUMN IF NOT EXISTS link TEXT;
 -- o vídeo já vem comprimido: guardado sem compressão, o banco lê só o pedaço pedido pelo player
-ALTER TABLE tutoriais ALTER COLUMN video SET STORAGE EXTERNAL
+ALTER TABLE tutoriais ALTER COLUMN video SET STORAGE EXTERNAL;
+-- planilhas do mês: a gestão é avisada uma vez, quando quem envia termina todas as planilhas pedidas a ele
+ALTER TABLE comissao_planilhas ADD COLUMN IF NOT EXISTS avisado_em TIMESTAMPTZ
 `;
 
 async function abrir(cfg) {

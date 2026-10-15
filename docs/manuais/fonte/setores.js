@@ -267,7 +267,7 @@ const FERRAMENTAS = {
     abas: [
       ['Dashboard', 'Total do mês, comissão e % atingido por setor, evolução mês a mês, metas do Comercial e a carteira de Crédito e Cobrança. Pendências do mês num quadro só.'],
       ['Resumo', 'O que cada pessoa recebe e de onde vem cada valor, o fechamento por setor (rascunho, conferido, aprovado, pago), os ajustes manuais com motivo e o envio dos demonstrativos.'],
-      ['Planilhas do mês', 'Pedir as planilhas do mês (Crédito, Cobrança, metas dos setores). O pedido vai para o coordenador do setor, que recebe um aviso só e envia a planilha de cada pessoa da equipe em Minhas Premiações; a gestão recebe o aviso no sino e importa no quadro da pessoa com <b>Importar e conferir</b>.'],
+      ['Planilhas do mês', 'Pedir as planilhas do mês (Crédito, Cobrança, metas dos setores). O pedido vai para o coordenador do setor, que recebe um aviso só e envia a planilha de cada pessoa da equipe em Minhas Premiações; quando todas estão enviadas, a gestão recebe um aviso só no sino e importa no quadro da pessoa com <b>Importar e conferir</b>.'],
       ['Comercial', 'Em dois passos: a <b>planilha de implantações</b> (entram os contratos com data de contrato no mês, com o executivo de cada um) e os <b>relatórios de garantia</b> da Vouch (os valores entram no contrato pelo CNPJ). Cada executivo abre a lista dos condomínios dele, com a média ponderada da taxa adm. e a faixa; também a gerência e a coordenação comercial.'],
       ['Crédito, Cobrança e Implantação', 'O envio dos boletos (quem é da Implantação e emite boletos anexa a mesma planilha, com prazo próprio), os devedores da Cobrança e a documentação e o onboarding da Implantação.'],
       ['Supervisão e coordenação', 'Calculada sozinha a partir das equipes.'],

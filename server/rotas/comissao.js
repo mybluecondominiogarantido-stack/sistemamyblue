@@ -11,9 +11,9 @@
  * Reenviar cria uma nova versão; a anterior fica guardada e sai das listas.
  *
  * Planilhas do mês: a gestão pede a planilha de cada pessoa (Crédito, Cobrança, metas dos setores…) a quem
- * envia — normalmente o coordenador do setor, que recebe um aviso só com a lista da equipe. Ele envia os arquivos
- * em "Minhas Premiações"; quem pediu recebe o aviso no sino e importa na ferramenta. Quem envia nunca vê a
- * ferramenta, as regras ou valores.
+ * envia — normalmente o coordenador do setor, que recebe um aviso só com a lista da equipe. Ele envia um arquivo
+ * por pessoa em "Minhas Premiações"; quem pediu recebe um aviso só, quando todas foram enviadas, e importa na
+ * ferramenta. Quem envia nunca vê a ferramenta, as regras ou valores.
  */
 const express = require('express');
 
@@ -289,6 +289,11 @@ function rotasComissao({ db, seg, cfg, avisos }) {
     const p = await pedidoDaGestao(req, res);
     if (!p) return;
     await db.q('UPDATE comissao_planilhas SET cancelado_em = now() WHERE id = $1', [p.id]);
+    // se era a última que faltava, as já enviadas por quem envia não podem ficar sem aviso
+    if (!p.enviado_em) {
+      const autor = await db.um('SELECT id, nome FROM usuarios WHERE id = $1', [p.usuario_id]);
+      if (autor) await avisarSeCompleto(p, autor, false);
+    }
     res.json({ ok: true });
   });
 
@@ -308,19 +313,37 @@ function rotasComissao({ db, seg, cfg, avisos }) {
     nome = nome.replace(/[\\/\r\n"]/g, '_').slice(0, 200);
     if (!EXT_PLANILHA.test(nome)) return erro(res, 400, 'Envie a planilha em Excel (.xlsx ou .xls) ou CSV.');
     const reenvio = !!p.enviado_em;
-    await db.q(`UPDATE comissao_planilhas SET arquivo = $2, arquivo_nome = $3, arquivo_tipo = $4, tamanho = $5, enviado_em = now(), importado_em = NULL, importado_por = NULL WHERE id = $1`,
+    await db.q(`UPDATE comissao_planilhas SET arquivo = $2, arquivo_nome = $3, arquivo_tipo = $4, tamanho = $5, enviado_em = now(), importado_em = NULL, importado_por = NULL, avisado_em = NULL WHERE id = $1`,
       [p.id, buf, nome, String(req.headers['content-type'] || 'application/octet-stream').slice(0, 120), buf.length]);
-    // aviso no sino para quem pediu (e, se ninguém pediu, para quem usa a ferramenta não há como saber: fica na lista)
-    if (p.pedido_por && p.pedido_por !== req.usuario.id) {
-      await avisos.notificar([p.pedido_por], {
-        tipo: 'comissao', link: `#/m/${p.modulo_slug}`, email: false, autor_id: req.usuario.id,
-        titulo: `${req.usuario.nome} ${reenvio ? 'enviou de novo' : 'enviou'} a planilha${p.nome && p.nome !== req.usuario.nome ? ' de ' + p.nome : ''} (${nomeComp(p.competencia)})`,
-        texto: `${p.titulo}: ${nome}. Abra a Gestão de Premiações → Planilhas do mês para importar e conferir.`,
-      });
-    }
+    const faltam = await avisarSeCompleto(p, req.usuario, reenvio);
     await seg.auditar(req, 'comissao_planilha_enviada', p.modulo_slug, { competencia: p.competencia, pedido: p.id, reenvio });
-    res.status(201).json({ ok: true, enviado_em: new Date().toISOString() });
+    res.status(201).json({ ok: true, enviado_em: new Date().toISOString(), faltam });
   });
+
+  /* Quem pediu recebe UM aviso, quando quem envia termina todas as planilhas que lhe foram pedidas na competência
+     (o coordenador manda a da equipe toda). O UPDATE marca as que entram no aviso, então dois envios ao mesmo
+     tempo não avisam duas vezes. Devolve quantas ainda faltam. */
+  async function avisarSeCompleto(p, autor, reenvio) {
+    const grupo = [p.modulo_slug, p.competencia, p.usuario_id, p.pedido_por];
+    const ONDE = 'modulo_slug = $1 AND competencia = $2 AND usuario_id = $3 AND pedido_por IS NOT DISTINCT FROM $4 AND cancelado_em IS NULL';
+    const { n: faltam } = await db.um(`SELECT COUNT(*)::int AS n FROM comissao_planilhas WHERE ${ONDE} AND enviado_em IS NULL`, grupo);
+    if (faltam || !p.pedido_por || p.pedido_por === autor.id) return faltam;
+    const { rows } = await db.q(`UPDATE comissao_planilhas SET avisado_em = now() WHERE ${ONDE} AND enviado_em IS NOT NULL AND avisado_em IS NULL
+      AND NOT EXISTS (SELECT 1 FROM comissao_planilhas o WHERE o.modulo_slug = $1 AND o.competencia = $2 AND o.usuario_id = $3
+        AND o.pedido_por IS NOT DISTINCT FROM $4 AND o.cancelado_em IS NULL AND o.enviado_em IS NULL)
+      RETURNING nome, titulo, arquivo_nome`, grupo);
+    if (!rows.length) return 0;
+    rows.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    const de = (x) => (x.nome && x.nome !== autor.nome ? ' de ' + x.nome : '');
+    const um = rows.length === 1;
+    await avisos.notificar([p.pedido_por], {
+      tipo: 'comissao', link: `#/m/${p.modulo_slug}`, email: false, autor_id: autor.id,
+      titulo: um ? `${autor.nome} ${reenvio ? 'enviou de novo' : 'enviou'} a planilha${de(rows[0])} (${nomeComp(p.competencia)})`
+        : `${autor.nome} enviou as ${rows.length} planilhas da equipe (${nomeComp(p.competencia)})`,
+      texto: `${um ? `${rows[0].titulo}: ${rows[0].arquivo_nome}` : rows.map((x) => x.nome).join(', ')}. Abra a Gestão de Premiações → Planilhas do mês para importar e conferir.`,
+    });
+    return 0;
+  }
 
   return r;
 }

@@ -618,7 +618,7 @@ module.exports = [
       await t.legenda('Em <b>Planilhas do mês</b>, peça as planilhas. O pedido vai para <b>quem envia</b>: o coordenador do setor, com um aviso só para a equipe.', { etapa: PL, ms: 300 });
       await t.clicar(aba('coleta'), { depois: 1800 });
       await t.mostrar(f.locator('.card table').first(), 3200);
-      await t.legenda('Quando o coordenador envia, chega o aviso no sino. Aqui, <b>Importar e conferir</b> leva a planilha para o quadro da pessoa.', { etapa: PL, ms: 300 });
+      await t.legenda('Quando o coordenador termina as da equipe, chega <b>um aviso só</b> no sino. Aqui, <b>Importar e conferir</b> leva a planilha para o quadro da pessoa.', { etapa: PL, ms: 300 });
       await t.clicar(f.locator('[data-coleta-importar]').first(), { depois: 2600 });
       await t.legenda('A planilha entrou no quadro da assistente, no Crédito: confira o resultado de cada condomínio e a comissão.', { etapa: PL, ms: 300 });
       await t.mostrar(f.locator('.resumo-pessoa').first(), 3000);

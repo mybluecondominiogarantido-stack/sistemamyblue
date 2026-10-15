@@ -168,7 +168,7 @@ module.exports = [
       const arq = require('path').join(pasta, 'controle-cobranca-marcos.csv');
       require('fs').writeFileSync(arq, 'Condomínio;Vencimento;Devedores inicial;Devedores atual\nCond. Jardim Azul;5;12;7\nCond. Primavera;10;30;17\n');
       await t.enviarArquivo('.pedido-plan:has-text("Marcos Lima") label.btn', '.pedido-plan:has-text("Marcos Lima") input[data-plan]', arq, { depois: 2400 });
-      await t.legenda('A gestão recebe o aviso e confere. Você acompanha: <b>Enviada</b> e depois <b>Recebida e conferida</b>.', { etapa: P, ms: 300 });
+      await t.legenda('Um arquivo por pessoa. Quando todas estão enviadas, a gestão recebe <b>um aviso só</b>. Você acompanha: <b>Enviada</b> e depois <b>Recebida e conferida</b>.', { etapa: P, ms: 300 });
       await t.mostrar('.planilhas-mes', 3200);
 
       const L = '4 · Líderes';

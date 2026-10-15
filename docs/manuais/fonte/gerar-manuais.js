@@ -31,7 +31,7 @@ const HISTORICO = [
   ['1.3', '09/10/2026', 'Passo a passo das ferramentas da Administrativa/Financeira; Tutoriais em vídeo; baixar o HTML de versões anteriores.'],
   ['2.0', '09/10/2026', 'Manuais no padrão visual da MyBlue (timbrado, partes e capítulos); catálogo das ferramentas; Central de Patrocínio e Gestão de Viagens; Central de Ferramentas do Crédito com as sete automações; regra de excedente por boleto da Prestação de Contas (v7); regra de tutoriais sempre em dia.'],
   ['2.1', '13/10/2026', 'Títulos no padrão <b>Manual do Portal – Geral</b> e <b>Manual do Portal – Setor …</b>. Carteira: <i>Adicionar novos</i> pela planilha de implantação (ID Vouch, vigência, executivo de negócios e CNPJ), sem importação de CSV. Comissões de Novos Condomínios: a gestão <i>puxa da carteira</i> os condomínios da vigência, parceiro só da lista e cadastro de parceiro novo pelo financeiro. Pesquisa em Módulos e dados e em Ferramentas do setor.'],
-  ['2.2', '15/10/2026', 'Menu <b>Premiações</b>: <b>Minhas Premiações</b> (demonstrativo de cada pessoa, só para leitura, <i>Estou ciente</i>, equipe para coordenação e gerência, diretoria) e a ferramenta <b>Gestão de Premiações</b> (antes Comissionamento MyBlue): planilhas do mês enviadas pelo coordenador do setor, Comercial pela planilha de implantações e relatórios de garantia, coordenação comercial, boletos da Implantação e metas do Sucesso do Cliente.'],
+  ['2.2', '15/10/2026', 'Menu <b>Premiações</b>: <b>Minhas Premiações</b> (demonstrativo de cada pessoa, só para leitura, <i>Estou ciente</i>, equipe para coordenação e gerência, diretoria) e a ferramenta <b>Gestão de Premiações</b> (antes Comissionamento MyBlue): planilhas do mês enviadas pelo coordenador do setor (um arquivo por pessoa e um aviso só para a gestão quando todas chegam), Comercial pela planilha de implantações e relatórios de garantia, coordenação comercial, boletos da Implantação e metas do Sucesso do Cliente.'],
 ];
 const VERSOES = (doc) => capVersoes({
   titulo: `Manutenção e controle de versão deste manual`,
@@ -303,8 +303,8 @@ ${dica('Dúvida sobre um valor? Fale com a gestão de premiações antes de clic
 ${passos([
   'Quando a gestão de premiações pede, o coordenador recebe <b>um aviso</b> no <b>sino</b> e um e-mail curto, com a lista das pessoas da equipe.',
   'Em <b>Minhas Premiações</b>, no quadro <b>Planilhas para enviar</b>, há uma linha por pessoa. Em cada uma, clique em <b>Enviar planilha</b> e escolha o arquivo dela (Excel ou CSV).',
-  'A gestão recebe o aviso e confere. A situação de cada linha mostra <i>Aguardando envio</i>, <i>Enviada</i> ou <i>Recebida e conferida pela gestão</i>.',
-  'Enviou o arquivo errado? <b>Enviar de novo</b> substitui o anterior e avisa a gestão outra vez.',
+  'Quando todas as planilhas da equipe estão enviadas, a gestão recebe <b>um aviso só</b>, com a lista, e confere. Enquanto falta alguma, o quadro mostra quantas já foram (ex.: <i>2 de 3 enviadas</i>). A situação de cada linha mostra <i>Aguardando envio</i>, <i>Enviada</i> ou <i>Recebida e conferida pela gestão</i>.',
+  'Enviou o arquivo errado? <b>Enviar de novo</b> substitui o anterior e, se as outras já foram enviadas, avisa a gestão outra vez.',
 ])}
 <p>O coordenador vê só os pedidos dele: nada da ferramenta de premiações, das regras ou dos valores.</p>`;
 

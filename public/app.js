@@ -2851,7 +2851,8 @@
             headers: { 'Content-Type': f.type || 'application/octet-stream', 'X-Nome-Arquivo': encodeURIComponent(f.name) } });
           var x = await r.json().catch(function () { return {}; });
           if (!r.ok) throw new Error(x.erro || 'Não foi possível enviar.');
-          toast('Planilha enviada. A gestão de premiações foi avisada.');
+          toast(x.faltam ? 'Planilha enviada. Falta' + (x.faltam > 1 ? 'm ' + x.faltam + ' planilhas' : ' 1 planilha') + ': a gestão de premiações recebe o aviso quando todas forem enviadas.'
+            : 'Planilha enviada. A gestão de premiações foi avisada.');
           atualizarComissao(); paginaComissoes(sub);
         } catch (e) { toast(e.message, 'erro'); paginaComissoes(sub); }
       };
@@ -2863,8 +2864,10 @@
     if (!lista.length) return '';
     var dataHora = function (s) { var d = new Date(s); return d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); };
     var daEquipe = lista.some(function (x) { return x.nome && x.nome !== eu.nome; });
-    return '<section class="planilhas-mes"><h2>' + IC.documento + 'Planilhas para enviar</h2>' +
-      '<p class="sub">' + (daEquipe ? 'A gestão de premiações pediu as planilhas do mês da sua equipe. Envie o arquivo de cada pessoa (Excel ou CSV); quem pediu recebe o aviso.' : 'A gestão de premiações pediu a sua planilha do mês. Envie o arquivo aqui (Excel ou CSV); quem pediu recebe o aviso.') + '</p>' +
+    var doMes = lista.filter(function (x) { return x.competencia === lista[0].competencia; });
+    var enviadas = doMes.filter(function (x) { return x.enviado_em; }).length;
+    return '<section class="planilhas-mes"><h2>' + IC.documento + 'Planilhas para enviar' + (doMes.length > 1 ? ' <span class="etiqueta ' + (enviadas === doMes.length ? 'verde' : 'ambar') + '">' + enviadas + ' de ' + doMes.length + ' enviadas</span>' : '') + '</h2>' +
+      '<p class="sub">' + (daEquipe ? 'A gestão de premiações pediu as planilhas do mês da sua equipe. Envie um arquivo por pessoa (Excel ou CSV); quem pediu recebe um aviso só, quando todas estiverem enviadas.' : 'A gestão de premiações pediu a sua planilha do mês. Envie o arquivo aqui (Excel ou CSV); quem pediu recebe o aviso.') + '</p>' +
       lista.map(function (x) {
         var st = x.importado_em ? ['ok', 'Recebida e conferida pela gestão'] : x.enviado_em ? ['enviada', 'Enviada em ' + dataHora(x.enviado_em)] : ['pendente', 'Aguardando envio'];
         return '<div class="pedido-plan ' + st[0] + '"><div class="info"><b>' + (x.nome && x.nome !== eu.nome ? esc(x.nome) + ' · ' : '') + esc(x.titulo) + '</b><span>Premiação de ' + nomeCompC(x.competencia) + ' · pedido em ' + diaC(x.pedido_em) + '</span>' +
