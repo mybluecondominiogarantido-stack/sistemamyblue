@@ -12,9 +12,12 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
   const r = express.Router();
   const json = express.json({ limit: '2mb' });
   const gestorDeSetor = (u) => seg.GESTORES_DE_SETOR.includes(u.papel);
+  // o coordenador também cria ferramentas nos setores dele, edita o cadastro delas e remove as que ele mesmo criou
+  const criaModulos = (u) => u.papel === 'coordenador';
 
   // Coordenador e supervisor gerenciam o(s) setor(es) do cadastro deles: usuários, ferramentas (HTML e quem abre),
   // equipe e tipos de demanda (rotas da Central de Tickets). O resto da administração é só do administrador.
+  const MODULO_SETOR = /^\/modulos\/([a-z0-9][a-z0-9-]{1,40})$/;
   const FERRAMENTA_SETOR = /^\/modulos\/([a-z0-9][a-z0-9-]{1,40})\/(arquivo|versoes|versoes\/\d+\/usar|versoes\/\d+\/arquivo|acesso)$/;
   const metodoDe = (acao) => (acao === 'arquivo' || acao === 'acesso' ? 'PUT' : acao === 'versoes' || acao.endsWith('/arquivo') ? 'GET' : 'POST');
   r.use('/api/admin', seg.exigirLogin, async (req, res, next) => {
@@ -25,9 +28,12 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
       if (/^\/usuarios(\/|$)/.test(req.path)) return next();
       if (/^\/(equipes|categorias)(\/|$)/.test(req.path) && req.path !== '/equipes/email-teste') return next(); // o escopo é conferido lá
       if (req.path === '/modulos' && req.method === 'GET') return next();
+      if (req.path === '/modulos' && req.method === 'POST' && criaModulos(req.usuario)) return next(); // o setor é conferido lá
       const x = FERRAMENTA_SETOR.exec(req.path);
-      if (x && req.method === metodoDe(x[2])) {
-        const m = await modulos.obter(x[1]);
+      const c = MODULO_SETOR.exec(req.path);
+      const slug = x && req.method === metodoDe(x[2]) ? x[1] : c && ['PATCH', 'DELETE'].includes(req.method) && criaModulos(req.usuario) ? c[1] : null;
+      if (slug) {
+        const m = await modulos.obter(slug);
         if (m && m.setor_id && req.setoresGeridos.has(m.setor_id)) { req.moduloSetor = m; return next(); }
         return erro(res, 403, 'Esta ferramenta não é de um setor seu.');
       }
@@ -244,9 +250,14 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
       const esc = await escopoDe(req);
       const meus = (await modulos.listar()).filter((m) => m.setor_id && req.setoresGeridos.has(m.setor_id));
       const perms = (await db.q('SELECT usuario_id, modulo_slug FROM permissoes')).rows;
-      return res.json({ modulos: meus.map((m) => ({ slug: m.slug, nome: m.nome, icone: m.icone, ativo: m.ativo, setor_nome: m.setor_nome, setor_ordem: m.setor_ordem,
+      const cria = criaModulos(req.usuario);
+      return res.json({ modulos: meus.map((m) => ({ slug: m.slug, nome: m.nome, descricao: m.descricao, icone: m.icone, ordem: m.ordem, ativo: m.ativo,
+        setor_id: m.setor_id, setor_nome: m.setor_nome, setor_ordem: m.setor_ordem,
         tem_arquivo: m.tem_arquivo, versao_id: m.versao_id, versao_em: m.versao_em, tamanho: m.tamanho, nome_original: m.nome_original,
-        usuarios: perms.filter((p) => p.modulo_slug === m.slug && esc.gerencia(p.usuario_id)).map((p) => p.usuario_id) })) });
+        pode_editar: cria, pode_remover: cria && m.criado_por === req.usuario.id,
+        usuarios: perms.filter((p) => p.modulo_slug === m.slug && esc.gerencia(p.usuario_id)).map((p) => p.usuario_id) })),
+      pode_criar: cria, icones: ICONES,
+      setores: (await db.q('SELECT id, nome, ordem FROM setores ORDER BY ordem, nome')).rows.filter((x) => req.setoresGeridos.has(x.id)) });
     }
     const lista = [];
     for (const m of await modulos.listar()) {
@@ -268,32 +279,44 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
     if (!SLUG_RE.test(slug)) return erro(res, 400, 'Identificador inválido: use letras minúsculas, números e hífen (ex.: juridico-contratos).');
     const nome = String(b.nome || '').trim();
     if (!nome) return erro(res, 400, 'Informe o nome do módulo.');
+    let setor = b.setor_id ? Number(b.setor_id) : null;
+    if (req.setoresGeridos) {
+      // coordenador: a ferramenta nova fica num dos setores dele
+      if (!setor && req.setoresGeridos.size === 1) setor = [...req.setoresGeridos][0];
+      if (!setor || !req.setoresGeridos.has(setor)) return erro(res, 400, 'Escolha um dos seus setores para a ferramenta.');
+    }
     if (await modulos.obter(slug)) return erro(res, 409, 'Já existe um módulo com este identificador.');
     const arm = ['navegador', 'usuario', 'compartilhado'].includes(b.armazenamento) ? b.armazenamento : 'compartilhado';
-    await db.q(`INSERT INTO modulos (slug, nome, descricao, setor_id, icone, ordem, armazenamento, config) VALUES ($1, $2, $3, $4, $5, $6, $7, '{}'::jsonb)`,
-      [slug, nome, String(b.descricao || ''), b.setor_id ? Number(b.setor_id) : null, ICONES.includes(b.icone) ? b.icone : 'app', Number(b.ordem) || 0, arm]);
+    await db.q(`INSERT INTO modulos (slug, nome, descricao, setor_id, icone, ordem, armazenamento, config, criado_por) VALUES ($1, $2, $3, $4, $5, $6, $7, '{}'::jsonb, $8)`,
+      [slug, nome, String(b.descricao || ''), setor, ICONES.includes(b.icone) ? b.icone : 'app', Number(b.ordem) || 0, arm, req.usuario.id]);
     await seg.auditar(req, 'modulo_criado', slug, { nome });
     res.status(201).json({ slug });
   });
 
   r.patch('/api/admin/modulos/:slug', json, async (req, res) => {
-    const m = await modulos.obter(req.params.slug);
+    const m = req.moduloSetor || await modulos.obter(req.params.slug);
     if (!m) return erro(res, 404, 'Módulo não encontrado.');
-    const b = { ...m, ...req.body };
+    let corpo = req.body || {};
+    if (req.setoresGeridos) {
+      // coordenador: só o cadastro da ferramenta (nome, descrição, setor, ícone, ordem e situação), sem mudar onde os dados ficam
+      corpo = Object.fromEntries(['nome', 'descricao', 'setor_id', 'icone', 'ordem', 'ativo'].filter((k) => k in corpo).map((k) => [k, corpo[k]]));
+      if ('setor_id' in corpo && !req.setoresGeridos.has(Number(corpo.setor_id))) return erro(res, 400, 'Escolha um dos seus setores para a ferramenta.');
+    }
+    const b = { ...m, ...corpo };
     const nome = String(b.nome || '').trim();
     if (!nome) return erro(res, 400, 'Informe o nome do módulo.');
     const arm = ['navegador', 'usuario', 'compartilhado'].includes(b.armazenamento) ? b.armazenamento : m.armazenamento;
     const fonte = m.adaptador && ['google', 'interno'].includes(b.fonte_dados) ? b.fonte_dados : m.fonte_dados;
     const config = { ...m.config };
-    if (Array.isArray(req.body.chaves_locais)) config.chaves_locais = req.body.chaves_locais.map(String).filter(Boolean).slice(0, 30);
-    if (typeof req.body.google_url === 'string') config.google_url = req.body.google_url.trim();
+    if (Array.isArray(corpo.chaves_locais)) config.chaves_locais = corpo.chaves_locais.map(String).filter(Boolean).slice(0, 30);
+    if (typeof corpo.google_url === 'string') config.google_url = corpo.google_url.trim();
     await db.q(`UPDATE modulos SET nome = $1, descricao = $2, setor_id = $3, icone = $4, ordem = $5, ativo = $6, armazenamento = $7, fonte_dados = $8,
       config = $9::jsonb, atualizado_em = now() WHERE slug = $10`, [nome, String(b.descricao || ''), b.setor_id ? Number(b.setor_id) : null,
       ICONES.includes(b.icone) ? b.icone : m.icone, Number(b.ordem) || 0, !!b.ativo, arm, fonte, JSON.stringify(config), m.slug]);
-    if (Array.isArray(req.body.usuarios)) {
+    if (Array.isArray(corpo.usuarios)) {
       await db.tx(async (t) => {
         await t.q('DELETE FROM permissoes WHERE modulo_slug = $1', [m.slug]);
-        for (const id of req.body.usuarios) await t.q('INSERT INTO permissoes (usuario_id, modulo_slug) VALUES ($1, $2) ON CONFLICT DO NOTHING', [Number(id), m.slug]);
+        for (const id of corpo.usuarios) await t.q('INSERT INTO permissoes (usuario_id, modulo_slug) VALUES ($1, $2) ON CONFLICT DO NOTHING', [Number(id), m.slug]);
       });
     }
     await seg.auditar(req, 'modulo_editado', m.slug, {
@@ -305,8 +328,9 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
   });
 
   r.delete('/api/admin/modulos/:slug', async (req, res) => {
-    const m = await modulos.obter(req.params.slug);
+    const m = req.moduloSetor || await modulos.obter(req.params.slug);
     if (!m) return erro(res, 404, 'Módulo não encontrado.');
+    if (req.setoresGeridos && m.criado_por !== req.usuario.id) return erro(res, 403, 'Você só remove as ferramentas que você criou. Para remover esta, fale com a administração.');
     if (String(req.query.confirmar) !== m.slug) return erro(res, 400, 'Confirme digitando o identificador do módulo.');
     await db.q('DELETE FROM modulos WHERE slug = $1', [m.slug]); // versões, dados e permissões saem em cascata
     await seg.auditar(req, 'modulo_removido', m.slug, { nome: m.nome });

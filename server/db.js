@@ -365,6 +365,8 @@ ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto_em TIMESTAMPTZ;
 ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_papel_check;
 ALTER TABLE usuarios ADD CONSTRAINT usuarios_papel_check CHECK (papel IN ('admin','coordenador','supervisor','usuario'));
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS criado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL;
+-- quem cadastrou a ferramenta: o coordenador remove só as que ele criou
+ALTER TABLE modulos ADD COLUMN IF NOT EXISTS criado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL;
 -- avisos que não são de ticket (ex.: demonstrativo de comissão) levam o endereço da tela no portal
 ALTER TABLE notificacoes ADD COLUMN IF NOT EXISTS link TEXT;
 -- o vídeo já vem comprimido: guardado sem compressão, o banco lê só o pedaço pedido pelo player

@@ -67,7 +67,7 @@ const TUTORIAIS = [
   { slug: 'gestao-usuarios', grupo: 'Gestão do setor', publico: 'gestor', titulo: 'Usuários do setor',
     descricao: 'Criar o acesso de alguém do setor, liberar ferramentas e redefinir a senha.' },
   { slug: 'gestao-ferramentas', grupo: 'Gestão do setor', publico: 'gestor', titulo: 'Ferramentas do setor',
-    descricao: 'Enviar o HTML novo de uma ferramenta, voltar uma versão e escolher quem pode abrir.' },
+    descricao: 'Enviar o HTML novo de uma ferramenta, voltar uma versão, escolher quem pode abrir e, para o coordenador, cadastrar, editar e remover ferramentas.' },
   { slug: 'gestao-carteira', grupo: 'Gestão do setor', publico: 'gestor', titulo: 'Carteira: trocar o responsável',
     descricao: 'Trocar o responsável do setor num condomínio e transferir a carteira de uma pessoa.' },
   { slug: 'gestao-equipe', grupo: 'Gestão do setor', publico: 'gestor', titulo: 'Equipe, líderes e tipos de demanda',
