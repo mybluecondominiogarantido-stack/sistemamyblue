@@ -760,6 +760,7 @@
       '<div class="painel"><div class="cab-painel"><b style="font-family:var(--display)" id="qtdMods"></b><span class="espaco"></span>' +
       '<button class="btn ghost" id="btSetores">Setores</button>' +
       '<button class="btn ghost" id="btLote">' + IC.enviar + 'Enviar vários HTMLs</button>' +
+      '<button class="btn ghost" id="btZipMods" title="A versão em uso de cada ferramenta, num arquivo .zip">' + IC.baixar + 'Baixar ferramentas (.zip)</button>' +
       '<button class="btn ghost" id="btBackup">' + IC.baixar + 'Backup do banco</button>' +
       '<button class="btn primary" id="btNovoMod">' + IC.mais + 'Novo módulo</button></div>' +
       '<div class="faixa-busca"><input class="campo" id="buscaMod" type="search" placeholder="Pesquisar módulo, setor ou arquivo…" aria-label="Pesquisar módulo"></div>' +
@@ -781,6 +782,7 @@
     $('#btSetores').onclick = gerirSetores;
     $('#btLote').onclick = envioEmLote;
     $('#btBackup').onclick = function () { location.href = '/api/admin/backup'; };
+    $('#btZipMods').onclick = function () { location.href = '/api/admin/modulos-em-uso.zip'; };
 
     function opcoesSetor(sel) {
       return '<option value="">— sem setor —</option>' + setores.map(function (s) { return '<option value="' + s.id + '"' + (s.id === sel ? ' selected' : '') + '>' + esc(s.nome) + '</option>'; }).join('');

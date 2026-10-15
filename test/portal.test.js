@@ -7,6 +7,7 @@ const os = require('os');
 const path = require('path');
 const http = require('http');
 const { criarApp, lerConfig } = require('../server/index');
+const { abrirZip } = require('../server/planilha');
 
 let servidor, base, ctx, dataDir;
 
@@ -219,6 +220,18 @@ test('armazenamento no servidor: equipe e por usuário', async () => {
   assert.match(pag.texto, /"modo":"compartilhado"/);
   assert.match(pag.texto, /"pedidos":"\[1,2\]"/);
   assert.match(pag.texto, /"versoes":\{"pedidos":\d+\}/);
+});
+
+test('baixar todas as ferramentas em uso num .zip', async () => {
+  const { c } = await logar('admin@teste.com', 'Admin1234');
+  await c('POST', '/api/admin/modulos', { slug: 'zip-x', nome: 'Zip X', armazenamento: 'navegador' });
+  await c('PUT', '/api/admin/modulos/zip-x/arquivo', '<!doctype html><title>Zip X</title><p>olá</p>', { headers: { 'content-type': 'text/html' } });
+  const r = await c('GET', '/api/admin/modulos-em-uso.zip', undefined, { bruto: true });
+  assert.equal(r.status, 200);
+  assert.equal(r.headers.get('content-type'), 'application/zip');
+  const z = abrirZip(r.buffer, () => true);
+  assert.equal(z.get('zip-x.html').toString('utf8'), '<!doctype html><title>Zip X</title><p>olá</p>');
+  assert.match(z.get('LEIAME.txt').toString('utf8'), /zip-x\.html — Zip X · versão \d+/);
 });
 
 test('bibliotecas das CDNs vêm do portal', async () => {
