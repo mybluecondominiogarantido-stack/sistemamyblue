@@ -645,7 +645,11 @@ module.exports = [
       await t.legenda('No <b>Crédito</b>: o envio de cada boleto. Fora do prazo com justificativa? <b>Pedir abono</b>: a supervisão aprova.', { etapa: L, ms: 300 });
       await t.clicar(aba('credito'), { depois: 1400 });
       await t.mostrar(f.locator('.resumo-pessoa'), 2600);
-      await t.legenda('Quem é da <b>Implantação</b> e emite boletos anexa a mesma planilha, com o prazo próprio da Implantação.', { etapa: L, ms: 300 });
+      await t.legenda('Depois de revisar, marque <b>Mostrar só os que não bateram</b> para ver só o que ficou fora da meta (também na Cobrança e na Implantação).', { etapa: L, ms: 300 });
+      await t.clicar(f.locator('[data-filtro-nao="credito"]'), { depois: 1600 });
+      await t.mostrar(f.locator('.card table').first(), 2400);
+      await t.clicar(f.locator('[data-filtro-nao="credito"]'), { depois: 800 });
+      await t.legenda('A <b>Implantação</b> manda a planilha completa: <b>Implantados</b> (boletos, aqui no Crédito), <b>Documentação</b> e <b>Onboarding</b>.', { etapa: L, ms: 300 });
       await t.clicar(f.locator('[data-sel="credito"][data-id="im1"]'), { depois: 1400 });
       await t.mostrar(f.locator('.regra').first(), 3200);
       await t.legenda('No <b>Sucesso do Cliente</b>: as metas sobre o salário e a comissão sobre o VOP de financiamentos.', { etapa: L, ms: 300 });

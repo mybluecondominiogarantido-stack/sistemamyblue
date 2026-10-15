@@ -217,7 +217,7 @@ test('Planilhas do mês: a gestão pede ao coordenador, ele envia uma por pessoa
   assert.equal((await ana('GET', '/api/comissao/minhas-planilhas')).json.planilhas.length, 0);
   const arq = Buffer.from('Nome do Cliente;Vencimento;Data Envio\nCond. Teste;10/10/2026;30/09/2026\n');
   assert.equal((await ana('POST', `/api/comissao/minhas-planilhas/${idAna}`, arq, { 'x-nome-arquivo': 'p.csv', 'content-type': 'text/csv' })).status, 404);
-  assert.equal((await lia('POST', `/api/comissao/minhas-planilhas/${idAna}`, arq, { 'x-nome-arquivo': 'virus.exe', 'content-type': 'application/octet-stream' })).status, 400, 'só Excel ou CSV');
+  assert.equal((await lia('POST', `/api/comissao/minhas-planilhas/${idAna}`, arq, { 'x-nome-arquivo': 'virus.exe', 'content-type': 'application/octet-stream' })).status, 400, 'só Excel, CSV ou PDF');
   assert.equal((await gestor('GET', `/api/comissao/planilhas/${idAna}/arquivo`)).status, 404, 'ainda não enviada');
   // envio da planilha da Ana pelo coordenador
   const env = await lia('POST', `/api/comissao/minhas-planilhas/${idAna}`, arq, { 'x-nome-arquivo': encodeURIComponent('Crédito Ana.csv'), 'content-type': 'text/csv' });
@@ -259,6 +259,10 @@ test('Planilhas do mês: a gestão pede ao coordenador, ele envia uma por pessoa
   assert.equal(r2.json.pedidos[0].novo, false);
   assert.equal((await gestor('DELETE', `/api/comissao/planilhas/${idCaio}`)).status, 200);
   assert.deepEqual((await lia('GET', '/api/comissao/minhas-planilhas')).json.planilhas.map((x) => x.nome), ['Ana Analista']);
+  // o balanço em PDF (ex.: Balanço de Marketing, montado pela supervisão) também é aceito
+  const rPdf = await gestor('POST', '/api/comissao/planilhas', { modulo: 'premiacoes', competencia: '2027-01', pedidos: [
+    { chave: 'p-mkt', usuario_id: ids['lia@teste.com'], nome: 'Ana Analista', tipo: 'metas', titulo: 'Balanço de Marketing' }] });
+  assert.equal((await lia('POST', `/api/comissao/minhas-planilhas/${rPdf.json.pedidos[0].id}`, Buffer.from('%PDF-1.4'), { 'x-nome-arquivo': 'balanco.pdf', 'content-type': 'application/pdf' })).status, 201);
   // cancelar a única que faltava: as já enviadas não ficam sem aviso
   const r3 = await gestor('POST', '/api/comissao/planilhas', { modulo: 'premiacoes', competencia: '2026-11', pedidos: [
     { chave: 'p-ana', usuario_id: ids['lia@teste.com'], nome: 'Ana Analista', titulo: 'Planilha' },

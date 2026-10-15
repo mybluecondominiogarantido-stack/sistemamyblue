@@ -302,7 +302,7 @@ ${dica('Dúvida sobre um valor? Fale com a gestão de premiações antes de clic
 <p>As planilhas que entram no cálculo (Crédito, Cobrança, metas dos setores…) são enviadas pelo <b>coordenador do setor</b>, pelo próprio portal, em vez do e-mail:</p>
 ${passos([
   'Quando a gestão de premiações pede, o coordenador recebe <b>um aviso</b> no <b>sino</b> e um e-mail curto, com a lista das pessoas da equipe.',
-  'Em <b>Minhas Premiações</b>, no quadro <b>Planilhas para enviar</b>, há uma linha por pessoa. Em cada uma, clique em <b>Enviar planilha</b> e escolha o arquivo dela (Excel ou CSV).',
+  'Em <b>Minhas Premiações</b>, no quadro <b>Planilhas para enviar</b>, há uma linha por pessoa. Em cada uma, clique em <b>Enviar planilha</b> e escolha o arquivo dela (Excel, CSV ou PDF).',
   'Quando todas as planilhas da equipe estão enviadas, a gestão recebe <b>um aviso só</b>, com a lista, e confere. Enquanto falta alguma, o quadro mostra quantas já foram (ex.: <i>2 de 3 enviadas</i>). A situação de cada linha mostra <i>Aguardando envio</i>, <i>Enviada</i> ou <i>Recebida e conferida pela gestão</i>.',
   'Enviou o arquivo errado? <b>Enviar de novo</b> substitui o anterior e, se as outras já foram enviadas, avisa a gestão outra vez.',
 ])}

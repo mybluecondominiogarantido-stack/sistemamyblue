@@ -199,7 +199,8 @@ function rotasComissao({ db, seg, cfg, avisos }) {
   /* ===================== planilhas do mês ===================== */
   const limiteArquivo = (cfg.limiteAnexoMb || 10) * 1024 * 1024;
   const corpoArquivo = express.raw({ type: () => true, limit: limiteArquivo });
-  const EXT_PLANILHA = /\.(xlsx|xlsm|xls|csv)$/i;
+  // planilhas e o PDF de balanço (ex.: Balanço de Marketing, que a supervisão monta em PDF)
+  const EXT_PLANILHA = /\.(xlsx|xlsm|xls|csv|pdf)$/i;
   const CAMPOS_PLAN = `p.id, p.competencia, p.chave, p.usuario_id, p.tipo, p.titulo, p.nome, p.pedido_em, p.enviado_em, p.arquivo_nome, p.tamanho, p.importado_em`;
 
   /* a gestão pede as planilhas do mês (ou renova o pedido de quem já tinha) */
@@ -311,7 +312,7 @@ function rotasComissao({ db, seg, cfg, avisos }) {
     let nome = 'planilha.xlsx';
     try { nome = decodeURIComponent(String(req.headers['x-nome-arquivo'] || nome)); } catch { /* mantém padrão */ }
     nome = nome.replace(/[\\/\r\n"]/g, '_').slice(0, 200);
-    if (!EXT_PLANILHA.test(nome)) return erro(res, 400, 'Envie a planilha em Excel (.xlsx ou .xls) ou CSV.');
+    if (!EXT_PLANILHA.test(nome)) return erro(res, 400, 'Envie a planilha em Excel (.xlsx ou .xls), CSV ou PDF.');
     const reenvio = !!p.enviado_em;
     await db.q(`UPDATE comissao_planilhas SET arquivo = $2, arquivo_nome = $3, arquivo_tipo = $4, tamanho = $5, enviado_em = now(), importado_em = NULL, importado_por = NULL, avisado_em = NULL WHERE id = $1`,
       [p.id, buf, nome, String(req.headers['content-type'] || 'application/octet-stream').slice(0, 120), buf.length]);
