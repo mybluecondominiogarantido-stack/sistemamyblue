@@ -433,7 +433,7 @@
     removeItem: function (k) {
       k = String(k);
       if (ehLocal(k)) { if (real) real.removeItem(k); return; }
-      if (!(k in mem)) return;
+      // mesmo sem a chave na memória: ela pode ter sido criada por outra pessoa depois que a página abriu
       delete mem[k]; pend.del[k] = 1; delete pend.set[k]; agendar();
     },
     clear: function () {
