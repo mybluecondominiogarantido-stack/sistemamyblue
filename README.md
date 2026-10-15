@@ -267,7 +267,7 @@ Todas as tabelas ficam no schema `public` (*Table Editor* do Supabase). As princ
 | `armazenamento` | Dados salvos pelas ferramentas que usam o navegador, quando o módulo grava no banco |
 | `auditoria` | Histórico de quem fez o quê |
 | `usuarios`, `permissoes`, `modulos`, `modulo_versoes` | Acessos, módulos e as versões dos HTMLs |
-| `comissao_relatorios`, `comissao_leitores` | Demonstrativos de comissão enviados pela ferramenta Comissionamento MyBlue (aba Minhas comissões) e quem pode lê-los |
+| `comissao_relatorios`, `comissao_leitores` | Demonstrativos de premiação enviados pela ferramenta Gestão de Premiações (aba Minhas Premiações) e quem pode lê-los |
 
 Exemplo, renegociações com condomínio e status:
 

@@ -271,7 +271,7 @@ function planilhaCredito(agora = new Date(), nome = 'Assistente') {
     ...[3, 6, 9, 12, 15, 18, 21, 24].map((d, i) => [i + 1, 'Cond. ' + CONDS[i], dt(d), new Date(dt(d).getTime() - (i === 5 ? 6 : 12) * 864e5), new Date(dt(d).getTime() - (i === 5 ? 5 : 11) * 864e5), ''])];
 }
 
-/* um demonstrativo pronto (como a ferramenta envia para "Minhas comissões"), para o vídeo da tela das pessoas */
+/* um demonstrativo pronto (como a ferramenta envia para "Minhas Premiações"), para o vídeo da tela das pessoas */
 function demonstrativo({ nome, cargo, setor, comp, titulo, nota, linhas, total }) {
   const [a, m] = comp.split('-');
   const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];

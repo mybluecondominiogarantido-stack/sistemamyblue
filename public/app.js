@@ -221,10 +221,10 @@
       // Comissões: a ferramenta (só para quem tem acesso) e os demonstrativos de cada pessoa
       var modCom = modulos.find(function (m) { return m.slug === MOD_COMISSAO; });
       var pendC = resumoComissao ? resumoComissao.pendentes + (resumoComissao.planilhas || 0) : 0;
-      html += '<div class="grupo">Comissões</div>' +
+      html += '<div class="grupo">Premiações</div>' +
         (modCom ? '<a href="#/m/' + MOD_COMISSAO + '" data-slug="' + MOD_COMISSAO + '" class="' + (atual === MOD_COMISSAO && rota.indexOf('#/m/') === 0 ? 'on ' : '') + (modCom.ativo ? '' : 'inativo') + '">' +
           IC.grafico + '<span>' + esc(modCom.nome) + '</span>' + (quadros[MOD_COMISSAO] ? '<i class="aberto" title="Aberta"></i>' : '') + '</a>' : '') +
-        '<a href="#/comissoes" class="' + (rota.indexOf('#/comissoes') === 0 ? 'on' : '') + '">' + IC.documento + '<span>Minhas comissões</span>' +
+        '<a href="#/premiacoes" class="' + (rota.indexOf('#/premiacoes') === 0 ? 'on' : '') + '">' + IC.documento + '<span>Minhas Premiações</span>' +
           '<i class="contador"' + (pendC ? '' : ' hidden') + ' title="Demonstrativos esperando o seu “Estou ciente” e planilhas para enviar">' + pendC + '</i></a>';
     }
     porSetor(termo ? lista : lista.filter(function (m) { return m.slug !== MOD_COMISSAO; })).forEach(function (g) {
@@ -270,6 +270,9 @@
   /* ======================= roteamento ======================= */
   function rotear() {
     var h = location.hash || '#/';
+    // endereços antigos (avisos e e-mails enviados antes de "Premiações"): levam para os novos
+    var novo = h.replace(/^#\/comissoes(?=\/|$)/, '#/premiacoes').replace(/^#\/m\/comissionamento(?=\/|$)/, '#/m/premiacoes');
+    if (novo !== h) { location.replace(novo); return; }
     var partes = h.replace(/^#\/?/, '').split('/');
     $('#casca').classList.remove('menu-aberto');
     if (partes[0] === 'm' && partes[1]) return abrirModulo(decodeURIComponent(partes[1]));
@@ -281,7 +284,7 @@
       return paginaTickets(lembrar('tickets.visao', 'minha'));
     }
     if (partes[0] === 'carteira') return paginaCarteira(partes[1]);
-    if (partes[0] === 'comissoes') return paginaComissoes(partes[1]);
+    if (partes[0] === 'premiacoes') return paginaComissoes(partes[1]);
     if (partes[0] === 'links') {
       if (partes[1] === 'gestao' && editorLinks()) return paginaGestaoLinks(partes[2]);
       if (partes[1] === 'previa' && editorLinks()) return paginaLinks(Number(partes[2]) || null);
@@ -2777,9 +2780,9 @@
   }
 
   /* ======================= partida ======================= */
-  /* ======================= Minhas comissões ======================= */
-  // demonstrativos enviados pela ferramenta de Comissionamento: cada pessoa vê o seu; líderes e diretoria, os da equipe
-  var MOD_COMISSAO = 'comissionamento';
+  /* ======================= Minhas Premiações ======================= */
+  // demonstrativos enviados pela Gestão de Premiações: cada pessoa vê o seu; líderes e diretoria, os da equipe
+  var MOD_COMISSAO = 'premiacoes';
   var resumoComissao = null;
   var MESES_C = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
   function nomeCompC(c) { var p = String(c).split('-'); return MESES_C[Number(p[1]) - 1] + '/' + p[0]; }
@@ -2799,21 +2802,21 @@
   }
   async function paginaComissoes(sub) {
     if (/^\d+$/.test(sub || '')) return paginaDemonstrativo(Number(sub));
-    definirBarra('<span class="nome">Minhas comissões</span>');
+    definirBarra('<span class="nome">Minhas Premiações</span>');
     $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">Carregando…</div></div>';
     var j, pl = [];
     try {
       var rs = await Promise.all([api('GET', '/api/comissao/meus'), api('GET', '/api/comissao/minhas-planilhas')]);
       j = rs[0]; pl = rs[1].planilhas || [];
     } catch (e) { $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">' + esc(e.message) + '</div></div>'; return; }
-    if (location.hash.indexOf('#/comissoes') !== 0) return;
+    if (location.hash.indexOf('#/premiacoes') !== 0) return;
     var aba = sub === 'equipe' && j.equipe.length ? 'equipe' : (j.meus.length || !j.equipe.length ? 'meus' : 'equipe');
-    var html = '<div class="pagina"><h1>Minhas comissões</h1><p class="sub">' + (aba === 'meus' ? 'Seus demonstrativos de comissão, mês a mês. Abra, confira os valores e clique em “Estou ciente”.' : 'Os demonstrativos das pessoas que você acompanha. Só você, a pessoa e a gestão da comissão veem.') + '</p>';
+    var html = '<div class="pagina"><h1>Minhas Premiações</h1><p class="sub">' + (aba === 'meus' ? 'Seus demonstrativos de premiação, mês a mês. Abra, confira os valores e clique em “Estou ciente”.' : 'Os demonstrativos das pessoas que você acompanha. Só você, a pessoa e a gestão de premiações veem.') + '</p>';
     html += blocoPlanilhas(pl);
-    if (j.equipe.length) html += '<nav class="abas"><a href="#/comissoes" class="' + (aba === 'meus' ? 'on' : '') + '">Meus demonstrativos</a><a href="#/comissoes/equipe" class="' + (aba === 'equipe' ? 'on' : '') + '">Minha equipe</a></nav>';
+    if (j.equipe.length) html += '<nav class="abas"><a href="#/premiacoes" class="' + (aba === 'meus' ? 'on' : '') + '">Meus demonstrativos</a><a href="#/premiacoes/equipe" class="' + (aba === 'equipe' ? 'on' : '') + '">Minha equipe</a></nav>';
     if (aba === 'meus') {
       html += j.meus.length ? '<div class="cartoes">' + j.meus.map(function (x) {
-        return '<a class="cartao" href="#/comissoes/' + x.id + '"><div class="cab"><div class="icone-mod">' + IC.documento + '</div><div><h3>' + nomeCompC(x.competencia) + '</h3>' +
+        return '<a class="cartao" href="#/premiacoes/' + x.id + '"><div class="cab"><div class="icone-mod">' + IC.documento + '</div><div><h3>' + nomeCompC(x.competencia) + '</h3>' +
           '<span class="ajuda" style="margin:0">' + esc([x.cargo, x.setor].filter(Boolean).join(' · ')) + '</span></div></div>' +
           '<div class="valor-comissao">' + reais(x.valor) + '</div><div class="linha">' + situacaoComissao(x, true) +
           (x.versao > 1 ? '<span class="etiqueta cinza">atualizado · versão ' + x.versao + '</span>' : '') + '</div></a>';
@@ -2837,7 +2840,7 @@
         }).join('') + '</tbody></table></div></div>';
     }
     $('#conteudo').innerHTML = html + '</div>';
-    $$('tr.clicavel[data-id]').forEach(function (tr) { tr.onclick = function () { location.hash = '#/comissoes/' + tr.getAttribute('data-id'); }; });
+    $$('tr.clicavel[data-id]').forEach(function (tr) { tr.onclick = function () { location.hash = '#/premiacoes/' + tr.getAttribute('data-id'); }; });
     if ($('#selCompC')) $('#selCompC').onchange = function () { guardar('comissao.competencia', this.value); paginaComissoes('equipe'); };
     $$('input[data-plan]').forEach(function (inp) {
       inp.onchange = async function () {
@@ -2848,22 +2851,23 @@
             headers: { 'Content-Type': f.type || 'application/octet-stream', 'X-Nome-Arquivo': encodeURIComponent(f.name) } });
           var x = await r.json().catch(function () { return {}; });
           if (!r.ok) throw new Error(x.erro || 'Não foi possível enviar.');
-          toast('Planilha enviada. A gestão da comissão foi avisada.');
+          toast('Planilha enviada. A gestão de premiações foi avisada.');
           atualizarComissao(); paginaComissoes(sub);
         } catch (e) { toast(e.message, 'erro'); paginaComissoes(sub); }
       };
     });
     if (sub === 'enviar' && $('.planilhas-mes')) $('.planilhas-mes').scrollIntoView({ block: 'start' });
   }
-  // pedidos de planilha da gestão da comissão: a pessoa só envia o arquivo dela (não vê a ferramenta nem valores)
+  // pedidos de planilha da gestão de premiações: a pessoa só envia o arquivo dela (não vê a ferramenta nem valores)
   function blocoPlanilhas(lista) {
     if (!lista.length) return '';
     var dataHora = function (s) { var d = new Date(s); return d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); };
+    var daEquipe = lista.some(function (x) { return x.nome && x.nome !== eu.nome; });
     return '<section class="planilhas-mes"><h2>' + IC.documento + 'Planilhas para enviar</h2>' +
-      '<p class="sub">A gestão da comissão pediu a sua planilha do mês. Envie o arquivo aqui (Excel ou CSV); quem pediu recebe o aviso.</p>' +
+      '<p class="sub">' + (daEquipe ? 'A gestão de premiações pediu as planilhas do mês da sua equipe. Envie o arquivo de cada pessoa (Excel ou CSV); quem pediu recebe o aviso.' : 'A gestão de premiações pediu a sua planilha do mês. Envie o arquivo aqui (Excel ou CSV); quem pediu recebe o aviso.') + '</p>' +
       lista.map(function (x) {
-        var st = x.importado_em ? ['ok', 'Recebida e conferida pela gestão'] : x.enviado_em ? ['enviada', 'Enviada em ' + dataHora(x.enviado_em)] : ['pendente', 'Aguardando o seu envio'];
-        return '<div class="pedido-plan ' + st[0] + '"><div class="info"><b>' + esc(x.titulo) + '</b><span>Comissão de ' + nomeCompC(x.competencia) + ' · pedido em ' + diaC(x.pedido_em) + '</span>' +
+        var st = x.importado_em ? ['ok', 'Recebida e conferida pela gestão'] : x.enviado_em ? ['enviada', 'Enviada em ' + dataHora(x.enviado_em)] : ['pendente', 'Aguardando envio'];
+        return '<div class="pedido-plan ' + st[0] + '"><div class="info"><b>' + (x.nome && x.nome !== eu.nome ? esc(x.nome) + ' · ' : '') + esc(x.titulo) + '</b><span>Premiação de ' + nomeCompC(x.competencia) + ' · pedido em ' + diaC(x.pedido_em) + '</span>' +
           '<span class="etiqueta ' + ({ ok: 'verde', enviada: 'azul', pendente: 'ambar' })[st[0]] + '">' + st[1] + '</span>' +
           (x.arquivo_nome ? '<span class="arq">' + IC.documento + esc(x.arquivo_nome) + '</span>' : '') + '</div>' +
           '<label class="btn ' + (x.enviado_em ? 'ghost' : 'primary') + '"><input type="file" hidden accept=".xlsx,.xls,.xlsm,.csv" data-plan="' + x.id + '">' + (x.enviado_em ? 'Enviar de novo' : 'Enviar planilha') + '</label></div>';
@@ -2873,25 +2877,23 @@
     $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">Carregando…</div></div>';
     var x;
     try { x = (await api('GET', '/api/comissao/relatorios/' + id)).relatorio; } catch (e) {
-      definirBarra('<span class="nome">Minhas comissões</span>');
-      $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">' + esc(e.message) + '<br><a class="btn ghost" style="margin-top:14px" href="#/comissoes">Voltar</a></div></div>';
+      definirBarra('<span class="nome">Minhas Premiações</span>');
+      $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">' + esc(e.message) + '<br><a class="btn ghost" style="margin-top:14px" href="#/premiacoes">Voltar</a></div></div>';
       return;
     }
     var podeCiente = x.meu && !x.ciente_em && !x.substituido;
-    definirBarra('<a class="setor" href="#/comissoes">Minhas comissões</a><span class="sep">/</span><span class="nome">' + esc((x.meu ? '' : x.nome + ' · ') + nomeCompC(x.competencia)) + '</span>',
-      '<button class="btn ghost sm" id="btImprimirC">' + IC.baixar + '<span class="so-desktop">Imprimir / PDF</span></button>' +
-      (podeCiente ? '<button class="btn primary sm" id="btCienteC">Estou ciente</button>' : '') + '<a class="btn ghost sm" href="#/comissoes">Voltar</a>');
-    var faixa = x.substituido ? '<div class="aviso-demo alerta">Este demonstrativo foi atualizado. Abra a versão nova em <a href="#/comissoes">Minhas comissões</a>.</div>'
+    definirBarra('<a class="setor" href="#/premiacoes">Minhas Premiações</a><span class="sep">/</span><span class="nome">' + esc((x.meu ? '' : x.nome + ' · ') + nomeCompC(x.competencia)) + '</span>',
+      (podeCiente ? '<button class="btn primary sm" id="btCienteC">Estou ciente</button>' : '') + '<a class="btn ghost sm" href="#/premiacoes">Voltar</a>');
+    var faixa = x.substituido ? '<div class="aviso-demo alerta">Este demonstrativo foi atualizado. Abra a versão nova em <a href="#/premiacoes">Minhas Premiações</a>.</div>'
       : x.meu ? (x.ciente_em ? '<div class="aviso-demo ok">✓ Você confirmou este demonstrativo em ' + diaC(x.ciente_em) + '.</div>'
         : '<div class="aviso-demo">Confira os valores. Se estiver tudo certo, clique em <b>Estou ciente</b>; se tiver dúvida, fale com a sua liderança antes.</div>')
         : '<div class="aviso-demo">Demonstrativo de <b>' + esc(x.nome) + '</b> (' + esc(x.setor || '—') + ') · versão ' + x.versao + ' · enviado em ' + diaC(x.enviado_em) + ' · ' + situacaoComissao(x, false) + '</div>';
-    $('#conteudo').innerHTML = '<div class="pagina pagina-demo">' + faixa + '<iframe id="frDemo" class="frame-demo" src="/api/comissao/relatorios/' + id + '/ver" title="Demonstrativo de comissão"></iframe></div>';
+    $('#conteudo').innerHTML = '<div class="pagina pagina-demo">' + faixa + '<iframe id="frDemo" class="frame-demo" src="/api/comissao/relatorios/' + id + '/ver" title="Demonstrativo de premiação"></iframe></div>';
     var fr = $('#frDemo');
     // a altura acompanha o demonstrativo (a folha ou, sem ela, o corpo da página)
     fr.onload = function () {
       try { var d = fr.contentDocument, f = d.querySelector('.rel'); fr.style.height = Math.ceil((f ? f.getBoundingClientRect().bottom : d.body.scrollHeight) + 20) + 'px'; } catch (e) { /* mantém a altura padrão */ }
     };
-    $('#btImprimirC').onclick = function () { try { fr.contentWindow.focus(); fr.contentWindow.print(); } catch (e) { window.open(fr.src, '_blank'); } };
     if (podeCiente) $('#btCienteC').onclick = async function () {
       this.disabled = true;
       try { await api('POST', '/api/comissao/relatorios/' + id + '/ciente'); toast('Obrigado! Demonstrativo confirmado.', 'ok'); atualizarComissao(); paginaDemonstrativo(id); }

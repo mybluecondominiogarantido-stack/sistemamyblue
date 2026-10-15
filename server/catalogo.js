@@ -152,16 +152,16 @@ const MODULOS = [
     config: { titulo: 'Controle de Síndicos' },
   },
   {
-    // relatorios_comissao: é a única ferramenta que pode enviar os demonstrativos para "Minhas comissões".
-    slug: 'comissionamento',
-    nome: 'Comissionamento MyBlue',
+    // relatorios_comissao: é a única ferramenta que pode enviar os demonstrativos para "Minhas Premiações".
+    slug: 'premiacoes',
+    nome: 'Gestão de Premiações',
     descricao: 'Metas e comissões de todos os setores: lançamento do mês, dashboard, resumo, fechamento e demonstrativos individuais.',
     setor: 'Administrativa/Financeira',
     icone: 'grafico',
     ordem: 5,
     armazenamento: 'compartilhado',
     // o HTML (com regras e percentuais) NÃO fica no repositório: a administração envia uma vez pelo painel
-    config: { titulo: 'Comissionamento MyBlue', relatorios_comissao: true },
+    config: { titulo: 'Gestão de Premiações', relatorios_comissao: true },
   },
 ];
 
