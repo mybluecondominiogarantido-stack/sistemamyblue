@@ -348,11 +348,28 @@
   var dados = C.dados || {};
   Object.keys(dados).forEach(function (k) { mem[k] = String(dados[k]); });
 
+  /* Conferência de versão: cada chave tem uma versão no banco. A gravação vai com a versão que esta página
+     conhece; se outra pessoa gravou a chave depois, o servidor recusa (409) e a página avisa, em vez de apagar
+     o trabalho da outra pessoa. Chaves "livres" (config chaves_livres) não são conferidas. */
+  var livres = (C.livres || []).map(function (p) { return new RegExp(p); });
+  function ehLivre(k) { for (var i = 0; i < livres.length; i++) if (livres[i].test(k)) return true; return false; }
+  var srv = Object.create(null); // o valor que o banco tem, até onde esta página sabe
+  var ver = Object.create(null); // a versão de cada chave no banco (0 = não existe)
+  Object.keys(dados).forEach(function (k) { srv[k] = String(dados[k]); });
+  Object.keys(C.versoes || {}).forEach(function (k) { ver[k] = Number(C.versoes[k]) || 0; });
+  var buscar = window.fetch ? window.fetch.bind(window) : null;
+  var URL_ARM = '/api/armazenamento/' + encodeURIComponent(C.modulo);
+
   var pend = { set: {}, del: {}, limpar: false };
+  var emVoo = null; // o lote que está sendo enviado agora
+  var conflito = null; // { k: { valor, versao } } enquanto a pessoa não decide
   var temPend = false, timer = null, enviando = false, tentativa = 0;
+
+  function vazio(p) { return !p.limpar && !Object.keys(p.set).length && !Object.keys(p.del).length; }
 
   function agendar() {
     temPend = true;
+    if (conflito) { avisarPortal('conflito'); return; } // espera a pessoa escolher no aviso
     avisarPortal('salvando');
     clearTimeout(timer);
     timer = setTimeout(enviar, 400);
@@ -376,39 +393,132 @@
   }
 
   function corpo(p) {
-    return JSON.stringify({ set: p.set, del: Object.keys(p.del), limpar: p.limpar });
+    var c = { set: p.set, del: Object.keys(p.del), limpar: p.limpar };
+    if (!p.limpar) {
+      c.base = {};
+      Object.keys(p.set).concat(c.del).forEach(function (k) { if (!ehLivre(k)) c.base[k] = ver[k] || 0; });
+    }
+    return JSON.stringify(c);
+  }
+
+  // o banco confirmou o lote: passa a ser o valor conhecido
+  function confirmar(p, versoes) {
+    versoes = versoes || {};
+    if (p.limpar) { srv = Object.create(null); ver = Object.create(null); }
+    Object.keys(p.del).forEach(function (k) { delete srv[k]; ver[k] = 0; });
+    Object.keys(p.set).forEach(function (k) { srv[k] = p.set[k]; if (versoes[k] != null) ver[k] = Number(versoes[k]); });
+  }
+
+  // a ferramenta leu o banco por conta própria (GET): atualiza o que a página conhece, menos o que ela ainda vai gravar
+  function conhecer(d, versoes) {
+    if (!d || !versoes) return;
+    Object.keys(srv).forEach(function (k) {
+      if (!(k in d) && !(k in pend.set) && !(k in pend.del) && !(emVoo && (k in emVoo.set || k in emVoo.del))) { delete srv[k]; delete mem[k]; ver[k] = 0; }
+    });
+    Object.keys(d).forEach(function (k) {
+      if ((k in pend.set) || (k in pend.del) || (emVoo && (k in emVoo.set || k in emVoo.del))) return;
+      srv[k] = String(d[k]); mem[k] = String(d[k]); ver[k] = Number(versoes[k]) || 0;
+    });
   }
 
   function enviar(saindo) {
-    if (!temPend) return;
+    if (!temPend || conflito) return;
     if (enviando && !saindo) { clearTimeout(timer); timer = setTimeout(enviar, 300); return; }
     var p = retirarPendencias();
+    if (vazio(p)) { if (!enviando) avisarPortal('salvo'); return; }
     var body = corpo(p);
-    var url = '/api/armazenamento/' + encodeURIComponent(C.modulo);
     if (saindo) {
       try {
-        fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body, keepalive: body.length < 60000, credentials: 'same-origin' })
-          .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); if (!temPend) avisarPortal('salvo'); })
+        buscar(URL_ARM, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body, keepalive: body.length < 60000, credentials: 'same-origin' })
+          .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json().catch(function () { return {}; }); })
+          .then(function (j) { confirmar(p, j.versoes); if (!temPend) avisarPortal('salvo'); })
           .catch(function () { devolverPendencias(p); agendar(); });
       } catch (e) { devolverPendencias(p); }
       return;
     }
-    enviando = true;
-    fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body, credentials: 'same-origin' })
+    enviando = true; emVoo = p;
+    buscar(URL_ARM, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body, credentials: 'same-origin' })
       .then(function (r) {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json().catch(function () { return {}; }).then(function (j) {
+          if (r.status === 409 && j && j.conflito) { var e = new Error('conflito'); e.conflito = j.conflito; throw e; }
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return j;
+        });
+      })
+      .then(function (j) {
+        confirmar(p, j.versoes);
         tentativa = 0;
-        enviando = false;
+        enviando = false; emVoo = null;
         if (temPend) agendar(); else avisarPortal('salvo');
       })
       .catch(function (e) {
-        enviando = false;
+        enviando = false; emVoo = null;
         devolverPendencias(p);
+        clearTimeout(timer);
+        if (e && e.conflito) { conflito = e.conflito; avisarPortal('conflito'); mostrarConflito(); return; }
         tentativa++;
         avisarPortal('erro', String(e && e.message || e));
-        clearTimeout(timer);
         timer = setTimeout(enviar, Math.min(1000 * Math.pow(2, tentativa), 30000));
       });
+  }
+
+  /* aviso de conflito, dentro da ferramenta */
+  var caixa = null;
+  function mostrarConflito() {
+    if (!document.body) { document.addEventListener('DOMContentLoaded', mostrarConflito); return; }
+    if (caixa) caixa.remove();
+    caixa = document.createElement('div');
+    caixa.setAttribute('role', 'alertdialog');
+    caixa.style.cssText = 'position:fixed;left:12px;right:12px;top:12px;z-index:2147483647;background:#fdecea;color:#7a1f16;border:1px solid #f1b8b1;border-radius:12px;padding:14px 16px;font:500 14px/1.45 system-ui,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.18);display:grid;gap:10px';
+    var t = document.createElement('div');
+    t.innerHTML = '<b>Outra pessoa alterou estes dados enquanto você trabalhava.</b><br>Para não apagar o que ela gravou, suas últimas alterações ainda <b>não foram salvas</b>. ' +
+      'Recarregue para ver a versão atual (suas alterações não salvas serão descartadas) ou mantenha as suas, substituindo as dela.';
+    var b = document.createElement('div');
+    b.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px';
+    function botao(txt, forte, fn) {
+      var x = document.createElement('button');
+      x.type = 'button'; x.textContent = txt;
+      x.style.cssText = 'font:600 14px system-ui,sans-serif;padding:8px 14px;border-radius:8px;cursor:pointer;border:1px solid #c0392b;' + (forte ? 'background:#c0392b;color:#fff' : 'background:#fff;color:#7a1f16');
+      x.onclick = fn; b.appendChild(x);
+    }
+    botao('Recarregar a página', true, function () {
+      pend = { set: {}, del: {}, limpar: false }; temPend = false; avisarPortal('salvo');
+      location.reload();
+    });
+    botao('Manter as minhas e substituir', false, function () {
+      Object.keys(conflito || {}).forEach(function (k) {
+        var a = conflito[k]; ver[k] = a.versao || 0;
+        if (a.valor == null) delete srv[k]; else srv[k] = a.valor;
+      });
+      conflito = null; caixa.remove(); caixa = null;
+      agendar();
+    });
+    caixa.appendChild(t); caixa.appendChild(b);
+    document.body.appendChild(caixa);
+  }
+
+  /* leituras e gravações que a ferramenta faz direto na API do armazenamento */
+  if (buscar) {
+    var ehMinhaUrl = function (u) {
+      try { var a = new URL(u, location.href); return a.origin === location.origin && (a.pathname === URL_ARM || decodeURIComponent(a.pathname) === '/api/armazenamento/' + C.modulo); } catch (e) { return false; }
+    };
+    window.fetch = function (entrada, init) {
+      var u = typeof entrada === 'string' ? entrada : (entrada && entrada.url) || String(entrada);
+      var metodo = String((init && init.method) || (entrada && entrada.method) || 'GET').toUpperCase();
+      var pr = buscar(entrada, init);
+      if (!ehMinhaUrl(u)) return pr;
+      if (metodo === 'GET') {
+        pr.then(function (r) { if (r.ok) r.clone().json().then(function (j) { conhecer(j.dados, j.versoes); }).catch(function () {}); }).catch(function () {});
+      } else if (metodo === 'POST' && init && typeof init.body === 'string') {
+        var enviado = null; try { enviado = JSON.parse(init.body); } catch (e) { enviado = null; }
+        if (enviado) pr.then(function (r) {
+          if (r.ok) r.clone().json().then(function (j) {
+            confirmar({ set: enviado.set || {}, del: (enviado.del || []).reduce(function (o, k) { o[k] = 1; return o; }, {}), limpar: !!enviado.limpar }, j.versoes);
+          }).catch(function () {});
+        }).catch(function () {});
+      }
+      return pr;
+    };
   }
 
   function chaves() {
@@ -428,12 +538,21 @@
     setItem: function (k, v) {
       k = String(k); v = String(v);
       if (ehLocal(k)) { if (real) real.setItem(k, v); return; }
-      mem[k] = v; pend.set[k] = v; delete pend.del[k]; agendar();
+      mem[k] = v; delete pend.del[k];
+      // igual ao que já está no banco (e nada a caminho para essa chave): não precisa gravar de novo
+      if (!pend.limpar && srv[k] === v && !(emVoo && (k in emVoo.set || k in emVoo.del))) {
+        delete pend.set[k];
+        if (vazio(pend) && !conflito) { if (temPend && !enviando) avisarPortal('salvo'); temPend = false; }
+        return;
+      }
+      pend.set[k] = v; agendar();
     },
     removeItem: function (k) {
       k = String(k);
       if (ehLocal(k)) { if (real) real.removeItem(k); return; }
-      // mesmo sem a chave na memória: ela pode ter sido criada por outra pessoa depois que a página abriu
+      // chave que esta página nunca viu: nada a apagar. As criadas por outra pessoa depois que a página abriu
+      // entram em `srv` quando a ferramenta relê o banco (GET), e aí a exclusão vai para o servidor.
+      if (!(k in mem) && !(k in srv) && !(k in pend.set)) return;
       delete mem[k]; pend.del[k] = 1; delete pend.set[k]; agendar();
     },
     clear: function () {

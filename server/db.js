@@ -266,6 +266,15 @@ CREATE TABLE IF NOT EXISTS links_campanhas (
 );
 CREATE INDEX IF NOT EXISTS idx_links_campanhas_inicio ON links_campanhas(inicio);
 
+-- cópia das bibliotecas que as ferramentas carregam de CDNs (server/rotas/cdn.js)
+CREATE TABLE IF NOT EXISTS cdn_cache (
+  url TEXT PRIMARY KEY,
+  tipo TEXT NOT NULL,
+  conteudo BYTEA NOT NULL,
+  tamanho INTEGER NOT NULL,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- vídeos tutoriais (o catálogo, com título e para quem é, fica em server/tutoriais.js)
 CREATE TABLE IF NOT EXISTS tutoriais (
   slug TEXT PRIMARY KEY,
@@ -337,12 +346,14 @@ CREATE INDEX IF NOT EXISTS idx_comissao_plan_chave ON comissao_planilhas(modulo_
    políticas, ninguém lê nem grava por lá; o portal conecta como dono das tabelas e não é afetado. */
 const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 'permissoes', 'armazenamento', 'colecoes', 'registros', 'documentos', 'auditoria',
   'setor_membros', 'ticket_categorias', 'tickets', 'ticket_eventos', 'ticket_anexos', 'notificacoes', 'condominios',
-  'links_pagina', 'links', 'links_campanhas', 'tutoriais', 'comissao_relatorios', 'comissao_leitores', 'comissao_planilhas'];
+  'links_pagina', 'links', 'links_campanhas', 'tutoriais', 'comissao_relatorios', 'comissao_leitores', 'comissao_planilhas', 'cdn_cache'];
 const RLS = TABELAS.map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`).join(';\n');
 
 /* Ajustes em bancos já existentes (rodam a cada início e não fazem nada se já estiverem aplicados). */
 const AJUSTES = `
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS supervisor_tickets BOOLEAN NOT NULL DEFAULT FALSE;
+-- versão de cada chave do armazenamento: a gravação feita sobre uma versão velha é recusada (conflito entre pessoas)
+ALTER TABLE armazenamento ADD COLUMN IF NOT EXISTS versao BIGINT NOT NULL DEFAULT 1;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS editor_links BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE tickets ADD COLUMN IF NOT EXISTS condominio_id INTEGER REFERENCES condominios(id) ON DELETE SET NULL;
 ALTER TABLE tickets ADD COLUMN IF NOT EXISTS demanda_interna BOOLEAN NOT NULL DEFAULT FALSE;

@@ -158,7 +158,7 @@
       if (e.key === 'Enter') { var a = $('#nav a[data-slug]'); if (a) { location.hash = a.getAttribute('href'); $('#busca').value = ''; desenharMenu(); } }
     });
     $('#btSair').onclick = async function () {
-      var pendente = Object.keys(statusSync).some(function (k) { return statusSync[k] === 'salvando' || statusSync[k] === 'erro'; });
+      var pendente = Object.keys(statusSync).some(function (k) { return statusSync[k] === 'salvando' || statusSync[k] === 'erro' || statusSync[k] === 'conflito'; });
       if (pendente && !(await confirmar('Sair do portal', 'Ainda há alterações sendo salvas em uma ferramenta. Sair agora pode perder essas alterações.', 'Sair mesmo assim', true))) return;
       await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
       location.href = '/login';
@@ -170,7 +170,7 @@
       if (ev.data.modulo === atual) desenharStatus();
     });
     window.addEventListener('beforeunload', function (e) {
-      var pendente = Object.keys(statusSync).some(function (k) { return statusSync[k] === 'salvando' || statusSync[k] === 'erro'; });
+      var pendente = Object.keys(statusSync).some(function (k) { return statusSync[k] === 'salvando' || statusSync[k] === 'erro' || statusSync[k] === 'conflito'; });
       if (pendente) { e.preventDefault(); e.returnValue = ''; }
     });
     // confere a sessão de tempos em tempos
@@ -262,7 +262,7 @@
     var s = atual ? statusSync[atual] : null;
     var el = $('#statusSync');
     if (!s) { el.innerHTML = ''; return; }
-    var txt = { salvando: 'salvando…', salvo: '✓ salvo no servidor', erro: '⚠ falha ao salvar — tentando de novo' }[s] || '';
+    var txt = { salvando: 'salvando…', salvo: '✓ salvo no servidor', erro: '⚠ falha ao salvar — tentando de novo', conflito: '⚠ não salvo: outra pessoa alterou — veja o aviso na ferramenta' }[s] || '';
     el.innerHTML = '<span class="status-sync ' + esc(s) + '">' + txt + '</span>';
     if (s === 'salvo') setTimeout(function () { if (statusSync[atual] === 'salvo') { el.innerHTML = ''; } }, 2500);
   }
@@ -945,7 +945,9 @@
           }).join('') +
           (armRes.length ? '<div class="ajuda">No banco agora: ' + armRes.map(function (a) { return (a.escopo === '*' ? 'equipe' : 'usuário #' + a.escopo.slice(2)) + ' — ' + a.chaves + ' chave(s), ' + tamanho(a.bytes); }).join(' · ') + '</div>' : '') +
           '<details><summary style="cursor:pointer;font-weight:700;color:var(--ink-2)">Avançado: chaves que ficam só no navegador</summary><input class="campo" id="mLocais" style="margin-top:8px" value="' + esc(((mod.config && mod.config.chaves_locais) || []).join(', ')) + '" placeholder="^staticrypt, rascunho_">' +
-          '<div class="ajuda">Expressões separadas por vírgula. Chaves que combinarem continuam apenas no navegador de cada pessoa.</div></details></div>' +
+          '<div class="ajuda">Expressões separadas por vírgula. Chaves que combinarem continuam apenas no navegador de cada pessoa.</div>' +
+          '<label class="fl" for="mLivres" style="margin-top:12px;display:block">Chaves gravadas sem conferir conflito</label><input class="campo" id="mLivres" value="' + esc(((mod.config && mod.config.chaves_livres) || []).join(', ')) + '" placeholder="^pp:conferido$">' +
+          '<div class="ajuda">Por padrão, se outra pessoa alterou um dado depois que a página abriu, a gravação é recusada e a ferramenta avisa. Chaves que combinarem aqui (dados calculados, preferências) gravam por cima sem conferir.</div></details></div>' +
           secPlanilha +
 
           '<h4 class="titulo-sec">Quem pode abrir</h4>' +
@@ -1031,6 +1033,7 @@
             icone: $('#mIcone', m).value, ordem: Number($('#mOrdem', m).value) || 0, ativo: $('#mAtivo', m).checked,
             armazenamento: arm, fonte_dados: fonte,
             chaves_locais: $('#mLocais', m).value.split(',').map(function (s) { return s.trim(); }).filter(Boolean),
+            chaves_livres: $('#mLivres', m).value.split(',').map(function (s) { return s.trim(); }).filter(Boolean),
             usuarios: $$('input[name=mUsu]:checked', m).map(function (i) { return Number(i.value); }),
           });
           m.fechar(); toast('Módulo salvo.', 'ok');
