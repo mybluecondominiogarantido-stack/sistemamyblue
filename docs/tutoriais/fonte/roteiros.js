@@ -119,7 +119,7 @@ module.exports = [
   },
 
   {
-    nome: 'minhas-comissoes',
+    nome: 'minhas-premiacoes',
     entrar: 'marcos@myblue.com.br',
     inicio: '#/',
     async preparar(cen) {
@@ -129,55 +129,55 @@ module.exports = [
       const conds = (n, falha) => D.CONDS.slice(0, n).map((c, i) => ['Cond. ' + c, i !== falha]);
       const doc = (x) => D.demonstrativo({ comp, titulo: 'Memória de cálculo — Condomínios com meta de redução de inadimplência', nota: 'Valor por condomínio que bate a meta.', ...x });
       const ids = cen.id;
-      await cen.admin('POST', '/api/comissao/relatorios', { modulo: 'comissionamento', competencia: comp, relatorios: [
+      await cen.admin('POST', '/api/comissao/relatorios', { modulo: 'premiacoes', competencia: comp, relatorios: [
         { chave: 'cb1', usuario_id: ids['marcos@myblue.com.br'], nome: 'Marcos Lima', cargo: 'Analista de Cobrança', setor: 'Cobrança', valor: 495,
           html: doc({ nome: 'Marcos Lima', cargo: 'Analista de Cobrança', setor: 'Cobrança', linhas: conds(12, 4), total: 495 }), leitores: [{ usuario_id: ids['lia@myblue.com.br'], motivo: 'lider' }] },
         { chave: 'cb2', usuario_id: ids['sara@myblue.com.br'], nome: 'Sara Alves', cargo: 'Analista de Cobrança', setor: 'Cobrança', valor: 540,
           html: doc({ nome: 'Sara Alves', cargo: 'Analista de Cobrança', setor: 'Cobrança', linhas: conds(12, -1), total: 540 }), leitores: [{ usuario_id: ids['lia@myblue.com.br'], motivo: 'lider' }] },
       ] });
-      // a gestão pede o controle do mês seguinte (Planilhas do mês)
-      await cen.admin('POST', '/api/comissao/planilhas', { modulo: 'comissionamento', competencia: comp, avisar_email: false, pedidos: [
-        { chave: 'cb1', usuario_id: ids['marcos@myblue.com.br'], nome: 'Marcos Lima', tipo: 'cobranca', titulo: 'Controle de cobrança (devedores do período)' }] });
+      // a gestão pede à coordenadora da Cobrança os controles da equipe (Planilhas do mês)
+      await cen.admin('POST', '/api/comissao/planilhas', { modulo: 'premiacoes', competencia: comp, avisar_email: false, pedidos: [
+        { chave: 'cb1', usuario_id: ids['lia@myblue.com.br'], nome: 'Marcos Lima', tipo: 'cobranca', titulo: 'Controle de cobrança (devedores do período)' },
+        { chave: 'cb2', usuario_id: ids['lia@myblue.com.br'], nome: 'Sara Alves', tipo: 'cobranca', titulo: 'Controle de cobrança (devedores do período)' }] });
     },
-    abertura: ['O seu demonstrativo de comissão, todo mês, no portal.', ['Enviar a planilha do mês', 'Conferir e baixar em PDF', 'Estou ciente', 'Líderes: a equipe']],
+    abertura: ['O seu demonstrativo de premiação, todo mês, no portal.', ['Onde fica', 'Conferir e Estou ciente', 'Coordenação: enviar as planilhas da equipe', 'Líderes: a equipe']],
     async gravar(t) {
-      const O = '1 · Enviar a planilha';
-      await t.legenda('Quando a gestão da comissão pede a sua planilha, ou envia o demonstrativo, chega um <b>aviso no sino</b> e um e-mail curto.', { etapa: O, ms: 600 });
+      const O = '1 · Onde fica';
+      await t.legenda('Quando o demonstrativo do mês é enviado, chega um <b>aviso no sino</b> e um e-mail curto (sem valores).', { etapa: O, ms: 600 });
       await t.mostrar('#btSino', 2600);
-      await t.legenda('No menu, em <b>Comissões</b>, abra <b>Minhas comissões</b>. O número mostra o que espera por você.', { etapa: O, ms: 300 });
-      await t.clicar(menu('#/comissoes'), { depois: 1600 });
-      await t.legenda('Em <b>Planilhas para enviar</b> fica o pedido da gestão. Clique em <b>Enviar planilha</b> e escolha o arquivo (Excel ou CSV).', { etapa: O, ms: 300 });
-      const pasta = require('fs').mkdtempSync(require('path').join(require('os').tmpdir(), 'tut-'));
-      const arq = require('path').join(pasta, 'controle-cobranca.csv');
-      require('fs').writeFileSync(arq, 'Condomínio;Vencimento;Devedores inicial;Devedores atual\nCond. Jardim Azul;5;12;7\nCond. Primavera;10;30;17\n');
-      await t.enviarArquivo('.pedido-plan label.btn', 'input[data-plan]', arq, { depois: 2400 });
-      await t.legenda('Pronto: a gestão recebe o aviso. Você vê quando ela <b>recebe e confere</b>. Enviou errado? <b>Enviar de novo</b>.', { etapa: O, ms: 300 });
-      await t.mostrar('.pedido-plan', 3200);
+      await t.legenda('No menu, em <b>Premiações</b>, abra <b>Minhas Premiações</b>. O número mostra o que espera por você.', { etapa: O, ms: 300 });
+      await t.clicar(menu('#/premiacoes'), { depois: 1600 });
       await t.legenda('Cada mês tem um cartão com o valor e a situação: <b>Novo</b>, <b>Aberto</b> ou <b>Ciente</b>.', { etapa: O, ms: 300 });
       await t.mostrar('.cartao', 3000);
 
       const C = '2 · Conferir';
-      await t.legenda('Clique no cartão para abrir o demonstrativo: o valor a receber e a memória de cálculo, condomínio por condomínio.', { etapa: C, ms: 300 });
+      await t.legenda('Clique no cartão para abrir o demonstrativo: o valor e a memória de cálculo, condomínio por condomínio. Ele fica aqui para consultar.', { etapa: C, ms: 300 });
       await t.clicar('.cartao', { depois: 2200 });
       await t.mostrar('#frDemo', 3600, { dy: 0.3 });
-      await t.legenda('<b>Imprimir / PDF</b> imprime ou salva o demonstrativo em PDF.', { etapa: C, ms: 300 });
-      await t.mostrar('#btImprimirC', 2600);
-
-      const E = '3 · Estou ciente';
-      await t.legenda('Conferiu? Clique em <b>Estou ciente</b>. Se tiver dúvida, fale com a sua liderança antes.', { etapa: E, ms: 300 });
+      await t.legenda('Conferiu? Clique em <b>Estou ciente</b>. Se tiver dúvida, fale com a sua liderança antes.', { etapa: C, ms: 300 });
       await t.clicar('#btCienteC', { depois: 2400 });
-      await t.legenda('Pronto: o demonstrativo fica marcado como ciente e a gestão da comissão acompanha quem já confirmou.', { etapa: E, ms: 3000 });
+      await t.legenda('Pronto: o demonstrativo fica marcado como ciente e a gestão de premiações acompanha quem já confirmou.', { etapa: C, ms: 2600 });
 
-      const L = '4 · Líderes';
-      await t.legenda('Coordenação, supervisão, gerência e diretoria veem também os demonstrativos da equipe.', { etapa: L, ms: 300 });
+      const P = '3 · Coordenação';
+      await t.legenda('O <b>coordenador do setor</b> recebe o pedido das planilhas do mês da equipe, com um aviso só.', { etapa: P, ms: 300 });
       await t.ctx.clearCookies(); // sai da sessão do analista para entrar como coordenadora
       await t.entrar('lia@myblue.com.br', require('./cenario').SENHA);
-      await t.ir('#/comissoes/equipe', 1600);
-      await t.legenda('Na aba <b>Minha equipe</b>: o total, quantos já confirmaram e a situação de cada pessoa. Clique na linha para abrir o demonstrativo.', { etapa: L, ms: 300 });
+      await t.ir('#/premiacoes', 1600);
+      await t.legenda('Em <b>Planilhas para enviar</b>, uma linha por pessoa: clique em <b>Enviar planilha</b> e escolha o arquivo (Excel ou CSV).', { etapa: P, ms: 300 });
+      const pasta = require('fs').mkdtempSync(require('path').join(require('os').tmpdir(), 'tut-'));
+      const arq = require('path').join(pasta, 'controle-cobranca-marcos.csv');
+      require('fs').writeFileSync(arq, 'Condomínio;Vencimento;Devedores inicial;Devedores atual\nCond. Jardim Azul;5;12;7\nCond. Primavera;10;30;17\n');
+      await t.enviarArquivo('.pedido-plan:has-text("Marcos Lima") label.btn', '.pedido-plan:has-text("Marcos Lima") input[data-plan]', arq, { depois: 2400 });
+      await t.legenda('A gestão recebe o aviso e confere. Você acompanha: <b>Enviada</b> e depois <b>Recebida e conferida</b>.', { etapa: P, ms: 300 });
+      await t.mostrar('.planilhas-mes', 3200);
+
+      const L = '4 · Líderes';
+      await t.legenda('Coordenação, supervisão, gerência e diretoria veem também os demonstrativos da equipe, na aba <b>Minha equipe</b>.', { etapa: L, ms: 300 });
+      await t.ir('#/premiacoes/equipe', 1600);
       await t.mostrar('.tiles', 2800);
       await t.mostrar('tr.clicavel', 2800);
     },
-    resumo: ['<b>Enviar a planilha do mês</b> quando a gestão pedir', 'Aviso no sino e por e-mail quando sai o demonstrativo', 'Abrir, conferir e baixar em <b>PDF</b>', '<b>Estou ciente</b> depois de conferir', 'Líderes e diretoria: aba <b>Minha equipe</b>'],
+    resumo: ['Aviso no sino e por e-mail quando sai o demonstrativo', 'Abrir, conferir e clicar em <b>Estou ciente</b>', 'Coordenação: <b>enviar as planilhas do mês</b> da equipe', 'Líderes e diretoria: aba <b>Minha equipe</b>'],
   },
   {
     nome: 'central-de-links',

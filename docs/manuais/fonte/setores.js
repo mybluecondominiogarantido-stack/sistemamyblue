@@ -259,15 +259,15 @@ const FERRAMENTAS = {
     ],
   },
   // as regras e os percentuais ficam só na ferramenta (fora do repositório) e no banco do portal: aqui, nada de valores
-  comissionamento: {
+  premiacoes: {
     video: true,
-    nome: 'Comissionamento MyBlue',
-    descricao: 'Metas e comissões de todos os setores num lugar só: o lançamento do mês, o dashboard, o resumo por pessoa, o fechamento e o envio dos demonstrativos para cada pessoa em Minhas comissões.',
-    dados: 'Os dados ficam no banco do portal. Só abre quem a administração liberar; cada pessoa vê o próprio demonstrativo em Minhas comissões. As regras e percentuais ficam na própria ferramenta (aba Parâmetros) e no manual da ferramenta, entregue à gestão da comissão.',
+    nome: 'Gestão de Premiações',
+    descricao: 'Metas e comissões de todos os setores num lugar só: o lançamento do mês, o dashboard, o resumo por pessoa, o fechamento e o envio dos demonstrativos para cada pessoa em Minhas Premiações.',
+    dados: 'Os dados ficam no banco do portal. Só abre quem a administração liberar; cada pessoa vê o próprio demonstrativo em Minhas Premiações. As regras e percentuais ficam na própria ferramenta (aba Parâmetros) e no manual da ferramenta, entregue à gestão de premiações.',
     abas: [
       ['Dashboard', 'Total do mês, comissão e % atingido por setor, evolução mês a mês, metas do Comercial e a carteira de Crédito e Cobrança. Pendências do mês num quadro só.'],
       ['Resumo', 'O que cada pessoa recebe e de onde vem cada valor, o fechamento por setor (rascunho, conferido, aprovado, pago), os ajustes manuais com motivo e o envio dos demonstrativos.'],
-      ['Planilhas do mês', 'Pedir a planilha a quem precisa mandar (Crédito, Cobrança, metas dos setores): a pessoa envia em Minhas comissões, a gestão recebe o aviso no sino e importa a planilha no quadro da pessoa com <b>Importar e conferir</b>.'],
+      ['Planilhas do mês', 'Pedir as planilhas do mês (Crédito, Cobrança, metas dos setores). O pedido vai para o coordenador do setor, que recebe um aviso só e envia a planilha de cada pessoa da equipe em Minhas Premiações; a gestão recebe o aviso no sino e importa no quadro da pessoa com <b>Importar e conferir</b>.'],
       ['Comercial', 'Em dois passos: a <b>planilha de implantações</b> (entram os contratos com data de contrato no mês, com o executivo de cada um) e os <b>relatórios de garantia</b> da Vouch (os valores entram no contrato pelo CNPJ). Cada executivo abre a lista dos condomínios dele, com a média ponderada da taxa adm. e a faixa; também a gerência e a coordenação comercial.'],
       ['Crédito, Cobrança e Implantação', 'O envio dos boletos (quem é da Implantação e emite boletos anexa a mesma planilha, com prazo próprio), os devedores da Cobrança e a documentação e o onboarding da Implantação.'],
       ['Supervisão e coordenação', 'Calculada sozinha a partir das equipes.'],
@@ -275,10 +275,10 @@ const FERRAMENTAS = {
       ['Configuração', '<b>Pessoas e salários</b> (login de cada pessoa no portal, diretoria e o atalho <b>lançar ›</b> para o quadro da pessoa), <b>Parâmetros</b> com as regras e <b>Importar</b> (cópia de segurança e começar do zero).'],
     ],
     rotina: [
-      'Abra o mês na competência e, em <b>Planilhas do mês</b>, peça as planilhas a quem precisa mandar.',
+      'Abra o mês na competência e, em <b>Planilhas do mês</b>, peça as planilhas (o pedido vai para o coordenador de cada setor).',
       'Conforme chegam os avisos, <b>Importar e conferir</b> cada planilha. No Comercial, envie a planilha de implantações e depois os relatórios de garantia.',
       'Confira no Dashboard e no Resumo; cada setor passa por conferido e aprovado.',
-      'Feche o mês e clique em <b>Enviar para todos</b>: cada pessoa recebe o aviso e vê o demonstrativo em Minhas comissões.',
+      'Feche o mês e clique em <b>Enviar para todos</b>: cada pessoa recebe o aviso e vê o demonstrativo em Minhas Premiações.',
       'Acompanhe quem abriu e quem clicou em <b>Estou ciente</b> no quadro de envio do Resumo.',
     ],
   },
@@ -290,7 +290,7 @@ const SETORES = [
   {
     nome: 'Administrativa/Financeira', arquivo: 'administrativa-financeira',
     papel: 'Cuida das rotinas administrativas e financeiras da MyBlue: pagamentos, notas fiscais, reembolsos, contas da empresa, patrocínios de eventos dos condomínios e viagens a trabalho. É responsável também por Suprimentos, Parceiros e Comissões de Novos Condomínios.',
-    ferramentas: ['patrocinio', 'viagens', 'comissionamento'],
+    ferramentas: ['patrocinio', 'viagens', 'premiacoes'],
     // subáreas sob a responsabilidade da Administrativa/Financeira (no portal, Suprimentos e Parceiros recebem tickets como setores próprios)
     subareas: [
       {

@@ -308,7 +308,10 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, cfg }) {
     const arm = ['navegador', 'usuario', 'compartilhado'].includes(b.armazenamento) ? b.armazenamento : m.armazenamento;
     const fonte = m.adaptador && ['google', 'interno'].includes(b.fonte_dados) ? b.fonte_dados : m.fonte_dados;
     const config = { ...m.config };
-    if (Array.isArray(corpo.chaves_locais)) config.chaves_locais = corpo.chaves_locais.map(String).filter(Boolean).slice(0, 30);
+    // expressões inválidas quebrariam a ponte de armazenamento da ferramenta: ficam de fora
+    const expressoes = (l) => l.map(String).map((x) => x.trim()).filter((x) => { try { return x && !!new RegExp(x); } catch (e) { return false; } }).slice(0, 30);
+    if (Array.isArray(corpo.chaves_locais)) config.chaves_locais = expressoes(corpo.chaves_locais);
+    if (Array.isArray(corpo.chaves_livres)) config.chaves_livres = expressoes(corpo.chaves_livres);
     if (typeof corpo.google_url === 'string') config.google_url = corpo.google_url.trim();
     await db.q(`UPDATE modulos SET nome = $1, descricao = $2, setor_id = $3, icone = $4, ordem = $5, ativo = $6, armazenamento = $7, fonte_dados = $8,
       config = $9::jsonb, atualizado_em = now() WHERE slug = $10`, [nome, String(b.descricao || ''), b.setor_id ? Number(b.setor_id) : null,

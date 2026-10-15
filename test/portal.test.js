@@ -93,7 +93,7 @@ test('login: senha errada, certa e cookie seguro', async () => {
   assert.match(r.headers.get('set-cookie'), /HttpOnly; SameSite=Lax/);
   const lista = await c('GET', '/api/modulos');
   assert.equal(lista.status, 200);
-  assert.deepEqual(lista.json.modulos.map((m) => m.slug).sort(), ['boletos', 'cobranca', 'comissionamento', 'credito', 'parceiros', 'renegociacoes', 'sindicos', 'suprimentos']);
+  assert.deepEqual(lista.json.modulos.map((m) => m.slug).sort(), ['boletos', 'cobranca', 'credito', 'parceiros', 'premiacoes', 'renegociacoes', 'sindicos', 'suprimentos']);
   const sair = await c('POST', '/api/auth/logout');
   assert.equal(sair.status, 200);
   assert.equal((await c('GET', '/api/modulos')).status, 401);
@@ -195,6 +195,22 @@ test('armazenamento no servidor: equipe e por usuário', async () => {
   await c('POST', '/api/armazenamento/pessoal-x', { limpar: true });
   assert.deepEqual((await c('GET', '/api/armazenamento/pessoal-x')).json.dados, {});
 
+  // conferência de versão: quem grava sobre uma versão velha recebe 409 e nada é gravado
+  const v0 = (await adm('GET', '/api/armazenamento/equipe-x')).json.versoes.pedidos;
+  assert.equal((await adm('POST', '/api/armazenamento/equipe-x', { set: { pedidos: '[1,2,3]' }, base: { pedidos: v0 } })).json.versoes.pedidos, v0 + 1);
+  const velho = await c('POST', '/api/armazenamento/equipe-x', { set: { pedidos: '[9]', nova: 'x' }, base: { pedidos: v0, nova: 0 } });
+  assert.equal(velho.status, 409);
+  assert.deepEqual(velho.json.conflito, { pedidos: { valor: '[1,2,3]', versao: v0 + 1 } });
+  assert.deepEqual((await c('GET', '/api/armazenamento/equipe-x')).json.dados, { pedidos: '[1,2,3]' }); // o lote inteiro ficou de fora
+  // gravar o mesmo valor que já está no banco não é conflito, nem muda a versão
+  assert.equal((await c('POST', '/api/armazenamento/equipe-x', { set: { pedidos: '[1,2,3]' }, base: { pedidos: v0 } })).json.versoes.pedidos, v0 + 1);
+  // apagar com versão velha também é conflito; com a versão certa, apaga
+  assert.equal((await c('POST', '/api/armazenamento/equipe-x', { del: ['pedidos'], base: { pedidos: v0 } })).status, 409);
+  assert.equal((await c('POST', '/api/armazenamento/equipe-x', { del: ['pedidos'], base: { pedidos: v0 + 1 } })).status, 200);
+  assert.deepEqual((await c('GET', '/api/armazenamento/equipe-x')).json.dados, {});
+  // sem base (ferramentas que gravam direto na API), continua gravando por cima
+  assert.equal((await c('POST', '/api/armazenamento/equipe-x', { set: { pedidos: '[1,2]' } })).status, 200);
+
   // módulo "só no navegador" não aceita gravação no servidor
   assert.equal((await adm('POST', '/api/armazenamento/credito', { set: { a: '1' } })).status, 409);
   // os dados entram na página da ferramenta
@@ -202,6 +218,32 @@ test('armazenamento no servidor: equipe e por usuário', async () => {
   const pag = await c('GET', '/m/equipe-x/');
   assert.match(pag.texto, /"modo":"compartilhado"/);
   assert.match(pag.texto, /"pedidos":"\[1,2\]"/);
+  assert.match(pag.texto, /"versoes":\{"pedidos":\d+\}/);
+});
+
+test('bibliotecas das CDNs vêm do portal', async () => {
+  const { c } = await logar('admin@teste.com', 'Admin1234');
+  await c('POST', '/api/admin/modulos', { slug: 'cdn-x', nome: 'CDN X', armazenamento: 'navegador' });
+  await c('PUT', '/api/admin/modulos/cdn-x/arquivo', '<!doctype html><html><head><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script></head>' +
+    '<body><script>const W = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js"; const U = \'//unpkg.com/a@1.0.0/a.js\';</script></body></html>', { headers: { 'content-type': 'text/html' } });
+  const pag = (await c('GET', '/m/cdn-x/')).texto;
+  assert.match(pag, /src="\/cdn\/cdnjs\/ajax\/libs\/xlsx\/0\.18\.5\/xlsx\.full\.min\.js"/);
+  assert.match(pag, /"\/cdn\/jsdelivr\/npm\/pdfjs-dist@3\.11\.174\/build\/pdf\.worker\.min\.js"/);
+  assert.match(pag, /'\/cdn\/unpkg\/a@1\.0\.0\/a\.js'/);
+  assert.doesNotMatch(pag, /cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net|unpkg\.com/);
+
+  // cópia guardada: entregue pelo portal, com o tipo certo e cache longo (endereço com versão)
+  const url = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  await ctx.db.q('INSERT INTO cdn_cache (url, tipo, conteudo, tamanho) VALUES ($1, $2, $3, $4) ON CONFLICT (url) DO NOTHING', [url, 'application/javascript; charset=utf-8', Buffer.from('var XLSX={};'), 12]);
+  const r = await c('GET', '/cdn/cdnjs/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+  assert.equal(r.status, 200);
+  assert.equal(r.texto, 'var XLSX={};');
+  assert.match(r.headers.get('content-type'), /javascript/);
+  assert.match(r.headers.get('cache-control'), /immutable/);
+  // endereço inválido e sem login
+  assert.equal((await c('GET', '/cdn/cdnjs/ajax/libs/x/1.0/a;b.js')).status, 400);
+  assert.equal((await c('GET', '/cdn/outra/a.js')).status, 404);
+  assert.equal((await cliente()('GET', '/cdn/cdnjs/ajax/libs/xlsx/0.18.5/xlsx.full.min.js')).status, 401);
 });
 
 test('planilha interna em linhas (Renegociações): protocolo do Apps Script', async () => {

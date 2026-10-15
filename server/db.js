@@ -266,6 +266,15 @@ CREATE TABLE IF NOT EXISTS links_campanhas (
 );
 CREATE INDEX IF NOT EXISTS idx_links_campanhas_inicio ON links_campanhas(inicio);
 
+-- cópia das bibliotecas que as ferramentas carregam de CDNs (server/rotas/cdn.js)
+CREATE TABLE IF NOT EXISTS cdn_cache (
+  url TEXT PRIMARY KEY,
+  tipo TEXT NOT NULL,
+  conteudo BYTEA NOT NULL,
+  tamanho INTEGER NOT NULL,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- vídeos tutoriais (o catálogo, com título e para quem é, fica em server/tutoriais.js)
 CREATE TABLE IF NOT EXISTS tutoriais (
   slug TEXT PRIMARY KEY,
@@ -337,12 +346,14 @@ CREATE INDEX IF NOT EXISTS idx_comissao_plan_chave ON comissao_planilhas(modulo_
    políticas, ninguém lê nem grava por lá; o portal conecta como dono das tabelas e não é afetado. */
 const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 'permissoes', 'armazenamento', 'colecoes', 'registros', 'documentos', 'auditoria',
   'setor_membros', 'ticket_categorias', 'tickets', 'ticket_eventos', 'ticket_anexos', 'notificacoes', 'condominios',
-  'links_pagina', 'links', 'links_campanhas', 'tutoriais', 'comissao_relatorios', 'comissao_leitores', 'comissao_planilhas'];
+  'links_pagina', 'links', 'links_campanhas', 'tutoriais', 'comissao_relatorios', 'comissao_leitores', 'comissao_planilhas', 'cdn_cache'];
 const RLS = TABELAS.map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`).join(';\n');
 
 /* Ajustes em bancos já existentes (rodam a cada início e não fazem nada se já estiverem aplicados). */
 const AJUSTES = `
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS supervisor_tickets BOOLEAN NOT NULL DEFAULT FALSE;
+-- versão de cada chave do armazenamento: a gravação feita sobre uma versão velha é recusada (conflito entre pessoas)
+ALTER TABLE armazenamento ADD COLUMN IF NOT EXISTS versao BIGINT NOT NULL DEFAULT 1;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS editor_links BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE tickets ADD COLUMN IF NOT EXISTS condominio_id INTEGER REFERENCES condominios(id) ON DELETE SET NULL;
 ALTER TABLE tickets ADD COLUMN IF NOT EXISTS demanda_interna BOOLEAN NOT NULL DEFAULT FALSE;
@@ -380,6 +391,7 @@ async function abrir(cfg) {
     await t.q('SELECT pg_advisory_xact_lock(7240513)');
     for (const cmd of (SCHEMA + ';' + RLS + ';' + AJUSTES).split(';').map((s) => s.trim()).filter(Boolean)) await t.q(cmd);
     await semear(t);
+    await renomearPremiacoes(t); // antes de semear os módulos novos do catálogo
     await semearSetores(t);
     await semearNovosModulos(t);
     await sincronizarCatalogo(t);
@@ -454,6 +466,31 @@ async function migrarCarteira(t) {
   for (const [campo, coluna] of [['analista_cobranca', 'ANALISTA ADMINISTRATIVA'], ['analista_extrajudicial', 'ANALISTA EXTRAJUDICIAL'], ['assistente_credito', 'ASSISTENTE CREDITO']]) {
     await t.q(`UPDATE condominios SET ${campo} = UPPER(TRIM(pessoas->>$1)) WHERE ${campo} = '' AND COALESCE(pessoas->>$1, '') <> ''`, [coluna]);
   }
+}
+
+/* "Comissionamento MyBlue" (módulo "comissionamento") passou a ser "Gestão de Premiações" (módulo "premiacoes").
+   Como as tabelas apontam para modulos(slug) sem ON UPDATE CASCADE, cria o módulo novo com os mesmos dados, leva tudo
+   o que era do antigo (versões do HTML, acessos, dados salvos, demonstrativos, pedidos de planilha, histórico) e apaga o
+   antigo. Os tutoriais e os links dos avisos também mudam. Roda uma vez: depois o módulo antigo já não existe. */
+async function renomearPremiacoes(t) {
+  const velho = await t.um("SELECT nome FROM modulos WHERE slug = 'comissionamento'");
+  if (!velho || await t.um("SELECT 1 FROM modulos WHERE slug = 'premiacoes'")) return;
+  const cols = (await t.q("SELECT column_name FROM information_schema.columns WHERE table_name = 'modulos' AND table_schema = current_schema() ORDER BY ordinal_position"))
+    .rows.map((c) => c.column_name).filter((c) => c !== 'slug');
+  const lista = cols.map((c) => `"${c}"`).join(', ');
+  await t.q(`INSERT INTO modulos (slug, ${lista}) SELECT 'premiacoes', ${lista} FROM modulos WHERE slug = 'comissionamento'`);
+  // o nome muda só se ainda for o antigo (não desfaz um nome escolhido pela administração)
+  await t.q(`UPDATE modulos SET nome = CASE WHEN nome = 'Comissionamento MyBlue' THEN 'Gestão de Premiações' ELSE nome END,
+    config = config || '{"titulo":"Gestão de Premiações"}'::jsonb WHERE slug = 'premiacoes'`);
+  for (const tab of ['modulo_versoes', 'permissoes', 'armazenamento', 'colecoes', 'registros', 'documentos', 'auditoria', 'comissao_relatorios', 'comissao_planilhas']) {
+    await t.q(`UPDATE ${tab} SET modulo_slug = 'premiacoes' WHERE modulo_slug = 'comissionamento'`);
+  }
+  await t.q("DELETE FROM modulos WHERE slug = 'comissionamento'");
+  await t.q("INSERT INTO auditoria (acao, modulo_slug, detalhe) VALUES ('modulo_semeado', 'premiacoes', '{\"de\":\"comissionamento\"}'::jsonb)");
+  for (const [de, para] of [['minhas-comissoes', 'minhas-premiacoes'], ['ferramenta-comissionamento', 'ferramenta-premiacoes']]) {
+    if (!(await t.um('SELECT 1 FROM tutoriais WHERE slug = $1', [para]))) await t.q('UPDATE tutoriais SET slug = $2 WHERE slug = $1', [de, para]);
+  }
+  await t.q("UPDATE notificacoes SET link = replace(replace(link, '#/m/comissionamento', '#/m/premiacoes'), '#/comissoes', '#/premiacoes') WHERE link LIKE '#/m/comissionamento%' OR link LIKE '#/comissoes%'");
 }
 
 module.exports = { abrir, SCHEMA, RLS };
