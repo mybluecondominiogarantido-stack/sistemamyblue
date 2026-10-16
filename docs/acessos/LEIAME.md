@@ -5,25 +5,73 @@ Os acessos são decididos **no portal**, num lugar só: a janela de cada ferrame
 **Quem abre e com qual papel**. O HTML da ferramenta não decide quem entra nem o que cada um faz:
 ele recebe isso pronto do portal.
 
-## O que o portal guarda para cada ferramenta
+## São três coisas diferentes
 
-| O quê | Onde se define | Quem define |
+| Pergunta | Onde se define | Quem define |
 |---|---|---|
-| **Quem abre** | marcar "abre" na pessoa (de qualquer setor) | administração (todas as ferramentas); coordenação e supervisão (as dos setores delas) |
-| **Edita ou só consulta** | "Como" na mesma linha | os mesmos acima |
-| **Papel dentro da ferramenta** (ex.: Gestão, Financeiro) | colunas de papéis na mesma linha | os mesmos acima |
-| **Quais papéis a ferramenta tem** | "Papéis desta ferramenta" | só a administração (os papéis acompanham o que o HTML faz) |
+| **1. Qual o perfil da pessoa no portal?** (Administrador, Coordenador, Supervisor, Usuário) | cadastro da pessoa | só a administração |
+| **2. A pessoa abre esta ferramenta? Edita ou só consulta?** | janela da ferramenta → *Quem abre e com qual papel* | administração; coordenação/supervisão do setor dono da ferramenta |
+| **3. O que ela faz dentro da ferramenta?** (papel: Gestão, Financeiro…) | mesma janela, colunas de papéis | os mesmos do item 2 |
 
-- Administração abre todas as ferramentas; coordenação e supervisão abrem todas as do setor delas,
-  sempre editando. As duas também podem receber papéis.
-- **Só consulta**: a pessoa abre e vê tudo, mas o servidor recusa as gravações. A ferramenta mostra o selo
-  "Modo consulta". As ferramentas feitas como artefato do Claude (`claude.use('user').can('data.write')`)
-  já escondem os botões de edição sozinhas.
-- **Ferramenta nova cadastrada pela coordenação** fica **aguardando aprovação**: só a coordenação do setor
-  e a administração abrem. A administração recebe o aviso, confere o HTML e clica em **Aprovar**. Só então
-  as pessoas liberadas passam a ver a ferramenta.
-- Mudar as ferramentas de uma pessoa pela tela de usuários não apaga o "só consulta" nem os papéis de quem
-  continua liberado.
+## O que cada perfil abre e pode administrar
+
+- **Administrador**: abre todas as ferramentas, sempre editando. Pode mudar tudo. É o único que **aprova ferramenta nova**
+  e que **cria os papéis** de uma ferramenta.
+- **Coordenador e Supervisor** (mesmos poderes aqui): abrem todas as ferramentas do(s) setor(es) deles, sempre editando,
+  inclusive as que aguardam aprovação. Nessas ferramentas podem: enviar HTML novo e voltar versão; **liberar qualquer
+  pessoa do portal, de qualquer setor**; escolher se ela edita ou só consulta; dar o papel dela; e **cadastrar ferramenta
+  nova** no setor (fica aguardando aprovação). Não mexem em ferramentas de outros setores e não criam papéis, só distribuem.
+- **Usuário**: abre só as ferramentas liberadas para ele, do jeito que foi liberado.
+
+## Edita x Só consulta
+
+- **Edita**: usa a ferramenta normalmente.
+- **Só consulta**: abre e vê tudo, mas o portal **não grava nada** do que a pessoa fizer. Aparece o selo "Modo consulta".
+  - Boletos, Síndicos e Análise de Espólio já **escondem os botões** de edição sozinhos.
+  - Nas demais (Renegociações, Pedidos, Prestação de Contas, Patrocínio), os botões continuam na tela: a pessoa pode até
+    mudar algo, mas não é salvo e some ao recarregar. Esconder os botões depende de ajustar o HTML de cada uma (contrato abaixo).
+
+## Papéis
+
+Papel só existe quando a ferramenta separa funções. **Hoje só duas têm papéis**; nas outras, quem abre faz tudo o que
+ela oferece.
+
+**Comissões de Novos Condomínios**
+- *Executivo comercial*: responde, na aba Comercial, pelos condomínios dele (parceiro e tipo de comissão).
+- *Gestão*: aprova ou devolve essas respostas.
+- *Financeiro*: cadastra na Prestação de Contas o que foi aprovado.
+- ⚠️ **Enquanto ninguém tiver o papel Gestão, todos veem todas as abas.** A separação só passa a valer quando alguém recebe Gestão.
+
+**Análise de Espólio**
+- *Gestão*: recebe as solicitações, faz as análises e configura a ferramenta.
+- *Solicitante*: pede análises e acompanha as dele.
+- ⚠️ **Quem abre sem papel não usa nada**: vê "Acesso registrado" até receber um papel. Se ninguém tiver Gestão,
+  valem como gestão os nomes fixos no HTML.
+
+Coordenação e administração abrem a ferramenta sem precisar ser marcadas, mas **papel precisa ser dado a elas também**
+(ex.: o coordenador que aprova as comissões precisa receber Gestão).
+
+## Exemplos
+
+**"A pessoa do Financeiro precisa cadastrar as comissões aprovadas"**
+1. A coordenação do Comercial abre *Ferramentas do setor → Comissões de Novos Condomínios*.
+2. Em *Quem abre e com qual papel*, clica em **Todas as pessoas**.
+3. Na linha da pessoa: marca **abre**, deixa **edita** e marca o papel **Financeiro**.
+4. **Salvar acessos**. Na próxima vez que ela entrar, a ferramenta aparece no menu, com o papel Financeiro.
+
+**"A Diretoria quer acompanhar os pedidos sem alterar nada"**: na ferramenta de Pedidos, marcar **abre** e escolher **só consulta**.
+
+**"O setor quer uma ferramenta nova"**
+1. A coordenação clica em **Nova ferramenta**, preenche os dados e envia o HTML.
+2. Enquanto aguarda aprovação, só a coordenação do setor e a administração abrem; dá para testar e já deixar marcado quem vai usar.
+3. A administração recebe o aviso, confere e clica em **Aprovar**. Só então aparece para as pessoas liberadas.
+
+## Os dois lugares onde se libera ferramenta
+
+- **Janela da ferramenta** (*Quem abre e com qual papel*): o completo, com edita/consulta, papel e pessoas de qualquer setor.
+- **Cadastro da pessoa** (*Usuários do setor*): continua funcionando, mas só marca se a pessoa abre ou não (ela entra
+  editando e sem papel), e a coordenação só vê ali as pessoas do próprio setor. Mudar por ali não apaga o "só consulta"
+  nem os papéis de quem continua liberado.
 
 ## Contrato para o HTML das ferramentas
 
