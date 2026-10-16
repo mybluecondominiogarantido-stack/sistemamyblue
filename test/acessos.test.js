@@ -114,6 +114,7 @@ test('papéis definidos no portal chegam ao HTML', async () => {
   const c = conf((await ivo('GET', '/m/agenda-credito/')).texto);
   assert.deepEqual(c.usuario.papeis, ['gestao']);
   assert.deepEqual(c.papeis.map((p) => p.id), ['gestao', 'equipe']);
+  assert.deepEqual(conf((await admin('GET', '/m/agenda-credito/')).texto).usuario.papeis, ['gestao', 'equipe'], 'administração: todos os papéis');
   const q = (await coord('GET', '/api/admin/modulos/agenda-credito/acesso')).json;
   assert.deepEqual(q.pessoas.find((p) => p.id === ids['olga@teste.com']).papeis, ['equipe']);
   // papel que deixa de existir sai de quem o tinha
@@ -148,6 +149,12 @@ test('Comissões de Novos Condomínios: o portal lê e grava os papéis no forma
   // quem perde o acesso perde os papéis na ferramenta
   assert.equal((await admin('PUT', '/api/admin/modulos/comissoes-teste/acesso', { acessos: [{ usuario_id: ivo, papeis: ['executivo', 'gestor'] }] })).status, 200);
   assert.deepEqual((await ler(olga)).papeis, []);
+  // a administração tem todos os papéis, só na sessão dela (o que está gravado não muda)
+  const admId = q.pessoas.find((p) => p.papel === 'admin').id;
+  const naFerramenta = JSON.parse((await admin('GET', '/api/armazenamento/comissoes-teste')).json.dados[`cnp:p:${admId}`]);
+  assert.deepEqual(naFerramenta.papeis, ['executivo', 'gestor', 'financeiro']);
+  assert.deepEqual(JSON.parse(conf((await admin('GET', '/m/comissoes-teste/')).texto).dados[`cnp:p:${admId}`]).papeis, ['executivo', 'gestor', 'financeiro']);
+  assert.equal(await ctx.db.um("SELECT 1 FROM armazenamento WHERE modulo_slug = 'comissoes-teste' AND chave = $1", [`cnp:p:${admId}`]), null);
   // mudança feita na aba da própria ferramenta aparece no portal
   await ctx.db.q("UPDATE armazenamento SET valor = $1 WHERE modulo_slug = 'comissoes-teste' AND chave = $2", [JSON.stringify({ ...pIvo, papeis: ['financeiro'] }), `cnp:p:${ivo}`]);
   q = (await admin('GET', '/api/admin/modulos/comissoes-teste/acesso')).json;
@@ -166,4 +173,25 @@ test('Análise de Espólio: papéis no banco de documentos da ferramenta', async
   assert.equal(doc.nomeCarteira, 'OLGA');
   const o = await entrar('olga@teste.com', 'Senha1234');
   assert.deepEqual(conf((await o('GET', '/m/espolio-teste/')).texto).usuario.papeis, ['gestao']);
+});
+
+test('Análise de Espólio: os papéis acompanham a versão do HTML', async () => {
+  const v2 = html('Espólio v2', "window.claude.use('db');\nconst COLECOES = { perfis:'perfis' };\nconst PAPEIS = { gestao: 'Gestão', implantacao: 'Implantação', avulso: 'Solicitante avulso' };");
+  assert.equal((await admin('PUT', '/api/admin/modulos/espolio-teste/arquivo', v2)).status, 200);
+  const q = (await admin('GET', '/api/admin/modulos/espolio-teste/acesso')).json;
+  assert.equal(q.modelo, 'Análise de Espólio');
+  assert.deepEqual(q.papeis.map((p) => p.id), ['gestao', 'implantacao', 'avulso']);
+  // a administração abre sempre e tem todos os papéis, sem marcar nada
+  const adm = q.pessoas.find((p) => p.papel === 'admin');
+  assert.equal(adm.automatico, 'administração');
+  assert.deepEqual(adm.papeis, ['gestao', 'implantacao', 'avulso']);
+  assert.equal((await admin('PUT', '/api/admin/modulos/espolio-teste/acesso', { acessos: [{ usuario_id: adm.id, papeis: [] }, { usuario_id: ids['olga@teste.com'], papeis: ['implantacao'] }] })).status, 200);
+  assert.equal(await ctx.documentos.ler('espolio-teste', `perfis/mb-${adm.id}`), null, 'nada é gravado para a administração');
+  assert.deepEqual((await ctx.documentos.ler('espolio-teste', `perfis/mb-${ids['olga@teste.com']}`)).papeis, ['implantacao']);
+  // na ferramenta: a administração recebe o próprio registro com todos os papéis; as outras pessoas não o veem
+  const doAdmin = (await admin('GET', '/api/db/espolio-teste')).json.docs.find((d) => d.c === 'perfis' && d.id === `mb-${adm.id}`);
+  assert.deepEqual(doAdmin.d.papeis, ['gestao', 'implantacao', 'avulso']);
+  assert.deepEqual(conf((await admin('GET', '/m/espolio-teste/')).texto).usuario.papeis, ['gestao', 'implantacao', 'avulso']);
+  const o = await entrar('olga@teste.com', 'Senha1234');
+  assert.ok(!(await o('GET', '/api/db/espolio-teste')).json.docs.some((d) => d.id === `mb-${adm.id}`));
 });

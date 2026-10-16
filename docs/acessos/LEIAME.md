@@ -15,7 +15,8 @@ ele recebe isso pronto do portal.
 
 ## O que cada perfil abre e pode administrar
 
-- **Administrador**: abre todas as ferramentas, sempre editando. Pode mudar tudo. É o único que **aprova ferramenta nova**
+- **Administrador**: abre todas as ferramentas, sempre editando e **com todos os papéis de cada uma** (não precisa ser
+  marcado; na janela de acessos aparece "todos os papéis"). Pode mudar tudo. É o único que **aprova ferramenta nova**
   e que **cria os papéis** de uma ferramenta.
 - **Coordenador e Supervisor** (mesmos poderes aqui): abrem todas as ferramentas do(s) setor(es) deles, sempre editando,
   inclusive as que aguardam aprovação. Nessas ferramentas podem: enviar HTML novo e voltar versão; **liberar qualquer
@@ -42,13 +43,16 @@ ela oferece.
 - *Financeiro*: cadastra na Prestação de Contas o que foi aprovado.
 - ⚠️ **Enquanto ninguém tiver o papel Gestão, todos veem todas as abas.** A separação só passa a valer quando alguém recebe Gestão.
 
-**Análise de Espólio**
+**Análise de Espólio** (os papéis são lidos do HTML em uso; na versão de 16/10: Gestão, Implantação e Solicitante avulso)
 - *Gestão*: recebe as solicitações, faz as análises e configura a ferramenta.
-- *Solicitante*: pede análises e acompanha as dele.
-- ⚠️ **Quem abre sem papel não usa nada**: vê "Acesso registrado" até receber um papel. Se ninguém tiver Gestão,
-  valem como gestão os nomes fixos no HTML.
+- *Implantação*: pede análises dos condomínios implantados (vê o quadro de verificação) e acompanha as dele.
+- *Solicitante avulso*: pede análises avulsas e acompanha as dele.
+- ⚠️ **Quem abre sem papel não usa nada**: vê o aviso para pedir acesso — vale também para a coordenação (a administração tem todos os papéis).
+  Exceção: enquanto ninguém tiver Gestão, todos veem todas as abas.
 
-Coordenação e administração abrem a ferramenta sem precisar ser marcadas, mas **papel precisa ser dado a elas também**
+A **administração tem todos os papéis** em todas as ferramentas, sem marcar nada. Nas ferramentas com aba Acessos própria,
+isso vale só na tela da própria administração: o portal não grava esse papel, então ela não conta como "alguém com Gestão"
+para as outras pessoas. A **coordenação** abre sem precisar ser marcada, mas **papel precisa ser dado a ela**
 (ex.: o coordenador que aprova as comissões precisa receber Gestão).
 
 ## Exemplos
@@ -104,7 +108,7 @@ e o contrário também.
 | Ferramenta | Papéis | Onde a ferramenta guarda |
 |---|---|---|
 | Comissões de Novos Condomínios | Executivo comercial, Gestão, Financeiro | armazenamento da equipe, chave `cnp:p:<id>` (o vínculo com o nome na carteira continua sendo feito na aba da ferramenta) |
-| Análise de Espólio | Gestão, Solicitante | banco de documentos, `perfis/mb-<id>` (o nome na carteira continua na aba da ferramenta) |
+| Análise de Espólio | os do `const PAPEIS` do HTML (hoje Gestão, Implantação, Solicitante avulso) | banco de documentos, `perfis/mb-<id>` (o nome na carteira continua na aba da ferramenta) |
 
 O reconhecimento fica em `server/acessos.js` (`MODELOS`). Quando essas ferramentas forem refeitas seguindo
 o contrato acima, o modelo deixa de ser reconhecido e os papéis passam a ser os cadastrados no portal.
@@ -115,7 +119,7 @@ o contrato acima, o modelo deixa de ser reconhecido e os papéis passam a ser os
 |---|---|---|---|---|
 | Comissões de Novos Condomínios | Comercial | Comercial, Aprovação da gestão, Financeiro, Acessos | papéis Executivo comercial, Gestão, Financeiro | papéis agora pelo portal (espelhados na aba Acessos) |
 | PartnerChip — Resultados | Comercial | Visão geral, Parceiros, Condomínios | abre (é só leitura por natureza) | — |
-| Análise de Espólio | Cobrança | Dashboard, Fila de acompanhamento, Minhas solicitações, Configurações, Acessos | papéis Gestão, Solicitante | papéis agora pelo portal; o HTML ainda tem nomes fixos de gestão para quando ninguém tem o papel |
+| Análise de Espólio | Cobrança | Dashboard, Fila de acompanhamento, Minhas solicitações, Configurações, Acessos | papéis Gestão, Implantação, Solicitante avulso | papéis agora pelo portal; enquanto ninguém tiver Gestão, todos veem todas as abas |
 | Central de Ferramentas — Cobrança / Gestão | Cobrança | calculadoras | abre | dados só no navegador de cada pessoa |
 | Central de Ferramentas — Crédito | Crédito | Balancetes, Consumos, Divisor, Gerador, Montador, Moradores, Nobre | abre | dados só no navegador de cada pessoa |
 | Controle de Emissão de Boletos | Crédito | Painel, Controle, Cadastro, Comparativo, Feriados, Histórico | edita ou só consulta | já respeita o "só consulta" na tela |

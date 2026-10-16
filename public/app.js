@@ -717,12 +717,12 @@
     var filtro = lembrar('acessos.filtro', 'com');
     function linha(p) {
       var e = estado[p.id];
-      var abre = p.automatico ? '<span class="etiqueta azul" title="Abre todas as ferramentas do setor">sempre · ' + esc(p.automatico) + '</span>'
+      var abre = p.automatico ? '<span class="etiqueta azul" title="' + (p.todos_papeis ? 'Abre todas as ferramentas, com todos os papéis' : 'Abre todas as ferramentas do setor') + '">sempre · ' + esc(p.automatico) + (p.todos_papeis && q.papeis.length ? ' · todos os papéis' : '') + '</span>'
         : '<label class="linha" style="gap:6px;font-weight:700;flex-wrap:nowrap"><input type="checkbox" data-abre="' + p.id + '"' + (e.abre ? ' checked' : '') + '> abre</label>';
       var como = p.automatico ? '<span class="ajuda" style="margin:0">edita</span>'
         : '<select class="campo" data-como="' + p.id + '" style="width:auto;padding:4px 8px"' + (e.abre ? '' : ' disabled') + '><option value="edita">edita</option><option value="consulta"' + (e.consulta ? ' selected' : '') + '>só consulta</option></select>';
       var papeis = q.papeis.map(function (x) {
-        return '<td style="text-align:center"><input type="checkbox" aria-label="' + esc(x.nome) + '" data-papel="' + esc(x.id) + '" data-u="' + p.id + '"' + (e.papeis.indexOf(x.id) >= 0 ? ' checked' : '') + (e.abre ? '' : ' disabled') + '></td>';
+        return '<td style="text-align:center"><input type="checkbox" aria-label="' + esc(x.nome) + '" data-papel="' + esc(x.id) + '" data-u="' + p.id + '"' + (e.papeis.indexOf(x.id) >= 0 ? ' checked' : '') + (e.abre && !p.todos_papeis ? '' : ' disabled') + (p.todos_papeis ? ' title="A administração tem todos os papéis em todas as ferramentas"' : '') + '></td>';
       }).join('');
       return '<tr data-p="' + p.id + '" data-busca="' + esc(normal([p.nome, p.email, (p.setores || []).join(' ')].join(' '))) + '"><td><b>' + esc(p.nome) + '</b><span class="sec">' + esc((p.setores || []).join(', ') || 'sem setor') + (p.do_setor || p.automatico ? '' : ' · outro setor') + '</span></td>' +
         '<td>' + abre + '</td><td>' + como + '</td>' + papeis + '</tr>';
