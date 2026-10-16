@@ -55,8 +55,11 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, cf
     const x = await moduloComArmazenamento(req, res);
     if (!x) return;
     const { rows } = await db.q('SELECT chave, valor, versao FROM armazenamento WHERE modulo_slug = $1 AND escopo = $2', [x.m.slug, x.escopo]);
+    const dados = Object.fromEntries(rows.map((l) => [l.chave, l.valor]));
+    const sob = x.escopo === '*' && await acessos.sobreposicaoAdmin(req.usuario, x.m);
+    if (sob && sob.tipo === 'armazenamento') dados[sob.chave] = sob.valor; // administração: todos os papéis
     res.set('Cache-Control', 'no-store');
-    res.json({ dados: Object.fromEntries(rows.map((l) => [l.chave, l.valor])), versoes: Object.fromEntries(rows.map((l) => [l.chave, Number(l.versao)])) });
+    res.json({ dados, versoes: Object.fromEntries(rows.map((l) => [l.chave, Number(l.versao)])) });
   });
 
   /* Grava o lote. Com `base` ({ chave: versão que a página conhece; 0 = não existia }), confere antes:
@@ -137,7 +140,15 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, cf
   r.get('/api/db/:slug', seg.exigirLogin, async (req, res) => {
     const m = await moduloComDocumentos(req, res);
     if (!m) return;
-    res.json(await documentos.mudancas(m.slug, req.query.desde, pessoaDe(req.usuario)));
+    const r2 = await documentos.mudancas(m.slug, req.query.desde, pessoaDe(req.usuario));
+    // administração: o próprio registro de papéis chega com todos os papéis (na carga inicial e quando ele muda)
+    const sob = await acessos.sobreposicaoAdmin(req.usuario, m);
+    if (sob && sob.tipo === 'documentos') {
+      const i = r2.docs.findIndex((d) => d.c === sob.colecao && d.id === sob.id);
+      if (i >= 0) r2.docs[i] = { c: sob.colecao, id: sob.id, d: sob.dados };
+      else if (!(Number(req.query.desde) > 0)) r2.docs.push({ c: sob.colecao, id: sob.id, d: sob.dados });
+    }
+    res.json(r2);
   });
 
   r.post('/api/db/:slug', seg.exigirLogin, express.json({ limit: '2mb' }), async (req, res) => {

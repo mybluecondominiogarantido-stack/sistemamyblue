@@ -15,6 +15,7 @@
 - Quem abre, se edita ou só consulta e o papel de cada pessoa em cada ferramenta são definidos no portal
   (janela da ferramenta → **Quem abre e com qual papel**). Ferramenta nova não cria aba "Acessos" nem lista de nomes:
   lê `window.__MYBLUE__.usuario.papeis` e `.somente_leitura` (contrato e mapa das ferramentas em `docs/acessos/LEIAME.md`).
+- A administração tem todos os papéis em todas as ferramentas (o portal entrega isso ao HTML; não é preciso marcar).
 - Papel novo numa ferramenta → a administração cadastra os papéis dela no portal com o mesmo identificador usado no HTML.
 
 ## Dados

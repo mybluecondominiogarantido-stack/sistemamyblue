@@ -15,7 +15,8 @@ ele recebe isso pronto do portal.
 
 ## O que cada perfil abre e pode administrar
 
-- **Administrador**: abre todas as ferramentas, sempre editando. Pode mudar tudo. É o único que **aprova ferramenta nova**
+- **Administrador**: abre todas as ferramentas, sempre editando e **com todos os papéis de cada uma** (não precisa ser
+  marcado; na janela de acessos aparece "todos os papéis"). Pode mudar tudo. É o único que **aprova ferramenta nova**
   e que **cria os papéis** de uma ferramenta.
 - **Coordenador e Supervisor** (mesmos poderes aqui): abrem todas as ferramentas do(s) setor(es) deles, sempre editando,
   inclusive as que aguardam aprovação. Nessas ferramentas podem: enviar HTML novo e voltar versão; **liberar qualquer
@@ -46,10 +47,12 @@ ela oferece.
 - *Gestão*: recebe as solicitações, faz as análises e configura a ferramenta.
 - *Implantação*: pede análises dos condomínios implantados (vê o quadro de verificação) e acompanha as dele.
 - *Solicitante avulso*: pede análises avulsas e acompanha as dele.
-- ⚠️ **Quem abre sem papel não usa nada**: vê o aviso para pedir acesso — vale também para a administração e a coordenação.
+- ⚠️ **Quem abre sem papel não usa nada**: vê o aviso para pedir acesso — vale também para a coordenação (a administração tem todos os papéis).
   Exceção: enquanto ninguém tiver Gestão, todos veem todas as abas.
 
-Coordenação e administração abrem a ferramenta sem precisar ser marcadas, mas **papel precisa ser dado a elas também**
+A **administração tem todos os papéis** em todas as ferramentas, sem marcar nada. Nas ferramentas com aba Acessos própria,
+isso vale só na tela da própria administração: o portal não grava esse papel, então ela não conta como "alguém com Gestão"
+para as outras pessoas. A **coordenação** abre sem precisar ser marcada, mas **papel precisa ser dado a ela**
 (ex.: o coordenador que aprova as comissões precisa receber Gestão).
 
 ## Exemplos

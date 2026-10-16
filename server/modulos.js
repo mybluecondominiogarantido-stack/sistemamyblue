@@ -129,6 +129,8 @@ function criarServicoModulos(db, cfg) {
       const escopo = m.armazenamento === 'compartilhado' ? '*' : `u:${usuario.id}`;
       const { rows } = await db.q('SELECT chave, valor, versao FROM armazenamento WHERE modulo_slug = $1 AND escopo = $2', [m.slug, escopo]);
       conf.dados = Object.fromEntries(rows.map((r) => [r.chave, r.valor]));
+      const sob = acesso.sobreposicao;
+      if (sob && sob.tipo === 'armazenamento' && escopo === '*') conf.dados[sob.chave] = sob.valor; // administração: todos os papéis
       conf.versoes = Object.fromEntries(rows.map((r) => [r.chave, Number(r.versao)]));
     }
     const injecao = `<script>window.__MYBLUE__=${jsonEmScript(conf)};\n${BRIDGE_JS}</script>`;

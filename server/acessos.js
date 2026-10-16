@@ -152,7 +152,8 @@ function criarAcessos({ db, seg, modulos, documentos }) {
     if (!comPapeis) return { abre: true, somente_leitura: !gestor && !!linha.somente_leitura, papeis: [] };
     const { modelo, lista } = await papeisDaFerramenta(m);
     let papeis = [];
-    if (modelo) papeis = (await papeisPorPessoa(m, modelo)).get(usuario.id) || [];
+    if (usuario.papel === 'admin') papeis = lista.map((p) => p.id); // a administração tem todos os papéis em todas as ferramentas
+    else if (modelo) papeis = (await papeisPorPessoa(m, modelo)).get(usuario.id) || [];
     else if (linha) papeis = (linha.papeis || []).filter((p) => lista.some((x) => x.id === p));
     return { abre: true, somente_leitura: !gestor && !!linha.somente_leitura, papeis };
   }
@@ -174,7 +175,8 @@ function criarAcessos({ db, seg, modulos, documentos }) {
         const automatico = u.papel === 'admin' ? 'administração' : gestores.has(u.id) ? 'coordenação do setor' : null;
         const l = linhas.get(u.id);
         return { id: u.id, nome: u.nome, email: u.email, papel: u.papel, setores: u.setores, do_setor: (u.setor_ids || []).includes(m.setor_id),
-          automatico, abre: !!(automatico || l), liberado: !!l, somente_leitura: !automatico && !!(l && l.somente_leitura), papeis: papeis.get(u.id) || [] };
+          automatico, abre: !!(automatico || l), liberado: !!l, somente_leitura: !automatico && !!(l && l.somente_leitura),
+          todos_papeis: u.papel === 'admin', papeis: u.papel === 'admin' ? lista.map((p) => p.id) : papeis.get(u.id) || [] };
       }),
     };
   }
@@ -189,7 +191,7 @@ function criarAcessos({ db, seg, modulos, documentos }) {
     const pedido = new Map();
     for (const a of acessos) {
       const uid = Number(a && a.usuario_id);
-      if (!ativos.has(uid)) continue;
+      if (!ativos.has(uid) || ativos.get(uid) === 'admin') continue; // administração: abre e tem todos os papéis, sem marcar
       pedido.set(uid, { somente_leitura: !!a.somente_leitura, papeis: [...new Set((Array.isArray(a.papeis) ? a.papeis : []).map(String))].filter((p) => validos.has(p)) });
     }
     const automatico = (uid) => ativos.get(uid) === 'admin' || gestores.has(uid);
@@ -212,7 +214,7 @@ function criarAcessos({ db, seg, modulos, documentos }) {
       const mudancas = new Map();
       const igual = (x, y) => x.length === y.length && x.every((p) => y.includes(p));
       for (const uid of new Set([...antes.keys(), ...pedido.keys()])) {
-        if (!ativos.has(uid)) continue; // pessoas desativadas ficam como estão na ferramenta
+        if (!ativos.has(uid) || ativos.get(uid) === 'admin') continue; // desativadas e administração ficam como estão na ferramenta
         const novo = pedido.has(uid) ? pedido.get(uid).papeis : [];
         if (!igual(novo, antes.get(uid) || [])) mudancas.set(uid, novo);
       }
@@ -221,14 +223,38 @@ function criarAcessos({ db, seg, modulos, documentos }) {
     return { pessoas: pedido.size };
   }
 
-  /* o que entra em window.__MYBLUE__ */
+  /* Ferramentas que guardam os papéis nelas mesmas (MODELOS) não leem __MYBLUE__: para a administração ter todos os
+     papéis, o registro dela é entregue com todos os papéis só para a própria administração (nada é gravado; para as
+     outras pessoas a ferramenta continua mostrando o que está guardado). */
+  async function sobreposicaoAdmin(usuario, m) {
+    if (!usuario || usuario.papel !== 'admin' || !m) return null;
+    const modelo = await modeloDe(m);
+    if (!modelo) return null;
+    const e = modelo.espelho;
+    const papeis = modelo.papeis.map((p) => p.id);
+    if (e.tipo === 'armazenamento') {
+      const escopo = escopoArm(m);
+      if (!escopo) return null;
+      const chave = e.prefixo + usuario.id;
+      const atual = await db.um('SELECT valor FROM armazenamento WHERE modulo_slug = $1 AND escopo = $2 AND chave = $3', [m.slug, escopo, chave]);
+      let base = {};
+      try { base = atual ? JSON.parse(atual.valor) || {} : {}; } catch { base = {}; }
+      return { tipo: 'armazenamento', chave, valor: JSON.stringify({ executivo: '', ...base, id: e.idNoDoc(usuario.id), nome: base.nome || usuario.nome, papeis }) };
+    }
+    const id = e.prefixo + usuario.id;
+    const atual = (await documentos.ler(m.slug, `${e.colecao}/${id}`)) || {};
+    return { tipo: 'documentos', colecao: e.colecao, id, dados: { nomeCarteira: '', ...atual, id: e.idNoDoc(usuario.id), nome: atual.nome || usuario.nome, papeis } };
+  }
+
+  /* o que entra em window.__MYBLUE__ (e, para a administração, o registro com todos os papéis nas ferramentas de modelo) */
   async function paraFerramenta(usuario, m) {
     const a = await acessoDe(usuario, m);
     const { lista } = await papeisDaFerramenta(m);
-    return { papeis: a.papeis, somente_leitura: a.somente_leitura, papeis_da_ferramenta: lista.map((p) => ({ id: p.id, nome: p.nome })) };
+    return { papeis: a.papeis, somente_leitura: a.somente_leitura, papeis_da_ferramenta: lista.map((p) => ({ id: p.id, nome: p.nome })),
+      sobreposicao: await sobreposicaoAdmin(usuario, m) };
   }
 
-  return { MODELOS, ID_PAPEL_RE, modeloDe, papeisDaFerramenta, acessoDe, quadro, salvar, paraFerramenta, gestoresDoSetor };
+  return { MODELOS, ID_PAPEL_RE, modeloDe, papeisDaFerramenta, acessoDe, quadro, salvar, paraFerramenta, sobreposicaoAdmin, gestoresDoSetor };
 }
 
 module.exports = { criarAcessos, MODELOS, ID_PAPEL_RE };
