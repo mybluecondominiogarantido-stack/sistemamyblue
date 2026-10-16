@@ -14,6 +14,13 @@
 
 const ID_PAPEL_RE = /^[a-z][a-z0-9_-]{0,29}$/;
 
+const DESCRICOES_ESPOLIO = {
+  gestao: 'Recebe as solicitações, faz as análises e configura a ferramenta.',
+  implantacao: 'Pede análises dos condomínios implantados (vê o quadro de verificação) e acompanha as próprias solicitações.',
+  avulso: 'Pede análises avulsas e acompanha as próprias solicitações.',
+  solicitante: 'Pede análises e acompanha as próprias solicitações.',
+};
+
 const MODELOS = [
   {
     id: 'comissoes-novos-condominios',
@@ -30,11 +37,16 @@ const MODELOS = [
   {
     id: 'analise-de-espolio',
     nome: 'Análise de Espólio',
-    reconhecer: (html) => html.includes("perfis:'perfis'") && html.includes("const PAPEIS = { gestao: 'Gestão', solicitante: 'Solicitante' }"),
-    papeis: [
-      { id: 'gestao', nome: 'Gestão', descricao: 'Recebe as solicitações, faz as análises e configura a ferramenta.' },
-      { id: 'solicitante', nome: 'Solicitante', descricao: 'Pede análises e acompanha as próprias solicitações.' },
-    ],
+    // os papéis vêm do próprio HTML (const PAPEIS = { gestao: 'Gestão', ... }): mudam de uma versão para outra
+    reconhecer: (html) => html.includes("perfis:'perfis'") && /const PAPEIS\s*=\s*\{/.test(html),
+    papeisDoHtml: (html) => {
+      const bloco = /const PAPEIS\s*=\s*\{([^}]*)\}/.exec(html);
+      const lista = [];
+      for (const x of (bloco ? bloco[1] : '').matchAll(/([a-z][a-z0-9_]*)\s*:\s*['"]([^'"]{1,60})['"]/g)) {
+        lista.push({ id: x[1], nome: x[2], descricao: DESCRICOES_ESPOLIO[x[1]] || '' });
+      }
+      return lista;
+    },
     // banco de documentos da ferramenta: perfis/mb-<id do usuário> → { id, nome, papeis, nomeCarteira, ... }
     espelho: { tipo: 'documentos', colecao: 'perfis', prefixo: 'mb-', idNoDoc: (uid) => `mb-${uid}` },
   },
@@ -50,7 +62,10 @@ function criarAcessos({ db, seg, modulos, documentos }) {
     let modelo = null;
     try {
       const html = await modulos.lerHtml(m);
-      modelo = (html && MODELOS.find((x) => x.reconhecer(html))) || null;
+      const achado = html && MODELOS.find((x) => x.reconhecer(html));
+      // a lista de papéis sai do HTML em uso quando o modelo sabe lê-la
+      if (achado) modelo = { ...achado, papeis: achado.papeisDoHtml ? achado.papeisDoHtml(html) : achado.papeis };
+      if (modelo && !modelo.papeis.length) modelo = null;
     } catch { modelo = null; }
     cacheModelo.set(m.slug, { versao: m.versao_id, modelo });
     return modelo;

@@ -167,3 +167,17 @@ test('Análise de Espólio: papéis no banco de documentos da ferramenta', async
   const o = await entrar('olga@teste.com', 'Senha1234');
   assert.deepEqual(conf((await o('GET', '/m/espolio-teste/')).texto).usuario.papeis, ['gestao']);
 });
+
+test('Análise de Espólio: os papéis acompanham a versão do HTML', async () => {
+  const v2 = html('Espólio v2', "window.claude.use('db');\nconst COLECOES = { perfis:'perfis' };\nconst PAPEIS = { gestao: 'Gestão', implantacao: 'Implantação', avulso: 'Solicitante avulso' };");
+  assert.equal((await admin('PUT', '/api/admin/modulos/espolio-teste/arquivo', v2)).status, 200);
+  const q = (await admin('GET', '/api/admin/modulos/espolio-teste/acesso')).json;
+  assert.equal(q.modelo, 'Análise de Espólio');
+  assert.deepEqual(q.papeis.map((p) => p.id), ['gestao', 'implantacao', 'avulso']);
+  // a administração abre sempre, mas papel na ferramenta ela também recebe pelo portal
+  const adm = q.pessoas.find((p) => p.papel === 'admin');
+  assert.equal(adm.automatico, 'administração');
+  assert.equal((await admin('PUT', '/api/admin/modulos/espolio-teste/acesso', { acessos: [{ usuario_id: adm.id, papeis: ['gestao'] }, { usuario_id: ids['olga@teste.com'], papeis: ['implantacao'] }] })).status, 200);
+  assert.deepEqual((await ctx.documentos.ler('espolio-teste', `perfis/mb-${adm.id}`)).papeis, ['gestao']);
+  assert.deepEqual((await ctx.documentos.ler('espolio-teste', `perfis/mb-${ids['olga@teste.com']}`)).papeis, ['implantacao']);
+});
