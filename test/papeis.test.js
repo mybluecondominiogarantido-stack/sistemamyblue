@@ -190,12 +190,16 @@ test('ferramentas do setor: HTML, versões e quem pode abrir', async () => {
   const vc = (await admin('GET', '/api/admin/modulos/cobranca/versoes')).json.versoes;
   if (vc.length) assert.equal((await coord('GET', `/api/admin/modulos/cobranca/versoes/${vc[0].id}/arquivo`)).status, 403, 'outro setor');
   assert.equal((await coord('GET', `/api/admin/modulos/credito/versoes/${v.json.versoes[0].id}/arquivo`)).status, 404, 'versão de outra ferramenta');
-  // quem pode abrir: marca e desmarca só gente do setor dela
+  // quem pode abrir: a coordenação libera gente do setor dela e de outros setores
   const ivo = ids['ivo@teste.com'];
-  await ctx.db.q("INSERT INTO permissoes (usuario_id, modulo_slug) VALUES ($1, 'credito') ON CONFLICT DO NOTHING", [ids['olga@teste.com']]);
+  const olga = ids['olga@teste.com'];
+  assert.equal((await coord('PUT', '/api/admin/modulos/credito/acesso', { usuarios: [ivo, olga] })).status, 200);
+  const perm = async () => (await ctx.db.q("SELECT usuario_id FROM permissoes WHERE modulo_slug = 'credito'")).rows.map((x) => x.usuario_id).sort();
+  assert.deepEqual(await perm(), [ivo, olga].sort(), 'Olga (outro setor) liberada pela coordenação');
+  const quadro = (await coord('GET', '/api/admin/modulos/credito/acesso')).json;
+  assert.ok(quadro.pessoas.some((p) => p.id === olga && p.liberado && !p.do_setor));
   assert.equal((await coord('PUT', '/api/admin/modulos/credito/acesso', { usuarios: [ivo] })).status, 200);
-  const perm = (await ctx.db.q("SELECT usuario_id FROM permissoes WHERE modulo_slug = 'credito'")).rows.map((x) => x.usuario_id).sort();
-  assert.deepEqual(perm, [ivo, ids['olga@teste.com']].sort(), 'Olga (outro setor) continua como estava');
+  assert.deepEqual(await perm(), [ivo]);
   assert.equal((await coord('PUT', '/api/admin/modulos/cobranca/acesso', { usuarios: [] })).status, 403);
   // o resto continua só com o administrador
   assert.equal((await coord('PATCH', '/api/admin/modulos/boletos', { nome: 'X' })).status, 403);

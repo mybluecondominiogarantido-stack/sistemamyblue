@@ -9,7 +9,7 @@ const paginaSimples = (titulo, msg) => `<!doctype html><html lang="pt-BR"><head>
 <title>${titulo}</title><link rel="stylesheet" href="/estilos.css"></head><body class="pagina-aviso"><div class="aviso-card"><img src="/img/logo.png" alt="MyBlue" height="40">
 <h1>${titulo}</h1><p>${msg}</p><a class="btn primary" href="/" target="_top">Voltar ao início</a></div></body></html>`;
 
-function rotasFerramentas({ db, seg, modulos, registros, documentos, cfg }) {
+function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, cfg }) {
   const r = express.Router();
 
   /* ---------- lista de ferramentas do usuário ---------- */
@@ -37,7 +37,7 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, cfg }) {
       return res.status(404).send(paginaSimples('Ferramenta ainda sem arquivo',
         req.usuario.papel === 'admin' ? 'Envie o HTML desta ferramenta em Administração → Módulos.' : 'A administração ainda não publicou o arquivo desta ferramenta.'));
     }
-    const html = await modulos.montarHtml(m, req.usuario);
+    const html = await modulos.montarHtml(m, req.usuario, await acessos.paraFerramenta(req.usuario, m));
     await seg.auditar(req, 'modulo_aberto', slug, null);
     res.set('Cache-Control', 'no-store');
     res.type('html').send(html);
@@ -98,9 +98,14 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, cfg }) {
     return { versoes };
   });
 
+  /* quem só consulta a ferramenta não grava (a ferramenta mostra o erro; os dados ficam como estão) */
+  const soConsulta = async (req, m) => (await acessos.acessoDe(req.usuario, m, { comPapeis: false })).somente_leitura;
+  const MSG_CONSULTA = 'Seu acesso a esta ferramenta é só de consulta. Peça a quem coordena o setor para liberar a edição.';
+
   r.post('/api/armazenamento/:slug', seg.exigirLogin, express.json({ limit: `${cfg.limiteDadosMb}mb` }), async (req, res) => {
     const x = await moduloComArmazenamento(req, res);
     if (!x) return;
+    if (x.escopo === '*' && await soConsulta(req, x.m)) return res.status(403).json({ erro: MSG_CONSULTA });
     const corpo = req.body || {};
     if ((corpo.set && typeof corpo.set !== 'object') || (corpo.del && !Array.isArray(corpo.del))) return res.status(400).json({ erro: 'Formato inválido.' });
     if (corpo.base && typeof corpo.base !== 'object') return res.status(400).json({ erro: 'Formato inválido.' });
@@ -138,6 +143,7 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, cfg }) {
   r.post('/api/db/:slug', seg.exigirLogin, express.json({ limit: '2mb' }), async (req, res) => {
     const m = await moduloComDocumentos(req, res);
     if (!m) return;
+    if (await soConsulta(req, m)) return res.status(403).json({ code: 'permission_denied', erro: MSG_CONSULTA });
     try {
       const ops = (req.body || {}).ops;
       const r2 = await documentos.gravar(m.slug, ops, pessoaDe(req.usuario), req.usuario.id);
@@ -289,6 +295,7 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, cfg }) {
     const acao = p.action ? String(p.action) : null;
     if (acao && req.method === 'GET' && !getDoProprioSite(req)) return responder(res, cb, { ok: false, error: 'Origem não permitida.' }, 403);
 
+    if (acao && await soConsulta(req, m)) return responder(res, cb, { ok: false, error: MSG_CONSULTA }, 403);
     const uid = req.usuario.id;
     const log = (detalhe) => seg.auditar(req, 'registro_' + acao, m.slug, { colecao, ...detalhe });
 

@@ -382,7 +382,15 @@ ALTER TABLE notificacoes ADD COLUMN IF NOT EXISTS link TEXT;
 -- o vídeo já vem comprimido: guardado sem compressão, o banco lê só o pedaço pedido pelo player
 ALTER TABLE tutoriais ALTER COLUMN video SET STORAGE EXTERNAL;
 -- planilhas do mês: a gestão é avisada uma vez, quando quem envia termina todas as planilhas pedidas a ele
-ALTER TABLE comissao_planilhas ADD COLUMN IF NOT EXISTS avisado_em TIMESTAMPTZ
+ALTER TABLE comissao_planilhas ADD COLUMN IF NOT EXISTS avisado_em TIMESTAMPTZ;
+-- HTML novo da ferramenta que não mudou a tela nem o fluxo: a administração confirma que o vídeo continua valendo
+ALTER TABLE tutoriais ADD COLUMN IF NOT EXISTS conferido_em TIMESTAMPTZ;
+-- acessos centralizados: cada pessoa liberada numa ferramenta edita ou só consulta, com os papéis que tem nela
+ALTER TABLE permissoes ADD COLUMN IF NOT EXISTS somente_leitura BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE permissoes ADD COLUMN IF NOT EXISTS papeis TEXT[] NOT NULL DEFAULT '{}';
+-- ferramenta nova cadastrada pela coordenação: fica aguardando a aprovação da administração
+ALTER TABLE modulos ADD COLUMN IF NOT EXISTS pendente BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE modulos ADD COLUMN IF NOT EXISTS criado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
 `;
 
 async function abrir(cfg) {

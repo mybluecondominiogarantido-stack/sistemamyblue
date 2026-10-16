@@ -94,8 +94,9 @@ function criarServicoModulos(db, cfg) {
     return { html: saida, falhas };
   }
 
-  /* Monta o HTML entregue ao navegador: aplica o banco interno (se ativo) e injeta a ponte de armazenamento. */
-  async function montarHtml(m, usuario) {
+  /* Monta o HTML entregue ao navegador: aplica o banco interno (se ativo) e injeta a ponte de armazenamento.
+     acesso: o que a pessoa pode nesta ferramenta ({ papeis, somente_leitura, papeis_da_ferramenta }, vem de acessos.js) */
+  async function montarHtml(m, usuario, acesso = {}) {
     let html = await lerHtml(m);
     if (html == null) return null;
     const avisos = [];
@@ -118,7 +119,9 @@ function criarServicoModulos(db, cfg) {
       modo: m.armazenamento,
       locais: m.config.chaves_locais || [],
       livres: m.config.chaves_livres || [],
-      usuario: { id: usuario.id, nome: usuario.nome, email: usuario.email, admin: usuario.papel === 'admin', foto_v: usuario.foto_v || null },
+      usuario: { id: usuario.id, nome: usuario.nome, email: usuario.email, admin: usuario.papel === 'admin', foto_v: usuario.foto_v || null,
+        papeis: acesso.papeis || [], somente_leitura: !!acesso.somente_leitura },
+      papeis: acesso.papeis_da_ferramenta || [],
       claudeDb: m.adaptador === 'claude-db',
       avisos,
     };

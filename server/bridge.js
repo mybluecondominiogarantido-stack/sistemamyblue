@@ -20,6 +20,18 @@
     });
   });
 
+  /* quem só consulta vê um selo discreto; o portal não grava o que a pessoa mudar */
+  var soConsulta = !!(C.usuario && C.usuario.somente_leitura);
+  if (soConsulta) {
+    document.addEventListener('DOMContentLoaded', function () {
+      var d = document.createElement('div');
+      d.textContent = 'Modo consulta: o que você mudar aqui não é salvo';
+      d.title = 'Seu acesso a esta ferramenta é só de consulta. Peça a quem coordena o setor para liberar a edição.';
+      d.style.cssText = 'position:fixed;right:12px;bottom:12px;z-index:2147483646;background:#e8f3fb;color:#0c4f7a;border:1px solid #bcdcf1;border-radius:999px;padding:6px 12px;font:700 12px system-ui,sans-serif;pointer-events:none';
+      document.body.appendChild(d);
+    });
+  }
+
   if (C.claudeDb) instalarClaude();
 
   /* Ferramentas feitas como artefato do Claude usam window.claude.use('db' | 'user' | 'downloads').
@@ -298,7 +310,13 @@
       me: function () { return Promise.resolve(Object.freeze({ id: meuId, name: U.nome || '', avatarUrl: minhaFoto, color: '#0c77be', email: U.email || null, isOwner: !!U.admin, canEdit: !!U.admin })); },
       isOwner: function () { return Promise.resolve(!!U.admin); },
       canEdit: function () { return Promise.resolve(!!U.admin); },
-      can: function (n) { return Promise.resolve(n === 'data.write' ? true : null); },
+      // data.write: edita ou só consulta; papel:<id>: um papel dado no portal (Administração → acessos da ferramenta)
+      can: function (n) {
+        n = String(n || '');
+        if (n === 'data.write') return Promise.resolve(!soConsulta);
+        if (n.indexOf('papel:') === 0) return Promise.resolve((U.papeis || []).indexOf(n.slice(6)) >= 0);
+        return Promise.resolve(null);
+      },
       name: function () { return Promise.resolve(U.nome || ''); },
       email: function () { return Promise.resolve(U.email || null); },
       avatarUrl: function () { return Promise.resolve(minhaFoto || null); },
@@ -423,6 +441,8 @@
 
   function enviar(saindo) {
     if (!temPend || conflito) return;
+    // só consulta, nos dados da equipe: nada vai para o banco (a página continua mostrando o que a pessoa mudou)
+    if (soConsulta && C.modo === 'compartilhado') { retirarPendencias(); return; }
     if (enviando && !saindo) { clearTimeout(timer); timer = setTimeout(enviar, 300); return; }
     var p = retirarPendencias();
     if (vazio(p)) { if (!enviando) avisarPortal('salvo'); return; }
