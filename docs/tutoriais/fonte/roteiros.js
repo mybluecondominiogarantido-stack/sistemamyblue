@@ -431,23 +431,40 @@ module.exports = [
     nome: 'gestao-ferramentas',
     entrar: 'caio@myblue.com.br',
     inicio: '#/admin/modulos',
-    abertura: ['Para coordenadores e supervisores.', ['Enviar o HTML novo de uma ferramenta', 'Voltar para uma versão anterior', 'Escolher quem pode abrir']],
+    abertura: ['Para coordenadores e supervisores.', ['Enviar o HTML novo de uma ferramenta', 'Voltar para uma versão anterior', 'Escolher quem pode abrir', 'Coordenador: cadastrar, editar e remover ferramentas']],
     async gravar(t, cen) {
       await t.legenda('Em <b>Ferramentas do setor</b> ficam as ferramentas dos seus setores. Clique numa delas.', { etapa: '1 · Ferramentas do setor', ms: 2600 });
       await t.clicar('tr[data-slug="boletos"]', { depois: 1200 });
       const H = '2 · Atualizar o HTML';
       await t.legenda('A ferramenta mudou? Envie o <b>arquivo .html novo</b> aqui. Quem abrir já recebe a versão nova.', { etapa: H, ms: 600 });
+      await t.rolar(420, '.fundo-modal .modal-corpo');
       await t.enviarArquivo('#zArq', '#inArq', cen.rec.html, { depois: 2600 });
       await t.legenda('A versão anterior fica guardada. Em <b>Versões anteriores</b>, <b>Usar esta</b> volta para ela.', { etapa: H, ms: 300 });
       await t.clicar('summary:has-text("Versões anteriores")', { depois: 1200 });
       await t.mostrar('[data-versao]', 2600);
       const Q = '3 · Quem pode abrir';
       await t.legenda('Em <b>Quem pode abrir</b>, marque as pessoas do setor que usam a ferramenta e salve.', { etapa: Q, ms: 300 });
+      await t.rolar(700, '.fundo-modal .modal-corpo');
       await t.clicar('.fundo-modal label:has-text("Davi Rocha") input', { depois: 700 });
       await t.clicar('#btSalvarAcesso', { depois: 2000 });
       await t.legenda('Coordenador e supervisor já abrem todas as ferramentas do setor.', { etapa: Q, ms: 3000 });
+      await t.clicar('.fundo-modal .modal-cab [data-fechar]', { depois: 1200 });
+      const N = '4 · Nova ferramenta (coordenador)';
+      await t.legenda('O coordenador também cadastra ferramentas novas no setor: <b>Novo módulo</b>, com nome, ícone e descrição.', { etapa: N, ms: 300 });
+      await t.clicar('#btNovoMod', { depois: 800 });
+      await t.digitar('#nNome', 'Controle de Contratos');
+      await t.escolher('#nIcone', { value: 'documento' });
+      await t.digitar('#nDesc', 'Contratos e vencimentos do Crédito.', { atraso: 26 });
+      await t.clicar('#btCriarMod', { depois: 2200 });
+      await t.legenda('A ferramenta abre em seguida: em <b>Dados gerais</b> você edita nome, ícone, ordem e situação. Depois envie o <b>arquivo .html</b>.', { etapa: N, ms: 300 });
+      await t.mostrar('#btSalvarMod', 2000);
+      await t.rolar(420, '.fundo-modal .modal-corpo');
+      await t.enviarArquivo('#zArq', '#inArq', cen.rec.html, { depois: 2600 });
+      await t.legenda('<b>Remover módulo</b> aparece só nas ferramentas que você cadastrou. As demais, quem remove é a administração.', { etapa: N, ms: 300 });
+      await t.rolar(-700, '.fundo-modal .modal-corpo');
+      await t.mostrar('#btApagarMod', 3200);
     },
-    resumo: ['<b>Ferramentas do setor</b> → clique na ferramenta', 'Envie o HTML novo · <b>Versões anteriores</b> para voltar', '<b>Quem pode abrir</b>: marque e salve'],
+    resumo: ['<b>Ferramentas do setor</b> → clique na ferramenta', 'Envie o HTML novo · <b>Versões anteriores</b> para voltar', '<b>Quem pode abrir</b>: marque e salve', 'Coordenador: <b>Novo módulo</b> · edita as do setor · remove as que cadastrou'],
   },
 
   {

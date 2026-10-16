@@ -558,8 +558,8 @@
           (coord ? '' :
           '<div><label class="rot">Perfil</label><div class="grade-2">' +
           '<label class="opcao-radio"><input type="radio" name="uPapel" value="usuario"' + (u.papel === 'usuario' || !PAPEL[u.papel] ? ' checked' : '') + '><div><b>Usuário</b><span>Abre só as ferramentas marcadas abaixo.</span></div></label>' +
-          '<label class="opcao-radio"><input type="radio" name="uPapel" value="supervisor"' + (u.papel === 'supervisor' ? ' checked' : '') + '><div><b>Supervisor</b><span>Gerencia o(s) setor(es) dele: usuários comuns, ferramentas, equipe, tipos de demanda e carteira. Mesmos poderes do coordenador.</span></div></label>' +
-          '<label class="opcao-radio"><input type="radio" name="uPapel" value="coordenador"' + (u.papel === 'coordenador' ? ' checked' : '') + '><div><b>Coordenador</b><span>Gerencia o(s) setor(es) dele: usuários comuns, ferramentas, equipe, tipos de demanda e carteira.</span></div></label>' +
+          '<label class="opcao-radio"><input type="radio" name="uPapel" value="supervisor"' + (u.papel === 'supervisor' ? ' checked' : '') + '><div><b>Supervisor</b><span>Gerencia o(s) setor(es) dele: usuários comuns, ferramentas (HTML e quem abre), equipe, tipos de demanda e carteira. Não cadastra ferramentas novas.</span></div></label>' +
+          '<label class="opcao-radio"><input type="radio" name="uPapel" value="coordenador"' + (u.papel === 'coordenador' ? ' checked' : '') + '><div><b>Coordenador</b><span>Gerencia o(s) setor(es) dele: usuários comuns, ferramentas, equipe, tipos de demanda e carteira. Também cadastra ferramentas novas no setor, edita as do setor e remove as que ele criou.</span></div></label>' +
           '<label class="opcao-radio"><input type="radio" name="uPapel" value="admin"' + (u.papel === 'admin' ? ' checked' : '') + '><div><b>Administrador</b><span>Acessa tudo e gerencia usuários, módulos e dados.</span></div></label></div></div>' +
           '<label class="opcao-radio" style="margin:0"><input type="checkbox" id="uSup"' + (u.supervisor_tickets ? ' checked' : '') + '><div><b>Supervisão da Central de Tickets</b>' +
           '<span>Vê os tickets de todos os setores e direciona: troca o responsável, transfere, muda situação, prioridade e prazo. Para quem acompanha a empresa toda (ex.: Gerência).</span></div></label>' +
@@ -681,7 +681,7 @@
     });
   }
 
-  /* Coordenador e supervisor: as ferramentas dos setores dele (HTML, versões e quem pode abrir) */
+  /* Coordenador e supervisor: as ferramentas dos setores dele (HTML, versões e quem pode abrir); o coordenador também cadastra, edita e remove */
   /* busca numa tabela: esconde as linhas (tr[data-busca]) que não têm todas as palavras digitadas */
   function ligarBusca(campo, tbody, rotulo, total, palavra, chave) {
     function aplicar() {
@@ -708,43 +708,107 @@
   async function paginaModulosCoord() {
     definirBarra('<span class="setor">Gestão do setor</span><span class="sep">/</span><span class="nome">Ferramentas do setor</span>');
     $('#conteudo').innerHTML = '<div class="pagina"><div class="carregando" style="position:static;background:none"><div><div class="giro"></div>Carregando…</div></div></div>';
-    var mods, pessoas;
-    try { mods = (await api('GET', '/api/admin/modulos')).modulos; pessoas = (await api('GET', '/api/admin/usuarios')).usuarios; } catch (e) { toast(e.message, 'erro'); return; }
+    var j, mods, pessoas;
+    try { j = await api('GET', '/api/admin/modulos'); mods = j.modulos; pessoas = (await api('GET', '/api/admin/usuarios')).usuarios; } catch (e) { toast(e.message, 'erro'); return; }
     if (location.hash.indexOf('#/admin/modulos') !== 0) return; // a pessoa já foi para outra tela
-    $('#conteudo').innerHTML = '<div class="pagina"><h1>Ferramentas do setor</h1><p class="sub">As ferramentas dos seus setores. Envie uma versão nova do HTML, volte para uma anterior e escolha quem do setor pode abrir cada uma.</p>' +
+    var setores = j.setores || [];
+    function opcoesSetor(sel) { return setores.map(function (s) { return '<option value="' + s.id + '"' + (s.id === sel ? ' selected' : '') + '>' + esc(s.nome) + '</option>'; }).join(''); }
+    function opcoesIcone(sel) { return (j.icones || []).map(function (i) { return '<option value="' + i + '"' + (i === sel ? ' selected' : '') + '>' + esc(ROTULO_ICONE[i] || i) + '</option>'; }).join(''); }
+    $('#conteudo').innerHTML = '<div class="pagina"><h1>Ferramentas do setor</h1><p class="sub">As ferramentas dos seus setores. ' + (j.pode_criar ? 'Cadastre uma ferramenta nova, envie' : 'Envie') + ' uma versão nova do HTML, volte para uma anterior e escolha quem do setor pode abrir cada uma.</p>' +
       '<div class="painel"><div class="cab-painel"><b style="font-family:var(--display)" id="qtdMods"></b>' +
-      '<input class="campo" id="buscaMod" type="search" placeholder="Pesquisar módulo, setor ou arquivo…" aria-label="Pesquisar módulo" style="max-width:320px"></div>' +
+      '<input class="campo" id="buscaMod" type="search" placeholder="Pesquisar módulo, setor ou arquivo…" aria-label="Pesquisar módulo" style="max-width:320px">' +
+      (j.pode_criar ? '<span class="espaco"></span><button class="btn primary" id="btNovoMod">' + IC.mais + 'Novo módulo</button>' : '') + '</div>' +
       '<div class="tabela-wrap"><table><thead><tr><th>Módulo</th><th>Setor</th><th>Arquivo em uso</th></tr></thead><tbody id="tbMods">' +
       (mods.map(function (x) {
         return '<tr class="clicavel" data-slug="' + esc(x.slug) + '" data-busca="' + esc(textoBuscaModulo(x)) + '"><td><div class="linha" style="flex-wrap:nowrap"><div class="icone-mod" style="width:34px;height:34px">' + (IC[x.icone] || IC.app) + '</div><div><b>' + esc(x.nome) + '</b>' + (x.ativo ? '' : ' <span class="etiqueta cinza">desativado</span>') + '</div></div></td>' +
           '<td>' + esc(x.setor_nome || '—') + '</td>' +
           '<td>' + (x.tem_arquivo ? quando(x.versao_em) + '<span class="sec">' + tamanho(x.tamanho) + (x.nome_original ? ' · ' + esc(x.nome_original) : '') + '</span>' : '<span class="etiqueta vermelha">sem arquivo</span>') + '</td></tr>';
-      }).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--muted);font-weight:700;padding:30px">Nenhuma ferramenta nos seus setores. Peça à administração para conferir o setor no seu cadastro.</td></tr>') +
+      }).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--muted);font-weight:700;padding:30px">Nenhuma ferramenta nos seus setores.' + (j.pode_criar ? ' Use <b>Novo módulo</b> para cadastrar a primeira.' : ' Peça à administração para conferir o setor no seu cadastro.') + '</td></tr>') +
       LINHA_SEM_RESULTADO(3) + '</tbody></table></div></div></div>';
     ligarBusca($('#buscaMod'), $('#tbMods'), $('#qtdMods'), mods.length, mods.length === 1 ? 'ferramenta' : 'ferramentas', 'busca.modulos.setor');
-    $$('tr[data-slug]').forEach(function (tr) {
-      tr.onclick = function () {
-        var mod = mods.find(function (x) { return x.slug === tr.getAttribute('data-slug'); });
-        var m = modal({
-          titulo: mod.nome, largo: true,
-          corpo: '<style>.titulo-sec{font-family:var(--display);font-size:15px;margin:22px 0 10px;padding-top:18px;border-top:1px solid var(--border)}.titulo-sec:first-child{margin-top:0;padding-top:0;border-top:0}</style><div class="pilha">' + htmlArquivoModulo(mod) +
-            '<h4 class="titulo-sec">Quem pode abrir</h4><p class="ajuda" style="margin-top:-4px">Pessoas do seu setor. Coordenadores, supervisores e administradores do setor já abrem todas as ferramentas dele.</p>' +
-            (pessoas.length ? '<div class="caixa-opcoes">' + pessoas.map(function (u) {
-              return '<label><input type="checkbox" name="mUsu" value="' + u.id + '"' + ((mod.usuarios || []).indexOf(u.id) >= 0 ? ' checked' : '') + '><span>' + esc(u.nome) + ' <span class="sec" style="display:inline;color:var(--muted)">· ' + esc(u.email) + (u.ativo ? '' : ' · desativado') + '</span></span></label>';
-            }).join('') + '</div><div class="linha" style="margin-top:8px"><button class="btn primary sm" id="btSalvarAcesso" type="button">Salvar quem pode abrir</button></div>' : '<div class="ajuda">Nenhum usuário no seu setor ainda. Cadastre em Usuários do setor.</div>') + '</div>',
-          pe: '<a class="btn ghost" href="#/m/' + esc(mod.slug) + '" id="btAbrirMod" style="margin-right:auto">' + IC.novaAba + 'Abrir</a><button class="btn ghost" data-fechar>Fechar</button>',
-          aoFechar: function () { if (location.hash.indexOf('#/admin/modulos') === 0) paginaModulosCoord(); },
-        });
-        $('#btAbrirMod', m).onclick = function () { m.fechar(); };
-        ligarArquivoEVersoes(m, mod);
-        if ($('#btSalvarAcesso', m)) $('#btSalvarAcesso', m).onclick = async function () {
-          try {
-            await api('PUT', '/api/admin/modulos/' + mod.slug + '/acesso', { usuarios: $$('input[name=mUsu]:checked', m).map(function (i) { return Number(i.value); }) });
-            toast('Acesso salvo.', 'ok');
-          } catch (e) { toast(e.message, 'erro'); }
-        };
+    $$('tr[data-slug]').forEach(function (tr) { tr.onclick = function () { abrir(mods.find(function (x) { return x.slug === tr.getAttribute('data-slug'); })); }; });
+    if (j.pode_criar) $('#btNovoMod').onclick = novoModulo;
+
+    /* coordenador: cadastra a ferramenta num dos setores dele; depois envia o HTML */
+    function novoModulo() {
+      var m = modal({
+        titulo: 'Novo módulo',
+        corpo: '<form class="pilha" novalidate><p style="margin:0;color:var(--muted);font-weight:600">Use para publicar uma nova ferramenta HTML do seu setor no portal. Depois de criar, envie o arquivo.</p>' +
+          '<div class="grade-2"><div><label class="rot" for="nNome">Nome</label><input class="campo" id="nNome" placeholder="Ex.: Controle de Contratos"></div>' +
+          '<div><label class="rot" for="nSlug">Identificador (endereço)</label><input class="campo" id="nSlug" placeholder="controle-contratos"><div class="ajuda">Letras minúsculas, números e hífen.</div></div></div>' +
+          '<div class="grade-2"><div><label class="rot" for="nSetor">Setor</label><select class="campo" id="nSetor">' + opcoesSetor(setores.length === 1 ? setores[0].id : null) + '</select></div>' +
+          '<div><label class="rot" for="nIcone">Ícone</label><select class="campo" id="nIcone">' + opcoesIcone('app') + '</select></div></div>' +
+          '<div><label class="rot" for="nDesc">Descrição</label><textarea class="campo" id="nDesc"></textarea></div>' +
+          '<div id="nMsg" class="msg erro" hidden></div></form>',
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="btCriarMod">Criar módulo</button>',
+      });
+      $('#nNome', m).oninput = function () {
+        if (!$('#nSlug', m).dataset.mexido) $('#nSlug', m).value = normal(this.value).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
       };
-    });
+      $('#nSlug', m).oninput = function () { this.dataset.mexido = '1'; };
+      $('#btCriarMod', m).onclick = async function () {
+        try {
+          var r = await api('POST', '/api/admin/modulos', {
+            nome: $('#nNome', m).value, slug: $('#nSlug', m).value, setor_id: $('#nSetor', m).value || null,
+            icone: $('#nIcone', m).value, descricao: $('#nDesc', m).value, armazenamento: 'compartilhado',
+          });
+          m.fechar();
+          toast('Módulo criado. Agora envie o HTML.', 'ok');
+          recarregarModulosUsuario();
+          await paginaModulosCoord();
+        } catch (e) { var x = $('#nMsg', m); x.textContent = e.message; x.hidden = false; }
+        // a página foi redesenhada: abre a ferramenta nova para enviar o HTML
+        var tr = r && $('tr[data-slug="' + r.slug + '"]');
+        if (tr) tr.onclick();
+      };
+    }
+
+    function abrir(mod) {
+      var gerais = mod.pode_editar ? '<h4 class="titulo-sec">Dados gerais</h4>' +
+        '<div class="grade-2"><div><label class="rot" for="mNome">Nome</label><input class="campo" id="mNome" value="' + esc(mod.nome) + '"></div>' +
+        '<div><label class="rot" for="mSetor">Setor</label><select class="campo" id="mSetor">' + opcoesSetor(mod.setor_id) + '</select></div></div>' +
+        '<div><label class="rot" for="mDesc">Descrição</label><textarea class="campo" id="mDesc">' + esc(mod.descricao || '') + '</textarea></div>' +
+        '<div class="grade-3"><div><label class="rot" for="mIcone">Ícone</label><select class="campo" id="mIcone">' + opcoesIcone(mod.icone) + '</select></div>' +
+        '<div><label class="rot" for="mOrdem">Ordem no setor</label><input class="campo" type="number" id="mOrdem" value="' + (mod.ordem || 0) + '"></div>' +
+        '<div><label class="rot">Situação</label><label class="linha" style="font-weight:700;padding-top:9px"><input type="checkbox" id="mAtivo"' + (mod.ativo ? ' checked' : '') + '> Módulo ativo</label></div></div>' +
+        '<div class="linha"><button class="btn primary sm" id="btSalvarMod" type="button">Salvar dados gerais</button>' +
+        (mod.pode_remover ? '<span class="espaco"></span><button class="btn danger sm" id="btApagarMod" type="button">Remover módulo</button>' : '') + '</div>' +
+        (mod.pode_remover ? '' : '<div class="ajuda">Você remove só as ferramentas que você cadastrou. Para remover esta, fale com a administração.</div>') +
+        '<div id="mMsg" class="msg erro" hidden></div>' : '';
+      var m = modal({
+        titulo: mod.nome, largo: true,
+        corpo: '<style>.titulo-sec{font-family:var(--display);font-size:15px;margin:22px 0 10px;padding-top:18px;border-top:1px solid var(--border)}.titulo-sec:first-child{margin-top:0;padding-top:0;border-top:0}</style><div class="pilha">' + gerais + htmlArquivoModulo(mod) +
+          '<h4 class="titulo-sec">Quem pode abrir</h4><p class="ajuda" style="margin-top:-4px">Pessoas do seu setor. Coordenadores, supervisores e administradores do setor já abrem todas as ferramentas dele.</p>' +
+          (pessoas.length ? '<div class="caixa-opcoes">' + pessoas.map(function (u) {
+            return '<label><input type="checkbox" name="mUsu" value="' + u.id + '"' + ((mod.usuarios || []).indexOf(u.id) >= 0 ? ' checked' : '') + '><span>' + esc(u.nome) + ' <span class="sec" style="display:inline;color:var(--muted)">· ' + esc(u.email) + (u.ativo ? '' : ' · desativado') + '</span></span></label>';
+          }).join('') + '</div><div class="linha" style="margin-top:8px"><button class="btn primary sm" id="btSalvarAcesso" type="button">Salvar quem pode abrir</button></div>' : '<div class="ajuda">Nenhum usuário no seu setor ainda. Cadastre em Usuários do setor.</div>') + '</div>',
+        pe: '<a class="btn ghost" href="#/m/' + esc(mod.slug) + '" id="btAbrirMod" style="margin-right:auto">' + IC.novaAba + 'Abrir</a><button class="btn ghost" data-fechar>Fechar</button>',
+        aoFechar: function () { if (location.hash.indexOf('#/admin/modulos') === 0) paginaModulosCoord(); },
+      });
+      $('#btAbrirMod', m).onclick = function () { m.fechar(); };
+      ligarArquivoEVersoes(m, mod);
+      if ($('#btSalvarAcesso', m)) $('#btSalvarAcesso', m).onclick = async function () {
+        try {
+          await api('PUT', '/api/admin/modulos/' + mod.slug + '/acesso', { usuarios: $$('input[name=mUsu]:checked', m).map(function (i) { return Number(i.value); }) });
+          toast('Acesso salvo.', 'ok');
+        } catch (e) { toast(e.message, 'erro'); }
+      };
+      if ($('#btSalvarMod', m)) $('#btSalvarMod', m).onclick = async function () {
+        try {
+          await api('PATCH', '/api/admin/modulos/' + mod.slug, {
+            nome: $('#mNome', m).value, descricao: $('#mDesc', m).value, setor_id: Number($('#mSetor', m).value),
+            icone: $('#mIcone', m).value, ordem: Number($('#mOrdem', m).value) || 0, ativo: $('#mAtivo', m).checked,
+          });
+          toast('Módulo salvo.', 'ok');
+          m.fechar(); recarregarModulosUsuario();
+        } catch (e) { var x = $('#mMsg', m); x.textContent = e.message; x.hidden = false; }
+      };
+      if ($('#btApagarMod', m)) $('#btApagarMod', m).onclick = async function () {
+        var conf = prompt('Isso remove o módulo, os arquivos enviados e TODOS os dados dele no banco. Para confirmar, digite: ' + mod.slug);
+        if (conf !== mod.slug) { if (conf !== null) toast('Identificador não confere. Nada foi removido.', 'erro'); return; }
+        try { await api('DELETE', '/api/admin/modulos/' + mod.slug + '?confirmar=' + encodeURIComponent(conf)); toast('Módulo removido.', 'ok'); m.fechar(); recarregarModulosUsuario(); } catch (e) { toast(e.message, 'erro'); }
+      };
+    }
   }
 
   async function paginaModulos() {

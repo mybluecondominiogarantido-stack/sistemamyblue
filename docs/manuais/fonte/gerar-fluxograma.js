@@ -174,7 +174,7 @@ function acessosPagina(total) {
     { id: 'prim', c: 4, y: A, ator: 'colaborador', t: '1º acesso: troca a senha (8+ caracteres, com letras e números)' },
     { id: 'fimA', c: 5, y: A, tipo: 'pilula', t: '<b>FIM</b><br>Vê as ferramentas, tickets e tutoriais do perfil e do setor' },
     { id: 'iniB', c: 0, y: B, tipo: 'pilula', t: '<b>INÍCIO</b><br>Ferramenta nova ou HTML atualizado' },
-    { id: 'envia', c: 1, y: B, ator: 'lider', t: 'Envia o HTML em Gestão do setor → Ferramentas do setor' },
+    { id: 'envia', c: 1, y: B, ator: 'lider', t: 'Envia o HTML em Gestão do setor → Ferramentas do setor (ferramenta nova: o coordenador cadastra em Novo módulo)' },
     { id: 'publica', c: 2, y: B, ator: 'portal', t: 'Publica para todos e guarda a versão anterior' },
     { id: 'dB', c: 3, y: B, tipo: 'decisao', ator: 'lider', t: 'Mudou a tela ou o jeito de usar?' },
     { id: 'tut', c: 4, y: B, ator: 'admin', t: 'Gravar ou regravar o tutorial e atualizar o manual (o portal avisa: “regravar”)' },

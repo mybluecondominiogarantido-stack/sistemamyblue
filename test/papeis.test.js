@@ -197,11 +197,51 @@ test('ferramentas do setor: HTML, versões e quem pode abrir', async () => {
   const perm = (await ctx.db.q("SELECT usuario_id FROM permissoes WHERE modulo_slug = 'credito'")).rows.map((x) => x.usuario_id).sort();
   assert.deepEqual(perm, [ivo, ids['olga@teste.com']].sort(), 'Olga (outro setor) continua como estava');
   assert.equal((await coord('PUT', '/api/admin/modulos/cobranca/acesso', { usuarios: [] })).status, 403);
-  // o resto continua só com o administrador
-  assert.equal((await coord('PATCH', '/api/admin/modulos/boletos', { nome: 'X' })).status, 403);
-  assert.equal((await coord('DELETE', '/api/admin/modulos/boletos?confirmar=boletos')).status, 403);
+  // dados, importação e o que não é do setor continuam só com o administrador
+  assert.equal((await coord('PATCH', '/api/admin/modulos/cobranca', { nome: 'X' })).status, 403, 'outro setor');
+  assert.equal((await coord('DELETE', '/api/admin/modulos/boletos?confirmar=boletos')).status, 403, 'não foi ela que criou');
+  assert.equal((await sup('PATCH', '/api/admin/modulos/cobranca', { nome: 'X' })).status, 403, 'supervisor não edita o cadastro');
   assert.equal((await coord('GET', '/api/admin/modulos/boletos/dados')).status, 403);
   assert.equal((await coord('POST', '/api/admin/modulos/boletos/documentos', { documentos: {} })).status, 403);
+});
+
+test('coordenador cadastra ferramenta no setor dele, edita as do setor e remove só as que criou', async () => {
+  const novo = { slug: 'credito-contratos', nome: 'Contratos do Crédito', icone: 'documento', armazenamento: 'navegador' };
+  assert.equal((await coord('POST', '/api/admin/modulos', { ...novo, setor_id: S('Cobrança') })).status, 400, 'setor que não é dela');
+  const r = await coord('POST', '/api/admin/modulos', novo);
+  assert.equal(r.status, 201, r.texto);
+  let m = await ctx.modulos.obter('credito-contratos');
+  assert.equal(m.setor_id, S('Crédito'), 'sem setor informado, fica no único setor dela');
+  assert.equal(m.criado_por, coordId);
+  const lista = (await coord('GET', '/api/admin/modulos')).json;
+  assert.equal(lista.pode_criar, true);
+  assert.deepEqual(lista.setores.map((x) => x.nome), ['Crédito']);
+  const meu = lista.modulos.find((x) => x.slug === 'credito-contratos');
+  assert.equal(meu.pode_remover, true);
+  assert.equal(lista.modulos.find((x) => x.slug === 'credito').pode_remover, false);
+  // edita o cadastro (nome, descrição, ícone, ordem, situação), sem mexer em onde os dados ficam
+  const antes = await ctx.modulos.obter('credito');
+  const e = await coord('PATCH', '/api/admin/modulos/credito', { nome: 'Crédito — Ferramentas', descricao: 'Nova', ordem: 3, ativo: true,
+    armazenamento: 'navegador', fonte_dados: 'google', chaves_locais: ['x'], usuarios: [] });
+  assert.equal(e.status, 200, e.texto);
+  m = await ctx.modulos.obter('credito');
+  assert.equal(m.nome, 'Crédito — Ferramentas');
+  assert.equal(m.descricao, 'Nova');
+  assert.equal(m.armazenamento, antes.armazenamento);
+  assert.equal(m.fonte_dados, antes.fonte_dados);
+  assert.deepEqual(m.config, antes.config);
+  assert.ok((await ctx.db.q("SELECT 1 FROM permissoes WHERE modulo_slug = 'credito'")).rows.length, 'quem abre não muda por aqui');
+  assert.equal((await coord('PATCH', '/api/admin/modulos/credito', { setor_id: S('Cobrança') })).status, 400, 'não passa para outro setor');
+  assert.equal((await coord('PATCH', '/api/admin/modulos/credito', { setor_id: null })).status, 400, 'não fica sem setor');
+  // remove só o que ela criou
+  assert.equal((await coord('DELETE', '/api/admin/modulos/credito?confirmar=credito')).status, 403);
+  assert.equal((await coord('DELETE', '/api/admin/modulos/credito-contratos?confirmar=errado')).status, 400);
+  assert.equal((await coord('DELETE', '/api/admin/modulos/credito-contratos?confirmar=credito-contratos')).status, 200);
+  assert.equal(await ctx.modulos.obter('credito-contratos'), null);
+  // supervisor não cadastra nem remove ferramentas
+  assert.equal((await sup('POST', '/api/admin/modulos', { slug: 'cobranca-nova', nome: 'X', setor_id: S('Cobrança') })).status, 403);
+  assert.equal((await sup('GET', '/api/admin/modulos')).json.pode_criar, false);
+  assert.equal((await sup('DELETE', '/api/admin/modulos/cobranca?confirmar=cobranca')).status, 403);
 });
 
 test('admin cria e edita os quatro perfis', async () => {

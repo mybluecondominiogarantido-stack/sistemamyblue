@@ -32,6 +32,7 @@ const HISTORICO = [
   ['2.0', '09/10/2026', 'Manuais no padrão visual da MyBlue (timbrado, partes e capítulos); catálogo das ferramentas; Central de Patrocínio e Gestão de Viagens; Central de Ferramentas do Crédito com as sete automações; regra de excedente por boleto da Prestação de Contas (v7); regra de tutoriais sempre em dia.'],
   ['2.1', '13/10/2026', 'Títulos no padrão <b>Manual do Portal – Geral</b> e <b>Manual do Portal – Setor …</b>. Carteira: <i>Adicionar novos</i> pela planilha de implantação (ID Vouch, vigência, executivo de negócios e CNPJ), sem importação de CSV. Comissões de Novos Condomínios: a gestão <i>puxa da carteira</i> os condomínios da vigência, parceiro só da lista e cadastro de parceiro novo pelo financeiro. Pesquisa em Módulos e dados e em Ferramentas do setor.'],
   ['2.2', '15/10/2026', 'Menu <b>Premiações</b>: <b>Minhas Premiações</b> (demonstrativo de cada pessoa, só para leitura, <i>Estou ciente</i>, equipe para coordenação e gerência, diretoria) e a ferramenta <b>Gestão de Premiações</b> (antes Comissionamento MyBlue): planilhas do mês enviadas pelo coordenador do setor (um arquivo por pessoa e um aviso só para a gestão quando todas chegam), Comercial pela planilha de implantações e relatórios de garantia, coordenação comercial, boletos da Implantação e metas do Sucesso do Cliente.'],
+  ['2.3', '15/10/2026', '<b>Coordenador cadastra ferramentas</b>: em <i>Ferramentas do setor</i>, <b>Novo módulo</b> no setor dele, edição do cadastro (nome, descrição, ícone, ordem e situação) das ferramentas do setor e remoção das que ele cadastrou. O supervisor continua enviando HTML, voltando versões e escolhendo quem abre.'],
 ];
 const VERSOES = (doc) => capVersoes({
   titulo: `Manutenção e controle de versão deste manual`,
@@ -198,8 +199,8 @@ const PERFIS = `
 <p class="intro">O que cada pessoa vê e faz no portal sai de <b>um lugar só</b>: o cadastro dela, em <i>Usuários e acessos</i>. Ali ficam o <b>perfil</b>, o <b>setor</b> (ou setores) e as <b>ferramentas liberadas</b>.</p>
 ${tabela(['Perfil', 'Para quem', 'O que faz'], [
   ['<b>Usuário</b>', 'A equipe em geral', 'Usa as ferramentas liberadas, abre e acompanha tickets e trata os tickets do setor dele.'],
-  ['<b>Coordenador</b>', 'Quem coordena um setor', 'Tudo do usuário, mais a <b>gestão do setor</b>: usuários, ferramentas, equipe, tipos de demanda, líder nos tickets e carteira do setor.'],
-  ['<b>Supervisor</b>', 'Quem supervisiona um setor', 'Os <b>mesmos poderes do coordenador</b>, nos setores dele. Um não fica acima do outro.'],
+  ['<b>Coordenador</b>', 'Quem coordena um setor', 'Tudo do usuário, mais a <b>gestão do setor</b>: usuários, ferramentas, equipe, tipos de demanda, líder nos tickets e carteira do setor. Também <b>cadastra ferramentas novas</b> no setor, edita as do setor e remove as que cadastrou.'],
+  ['<b>Supervisor</b>', 'Quem supervisiona um setor', 'Os <b>mesmos poderes do coordenador</b> nos setores dele, menos cadastrar, editar o cadastro e remover ferramentas. Um não fica acima do outro.'],
   ['<b>Administrador</b>', 'A administração do portal', 'Faz tudo, em todos os setores, e é o único que cria coordenadores, supervisores e administradores.'],
 ])}
 <h2>O setor no cadastro</h2>
@@ -236,7 +237,14 @@ ${passos([
   <li><b>Voltar para uma versão anterior</b>, em <i>Versões anteriores → Usar esta</i>, se algo der errado.</li>
   <li>Escolher <b>quem pode abrir</b> a ferramenta, entre as pessoas do seu setor, e clicar em <b>Salvar quem pode abrir</b>.</li>
 </ul>
-${fig('21b-coord-html', 'Ferramenta do setor: HTML, versões anteriores e quem pode abrir.')}
+<p>Só o <b>coordenador</b>:</p>
+<ul>
+  <li><b>Novo módulo</b> cadastra uma ferramenta nova num dos seus setores (nome, identificador, ícone e descrição). Depois de criar, a ferramenta abre para você enviar o HTML.</li>
+  <li>Em <b>Dados gerais</b>, edita nome, setor (entre os seus), descrição, ícone, ordem e situação de qualquer ferramenta do setor e clica em <b>Salvar dados gerais</b>.</li>
+  <li><b>Remover módulo</b> aparece só nas ferramentas que você cadastrou e apaga a ferramenta com todos os dados dela. As demais, quem remove é a administração.</li>
+  <li>Onde os dados ficam, a planilha Google e a importação de dados continuam com a administração, em <b>Módulos e dados</b>.</li>
+</ul>
+${fig('21b-coord-html', 'Ferramenta do setor: dados gerais (coordenador), HTML, versões anteriores e quem pode abrir.')}
 <h2>Equipe e tipos de demanda</h2>
 <ul>
   <li>Marque os <b>líderes</b>: eles recebem os avisos de tickets novos e distribuem. Quem faz parte do setor vem do cadastro (para incluir alguém, use <i>Usuários do setor</i>).</li>
@@ -333,6 +341,7 @@ function CATALOGO() {
   ${dica('O passo a passo de cada ferramenta (o que cada aba faz e como fazer cada tarefa) está no <b>Manual do Portal – Setor</b> dela. As marcadas com <b>vídeo</b> têm tutorial no menu <b>Tutoriais</b>.')}
   <h2>Atualização das ferramentas</h2>
   <ul>
+    <li>Ferramenta nova: o coordenador do setor cadastra em <b>Gestão do setor → Ferramentas do setor → Novo módulo</b> e envia o HTML (a administração, em <b>Módulos e dados</b>).</li>
     <li>Quando uma ferramenta muda, o coordenador ou supervisor do setor envia o HTML novo em <b>Gestão do setor → Ferramentas do setor</b> (a administração, em <b>Módulos e dados</b>). Todos passam a usar a versão nova.</li>
     <li>A versão anterior fica guardada: dá para <b>voltar</b> para ela ou <b>baixar</b> o HTML de qualquer versão em <i>Versões anteriores</i>.</li>
     <li>Toda ferramenta nova ganha um tutorial em vídeo, e toda atualização que mude a tela ou o jeito de usar pede a revisão do tutorial e deste manual.</li>
@@ -490,6 +499,8 @@ function manualGeral() {
     ['Criar e editar usuários comuns', '—', 'do setor', 'do setor', 'todos'],
     ['Criar coordenadores, supervisores e admins', '—', '—', '—', 'sim'],
     ['Enviar HTML, voltar versão, quem pode abrir', '—', 'do setor', 'do setor', 'todos'],
+    ['Cadastrar ferramenta nova e editar o cadastro', '—', 'do setor', '—', 'todos'],
+    ['Remover ferramenta (com os dados)', '—', 'as que cadastrou', '—', 'todas'],
     ['Líderes e tipos de demanda', '—', 'do setor', 'do setor', 'todos'],
     ['Carteira: consultar e exportar', 'sim', 'sim', 'sim', 'sim'],
     ['Carteira: responsável do setor', '—', 'do setor', 'do setor', 'tudo'],
@@ -642,10 +653,10 @@ function manualSetor(s) {
   ${fig('23-coord-equipe', 'Exemplo: equipe e tipos de demanda do setor, na tela do coordenador.')}`) +
 
   cap('Gestão do setor: coordenador e supervisor', `
-  <p class="intro">Quem tem o perfil <b>Coordenador</b> ou <b>Supervisor</b> com o setor ${esc(s.nome)} no cadastro cuida do setor no portal. Os dois têm os mesmos poderes.</p>
+  <p class="intro">Quem tem o perfil <b>Coordenador</b> ou <b>Supervisor</b> com o setor ${esc(s.nome)} no cadastro cuida do setor no portal. Os dois têm os mesmos poderes, menos cadastrar, editar o cadastro e remover ferramentas, que é só do coordenador.</p>
   ${tabela(['No menu Gestão do setor', 'O que faz'], [
     ['<b>Usuários do setor</b>', 'Cria, edita, desativa e redefine a senha das pessoas do setor, liberando as ferramentas do setor.'],
-    ['<b>Ferramentas do setor</b>', 'Envia a versão nova do HTML, volta uma versão anterior e escolhe quem do setor abre cada ferramenta. O campo <b>Pesquisar</b> acha a ferramenta pelo nome, setor ou arquivo.'],
+    ['<b>Ferramentas do setor</b>', 'Envia a versão nova do HTML, volta uma versão anterior e escolhe quem do setor abre cada ferramenta. O campo <b>Pesquisar</b> acha a ferramenta pelo nome, setor ou arquivo. O coordenador também cadastra ferramentas novas (<b>Novo módulo</b>), edita nome, descrição, ícone, ordem e situação das ferramentas do setor e remove as que ele cadastrou.'],
     ['<b>Equipe e tipos de demanda</b>', 'Marca os líderes e cadastra os tipos de demanda com prazo.'],
   ])}
   <ul>
