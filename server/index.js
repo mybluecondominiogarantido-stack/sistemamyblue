@@ -9,6 +9,7 @@ const { criarServicoModulos } = require('./modulos');
 const { criarRegistros } = require('./registros');
 const { criarDocumentos } = require('./documentos');
 const { criarAcessos } = require('./acessos');
+const { criarRegras } = require('./regras');
 const { criarNotificador } = require('./notificacoes');
 const { criarExpediente, lerExpediente } = require('./expediente');
 const { rotasAuth } = require('./rotas/auth');
@@ -83,7 +84,8 @@ async function criarApp(cfg) {
   const avisos = criarNotificador(db, cfg);
   const expediente = criarExpediente(lerExpediente());
   const acessos = criarAcessos({ db, seg, modulos, documentos });
-  const ctx = { db, seg, modulos, registros, documentos, avisos, expediente, acessos, cfg };
+  const regras = criarRegras(db);
+  const ctx = { db, seg, modulos, registros, documentos, avisos, expediente, acessos, regras, cfg };
 
   const app = express();
   app.disable('x-powered-by');

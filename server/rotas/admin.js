@@ -8,7 +8,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ICONES = ['app', 'calculadora', 'grafico', 'aperto', 'caixa', 'carteira', 'documento', 'pessoas', 'ticket', 'casa', 'calendario', 'escudo'];
 const ehDuplicado = (e) => e && (e.code === '23505' || /duplicate key|unique/i.test(String(e.message)));
 
-function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, avisos, cfg }) {
+function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, avisos, cfg }) {
   const ehDocs = (m) => m && m.adaptador === 'claude-db';
   const r = express.Router();
   const json = express.json({ limit: '2mb' });
@@ -27,6 +27,7 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, avisos, 
       if (/^\/usuarios(\/|$)/.test(req.path)) return next();
       if (/^\/(equipes|categorias)(\/|$)/.test(req.path) && req.path !== '/equipes/email-teste') return next(); // o escopo é conferido lá
       if (req.path === '/modulos' && (req.method === 'GET' || req.method === 'POST')) return next(); // o setor da ferramenta nova é conferido lá
+      if (/^\/carteira\/acessos(\/|$)/.test(req.path)) return next(); // cada permissão é conferida lá
       const x = FERRAMENTA_SETOR.exec(req.path);
       if (x && metodosDe(x[2]).includes(req.method)) {
         const m = await modulos.obter(x[1]);
@@ -424,6 +425,48 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, avisos, 
     await db.q('UPDATE permissoes SET papeis = ARRAY(SELECT x FROM unnest(papeis) x WHERE x = ANY($2::text[])) WHERE modulo_slug = $1', [m.slug, lista.map((p) => p.id)]);
     await seg.auditar(req, 'modulo_papeis', m.slug, { papeis: lista.map((p) => p.id) });
     res.json({ ok: true, papeis: lista });
+  });
+
+  /* ===================== Carteira: quem edita o quê ===================== */
+  // a administração configura tudo; coordenação e supervisão liberam pessoas nas permissões do setor delas
+  r.get('/api/admin/carteira/acessos', async (req, res) => {
+    const vigentes = await regras.regras();
+    const quem = await regras.quemPode();
+    const minhas = await regras.gerenciaveis(req.usuario);
+    const admin = req.usuario.papel === 'admin';
+    const { rows: pessoas } = await db.q(`SELECT u.id, u.nome, u.papel, COALESCE(array_agg(s.nome ORDER BY s.ordem) FILTER (WHERE s.id IS NOT NULL), '{}') AS setores
+      FROM usuarios u LEFT JOIN setor_membros sm ON sm.usuario_id = u.id LEFT JOIN setores s ON s.id = sm.setor_id
+      WHERE u.ativo AND u.papel <> 'admin' GROUP BY u.id ORDER BY u.nome`);
+    res.json({
+      admin,
+      niveis: regras.NIVEIS,
+      setores: (await db.q('SELECT id, nome FROM setores ORDER BY ordem, nome')).rows,
+      pessoas,
+      admins: (await db.q("SELECT nome FROM usuarios WHERE ativo AND papel = 'admin' ORDER BY nome")).rows.map((x) => x.nome),
+      permissoes: regras.PERMISSOES.filter((p) => p.chave.startsWith('carteira.')).map((p) => ({ chave: p.chave, rotulo: p.rotulo, descricao: p.descricao,
+        regra: vigentes.get(p.chave), quem: quem.get(p.chave), pode_configurar: minhas.has(p.chave), pode_mudar_regra: admin })),
+    });
+  });
+
+  r.put('/api/admin/carteira/acessos/:chave', json, async (req, res) => {
+    const p = regras.porChave.get(req.params.chave);
+    if (!p) return erro(res, 404, 'Permissão não encontrada.');
+    if (!(await regras.gerenciaveis(req.usuario)).has(p.chave)) return erro(res, 403, 'Esta permissão não é do seu setor. Quem configura é a administração.');
+    const atual = (await regras.regras()).get(p.chave);
+    const b = req.body || {};
+    // coordenação e supervisão: só as pessoas liberadas individualmente; níveis e setores ficam com a administração
+    const pedido = req.usuario.papel === 'admin' ? { niveis: b.niveis, setores: b.setores, pessoas: b.pessoas } : { niveis: atual.niveis, setores: atual.setores, pessoas: b.pessoas };
+    const salva = await regras.salvar(p.chave, pedido, req.usuario);
+    await seg.auditar(req, 'regra_acesso', null, { chave: p.chave, ...salva });
+    res.json({ ok: true, regra: salva });
+  });
+
+  r.delete('/api/admin/carteira/acessos/:chave', async (req, res) => {
+    if (req.usuario.papel !== 'admin') return erro(res, 403, 'Só a administração volta a regra para o padrão.');
+    if (!regras.porChave.has(req.params.chave)) return erro(res, 404, 'Permissão não encontrada.');
+    await regras.voltarAoPadrao(req.params.chave);
+    await seg.auditar(req, 'regra_acesso', null, { chave: req.params.chave, padrao: true });
+    res.json({ ok: true });
   });
 
   /* ferramenta nova da coordenação: a administração confere e libera */

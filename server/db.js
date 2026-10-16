@@ -276,6 +276,14 @@ CREATE TABLE IF NOT EXISTS cdn_cache (
 );
 
 -- vídeos tutoriais (o catálogo, com título e para quem é, fica em server/tutoriais.js)
+-- quem edita o quê na Carteira (regras definidas em Ferramentas do setor e Módulos e dados, sem linha = padrão do portal)
+CREATE TABLE IF NOT EXISTS regras_acesso (
+  chave TEXT PRIMARY KEY,
+  regra JSONB NOT NULL,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
+);
+
 CREATE TABLE IF NOT EXISTS tutoriais (
   slug TEXT PRIMARY KEY,
   video BYTEA,
@@ -347,7 +355,7 @@ CREATE INDEX IF NOT EXISTS idx_comissao_plan_chave ON comissao_planilhas(modulo_
    políticas, ninguém lê nem grava por lá; o portal conecta como dono das tabelas e não é afetado. */
 const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 'permissoes', 'armazenamento', 'colecoes', 'registros', 'documentos', 'auditoria',
   'setor_membros', 'ticket_categorias', 'tickets', 'ticket_eventos', 'ticket_anexos', 'notificacoes', 'condominios',
-  'links_pagina', 'links', 'links_campanhas', 'tutoriais', 'comissao_relatorios', 'comissao_leitores', 'comissao_planilhas', 'cdn_cache'];
+  'links_pagina', 'links', 'links_campanhas', 'tutoriais', 'comissao_relatorios', 'comissao_leitores', 'comissao_planilhas', 'cdn_cache', 'regras_acesso'];
 const RLS = TABELAS.map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`).join(';\n');
 
 /* Ajustes em bancos já existentes (rodam a cada início e não fazem nada se já estiverem aplicados). */
