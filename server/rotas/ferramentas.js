@@ -9,7 +9,7 @@ const paginaSimples = (titulo, msg) => `<!doctype html><html lang="pt-BR"><head>
 <title>${titulo}</title><link rel="stylesheet" href="/estilos.css"></head><body class="pagina-aviso"><div class="aviso-card"><img src="/img/logo.png" alt="MyBlue" height="40">
 <h1>${titulo}</h1><p>${msg}</p><a class="btn primary" href="/" target="_top">Voltar ao início</a></div></body></html>`;
 
-function rotasFerramentas({ db, seg, modulos, registros, documentos, cfg }) {
+function rotasFerramentas({ db, seg, modulos, registros, documentos, avisos, cfg }) {
   const r = express.Router();
 
   /* ---------- lista de ferramentas do usuário ---------- */
@@ -155,10 +155,61 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, cfg }) {
     } catch (e) { falhaDoc(res, e); }
   });
 
-  /* nomes de quem aparece nos registros (ids "mb-<n>" do portal; ids antigos do Claude pelo config do módulo) */
+  /* pessoas ativas que podem abrir a ferramenta: administradores, permissão direta ou gestores do setor dela */
+  async function pessoasDoModulo(slug, busca) {
+    const { rows } = await db.q(`SELECT u.id, u.nome, u.email, u.foto_em FROM usuarios u
+      WHERE u.ativo AND (u.papel = 'admin'
+        OR u.id IN (SELECT usuario_id FROM permissoes WHERE modulo_slug = $1)
+        OR (u.papel = ANY($2::text[]) AND u.id IN (SELECT sm.usuario_id FROM setor_membros sm JOIN modulos m ON m.setor_id = sm.setor_id WHERE m.slug = $1)))
+      ORDER BY u.nome`, [slug, seg.GESTORES_DE_SETOR]);
+    const t = semAcento(busca || '').trim();
+    return t ? rows.filter((u) => semAcento(u.nome).includes(t) || semAcento(u.email).includes(t)) : rows;
+  }
+  const pessoaJson = (u, eu) => ({ id: `mb-${u.id}`, name: u.nome, email: u.email,
+    avatarUrl: u.foto_em ? `/api/usuarios/${u.id}/foto?v=${new Date(u.foto_em).getTime()}` : '', isMe: u.id === eu, guest: false });
+
+  /* avisos enviados pela ferramenta (sino do portal + e-mail, quando configurado) */
+  const enviosAviso = new Map(); // usuário|ferramenta → horários dos últimos envios
+  const LIMITE_AVISOS = 60; // por pessoa e ferramenta a cada 10 minutos
+  r.get('/api/db/:slug/avisos', seg.exigirLogin, async (req, res) => {
+    const m = await moduloComDocumentos(req, res);
+    if (!m) return;
+    res.json({ email_ativo: !!(avisos && avisos.emailAtivo) });
+  });
+  r.post('/api/db/:slug/avisos', seg.exigirLogin, express.json({ limit: '50kb' }), async (req, res) => {
+    const m = await moduloComDocumentos(req, res);
+    if (!m) return;
+    const b = req.body || {};
+    const ids = [...new Set((Array.isArray(b.para) ? b.para : []).map((x) => /^mb-(\d{1,9})$/.exec(String(x))).filter(Boolean).map((x) => Number(x[1])))];
+    const titulo = String(b.titulo == null ? '' : b.titulo).trim().slice(0, 160);
+    const texto = String(b.texto == null ? '' : b.texto).trim().slice(0, 1000);
+    const ref = b.ref == null || b.ref === '' ? '' : String(b.ref);
+    if (!ids.length || ids.length > 50 || !titulo) return res.status(400).json({ code: 'invalid_argument', erro: 'Informe quem recebe (até 50 pessoas) e o título do aviso.' });
+    if (ref && !/^[A-Za-z0-9_\-.:]{1,80}$/.test(ref)) return res.status(400).json({ code: 'invalid_argument', erro: 'Referência inválida.' });
+    const chave = `${req.usuario.id}|${m.slug}`;
+    const agora = Date.now();
+    const recentes = (enviosAviso.get(chave) || []).filter((t) => agora - t < 10 * 60 * 1000);
+    if (recentes.length >= LIMITE_AVISOS) return res.status(429).json({ code: 'resource_exhausted', erro: 'Avisos demais em pouco tempo. Aguarde alguns minutos.' });
+    recentes.push(agora);
+    enviosAviso.set(chave, recentes);
+    const podem = new Set((await pessoasDoModulo(m.slug)).map((u) => u.id));
+    const destino = ids.filter((id) => podem.has(id));
+    if (avisos && destino.length) {
+      await avisos.notificar(destino, { tipo: 'ferramenta', titulo, texto, link: `#/m/${m.slug}${ref ? '/' + ref : ''}`, email: b.email !== false, autor_id: req.usuario.id });
+    }
+    await seg.auditar(req, 'aviso_enviado', m.slug, { para: destino, ignorados: ids.filter((id) => !podem.has(id)), titulo });
+    res.json({ ok: true, enviados: destino.filter((id) => id !== req.usuario.id).length, ignorados: ids.length - destino.length, email_ativo: !!(avisos && avisos.emailAtivo) });
+  });
+
+  /* nomes de quem aparece nos registros (ids "mb-<n>" do portal; ids antigos do Claude pelo config do módulo).
+     Com ?busca=… lista quem tem acesso à ferramenta (filtrado por nome ou e-mail). */
   r.get('/api/db/:slug/pessoas', seg.exigirLogin, async (req, res) => {
     const m = await moduloComDocumentos(req, res);
     if (!m) return;
+    if (req.query.busca !== undefined) {
+      const lista = (await pessoasDoModulo(m.slug, String(req.query.busca).slice(0, 80))).slice(0, 100).map((u) => pessoaJson(u, req.usuario.id));
+      return res.json({ lista });
+    }
     const ids = String(req.query.ids || '').split(',').map((x) => x.trim()).filter(Boolean).slice(0, 200);
     const numeros = ids.map((x) => /^mb-(\d{1,9})$/.exec(x)).filter(Boolean).map((x) => Number(x[1]));
     const { rows } = numeros.length ? await db.q('SELECT id, nome, email, foto_em FROM usuarios WHERE id = ANY($1::int[])', [numeros]) : { rows: [] };

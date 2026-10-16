@@ -275,7 +275,7 @@
     if (novo !== h) { location.replace(novo); return; }
     var partes = h.replace(/^#\/?/, '').split('/');
     $('#casca').classList.remove('menu-aberto');
-    if (partes[0] === 'm' && partes[1]) return abrirModulo(decodeURIComponent(partes[1]));
+    if (partes[0] === 'm' && partes[1]) return abrirModulo(decodeURIComponent(partes[1]), partes[2] ? decodeURIComponent(partes[2]) : null);
     mostrarConteudo();
     if (partes[0] === 'tickets') {
       if (partes[1] === 'painel') return paginaPainelTickets();
@@ -316,9 +316,17 @@
   }
 
   /* ======================= módulo (iframe) ======================= */
-  function abrirModulo(slug) {
+  /* ref: vem de um aviso (#/m/<ferramenta>/<ref>) — a ferramenta abre direto no registro avisado */
+  function abrirModulo(slug, ref) {
     var m = modulos.find(function (x) { return x.slug === slug; });
     if (!m) { toast('Ferramenta não encontrada ou sem acesso.', 'erro'); location.hash = '#/'; return; }
+    if (ref) {
+      // tira a referência do endereço: clicar no mesmo aviso de novo volta a abrir o registro
+      try { history.replaceState(null, '', '#/m/' + encodeURIComponent(slug)); } catch (e) { /* sem history */ }
+      if (quadros[slug]) {
+        try { quadros[slug].contentWindow.postMessage({ myblue: true, tipo: 'abrir-ref', ref: ref }, location.origin); } catch (e) { /* quadro fechado */ }
+      }
+    }
     atual = slug;
     $('#conteudo').hidden = true;
     Object.keys(quadros).forEach(function (s) { quadros[s].hidden = s !== slug; });
@@ -326,7 +334,7 @@
       var f = document.createElement('iframe');
       f.title = m.nome;
       f.setAttribute('data-slug', slug);
-      f.src = '/m/' + encodeURIComponent(slug) + '/';
+      f.src = '/m/' + encodeURIComponent(slug) + '/' + (ref ? '?ref=' + encodeURIComponent(ref) : '');
       f.setAttribute('allow', 'clipboard-read; clipboard-write; fullscreen');
       var carregando = document.createElement('div');
       carregando.className = 'carregando';
