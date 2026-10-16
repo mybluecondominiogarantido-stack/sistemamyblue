@@ -22,7 +22,7 @@
 
   if (C.claudeDb) instalarClaude();
 
-  /* Ferramentas feitas como artefato do Claude usam window.claude.use('db' | 'user' | 'downloads').
+  /* Ferramentas feitas como artefato do Claude usam window.claude.use('db' | 'user' | 'downloads' | 'avisos').
    * Aqui o portal oferece o mesmo contrato, com os documentos guardados no banco do portal:
    * a página carrega tudo uma vez e depois busca só o que mudou a cada poucos segundos. */
   function instalarClaude() {
@@ -302,7 +302,15 @@
       name: function () { return Promise.resolve(U.nome || ''); },
       email: function () { return Promise.resolve(U.email || null); },
       avatarUrl: function () { return Promise.resolve(minhaFoto || null); },
-      search: function () { return Promise.resolve([]); },
+      /* quem tem acesso a esta ferramenta (para escolher aprovadores, responsáveis etc.) */
+      search: function (q) {
+        return pedir('GET', base + '/pessoas?busca=' + encodeURIComponent(String(q == null ? '' : q).slice(0, 80))).then(function (r) {
+          return (r.lista || []).map(function (x) {
+            cachePessoas[x.id] = Object.freeze({ id: x.id, name: x.name || '', avatarUrl: x.avatarUrl || '', color: '#0c77be', email: x.email || null, isMe: x.id === meuId, guest: false });
+            return cachePessoas[x.id];
+          });
+        }).catch(function () { return []; });
+      },
       profiles: function (ids) {
         ids = (Array.isArray(ids) ? ids : [ids]).filter(function (x) { return typeof x === 'string' && x; });
         var faltam = ids.filter(function (x) { return !(x in cachePessoas); });
@@ -332,7 +340,35 @@
       },
     });
 
-    var CAP = { db: DB, user: USER, downloads: DOWNLOADS };
+    /* ---------- avisos do portal (sino, som e e-mail) ----------
+     * enviar({ para: ['mb-3', ...], titulo, texto, ref, email }) → { enviados, ignorados, email_ativo }
+     *   O portal só entrega a quem tem acesso a esta ferramenta; quem enviou não recebe o próprio aviso.
+     *   `ref` volta para a ferramenta quando a pessoa clica no aviso (#/m/<ferramenta>/<ref>).
+     * estado() → { email_ativo }   ·   aoAbrir(fn) → fn(ref) quando a ferramenta é aberta por um aviso. */
+    var refInicial = null;
+    try { refInicial = new URLSearchParams(location.search).get('ref'); } catch (e) { refInicial = null; }
+    var aoAbrirFns = [];
+    window.addEventListener('message', function (ev) {
+      if (ev.source !== window.parent || ev.origin !== location.origin) return;
+      var d = ev.data;
+      if (!d || !d.myblue || d.tipo !== 'abrir-ref' || typeof d.ref !== 'string') return;
+      aoAbrirFns.forEach(function (fn) { try { fn(d.ref); } catch (e) { /* erro da ferramenta */ } });
+    });
+    var AVISOS = Object.freeze({
+      enviar: function (o) {
+        o = o || {};
+        return pedir('POST', base + '/avisos', { para: o.para, titulo: o.titulo, texto: o.texto, ref: o.ref, email: o.email !== false })
+          .catch(function (e) { throw { code: e.code, message: e.message }; });
+      },
+      estado: function () { return pedir('GET', base + '/avisos').catch(function () { return { email_ativo: null }; }); },
+      aoAbrir: function (fn) {
+        if (typeof fn !== 'function') return;
+        aoAbrirFns.push(fn);
+        if (refInicial) { var r = refInicial; setTimeout(function () { try { fn(r); } catch (e) { /* erro da ferramenta */ } }, 0); }
+      },
+    });
+
+    var CAP = { db: DB, user: USER, downloads: DOWNLOADS, avisos: AVISOS };
     var claude = Object.freeze({ use: function (nome) { return Promise.resolve(CAP[nome] || null); } });
     try { Object.defineProperty(window, 'claude', { value: claude, configurable: false, enumerable: true, writable: false }); } catch (e) { window.claude = claude; }
   }

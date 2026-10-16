@@ -189,3 +189,34 @@ test('ferramenta nova feita como artefato do Claude passa a usar o banco de docu
   await admin('PUT', '/api/admin/modulos/comum-teste/arquivo', '<!doctype html><html><head><title>Comum</title></head><body>oi</body></html>', { headers: { 'content-type': 'text/html' } });
   assert.equal((await admin('GET', '/api/admin/modulos')).json.modulos.find((x) => x.slug === 'comum-teste').adaptador, null);
 });
+
+test('ferramenta envia avisos ao sino só para quem tem acesso a ela, e lista essas pessoas', async () => {
+  const adminId = (await ctx.db.um("SELECT id FROM usuarios WHERE email = 'admin@teste.com'")).id;
+  // busca: Ana (permissão direta) e o administrador; Beto não tem acesso a "boletos"
+  const lista = (await ana.c('GET', '/api/db/boletos/pessoas?busca=')).json.lista;
+  const emails = lista.map((p) => p.email).sort();
+  assert.deepEqual(emails, ['admin@teste.com', 'ana@teste.com']);
+  assert.equal(lista.find((p) => p.email === 'ana@teste.com').isMe, true);
+  assert.deepEqual((await ana.c('GET', '/api/db/boletos/pessoas?busca=sou')).json.lista.map((p) => p.email), ['ana@teste.com']);
+
+  const r = await ana.c('POST', '/api/db/boletos/avisos', { para: [`mb-${adminId}`, `mb-${beto.id}`, `mb-${ana.id}`], titulo: 'Pedido BR-0001 aguardando aprovação', texto: 'Ana pediu 20 canetas.', ref: 'BR-0001' });
+  assert.equal(r.status, 200, r.texto);
+  assert.equal(r.json.enviados, 1); // o admin; Ana é a autora
+  assert.equal(r.json.ignorados, 1); // Beto não tem acesso
+  const n = await ctx.db.um('SELECT tipo, titulo, link FROM notificacoes WHERE usuario_id = $1 ORDER BY id DESC LIMIT 1', [adminId]);
+  assert.equal(n.titulo, 'Pedido BR-0001 aguardando aprovação');
+  assert.equal(n.link, '#/m/boletos/BR-0001');
+  assert.equal(n.tipo, 'ferramenta');
+  assert.equal((await ctx.db.um('SELECT COUNT(*)::int AS n FROM notificacoes WHERE usuario_id = $1', [beto.id])).n, 0);
+
+  assert.equal((await ana.c('POST', '/api/db/boletos/avisos', { para: [], titulo: 'x' })).status, 400);
+  assert.equal((await ana.c('POST', '/api/db/boletos/avisos', { para: [`mb-${adminId}`], titulo: 'x', ref: '../x y' })).status, 400);
+  assert.equal((await beto.c('POST', '/api/db/boletos/avisos', { para: [`mb-${adminId}`], titulo: 'x' })).status, 403);
+  assert.equal((await ana.c('GET', '/api/db/boletos/avisos')).json.email_ativo, false);
+});
+
+test('a ponte oferece os avisos e a busca de pessoas às ferramentas', async () => {
+  const html = (await ana.c('GET', '/m/boletos/')).texto;
+  assert.match(html, /avisos: AVISOS/);
+  assert.match(html, /\/pessoas\?busca=/);
+});
