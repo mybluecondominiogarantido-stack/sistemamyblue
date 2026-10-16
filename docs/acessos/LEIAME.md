@@ -46,8 +46,8 @@ ela oferece.
 - *Gestão*: recebe as solicitações, faz as análises e configura a ferramenta.
 - *Implantação*: pede análises dos condomínios implantados (vê o quadro de verificação) e acompanha as dele.
 - *Solicitante avulso*: pede análises avulsas e acompanha as dele.
-- ⚠️ **Quem abre sem papel não usa nada**: vê "Acesso registrado" até receber um papel. Se ninguém tiver Gestão,
-  valem como gestão os nomes fixos no HTML.
+- ⚠️ **Quem abre sem papel não usa nada**: vê o aviso para pedir acesso — vale também para a administração e a coordenação.
+  Exceção: enquanto ninguém tiver Gestão, todos veem todas as abas.
 
 Coordenação e administração abrem a ferramenta sem precisar ser marcadas, mas **papel precisa ser dado a elas também**
 (ex.: o coordenador que aprova as comissões precisa receber Gestão).
@@ -116,7 +116,7 @@ o contrato acima, o modelo deixa de ser reconhecido e os papéis passam a ser os
 |---|---|---|---|---|
 | Comissões de Novos Condomínios | Comercial | Comercial, Aprovação da gestão, Financeiro, Acessos | papéis Executivo comercial, Gestão, Financeiro | papéis agora pelo portal (espelhados na aba Acessos) |
 | PartnerChip — Resultados | Comercial | Visão geral, Parceiros, Condomínios | abre (é só leitura por natureza) | — |
-| Análise de Espólio | Cobrança | Dashboard, Fila de acompanhamento, Minhas solicitações, Configurações, Acessos | papéis Gestão, Implantação, Solicitante avulso | papéis agora pelo portal; o HTML ainda tem nomes fixos de gestão para quando ninguém tem o papel |
+| Análise de Espólio | Cobrança | Dashboard, Fila de acompanhamento, Minhas solicitações, Configurações, Acessos | papéis Gestão, Implantação, Solicitante avulso | papéis agora pelo portal; enquanto ninguém tiver Gestão, todos veem todas as abas |
 | Central de Ferramentas — Cobrança / Gestão | Cobrança | calculadoras | abre | dados só no navegador de cada pessoa |
 | Central de Ferramentas — Crédito | Crédito | Balancetes, Consumos, Divisor, Gerador, Montador, Moradores, Nobre | abre | dados só no navegador de cada pessoa |
 | Controle de Emissão de Boletos | Crédito | Painel, Controle, Cadastro, Comparativo, Feriados, Histórico | edita ou só consulta | já respeita o "só consulta" na tela |
