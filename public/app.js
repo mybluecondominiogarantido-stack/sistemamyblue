@@ -705,44 +705,137 @@
   function textoBuscaModulo(m) { return normal([m.nome, m.slug, m.setor_nome, m.nome_original, m.descricao].filter(Boolean).join(' ')); }
   var LINHA_SEM_RESULTADO = function (cols) { return '<tr class="sem-resultado" hidden><td colspan="' + cols + '" style="text-align:center;color:var(--muted);font-weight:700;padding:30px">Nenhum módulo encontrado com essa pesquisa.</td></tr>'; };
 
+  /* Quem abre a ferramenta, se edita ou só consulta e com qual papel: a mesma tela para a administração e para a
+     coordenação do setor (que pode liberar pessoas de qualquer setor). Os papéis de ferramentas com aba "Acessos"
+     própria são lidos e gravados no formato delas. */
+  async function editorAcessos(cont, slug) {
+    cont.innerHTML = '<div class="ajuda">Carregando quem tem acesso…</div>';
+    var q;
+    try { q = await api('GET', '/api/admin/modulos/' + slug + '/acesso'); } catch (e) { cont.innerHTML = '<div class="msg erro">' + esc(e.message) + '</div>'; return; }
+    var estado = {};
+    q.pessoas.forEach(function (p) { estado[p.id] = { abre: p.abre, consulta: p.somente_leitura, papeis: p.papeis.slice() }; });
+    var filtro = lembrar('acessos.filtro', 'com');
+    function linha(p) {
+      var e = estado[p.id];
+      var abre = p.automatico ? '<span class="etiqueta azul" title="Abre todas as ferramentas do setor">sempre · ' + esc(p.automatico) + '</span>'
+        : '<label class="linha" style="gap:6px;font-weight:700;flex-wrap:nowrap"><input type="checkbox" data-abre="' + p.id + '"' + (e.abre ? ' checked' : '') + '> abre</label>';
+      var como = p.automatico ? '<span class="ajuda" style="margin:0">edita</span>'
+        : '<select class="campo" data-como="' + p.id + '" style="width:auto;padding:4px 8px"' + (e.abre ? '' : ' disabled') + '><option value="edita">edita</option><option value="consulta"' + (e.consulta ? ' selected' : '') + '>só consulta</option></select>';
+      var papeis = q.papeis.map(function (x) {
+        return '<td style="text-align:center"><input type="checkbox" aria-label="' + esc(x.nome) + '" data-papel="' + esc(x.id) + '" data-u="' + p.id + '"' + (e.papeis.indexOf(x.id) >= 0 ? ' checked' : '') + (e.abre ? '' : ' disabled') + '></td>';
+      }).join('');
+      return '<tr data-p="' + p.id + '" data-busca="' + esc(normal([p.nome, p.email, (p.setores || []).join(' ')].join(' '))) + '"><td><b>' + esc(p.nome) + '</b><span class="sec">' + esc((p.setores || []).join(', ') || 'sem setor') + (p.do_setor || p.automatico ? '' : ' · outro setor') + '</span></td>' +
+        '<td>' + abre + '</td><td>' + como + '</td>' + papeis + '</tr>';
+    }
+    function visivel(p) { var e = estado[p.id]; return filtro === 'todas' || e.abre || (filtro === 'setor' && p.do_setor); }
+    function desenhar() {
+      var lista = q.pessoas.filter(visivel);
+      cont.innerHTML = (q.modelo ? '<div class="msg aviso" style="margin-bottom:10px"><span>Os papéis desta ferramenta são os da aba <b>Acessos</b> dela (' + esc(q.modelo) + '). O que você mudar aqui aparece lá, e o que mudarem lá aparece aqui.</span></div>' : '') +
+        (!q.papeis.length ? '<p class="ajuda" style="margin-top:0">Esta ferramenta não tem papéis definidos: quem abre usa tudo o que ela oferece.' + (q.pode_definir_papeis ? ' Defina os papéis abaixo, se o HTML separar o que cada um faz.' : '') + '</p>' :
+          '<p class="ajuda" style="margin-top:0">' + q.papeis.map(function (x) { return '<b>' + esc(x.nome) + '</b>' + (x.descricao ? ': ' + esc(x.descricao) : ''); }).join('<br>') + '</p>') +
+        '<div class="linha" style="margin:10px 0;flex-wrap:wrap;gap:8px">' +
+        [['com', 'Com acesso'], ['setor', 'Do setor'], ['todas', 'Todas as pessoas']].map(function (f) { return '<button type="button" class="btn sm ' + (filtro === f[0] ? 'primary' : 'ghost') + '" data-filtro="' + f[0] + '">' + f[1] + '</button>'; }).join('') +
+        '<input class="campo" type="search" id="buscaAcesso" placeholder="Buscar pessoa ou setor…" style="max-width:240px;margin-left:auto"></div>' +
+        '<div class="tabela-wrap"><table><thead><tr><th>Pessoa</th><th>Acesso</th><th>Como</th>' + q.papeis.map(function (x) { return '<th style="text-align:center">' + esc(x.nome) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+        (lista.map(linha).join('') || '<tr><td colspan="' + (3 + q.papeis.length) + '" style="text-align:center;color:var(--muted);padding:20px">Ninguém aqui ainda. Use <b>Todas as pessoas</b> para liberar alguém, inclusive de outro setor.</td></tr>') +
+        '</tbody></table></div><div class="linha" style="margin-top:10px"><button class="btn primary sm" type="button" id="btSalvarAcessos">Salvar acessos</button></div>' +
+        (q.pode_definir_papeis && !q.modelo ? '<details style="margin-top:14px"><summary style="cursor:pointer;font-weight:700;color:var(--ink-2)">Papéis desta ferramenta (administração)</summary>' +
+          '<p class="ajuda">Um papel por linha: <code>identificador | Nome | o que faz</code>. O HTML recebe os papéis de cada pessoa em <code>window.__MYBLUE__.usuario.papeis</code>.</p>' +
+          '<textarea class="campo" id="txPapeis" rows="4" placeholder="gestao | Gestão | aprova os pedidos">' + esc(q.papeis.map(function (x) { return x.id + ' | ' + x.nome + (x.descricao ? ' | ' + x.descricao : ''); }).join('\n')) + '</textarea>' +
+          '<div class="linha" style="margin-top:8px"><button class="btn ghost sm" type="button" id="btSalvarPapeis">Salvar papéis</button></div></details>' : '');
+      var busca = $('#buscaAcesso', cont);
+      busca.oninput = function () {
+        var termos = normal(busca.value).split(/\s+/).filter(Boolean);
+        $$('tr[data-p]', cont).forEach(function (tr) { var t = tr.getAttribute('data-busca'); tr.hidden = !termos.every(function (x) { return t.indexOf(x) >= 0; }); });
+      };
+      $$('[data-filtro]', cont).forEach(function (b) { b.onclick = function () { filtro = b.getAttribute('data-filtro'); guardar('acessos.filtro', filtro); desenhar(); }; });
+      $$('[data-abre]', cont).forEach(function (c) {
+        c.onchange = function () {
+          estado[Number(c.getAttribute('data-abre'))].abre = c.checked;
+          $$('select, [data-papel]', c.closest('tr')).forEach(function (x) { x.disabled = !c.checked; });
+        };
+      });
+      $$('[data-como]', cont).forEach(function (c) { c.onchange = function () { estado[Number(c.getAttribute('data-como'))].consulta = c.value === 'consulta'; }; });
+      $$('[data-papel]', cont).forEach(function (c) {
+        c.onchange = function () {
+          var e = estado[Number(c.getAttribute('data-u'))], id = c.getAttribute('data-papel');
+          e.papeis = e.papeis.filter(function (x) { return x !== id; });
+          if (c.checked) e.papeis.push(id);
+        };
+      });
+      $('#btSalvarAcessos', cont).onclick = async function () {
+        var acessos = q.pessoas.filter(function (p) { return estado[p.id].abre && (!p.automatico || estado[p.id].papeis.length); }).map(function (p) {
+          var e = estado[p.id];
+          return { usuario_id: p.id, somente_leitura: !p.automatico && e.consulta, papeis: e.papeis };
+        });
+        try { await api('PUT', '/api/admin/modulos/' + slug + '/acesso', { acessos: acessos }); toast('Acessos salvos.', 'ok'); editorAcessos(cont, slug); } catch (e) { toast(e.message, 'erro'); }
+      };
+      if ($('#btSalvarPapeis', cont)) $('#btSalvarPapeis', cont).onclick = async function () {
+        var papeis = $('#txPapeis', cont).value.split('\n').map(function (l) { return l.split('|').map(function (x) { return x.trim(); }); })
+          .filter(function (x) { return x[0]; }).map(function (x) { return { id: x[0], nome: x[1] || x[0], descricao: x[2] || '' }; });
+        try { await api('PUT', '/api/admin/modulos/' + slug + '/papeis', { papeis: papeis }); toast('Papéis salvos.', 'ok'); editorAcessos(cont, slug); } catch (e) { toast(e.message, 'erro'); }
+      };
+    }
+    desenhar();
+  }
+
   async function paginaModulosCoord() {
     definirBarra('<span class="setor">Gestão do setor</span><span class="sep">/</span><span class="nome">Ferramentas do setor</span>');
     $('#conteudo').innerHTML = '<div class="pagina"><div class="carregando" style="position:static;background:none"><div><div class="giro"></div>Carregando…</div></div></div>';
-    var mods, pessoas;
-    try { mods = (await api('GET', '/api/admin/modulos')).modulos; pessoas = (await api('GET', '/api/admin/usuarios')).usuarios; } catch (e) { toast(e.message, 'erro'); return; }
+    var mods, jm;
+    try { jm = await api('GET', '/api/admin/modulos'); mods = jm.modulos; } catch (e) { toast(e.message, 'erro'); return; }
     if (location.hash.indexOf('#/admin/modulos') !== 0) return; // a pessoa já foi para outra tela
-    $('#conteudo').innerHTML = '<div class="pagina"><h1>Ferramentas do setor</h1><p class="sub">As ferramentas dos seus setores. Envie uma versão nova do HTML, volte para uma anterior e escolha quem do setor pode abrir cada uma.</p>' +
-      '<div class="painel"><div class="cab-painel"><b style="font-family:var(--display)" id="qtdMods"></b>' +
+    $('#conteudo').innerHTML = '<div class="pagina"><h1>Ferramentas do setor</h1><p class="sub">As ferramentas dos seus setores. Envie uma versão nova do HTML, volte para uma anterior e escolha quem abre cada uma (do seu setor ou de outros), se edita ou só consulta e com qual papel.</p>' +
+      '<div class="painel"><div class="cab-painel"><b style="font-family:var(--display)" id="qtdMods"></b><span class="espaco"></span>' +
+      '<button class="btn primary" id="btNovaFerr">' + IC.mais + 'Nova ferramenta</button>' +
       '<input class="campo" id="buscaMod" type="search" placeholder="Pesquisar módulo, setor ou arquivo…" aria-label="Pesquisar módulo" style="max-width:320px"></div>' +
       '<div class="tabela-wrap"><table><thead><tr><th>Módulo</th><th>Setor</th><th>Arquivo em uso</th></tr></thead><tbody id="tbMods">' +
       (mods.map(function (x) {
-        return '<tr class="clicavel" data-slug="' + esc(x.slug) + '" data-busca="' + esc(textoBuscaModulo(x)) + '"><td><div class="linha" style="flex-wrap:nowrap"><div class="icone-mod" style="width:34px;height:34px">' + (IC[x.icone] || IC.app) + '</div><div><b>' + esc(x.nome) + '</b>' + (x.ativo ? '' : ' <span class="etiqueta cinza">desativado</span>') + '</div></div></td>' +
+        return '<tr class="clicavel" data-slug="' + esc(x.slug) + '" data-busca="' + esc(textoBuscaModulo(x)) + '"><td><div class="linha" style="flex-wrap:nowrap"><div class="icone-mod" style="width:34px;height:34px">' + (IC[x.icone] || IC.app) + '</div><div><b>' + esc(x.nome) + '</b>' + (x.pendente ? ' <span class="etiqueta ambar">aguardando aprovação</span>' : '') + (x.ativo ? '' : ' <span class="etiqueta cinza">desativado</span>') + '</div></div></td>' +
           '<td>' + esc(x.setor_nome || '—') + '</td>' +
           '<td>' + (x.tem_arquivo ? quando(x.versao_em) + '<span class="sec">' + tamanho(x.tamanho) + (x.nome_original ? ' · ' + esc(x.nome_original) : '') + '</span>' : '<span class="etiqueta vermelha">sem arquivo</span>') + '</td></tr>';
       }).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--muted);font-weight:700;padding:30px">Nenhuma ferramenta nos seus setores. Peça à administração para conferir o setor no seu cadastro.</td></tr>') +
       LINHA_SEM_RESULTADO(3) + '</tbody></table></div></div></div>';
     ligarBusca($('#buscaMod'), $('#tbMods'), $('#qtdMods'), mods.length, mods.length === 1 ? 'ferramenta' : 'ferramentas', 'busca.modulos.setor');
+    $('#btNovaFerr').onclick = function () {
+      var m = modal({
+        titulo: 'Nova ferramenta',
+        corpo: '<form class="pilha" novalidate><p style="margin:0;color:var(--muted);font-weight:600">A ferramenta nova fica <b>aguardando a aprovação da administração</b>. Enquanto isso, só a coordenação do setor a abre: envie o HTML, teste e escolha quem vai usar.</p>' +
+          '<div class="grade-2"><div><label class="rot" for="nNome">Nome</label><input class="campo" id="nNome" placeholder="Ex.: Controle de Contratos"></div>' +
+          '<div><label class="rot" for="nSlug">Identificador (endereço)</label><input class="campo" id="nSlug" placeholder="controle-contratos"><div class="ajuda">Letras minúsculas, números e hífen.</div></div></div>' +
+          '<div class="grade-2"><div><label class="rot" for="nSetor">Setor</label><select class="campo" id="nSetor">' + (jm.setores || []).map(function (x) { return '<option value="' + x.id + '">' + esc(x.nome) + '</option>'; }).join('') + '</select></div>' +
+          '<div><label class="rot" for="nIcone">Ícone</label><select class="campo" id="nIcone">' + (jm.icones || ['app']).map(function (i) { return '<option value="' + i + '">' + esc(ROTULO_ICONE[i] || i) + '</option>'; }).join('') + '</select></div></div>' +
+          '<div><label class="rot" for="nDesc">Descrição</label><textarea class="campo" id="nDesc"></textarea></div><div id="nMsg" class="msg erro" hidden></div></form>',
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="btCriarFerr">Cadastrar</button>',
+      });
+      $('#nNome', m).oninput = function () {
+        if (!$('#nSlug', m).dataset.mexido) $('#nSlug', m).value = normal(this.value).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+      };
+      $('#nSlug', m).oninput = function () { this.dataset.mexido = '1'; };
+      $('#btCriarFerr', m).onclick = async function () {
+        try {
+          var r = await api('POST', '/api/admin/modulos', { nome: $('#nNome', m).value, slug: $('#nSlug', m).value, setor_id: Number($('#nSetor', m).value), icone: $('#nIcone', m).value, descricao: $('#nDesc', m).value });
+          m.fechar(); toast('Ferramenta cadastrada. Envie o HTML; a administração foi avisada para aprovar.', 'ok');
+          await paginaModulosCoord();
+          var tr = $('tr[data-slug="' + r.slug + '"]'); if (tr) tr.click();
+          recarregarModulosUsuario();
+        } catch (e) { var x = $('#nMsg', m); x.textContent = e.message; x.hidden = false; }
+      };
+    };
     $$('tr[data-slug]').forEach(function (tr) {
       tr.onclick = function () {
         var mod = mods.find(function (x) { return x.slug === tr.getAttribute('data-slug'); });
         var m = modal({
           titulo: mod.nome, largo: true,
           corpo: '<style>.titulo-sec{font-family:var(--display);font-size:15px;margin:22px 0 10px;padding-top:18px;border-top:1px solid var(--border)}.titulo-sec:first-child{margin-top:0;padding-top:0;border-top:0}</style><div class="pilha">' + htmlArquivoModulo(mod) +
-            '<h4 class="titulo-sec">Quem pode abrir</h4><p class="ajuda" style="margin-top:-4px">Pessoas do seu setor. Coordenadores, supervisores e administradores do setor já abrem todas as ferramentas dele.</p>' +
-            (pessoas.length ? '<div class="caixa-opcoes">' + pessoas.map(function (u) {
-              return '<label><input type="checkbox" name="mUsu" value="' + u.id + '"' + ((mod.usuarios || []).indexOf(u.id) >= 0 ? ' checked' : '') + '><span>' + esc(u.nome) + ' <span class="sec" style="display:inline;color:var(--muted)">· ' + esc(u.email) + (u.ativo ? '' : ' · desativado') + '</span></span></label>';
-            }).join('') + '</div><div class="linha" style="margin-top:8px"><button class="btn primary sm" id="btSalvarAcesso" type="button">Salvar quem pode abrir</button></div>' : '<div class="ajuda">Nenhum usuário no seu setor ainda. Cadastre em Usuários do setor.</div>') + '</div>',
+            (mod.pendente ? '<div class="msg aviso">Aguardando a aprovação da administração. Até lá, só a coordenação do setor abre esta ferramenta.</div>' : '') +
+            '<h4 class="titulo-sec">Quem abre e com qual papel</h4><div id="edAcessos"></div></div>',
           pe: '<a class="btn ghost" href="#/m/' + esc(mod.slug) + '" id="btAbrirMod" style="margin-right:auto">' + IC.novaAba + 'Abrir</a><button class="btn ghost" data-fechar>Fechar</button>',
           aoFechar: function () { if (location.hash.indexOf('#/admin/modulos') === 0) paginaModulosCoord(); },
         });
         $('#btAbrirMod', m).onclick = function () { m.fechar(); };
         ligarArquivoEVersoes(m, mod);
-        if ($('#btSalvarAcesso', m)) $('#btSalvarAcesso', m).onclick = async function () {
-          try {
-            await api('PUT', '/api/admin/modulos/' + mod.slug + '/acesso', { usuarios: $$('input[name=mUsu]:checked', m).map(function (i) { return Number(i.value); }) });
-            toast('Acesso salvo.', 'ok');
-          } catch (e) { toast(e.message, 'erro'); }
-        };
+        editorAcessos($('#edAcessos', m), mod.slug);
       };
     });
   }
@@ -776,7 +869,7 @@
         return '<tr class="clicavel" data-slug="' + esc(m.slug) + '" data-busca="' + esc(textoBuscaModulo(m)) + '"><td><div class="linha" style="flex-wrap:nowrap"><div class="icone-mod" style="width:34px;height:34px">' + (IC[m.icone] || IC.app) + '</div><div><b>' + esc(m.nome) + '</b><span class="sec">/' + esc(m.slug) + '</span></div></div></td>' +
           '<td>' + esc(m.setor_nome || '—') + '</td>' +
           '<td>' + (m.tem_arquivo ? quando(m.versao_em) + '<span class="sec">' + tamanho(m.tamanho) + (m.nome_original ? ' · ' + esc(m.nome_original) : '') + '</span>' : '<span class="etiqueta vermelha">sem arquivo</span>') + '</td>' +
-          '<td>' + dados + '</td><td>' + (m.ativo ? '<span class="etiqueta verde">ativo</span>' : '<span class="etiqueta cinza">desativado</span>') + '</td></tr>';
+          '<td>' + dados + '</td><td>' + (m.pendente ? '<span class="etiqueta ambar">aguardando aprovação</span>' : m.ativo ? '<span class="etiqueta verde">ativo</span>' : '<span class="etiqueta cinza">desativado</span>') + '</td></tr>';
       }).join('') + LINHA_SEM_RESULTADO(5) + '</tbody></table></div></div></div>';
 
     ligarBusca($('#buscaMod'), $('#tbMods'), $('#qtdMods'), mods.length, 'módulos', 'busca.modulos');
@@ -891,7 +984,6 @@
     }
 
     function editarModulo(mod) {
-      var usuNaoAdmin = usuarios.filter(function (u) { return u.papel !== 'admin'; });
       var colecoes = mod.config && mod.config.colecoes ? Object.keys(mod.config.colecoes) : [];
       var resumo = {}; (mod.dados_registros || []).forEach(function (r) { resumo[r.colecao] = r; });
       var armRes = mod.dados_armazenamento || [];
@@ -932,6 +1024,7 @@
         titulo: mod.nome, largo: true,
         corpo: '<style>.titulo-sec{font-family:var(--display);font-size:15px;margin:22px 0 10px;padding-top:18px;border-top:1px solid var(--border)}.titulo-sec:first-child{margin-top:0;padding-top:0;border-top:0}</style>' +
           '<div class="pilha">' +
+          (mod.pendente ? '<div class="msg aviso linha" style="justify-content:space-between;gap:10px"><span>Ferramenta nova cadastrada pela coordenação, <b>aguardando aprovação</b>. Confira o HTML (botão Abrir) e aprove para liberar às pessoas.</span><button class="btn primary sm" type="button" id="btAprovarMod">Aprovar</button></div>' : '') +
           '<h4 class="titulo-sec">Dados gerais</h4>' +
           '<div class="grade-2"><div><label class="rot" for="mNome">Nome</label><input class="campo" id="mNome" value="' + esc(mod.nome) + '"></div>' +
           '<div><label class="rot" for="mSetor">Setor</label><select class="campo" id="mSetor">' + opcoesSetor(mod.setor_id) + '</select></div></div>' +
@@ -955,11 +1048,7 @@
           '<div class="ajuda">Por padrão, se outra pessoa alterou um dado depois que a página abriu, a gravação é recusada e a ferramenta avisa. Chaves que combinarem aqui (dados calculados, preferências) gravam por cima sem conferir.</div></details></div>' +
           secPlanilha +
 
-          '<h4 class="titulo-sec">Quem pode abrir</h4>' +
-          '<p class="ajuda" style="margin-top:-4px">Administradores sempre têm acesso.</p>' +
-          (usuNaoAdmin.length ? '<div class="caixa-opcoes">' + usuNaoAdmin.map(function (u) {
-            return '<label><input type="checkbox" name="mUsu" value="' + u.id + '"' + (mod.usuarios.indexOf(u.id) >= 0 ? ' checked' : '') + '><span>' + esc(u.nome) + ' <span class="sec" style="display:inline;color:var(--muted)">· ' + esc(u.email) + (u.ativo ? '' : ' · desativado') + '</span></span></label>';
-          }).join('') + '</div>' : '<div class="ajuda">Nenhum usuário comum cadastrado ainda.</div>') +
+          '<h4 class="titulo-sec">Quem abre e com qual papel</h4><div id="edAcessos"></div>' +
 
           '<h4 class="titulo-sec">Cópia dos dados</h4>' +
           '<div class="linha"><a class="btn ghost sm" href="/api/admin/modulos/' + esc(mod.slug) + '/dados">' + IC.baixar + 'Exportar dados deste módulo (JSON)</a>' +
@@ -970,6 +1059,10 @@
       $('#btAbrirMod', m).onclick = function () { m.fechar(); };
 
       ligarArquivoEVersoes(m, mod);
+      editorAcessos($('#edAcessos', m), mod.slug);
+      if ($('#btAprovarMod', m)) $('#btAprovarMod', m).onclick = async function () {
+        try { await api('POST', '/api/admin/modulos/' + mod.slug + '/aprovar'); toast('Ferramenta aprovada. As pessoas liberadas já a veem.', 'ok'); m.fechar(); paginaModulos(); recarregarModulosUsuario(); } catch (e) { toast(e.message, 'erro'); }
+      };
 
       // importação dos dados de uma ferramenta do Claude
       if (mod.adaptador === 'claude-db') {
@@ -1039,7 +1132,6 @@
             armazenamento: arm, fonte_dados: fonte,
             chaves_locais: $('#mLocais', m).value.split(',').map(function (s) { return s.trim(); }).filter(Boolean),
             chaves_livres: $('#mLivres', m).value.split(',').map(function (s) { return s.trim(); }).filter(Boolean),
-            usuarios: $$('input[name=mUsu]:checked', m).map(function (i) { return Number(i.value); }),
           });
           m.fechar(); toast('Módulo salvo.', 'ok');
           if (arm !== mod.armazenamento || fonte !== mod.fonte_dados) recarregarQuadro(mod.slug);

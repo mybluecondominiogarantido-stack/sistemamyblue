@@ -10,6 +10,13 @@
 - Como gravar: `docs/tutoriais/LEIAME.md`. O HTML da ferramenta vem do portal (versão em uso, botão
   Baixar em Versões anteriores, ou tabela `modulo_versoes`) e fica **fora do repositório**.
 
+## Acessos ficam no portal, não no HTML
+
+- Quem abre, se edita ou só consulta e o papel de cada pessoa em cada ferramenta são definidos no portal
+  (janela da ferramenta → **Quem abre e com qual papel**). Ferramenta nova não cria aba "Acessos" nem lista de nomes:
+  lê `window.__MYBLUE__.usuario.papeis` e `.somente_leitura` (contrato e mapa das ferramentas em `docs/acessos/LEIAME.md`).
+- Papel novo numa ferramenta → a administração cadastra os papéis dela no portal com o mesmo identificador usado no HTML.
+
 ## Dados
 
 - O repositório é público: nunca versionar HTML das ferramentas, vídeos, dados de negócio ou nomes reais.

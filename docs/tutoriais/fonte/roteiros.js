@@ -431,7 +431,7 @@ module.exports = [
     nome: 'gestao-ferramentas',
     entrar: 'caio@myblue.com.br',
     inicio: '#/admin/modulos',
-    abertura: ['Para coordenadores e supervisores.', ['Enviar o HTML novo de uma ferramenta', 'Voltar para uma versão anterior', 'Escolher quem pode abrir']],
+    abertura: ['Para coordenadores e supervisores.', ['Enviar o HTML novo de uma ferramenta', 'Voltar para uma versão anterior', 'Quem abre, como e com qual papel', 'Cadastrar uma ferramenta nova']],
     async gravar(t, cen) {
       await t.legenda('Em <b>Ferramentas do setor</b> ficam as ferramentas dos seus setores. Clique numa delas.', { etapa: '1 · Ferramentas do setor', ms: 2600 });
       await t.clicar('tr[data-slug="boletos"]', { depois: 1200 });
@@ -441,13 +441,27 @@ module.exports = [
       await t.legenda('A versão anterior fica guardada. Em <b>Versões anteriores</b>, <b>Usar esta</b> volta para ela.', { etapa: H, ms: 300 });
       await t.clicar('summary:has-text("Versões anteriores")', { depois: 1200 });
       await t.mostrar('[data-versao]', 2600);
-      const Q = '3 · Quem pode abrir';
-      await t.legenda('Em <b>Quem pode abrir</b>, marque as pessoas do setor que usam a ferramenta e salve.', { etapa: Q, ms: 300 });
-      await t.clicar('.fundo-modal label:has-text("Davi Rocha") input', { depois: 700 });
-      await t.clicar('#btSalvarAcesso', { depois: 2000 });
-      await t.legenda('Coordenador e supervisor já abrem todas as ferramentas do setor.', { etapa: Q, ms: 3000 });
+      const Q = '3 · Quem abre e com qual papel';
+      await t.legenda('Em <b>Quem abre e com qual papel</b>, marque quem usa a ferramenta. Coordenação e administração abrem sempre.', { etapa: Q, ms: 300 });
+      await t.rolar(520, '#edAcessos');
+      await t.clicar('.fundo-modal [data-filtro="setor"]', { depois: 900 });
+      await t.clicar('.fundo-modal tr:has-text("Davi Rocha") [data-abre]', { depois: 900 });
+      await t.legenda('Em <b>Todas as pessoas</b> você libera também gente de <b>outros setores</b>.', { etapa: Q, ms: 300 });
+      await t.clicar('.fundo-modal [data-filtro="todas"]', { depois: 900 });
+      await t.clicar('.fundo-modal tr:has-text("Marcos Lima") [data-abre]', { depois: 700 });
+      await t.legenda('Em <b>Como</b>, escolha se a pessoa <b>edita</b> ou <b>só consulta</b>: quem só consulta vê tudo, mas não grava.', { etapa: Q, ms: 300 });
+      await t.escolher('.fundo-modal tr:has-text("Marcos Lima") [data-como]', 'só consulta', { depois: 900 });
+      await t.clicar('#btSalvarAcessos', { depois: 2200 });
+      await t.legenda('Se a ferramenta tiver <b>papéis</b> (ex.: Gestão, Financeiro), eles aparecem em colunas na mesma tabela.', { etapa: Q, ms: 3200 });
+      await t.clicar('.fundo-modal [data-fechar]', { depois: 900 });
+      const N = '4 · Ferramenta nova';
+      await t.legenda('<b>Nova ferramenta</b> cadastra uma ferramenta do seu setor: nome, setor e ícone.', { etapa: N, ms: 300 });
+      await t.clicar('#btNovaFerr', { depois: 900 });
+      await t.digitar('#nNome', 'Agenda do Crédito', { depois: 900 });
+      await t.legenda('Ela fica <b>aguardando aprovação</b>: só a coordenação abre até a administração conferir o HTML e aprovar.', { etapa: N, ms: 3600 });
+      await t.clicar('.fundo-modal [data-fechar]', { depois: 800 });
     },
-    resumo: ['<b>Ferramentas do setor</b> → clique na ferramenta', 'Envie o HTML novo · <b>Versões anteriores</b> para voltar', '<b>Quem pode abrir</b>: marque e salve'],
+    resumo: ['<b>Ferramentas do setor</b> → clique na ferramenta', 'Envie o HTML novo · <b>Versões anteriores</b> para voltar', '<b>Quem abre</b>: do setor ou de outros, edita ou só consulta, papel', '<b>Nova ferramenta</b>: aguarda a aprovação da administração'],
   },
 
   {
@@ -550,7 +564,7 @@ module.exports = [
       await t.clicar('#btCriarMod', { depois: 2200 });
       await t.legenda('Depois de criar, envie o <b>arquivo .html</b> da ferramenta.', { etapa: N, ms: 300 });
       await t.enviarArquivo('#zArq', '#inArq', cen.rec.html, { depois: 2600 });
-      await t.legenda('Na mesma janela: onde os dados ficam, quem pode abrir e as versões anteriores.', { etapa: N, ms: 300 });
+      await t.legenda('Na mesma janela: onde os dados ficam, quem abre e com qual papel e as versões anteriores.', { etapa: N, ms: 300 });
       await t.rolar(700, '.fundo-modal .modal-corpo');
       await t.pausa(1800);
       await t.clicar('.fundo-modal .modal-cab [data-fechar]', { depois: 1200 });

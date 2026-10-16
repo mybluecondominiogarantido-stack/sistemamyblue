@@ -134,9 +134,10 @@ function criarSeguranca(db, cfg) {
     return new Set((await db.q('SELECT setor_id FROM setor_membros WHERE usuario_id = $1', [usuario.id])).rows.map((x) => x.setor_id));
   }
 
-  /* ferramentas que a pessoa abre: as liberadas no cadastro e, para coordenador e supervisor, todas as dos setores dele */
+  /* ferramentas que a pessoa abre: as liberadas para ela (de qualquer setor) e, para coordenador e supervisor,
+     todas as dos setores dele (inclusive as que aguardam a aprovação da administração) */
   async function modulosDoUsuario(usuario) {
-    const { rows } = await db.q(`SELECT modulo_slug FROM permissoes WHERE usuario_id = $1
+    const { rows } = await db.q(`SELECT p.modulo_slug FROM permissoes p JOIN modulos m ON m.slug = p.modulo_slug WHERE p.usuario_id = $1 AND NOT m.pendente
       UNION SELECT m.slug FROM modulos m JOIN setor_membros sm ON sm.setor_id = m.setor_id
         WHERE sm.usuario_id = $1 AND $2`, [usuario.id, GESTORES_DE_SETOR.includes(usuario.papel)]);
     return new Set(rows.map((r) => r.modulo_slug));

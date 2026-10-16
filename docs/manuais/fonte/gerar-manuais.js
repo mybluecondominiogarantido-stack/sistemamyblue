@@ -234,9 +234,10 @@ ${passos([
 <ul>
   <li><b>Enviar uma versão nova do HTML</b> quando a ferramenta for alterada. A versão anterior fica guardada.</li>
   <li><b>Voltar para uma versão anterior</b>, em <i>Versões anteriores → Usar esta</i>, se algo der errado.</li>
-  <li>Escolher <b>quem pode abrir</b> a ferramenta, entre as pessoas do seu setor, e clicar em <b>Salvar quem pode abrir</b>.</li>
+  <li>Em <b>Quem abre e com qual papel</b>: marcar quem abre (do seu setor ou, em <i>Todas as pessoas</i>, de outros setores), se a pessoa <b>edita</b> ou <b>só consulta</b> e o <b>papel</b> dela na ferramenta, e clicar em <b>Salvar acessos</b>.</li>
+  <li><b>Nova ferramenta</b> cadastra uma ferramenta do seu setor. Ela fica <b>aguardando aprovação</b>: só a coordenação abre até a administração conferir o HTML e aprovar.</li>
 </ul>
-${fig('21b-coord-html', 'Ferramenta do setor: HTML, versões anteriores e quem pode abrir.')}
+${fig('21b-coord-html', 'Ferramenta do setor: HTML, versões anteriores e quem abre.')}
 <h2>Equipe e tipos de demanda</h2>
 <ul>
   <li>Marque os <b>líderes</b>: eles recebem os avisos de tickets novos e distribuem. Quem faz parte do setor vem do cadastro (para incluir alguém, use <i>Usuários do setor</i>).</li>
@@ -326,7 +327,7 @@ function CATALOGO() {
     for (const a of st.subareas || []) for (const k of a.ferramentas) linhas.push([`${st.nome} · ${a.nome}`, k]);
   }
   return `
-  <p class="intro">Cada setor tem as suas ferramentas, que abrem dentro do portal. Quem pode abrir cada uma é definido no cadastro da pessoa (ferramentas liberadas) e, para coordenadores e supervisores, pelo setor.</p>
+  <p class="intro">Cada setor tem as suas ferramentas, que abrem dentro do portal. Quem abre cada uma, se edita ou só consulta e com qual papel é definido no portal, na janela da ferramenta (<i>Quem abre e com qual papel</i>); coordenadores e supervisores abrem todas as do setor deles.</p>
   ${tabela(['Setor', 'Ferramenta', 'Para que serve'], linhas.map(([setor, k]) => [setor, `<b>${FERRAMENTAS[k].nome}</b>${FERRAMENTAS[k].video ? '<br><span class="etq azul" style="margin-top:1mm">vídeo</span>' : ''}`, FERRAMENTAS[k].descricao]))}
   <h2>Onde ficam os dados de cada ferramenta</h2>
   ${tabela(['Ferramenta', 'Dados'], linhas.map(([, k]) => [`<b>${FERRAMENTAS[k].nome}</b>`, FERRAMENTAS[k].dados]))}
@@ -489,7 +490,10 @@ function manualGeral() {
     ['Abrir as ferramentas', 'liberadas', 'do setor + liberadas', 'do setor + liberadas', 'todas'],
     ['Criar e editar usuários comuns', '—', 'do setor', 'do setor', 'todos'],
     ['Criar coordenadores, supervisores e admins', '—', '—', '—', 'sim'],
-    ['Enviar HTML, voltar versão, quem pode abrir', '—', 'do setor', 'do setor', 'todos'],
+    ['Enviar HTML, voltar versão, quem abre e com qual papel', '—', 'do setor', 'do setor', 'todos'],
+    ['Liberar ferramenta para pessoas de outros setores', '—', 'do setor', 'do setor', 'todas'],
+    ['Cadastrar ferramenta nova', '—', 'do setor (aguarda aprovação)', 'do setor (aguarda aprovação)', 'sim'],
+    ['Aprovar ferramenta nova · definir os papéis de uma ferramenta', '—', '—', '—', 'sim'],
     ['Líderes e tipos de demanda', '—', 'do setor', 'do setor', 'todos'],
     ['Carteira: consultar e exportar', 'sim', 'sim', 'sim', 'sim'],
     ['Carteira: responsável do setor', '—', 'do setor', 'do setor', 'tudo'],
