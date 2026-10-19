@@ -94,7 +94,7 @@ Supervisão, Usuário), setores (vazio = qualquer setor) e pessoas liberadas uma
 
 - A coordenação e a supervisão liberam pessoas nas permissões do setor delas (ex.: Crédito → Assistente de crédito).
   Perfis e setores de cada regra são da administração.
-- Na Carteira, o quadro **Seu acesso** mostra o que o portal identificou para quem está vendo (com o motivo) e quem pode
+- Na Carteira, o quadro **Seu acesso** (só para administração, coordenação e supervisão; usuário comum não o vê) mostra o que o portal identificou para quem está vendo (com o motivo) e quem pode
   cada coisa hoje. Na ficha do condomínio, só os campos liberados para a pessoa ficam abertos.
 
 ## Contrato para o HTML das ferramentas

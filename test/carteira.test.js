@@ -172,7 +172,8 @@ test('quem edita o quê na carteira: o portal diz o que identificou e a configur
   assert.deepEqual(a.permissoes.find((x) => x.chave === 'carteira.assistente_credito').quem, [{ nome: 'Cida Coordenadora', motivo: 'Coordenação · Crédito' }]);
   assert.equal((await cida.c('PATCH', `/api/carteira/${cond}`, { assistente_credito: 'cida - 1' })).status, 200);
   assert.equal((await cida.c('PATCH', `/api/carteira/${cond}`, { inicio_contrato: '02/2026' })).status, 403);
-  assert.equal((await pessoa('GET', '/api/carteira')).json.acesso.voce.pode.length, 0, 'usuário só consulta');
+  assert.equal((await pessoa('GET', '/api/carteira')).json.acesso, null, 'usuário comum não recebe a lista de quem edita');
+  assert.deepEqual((await pessoa('GET', '/api/carteira')).json.campos_editaveis, [], 'usuário só consulta');
   assert.equal((await pessoa('GET', '/api/carteira')).status, 200, 'todos veem');
 
   // a coordenação do Crédito vê as regras e libera uma pessoa na coluna do setor dela, e só nela
