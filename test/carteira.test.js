@@ -146,19 +146,10 @@ test('transferir a carteira de uma pessoa (toda ou parte)', async () => {
   assert.equal(h[0].acao, 'carteira_transferida');
 });
 
-test('exporta no formato da planilha e o arquivo volta pela importação', async () => {
-  // exportar é só da administração, até alguém ser liberado
-  assert.equal((await pessoa('GET', '/api/carteira/exportar')).status, 403);
-  assert.equal((await pessoa('GET', '/api/carteira')).json.pode_exportar, false);
-  const r = await admin('GET', '/api/carteira/exportar');
-  assert.equal(r.status, 200);
-  assert.match(r.headers.get('content-disposition'), /carteira-de-condominios-/);
-  const linhas = r.texto.replace(/^﻿/, '').trim().split('\r\n');
-  assert.ok(linhas[0].startsWith('ID;SITUAÇÃO;COMARCA;CONDOMÍNIO;VENCIMENTO;ANALISTA ADMINISTRATIVA;ANALISTA EXTRAJUDICIAL;ASSISTENTE CRÉDITO'));
-  assert.equal(linhas.length, 4);
-  assert.ok(linhas.some((l) => l.includes('"COND; VILA VERDE"')));
-  const de = await admin('POST', '/api/carteira/importar', Buffer.from(r.texto, 'utf8'));
-  assert.deepEqual([de.json.novos, de.json.atualizados, de.json.iguais], [0, 0, 3], 'exportar e reimportar não muda nada');
+test('a carteira não é exportada: nem a administração tem o endereço', async () => {
+  assert.equal((await admin('GET', '/api/carteira/exportar')).status, 404);
+  assert.equal((await pessoa('GET', '/api/carteira/exportar')).status, 404);
+  assert.equal((await admin('GET', '/api/carteira')).json.pode_exportar, undefined);
 });
 
 test('quem edita o quê na carteira: o portal diz o que identificou e a configuração muda na hora', async () => {

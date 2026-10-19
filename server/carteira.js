@@ -1,7 +1,7 @@
 'use strict';
 /*
- * Carteira de condomínios: campos, leitura do CSV da planilha "Carteira de Condomínios"
- * (como o Excel salva: ponto e vírgula, Windows-1252) e exportação no mesmo formato.
+ * Carteira de condomínios: campos e leitura do CSV da planilha "Carteira de Condomínios"
+ * (como o Excel salva: ponto e vírgula, Windows-1252). A carteira não é exportada pelo portal.
  *
  * Os dados da carteira não ficam no repositório: entram pela aba Carteira do portal.
  */
@@ -145,21 +145,6 @@ function interpretar(buf) {
   return { condominios, avisos };
 }
 
-const aspas = (v) => (/[;"\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v);
-const dataBr = (d) => {
-  if (!d) return '';
-  const s = d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10);
-  const [a, m] = s.split('-');
-  return `${m}/${a}`;
-};
-
-/* CSV no mesmo formato da planilha (abre no Excel e pode ser importado de volta) */
-function exportar(linhas) {
-  const cab = CAMPOS.map((c) => c.coluna).join(';');
-  const corpo = linhas.map((l) => CAMPOS.map((c) => aspas(c.data ? dataBr(l[c.campo]) : String(l[c.campo] == null ? '' : l[c.campo]))).join(';'));
-  return '﻿' + [cab, ...corpo].join('\r\n') + '\r\n';
-}
-
 /* ===================== responsável do condomínio nos tickets ===================== */
 // "CHAYANNE FREITAS - 4624" → "chayanne freitas" (sem acento e sem o ramal)
 const chavePessoa = (s) => semAcento(s).toLowerCase().replace(/\s*-\s*\d+\s*$/, '').replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -208,4 +193,4 @@ async function responsavelDoCondominio(db, condominioId, setorId) {
   return achado ? { id: achado.id, nome: achado.nome, carteira: c.pessoa } : { id: null, carteira: c.pessoa };
 }
 
-module.exports = { acharPessoa, funcoesPorSetor, responsavelDoCondominio, FUNCOES, CAMPOS, SITUACOES, interpretar, normalizar, exportar, lerCsv, decodificar, semAcento };
+module.exports = { acharPessoa, funcoesPorSetor, responsavelDoCondominio, FUNCOES, CAMPOS, SITUACOES, interpretar, normalizar, lerCsv, decodificar, semAcento };

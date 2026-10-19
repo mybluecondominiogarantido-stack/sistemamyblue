@@ -256,7 +256,6 @@ const CARTEIRA = `
   <li><b>Condomínios:</b> indicadores (ativos, comarcas, pessoas por função, ativos sem responsável), busca por nome, razão social, CNPJ ou ID, filtros por situação, UF, administradora e responsável. Clique no condomínio para ver a ficha completa e o histórico de alterações.</li>
   <li><b>Responsáveis:</b> quantos condomínios ativos cada pessoa tem, por UF. Clique no número para ver a lista.</li>
   <li><b>Adicionar novos:</b> a implantação envia o <i>Controle de Implantações</i> (.xlsx ou .csv, como está), escolhe a <b>vigência</b> (mês/ano da data do contrato) e confere os condomínios que ainda não estão na carteira.</li>
-  <li><b>Exportar CSV:</b> baixa a carteira no formato da planilha, que abre no Excel. Só para a administração e para quem ela liberar.</li>
 </ul>
 <h2>Cadastro do condomínio</h2>
 <ul>
@@ -496,7 +495,6 @@ function manualGeral() {
     ['Aprovar ferramenta nova · definir os papéis de uma ferramenta', '—', '—', '—', 'sim'],
     ['Líderes e tipos de demanda', '—', 'do setor', 'do setor', 'todos'],
     ['Carteira: consultar', 'sim', 'sim', 'sim', 'sim'],
-    ['Carteira: exportar (CSV)', 'se liberado', 'se liberado', 'se liberado', 'sim'],
     ['Carteira: responsável do setor', '—', 'do setor', 'do setor', 'tudo'],
     ['Módulos e dados, setores, backup, histórico', '—', '—', '—', 'sim'],
     ['Central de Links: editar', 'com a marcação', 'com a marcação', 'com a marcação', 'sim'],

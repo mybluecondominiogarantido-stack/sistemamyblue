@@ -1903,7 +1903,7 @@
       var q;
       try { q = await api('GET', '/api/admin/carteira/acessos'); } catch (e) { cont.innerHTML = '<div class="msg erro">' + esc(e.message) + '</div>'; return; }
       var nomeSetor = {}; q.setores.forEach(function (x) { nomeSetor[x.id] = x.nome; });
-      cont.innerHTML = '<p class="sub" style="margin-top:0"><b>Todos veem a carteira.</b> Aqui se define quem <b>edita</b> e quem <b>exporta</b>. A administração (' + esc(q.admins.join(', ')) + ') edita tudo, sempre.' +
+      cont.innerHTML = '<p class="sub" style="margin-top:0"><b>Todos veem a carteira.</b> Aqui se define quem <b>edita</b> cada coisa. A administração (' + esc(q.admins.join(', ')) + ') edita tudo, sempre.' +
         (q.admin ? '' : ' Você libera pessoas nas permissões do seu setor; as demais são configuradas pela administração.') + '</p>' +
         q.permissoes.map(function (p, i) {
           var r = p.regra;
@@ -1985,8 +1985,7 @@
       '<a href="#/carteira/responsaveis" class="' + (aba === 'responsaveis' ? 'on' : '') + '">Responsáveis</a>' +
       (adicionar ? '<a href="#/carteira/novos" class="' + (aba === 'novos' ? 'on' : '') + '">Adicionar novos</a>' : '') + '</nav><div id="cCorpo"></div></div>';
 
-    var acoes = (j.pode_exportar ? '<button class="btn ghost" id="btCExportar"' + (conds.length ? '' : ' disabled') + '>' + IC.baixar + 'Exportar CSV</button>' : '') +
-      (admin ? '<button class="btn primary" id="btCNovo">' + IC.mais + 'Novo condomínio</button>' : '');
+    var acoes = (admin ? '<button class="btn primary" id="btCNovo">' + IC.mais + 'Novo condomínio</button>' : '');
 
     if (aba === 'novos' && adicionar) { desenharNovos(); return; }
     if (!conds.length) {
@@ -1996,7 +1995,6 @@
     ligarAcoes();
 
     function ligarAcoes() {
-      if ($('#btCExportar')) $('#btCExportar').onclick = function () { location.href = '/api/carteira/exportar'; };
       if ($('#btCNovo')) $('#btCNovo').onclick = function () { editarCondominio(null); };
       $$('[data-carteira-acessos]').forEach(function (a) { a.onclick = function (e) { e.preventDefault(); editorCarteiraAcessos(); }; });
     }

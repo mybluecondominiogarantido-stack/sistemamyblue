@@ -79,7 +79,7 @@ para as outras pessoas. A **coordenação** abre sem precisar ser marcada, mas *
 
 ## Carteira de condomínios
 
-**Todos veem a carteira.** O resto é permissão configurável em **Ferramentas do setor → Carteira de condomínios: quem edita**
+**Todos veem a carteira** (ninguém exporta: o portal não tem mais o botão Exportar CSV). O resto é permissão configurável em **Ferramentas do setor → Carteira de condomínios: quem edita**
 (administração: também em Módulos e dados → Carteira: quem edita). Cada permissão tem uma regra: perfis (Coordenação,
 Supervisão, Usuário), setores (vazio = qualquer setor) e pessoas liberadas uma a uma. A administração pode tudo, sempre.
 
@@ -90,7 +90,6 @@ Supervisão, Usuário), setores (vazio = qualquer setor) e pessoas liberadas uma
 | Editar e transferir o Analista extrajudicial (ApoioCob) | só a administração |
 | Editar e transferir o Assistente de crédito | Coordenação e Supervisão do Crédito |
 | Adicionar condomínios novos pela planilha de implantação | Coordenação e Supervisão de qualquer setor |
-| Exportar a carteira (CSV) | só a administração |
 | Cadastrar e excluir condomínios, mudar o ID e importar a planilha | só a administração |
 
 - A coordenação e a supervisão liberam pessoas nas permissões do setor delas (ex.: Crédito → Assistente de crédito).
