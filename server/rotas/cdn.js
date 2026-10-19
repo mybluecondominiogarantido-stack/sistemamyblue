@@ -87,7 +87,7 @@ function rotasCdn({ db }) {
     if (m) return m;
     const linha = await db.um('SELECT tipo, conteudo FROM cdn_cache WHERE url = $1', [url]);
     let arq = linha ? { tipo: linha.tipo, corpo: Buffer.from(linha.conteudo) } : null;
-    if (arq && !tipoPadrao && !tipoSemExtensao(arq.tipo)) arq = null; // cópia antiga de um tipo que não é mais entregue
+    if (arq && !tipoPadrao && !tipoSemExtensao(arq.tipo)) return null; // cópia antiga de um tipo que não é mais entregue: vai para a CDN
     if (!arq) {
       if (!buscando.has(url)) {
         buscando.set(url, (async () => {
