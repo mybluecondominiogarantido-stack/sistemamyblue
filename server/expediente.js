@@ -59,7 +59,24 @@ function criarExpediente(cfg = lerExpediente()) {
     throw new Error('Não foi possível calcular o prazo (expediente sem dias úteis?).');
   }
 
-  return { somarHorasUteis, config: { inicio: cfg.inicio, fim: cfg.fim, dias: cfg.dias, horasDia: cfg.horasDia, fuso: cfg.fuso } };
+  /* prazo "no mesmo dia útil": chegou num dia útil até a hora de corte (inclusive) → fim do expediente do dia;
+     depois do corte, em fim de semana ou feriado → fim do expediente do próximo dia útil.
+     Ex. (Análise de Crédito, corte 16h): 15h50 de terça → terça 17h; 16h10 de terça → quarta 17h. */
+  function fimDoDiaUtil(de, corteHora = cfg.fim) {
+    let l = local(new Date(de));
+    const agora = l.hora * 60 + l.min + l.seg / 60;
+    if (!diaUtil(l) || agora > corteHora * 60) l = local(inicioDoProximoDia(l));
+    for (let i = 0; i < 400 && !diaUtil(l); i++) l = local(inicioDoProximoDia(l));
+    if (!diaUtil(l)) throw new Error('Não foi possível calcular o prazo (expediente sem dias úteis?).');
+    return instante(l.ano, l.mes, l.dia, cfg.fim, 0);
+  }
+
+  /* N dias úteis depois (mesmo horário, ou o início do expediente se chegou fora dele) */
+  function somarDiasUteis(de, dias) {
+    return somarHorasUteis(de, dias * cfg.horasDia);
+  }
+
+  return { somarHorasUteis, somarDiasUteis, fimDoDiaUtil, config: { inicio: cfg.inicio, fim: cfg.fim, dias: cfg.dias, horasDia: cfg.horasDia, fuso: cfg.fuso } };
 }
 
 module.exports = { criarExpediente, lerExpediente };
