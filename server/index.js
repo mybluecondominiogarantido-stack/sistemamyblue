@@ -105,6 +105,7 @@ async function criarApp(cfg) {
     try { await db.q('SELECT 1'); res.json({ ok: true, banco: db.tipo }); } catch { res.status(503).json({ ok: false }); }
   });
   app.use(seg.identificar);
+  app.use(seg.escopoDaChave);
   app.use('/api', seg.mesmaOrigem);
 
   app.use(rotasAuth(ctx));

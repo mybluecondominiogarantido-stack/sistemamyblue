@@ -105,9 +105,51 @@ function criarSeguranca(db, cfg) {
     res.setHeader('Set-Cookie', montarCookie(req, '', 0));
   }
 
+  /* ---------- chave da ferramenta isolada ----------
+     Ferramenta isolada roda numa origem à parte (sandbox): o navegador não manda o cookie do portal para ela.
+     Ela fala com o servidor por uma chave no endereço (/t/<chave>/api/… ou /api/gas/<ferramenta>/<chave>), presa
+     à sessão de quem abriu (vale enquanto a sessão valer) e a UMA ferramenta: <ferramenta>.<início do hash da sessão>.<assinatura>.
+     A assinatura usa o hash inteiro da sessão, que só o servidor conhece, então a ferramenta não fabrica a chave de outra. */
+  const CHAVE_RE = '([a-z0-9][a-z0-9-]{1,40})\\.([0-9a-f]{24})\\.([A-Za-z0-9_-]{32})';
+  const PREFIXO_CHAVE = new RegExp('^/t/' + CHAVE_RE + '(/.*)$');
+  const GAS_COM_CHAVE = new RegExp('^/api/gas/([a-z0-9][a-z0-9-]{1,40})/' + CHAVE_RE + '([?].*)?$');
+  const assinar = (hashSessao, slug) => crypto.createHmac('sha256', hashSessao).update('ferramenta:' + slug).digest('base64url').slice(0, 32);
+
+  function chaveFerramenta(req, slug) {
+    const token = lerCookies(req)[COOKIE];
+    if (!token) return null;
+    const th = sha256(token);
+    return `${slug}.${th.slice(0, 24)}.${assinar(th, slug)}`;
+  }
+
+  async function identificarPorChave(req, slug, inicio, assinatura) {
+    const s = await db.um(`SELECT s.token_hash, s.expira_em, u.id, u.nome, u.email, u.papel, u.ativo, u.trocar_senha, u.foto_em, u.supervisor_tickets, u.editor_links
+      FROM sessoes s JOIN usuarios u ON u.id = s.usuario_id WHERE left(s.token_hash, 24) = $1`, [inicio]);
+    if (!s || !s.ativo || new Date(s.expira_em) <= new Date()) return;
+    const esperado = Buffer.from(assinar(s.token_hash, slug));
+    if (!crypto.timingSafeEqual(esperado, Buffer.from(assinatura.padEnd(esperado.length).slice(0, esperado.length)))) return;
+    req.usuario = { id: s.id, nome: s.nome, email: s.email, papel: s.papel, trocar_senha: !!s.trocar_senha, foto_v: s.foto_em ? new Date(s.foto_em).getTime() : null, supervisor_tickets: !!s.supervisor_tickets, editor_links: !!s.editor_links };
+    req.ferramenta = slug;
+  }
+
   /* Identifica o usuário (se houver sessão válida). Renova a sessão quando passou da metade. */
   async function identificar(req, res, next) {
     try {
+      // pedido de ferramenta isolada: só a chave vale (cookie, se vier, é ignorado)
+      let m = PREFIXO_CHAVE.exec(req.url);
+      if (m) {
+        req.viaChave = true;
+        req.url = m[4];
+        await identificarPorChave(req, m[1], m[2], m[3]);
+        return next();
+      }
+      m = GAS_COM_CHAVE.exec(req.url);
+      if (m) {
+        req.viaChave = true;
+        req.url = `/api/gas/${m[1]}${m[5] || ''}`;
+        if (m[1] === m[2]) await identificarPorChave(req, m[2], m[3], m[4]);
+        return next();
+      }
       const token = lerCookies(req)[COOKIE];
       if (token) {
         const th = sha256(token);
@@ -170,9 +212,48 @@ function criarSeguranca(db, cfg) {
     next();
   };
 
+  /* O que uma ferramenta isolada pode pedir com a chave dela: os dados dela, a carteira (consulta), abrir ticket com
+     anexo (Análise de Espólio), as rotas da Gestão de Premiações (só se a ferramenta for de premiação), fotos e bibliotecas.
+     O resto (administração, tickets dos outros, dados de outras ferramentas) fica fechado mesmo para quem é admin. */
+  async function permitidoParaFerramenta(req) {
+    const s = req.ferramenta;
+    const p = req.path;
+    const ler = req.method === 'GET' || req.method === 'HEAD';
+    if (p === `/api/armazenamento/${s}` || p === `/api/gas/${s}`) return true;
+    if (p === `/api/db/${s}` || p === `/api/db/${s}/trava` || p === `/api/db/${s}/pessoas`) return true;
+    if (ler && (/^\/api\/carteira(\/\d+)?$/.test(p) || /^\/api\/usuarios\/\d+\/foto$/.test(p) || p.startsWith('/cdn/'))) return true;
+    if (req.method === 'POST' && (p === '/api/tickets' || /^\/api\/tickets\/\d+\/anexos$/.test(p))) return true;
+    if (p.startsWith('/api/comissao/')) {
+      const m = await db.um('SELECT config FROM modulos WHERE slug = $1', [s]);
+      return !!(m && m.config && m.config.relatorios_comissao);
+    }
+    return false;
+  }
+
+  /* Pedidos com a chave: respondem a qualquer origem (a ferramenta isolada tem origem "null"); a chave é o que autentica,
+     não um cookie, então não há CSRF. Fora do que a ferramenta pode pedir, recusa. */
+  async function escopoDaChave(req, res, next) {
+    if (!req.viaChave) return next();
+    // a ferramenta pode pedir com credentials: 'include'; nem assim o cookie vale aqui (só a chave)
+    if (req.headers.origin === 'null') res.set({ 'Access-Control-Allow-Origin': 'null', 'Access-Control-Allow-Credentials': 'true', Vary: 'Origin' });
+    else res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Expose-Headers', 'Content-Disposition, Content-Length');
+    if (req.method === 'OPTIONS') {
+      res.set('Access-Control-Allow-Methods', 'GET, HEAD, POST, PUT, PATCH, DELETE');
+      res.set('Access-Control-Allow-Headers', String(req.headers['access-control-request-headers'] || 'Content-Type').slice(0, 300));
+      res.set('Access-Control-Max-Age', '600');
+      return res.status(204).end();
+    }
+    try {
+      if (!req.usuario) return res.status(401).json({ erro: 'A sessão desta ferramenta terminou. Recarregue a página.', code: 'revoked' });
+      if (!(await permitidoParaFerramenta(req))) return res.status(403).json({ erro: 'Esta ferramenta não tem acesso a este recurso do portal.', code: 'permission_denied' });
+      next();
+    } catch (e) { next(e); }
+  }
+
   /* Bloqueia requisições que alteram dados vindas de outro site (proteção CSRF). */
   function mesmaOrigem(req, res, next) {
-    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || req.viaChave) return next();
     const origem = req.headers.origin;
     if (origem && origem !== 'null') {
       let host;
@@ -213,7 +294,7 @@ function criarSeguranca(db, cfg) {
   setInterval(() => db.q('DELETE FROM sessoes WHERE expira_em < now()').catch(() => {}), 3600 * 1000).unref();
 
   return {
-    auditar, iniciarSessao, encerrarSessao, identificar, exigirLogin, exigirAdmin, mesmaOrigem,
+    auditar, iniciarSessao, encerrarSessao, identificar, escopoDaChave, chaveFerramenta, exigirLogin, exigirAdmin, mesmaOrigem,
     podeAcessar, modulosDoUsuario, setoresGeridos, GESTORES_DE_SETOR, bloqueado, registrarFalha, limparFalhas,
   };
 }

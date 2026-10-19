@@ -165,9 +165,16 @@
     };
 
     window.addEventListener('message', function (ev) {
-      if (ev.origin !== location.origin || !ev.data || !ev.data.myblue) return;
-      statusSync[ev.data.modulo] = ev.data.tipo;
-      if (ev.data.modulo === atual) desenharStatus();
+      if (!ev.data || !ev.data.myblue) return;
+      var modulo = ev.data.modulo;
+      if (ev.origin !== location.origin) {
+        // ferramenta isolada (origem "null"): vale só se vier de um dos quadros abertos, e o módulo é o do quadro
+        var dono = Object.keys(quadros).find(function (s) { return quadros[s].contentWindow === ev.source; });
+        if (ev.origin !== 'null' || !dono) return;
+        modulo = dono;
+      }
+      statusSync[modulo] = ev.data.tipo;
+      if (modulo === atual) desenharStatus();
     });
     window.addEventListener('beforeunload', function (e) {
       var pendente = Object.keys(statusSync).some(function (k) { return statusSync[k] === 'salvando' || statusSync[k] === 'erro' || statusSync[k] === 'conflito'; });
@@ -327,7 +334,11 @@
       f.title = m.nome;
       f.setAttribute('data-slug', slug);
       f.src = '/m/' + encodeURIComponent(slug) + '/';
-      f.setAttribute('allow', 'clipboard-read; clipboard-write; fullscreen');
+      if (m.isolada) {
+        // isolada: origem própria, sem acesso ao portal (o servidor também manda o sandbox no cabeçalho)
+        f.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads');
+        f.setAttribute('allow', 'clipboard-read *; clipboard-write *; fullscreen *');
+      } else f.setAttribute('allow', 'clipboard-read; clipboard-write; fullscreen');
       var carregando = document.createElement('div');
       carregando.className = 'carregando';
       carregando.innerHTML = '<div><div class="giro"></div>Abrindo ' + esc(m.nome) + '…</div>';
@@ -1101,6 +1112,12 @@
 
           htmlArquivoModulo(mod) +
 
+          '<h4 class="titulo-sec">Isolamento</h4>' +
+          '<label class="opcao-radio"><input type="checkbox" id="mIsolada"' + (mod.config && mod.config.isolada ? ' checked' : '') + '><div><b>Isolar esta ferramenta (recomendado)</b>' +
+          '<span>A ferramenta roda separada do portal: o HTML dela não consegue usar a sessão de quem a abre para mexer em outras partes do portal ' +
+          '(usuários, outras ferramentas, backup). Ela continua lendo e gravando os próprios dados. Antes de ligar numa ferramenta em uso, abra e teste: ' +
+          'o que ela guardar "só no navegador" passa a valer só enquanto a página estiver aberta, e ferramentas que usam IndexedDB ou Web Worker podem não funcionar isoladas.</span></div></label>' +
+
           // ferramentas do Claude guardam tudo no banco de documentos: esta escolha não se aplica a elas
           '<div' + (mod.adaptador === 'claude-db' ? ' hidden' : '') + '>' +
           '<h4 class="titulo-sec">Onde ficam os dados salvos pela ferramenta</h4>' +
@@ -1197,12 +1214,15 @@
           await api('PATCH', '/api/admin/modulos/' + mod.slug, {
             nome: $('#mNome', m).value, descricao: $('#mDesc', m).value, setor_id: $('#mSetor', m).value || null,
             icone: $('#mIcone', m).value, ordem: Number($('#mOrdem', m).value) || 0, ativo: $('#mAtivo', m).checked,
-            armazenamento: arm, fonte_dados: fonte,
+            armazenamento: arm, fonte_dados: fonte, isolada: $('#mIsolada', m).checked,
             chaves_locais: $('#mLocais', m).value.split(',').map(function (s) { return s.trim(); }).filter(Boolean),
             chaves_livres: $('#mLivres', m).value.split(',').map(function (s) { return s.trim(); }).filter(Boolean),
           });
           m.fechar(); toast('Módulo salvo.', 'ok');
-          if (arm !== mod.armazenamento || fonte !== mod.fonte_dados) recarregarQuadro(mod.slug);
+          if (arm !== mod.armazenamento || fonte !== mod.fonte_dados || $('#mIsolada', m).checked !== !!(mod.config && mod.config.isolada)) {
+            // o sandbox do quadro só muda criando o quadro de novo
+            if (quadros[mod.slug]) { quadros[mod.slug].remove(); delete quadros[mod.slug]; }
+          }
           paginaModulos(); recarregarModulosUsuario();
         } catch (e) { var x = $('#mMsg', m); x.textContent = e.message; x.hidden = false; }
       };

@@ -32,12 +32,14 @@ function tipoSemExtensao(tipoDaCdn) {
   return null;
 }
 
-/* troca os endereços das CDNs conhecidas pelo endereço do portal (no HTML e nas strings do JS da ferramenta) */
-function trocarCdns(html) {
+/* troca os endereços das CDNs conhecidas pelo endereço do portal (no HTML e nas strings do JS da ferramenta).
+   prefixo: '/t/<chave>' na ferramenta isolada (ela não tem o cookie do portal) */
+function trocarCdns(html, prefixo = '') {
   let s = html;
   for (const [nome, base] of Object.entries(CDNS)) {
     const host = base.replace('https://', '');
-    s = s.split('https://' + host + '/').join('/cdn/' + nome + '/').split('"//' + host + '/').join('"/cdn/' + nome + '/').split("'//" + host + "/").join("'/cdn/" + nome + '/');
+    const local = prefixo + '/cdn/' + nome + '/';
+    s = s.split('https://' + host + '/').join(local).split('"//' + host + '/').join('"' + local).split("'//" + host + "/").join("'" + local);
   }
   return s;
 }

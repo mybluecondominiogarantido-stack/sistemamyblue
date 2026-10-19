@@ -96,13 +96,14 @@ function criarServicoModulos(db, cfg) {
 
   /* Monta o HTML entregue ao navegador: aplica o banco interno (se ativo) e injeta a ponte de armazenamento.
      acesso: o que a pessoa pode nesta ferramenta ({ papeis, somente_leitura, papeis_da_ferramenta }, vem de acessos.js) */
-  async function montarHtml(m, usuario, acesso = {}) {
-    let html = await lerHtml(m);
+  async function montarHtml(m, usuario, acesso = {}, { chave = null, versao = null } = {}) {
+    let html = versao ? (await db.um('SELECT conteudo FROM modulo_versoes WHERE id = $1 AND modulo_slug = $2', [versao, m.slug]))?.conteudo?.toString('utf8') : await lerHtml(m);
     if (html == null) return null;
     const avisos = [];
 
     if (m.adaptador && m.adaptador !== 'claude-db' && m.fonte_dados === 'interno') {
-      const r = aplicarPatches(html, m.config.patches_interno, { GAS_URL: `/api/gas/${m.slug}` });
+      // ferramenta isolada: a chave vai no fim do endereço (a ferramenta acrescenta "?action=…" depois)
+      const r = aplicarPatches(html, m.config.patches_interno, { GAS_URL: chave ? `/api/gas/${m.slug}/${chave}` : `/api/gas/${m.slug}` });
       if (r.falhas.length) {
         avisos.push('Não foi possível ligar esta ferramenta ao banco interno (o HTML mudou). Ela está usando a fonte original. Avise a administração.');
         console.warn(`[modulos] ${m.slug}: patches não aplicados →`, r.falhas);
@@ -112,7 +113,7 @@ function criarServicoModulos(db, cfg) {
     }
 
     // bibliotecas das CDNs passam a vir do próprio portal (funciona mesmo com a CDN bloqueada na rede)
-    html = trocarCdns(html);
+    html = trocarCdns(html, chave ? `/t/${chave}` : '');
 
     const conf = {
       modulo: m.slug,
@@ -123,6 +124,9 @@ function criarServicoModulos(db, cfg) {
         papeis: acesso.papeis || [], somente_leitura: !!acesso.somente_leitura },
       papeis: acesso.papeis_da_ferramenta || [],
       claudeDb: m.adaptador === 'claude-db',
+      // isolada: roda em sandbox (origem própria) e fala com o portal pela chave
+      isolada: !!chave,
+      chave,
       avisos,
     };
     if (m.armazenamento !== 'navegador') {

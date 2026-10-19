@@ -300,7 +300,8 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     const daCoordenacao = !!req.setoresGeridos;
     const setorId = b.setor_id ? Number(b.setor_id) : null;
     if (daCoordenacao && !(setorId && req.setoresGeridos.has(setorId))) return erro(res, 403, 'Escolha um dos seus setores para a ferramenta nova.');
-    await db.q(`INSERT INTO modulos (slug, nome, descricao, setor_id, icone, ordem, armazenamento, config, pendente, criado_por) VALUES ($1, $2, $3, $4, $5, $6, $7, '{}'::jsonb, $8, $9)`,
+    // ferramenta nova já nasce isolada (a administração desliga se ela precisar de algo que o isolamento não permite)
+    await db.q(`INSERT INTO modulos (slug, nome, descricao, setor_id, icone, ordem, armazenamento, config, pendente, criado_por) VALUES ($1, $2, $3, $4, $5, $6, $7, '{"isolada":true}'::jsonb, $8, $9)`,
       [slug, nome, String(b.descricao || ''), setorId, ICONES.includes(b.icone) ? b.icone : 'app', Number(b.ordem) || 0, daCoordenacao ? 'compartilhado' : arm, daCoordenacao, req.usuario.id]);
     await seg.auditar(req, 'modulo_criado', slug, { nome, pendente: daCoordenacao });
     if (daCoordenacao && avisos) {
@@ -325,6 +326,7 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     if (Array.isArray(req.body.chaves_locais)) config.chaves_locais = expressoes(req.body.chaves_locais);
     if (Array.isArray(req.body.chaves_livres)) config.chaves_livres = expressoes(req.body.chaves_livres);
     if (typeof req.body.google_url === 'string') config.google_url = req.body.google_url.trim();
+    if (typeof req.body.isolada === 'boolean') config.isolada = req.body.isolada;
     await db.q(`UPDATE modulos SET nome = $1, descricao = $2, setor_id = $3, icone = $4, ordem = $5, ativo = $6, armazenamento = $7, fonte_dados = $8,
       config = $9::jsonb, atualizado_em = now() WHERE slug = $10`, [nome, String(b.descricao || ''), b.setor_id ? Number(b.setor_id) : null,
       ICONES.includes(b.icone) ? b.icone : m.icone, Number(b.ordem) || 0, !!b.ativo, arm, fonte, JSON.stringify(config), m.slug]);
@@ -336,7 +338,7 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
       });
     }
     await seg.auditar(req, 'modulo_editado', m.slug, {
-      nome, armazenamento: arm, fonte_dados: fonte, ativo: !!b.ativo,
+      nome, armazenamento: arm, fonte_dados: fonte, ativo: !!b.ativo, isolada: !!config.isolada,
       ...(arm !== m.armazenamento ? { armazenamento_anterior: m.armazenamento } : {}),
       ...(fonte !== m.fonte_dados ? { fonte_anterior: m.fonte_dados } : {}),
     });

@@ -249,6 +249,7 @@ test('baixar todas as ferramentas em uso num .zip', async () => {
 test('bibliotecas das CDNs vêm do portal', async () => {
   const { c } = await logar('admin@teste.com', 'Admin1234');
   await c('POST', '/api/admin/modulos', { slug: 'cdn-x', nome: 'CDN X', armazenamento: 'navegador' });
+  await c('PATCH', '/api/admin/modulos/cdn-x', { isolada: false }); // ferramenta nova nasce isolada; aqui, o caso sem isolamento
   await c('PUT', '/api/admin/modulos/cdn-x/arquivo', '<!doctype html><html><head><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script></head>' +
     '<body><script>const W = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js"; const U = \'//unpkg.com/a@1.0.0/a.js\';</script></body></html>', { headers: { 'content-type': 'text/html' } });
   const pag = (await c('GET', '/m/cdn-x/')).texto;

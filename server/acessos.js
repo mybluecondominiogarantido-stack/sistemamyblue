@@ -33,6 +33,8 @@ const MODELOS = [
     ],
     // armazenamento da ferramenta: chave cnp:p:<id do usuário> → { id, papeis, executivo, nome, ... }
     espelho: { tipo: 'armazenamento', prefixo: 'cnp:p:', idNoDoc: (uid) => String(uid) },
+    // quem tem este papel distribui os papéis pela aba Acessos da própria ferramenta
+    papelQueDistribui: 'gestor',
   },
   {
     id: 'analise-de-espolio',
@@ -49,6 +51,7 @@ const MODELOS = [
     },
     // banco de documentos da ferramenta: perfis/mb-<id do usuário> → { id, nome, papeis, nomeCarteira, ... }
     espelho: { tipo: 'documentos', colecao: 'perfis', prefixo: 'mb-', idNoDoc: (uid) => `mb-${uid}` },
+    papelQueDistribui: 'gestao',
   },
 ];
 
@@ -246,6 +249,59 @@ function criarAcessos({ db, seg, modulos, documentos }) {
     return { tipo: 'documentos', colecao: e.colecao, id, dados: { nomeCarteira: '', ...atual, id: e.idNoDoc(usuario.id), nome: atual.nome || usuario.nome, papeis } };
   }
 
+  /* ---------- papéis conferidos no servidor ----------
+     Nas ferramentas que guardam os papéis nelas mesmas (MODELOS), o registro de papéis fica nos dados da ferramenta,
+     que qualquer pessoa que edita consegue gravar. Sem conferência, alguém se daria o papel Gestão pela aba Acessos da
+     ferramenta. Aqui: mudar os papéis de alguém (inclusive os próprios) só a administração, a coordenação/supervisão do
+     setor da ferramenta e quem já tem o papel que distribui (ex.: Gestão). O resto do registro grava normalmente. */
+  async function podeDistribuirPapeis(usuario, m, modelo) {
+    if (usuario.papel === 'admin') return true;
+    if (seg.GESTORES_DE_SETOR.includes(usuario.papel) && (await gestoresDoSetor(m.setor_id)).includes(usuario.id)) return true;
+    return !!modelo.papelQueDistribui && ((await papeisPorPessoa(m, modelo)).get(usuario.id) || []).includes(modelo.papelQueDistribui);
+  }
+  const listaPapeis = (d) => (d && Array.isArray(d.papeis) ? d.papeis.map(String).sort() : []);
+  const mesmaLista = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+  const recusa = (modelo) => {
+    const p = modelo.papeis.find((x) => x.id === modelo.papelQueDistribui);
+    return `Só a administração, a coordenação do setor${p ? ` ou quem tem o papel ${p.nome}` : ''} muda os papéis das pessoas nesta ferramenta. Nada foi salvo.`;
+  };
+
+  /* gravação no armazenamento compartilhado ({ set, del, limpar }); devolve a mensagem de recusa ou null */
+  async function conferirPapeisNoArmazenamento(usuario, m, corpo) {
+    const modelo = await modeloDe(m);
+    if (!modelo || modelo.espelho.tipo !== 'armazenamento' || escopoArm(m) !== '*') return null;
+    const pre = modelo.espelho.prefixo;
+    const set = Object.entries(corpo.set || {}).filter(([k]) => String(k).startsWith(pre));
+    const del = (corpo.del || []).map(String).filter((k) => k.startsWith(pre));
+    if (!set.length && !del.length && !corpo.limpar) return null;
+    const { rows } = await db.q("SELECT chave, valor FROM armazenamento WHERE modulo_slug = $1 AND escopo = '*' AND starts_with(chave, $2)", [m.slug, pre]);
+    const antes = new Map(rows.map((r) => { try { return [r.chave, listaPapeis(JSON.parse(r.valor))]; } catch { return [r.chave, []]; } }));
+    const depois = new Map(corpo.limpar ? [] : antes);
+    for (const k of del) depois.delete(k);
+    for (const [k, v] of set) { try { depois.set(k, listaPapeis(JSON.parse(String(v)))); } catch { depois.set(k, []); } }
+    const muda = [...new Set([...antes.keys(), ...depois.keys()])].some((k) => !mesmaLista(antes.get(k) || [], depois.get(k) || []));
+    if (!muda || await podeDistribuirPapeis(usuario, m, modelo)) return null;
+    return recusa(modelo);
+  }
+
+  /* gravação no banco de documentos ([{ op, path, data }]); devolve a mensagem de recusa ou null */
+  async function conferirPapeisNosDocumentos(usuario, m, ops) {
+    const modelo = await modeloDe(m);
+    if (!modelo || modelo.espelho.tipo !== 'documentos' || !Array.isArray(ops)) return null;
+    const pre = modelo.espelho.colecao + '/';
+    let muda = false;
+    for (const o of ops) {
+      const caminho = o && String(o.path || '');
+      if (!caminho.startsWith(pre) || caminho.slice(pre.length).includes('/')) continue;
+      const antes = listaPapeis(await documentos.ler(m.slug, caminho));
+      const dados = o.data && typeof o.data === 'object' ? o.data : {};
+      const depois = o.op === 'delete' ? [] : o.op === 'update' && !('papeis' in dados) ? antes : listaPapeis(dados);
+      if (!mesmaLista(antes, depois)) { muda = true; break; }
+    }
+    if (!muda || await podeDistribuirPapeis(usuario, m, modelo)) return null;
+    return recusa(modelo);
+  }
+
   /* o que entra em window.__MYBLUE__ (e, para a administração, o registro com todos os papéis nas ferramentas de modelo) */
   async function paraFerramenta(usuario, m) {
     const a = await acessoDe(usuario, m);
@@ -254,7 +310,8 @@ function criarAcessos({ db, seg, modulos, documentos }) {
       sobreposicao: await sobreposicaoAdmin(usuario, m) };
   }
 
-  return { MODELOS, ID_PAPEL_RE, modeloDe, papeisDaFerramenta, acessoDe, quadro, salvar, paraFerramenta, sobreposicaoAdmin, gestoresDoSetor };
+  return { MODELOS, ID_PAPEL_RE, modeloDe, papeisDaFerramenta, acessoDe, quadro, salvar, paraFerramenta, sobreposicaoAdmin, gestoresDoSetor,
+    conferirPapeisNoArmazenamento, conferirPapeisNosDocumentos };
 }
 
 module.exports = { criarAcessos, MODELOS, ID_PAPEL_RE };
