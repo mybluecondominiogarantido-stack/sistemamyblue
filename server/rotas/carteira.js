@@ -1,7 +1,7 @@
 'use strict';
 /*
  * Aba Carteira de condomínios.
- * Todos que entram no portal consultam. Quem edita o quê (dados do condomínio, cada coluna de responsável,
+ * Todos que entram no portal consultam (exportar é uma permissão à parte). Quem edita o quê (dados do condomínio, cada coluna de responsável,
  * adicionar novos, cadastrar/importar) vem das regras de acesso (server/regras.js), configuradas em
  * Ferramentas do setor → Carteira de condomínios. A administração pode tudo.
  * Cada alteração fica no histórico (auditoria) com o que mudou, quem mudou e quando.
@@ -88,10 +88,11 @@ function rotasCarteira({ db, seg, regras }) {
     const { rows } = await db.q(`${SELECT} ORDER BY c.nome, c.comarca`);
     res.json({ condominios: rows, funcoes: FUNCOES.map((f) => ({ campo: f.campo, rotulo: f.rotulo })), situacoes: SITUACOES,
       pode_editar: await regras.pode(req.usuario, 'carteira.cadastro'), campos_editaveis: await camposEditaveis(req.usuario),
-      funcoes_editaveis: await funcoesEditaveis(req.usuario), pode_adicionar: await regras.pode(req.usuario, 'carteira.adicionar'), acesso: await quadroDeAcesso(req.usuario) });
+      funcoes_editaveis: await funcoesEditaveis(req.usuario), pode_adicionar: await regras.pode(req.usuario, 'carteira.adicionar'),
+      pode_exportar: await regras.pode(req.usuario, 'carteira.exportar'), acesso: await quadroDeAcesso(req.usuario) });
   });
 
-  r.get('/api/carteira/exportar', async (req, res) => {
+  r.get('/api/carteira/exportar', exigir('carteira.exportar', 'Você não tem permissão para exportar a carteira.'), async (req, res) => {
     const { rows } = await db.q(`${SELECT} ORDER BY c.nome, c.comarca`);
     await seg.auditar(req, 'carteira_exportada', null, { condominios: rows.length });
     res.set('Content-Type', 'text/csv; charset=utf-8');

@@ -147,7 +147,10 @@ test('transferir a carteira de uma pessoa (toda ou parte)', async () => {
 });
 
 test('exporta no formato da planilha e o arquivo volta pela importação', async () => {
-  const r = await pessoa('GET', '/api/carteira/exportar');
+  // exportar é só da administração, até alguém ser liberado
+  assert.equal((await pessoa('GET', '/api/carteira/exportar')).status, 403);
+  assert.equal((await pessoa('GET', '/api/carteira')).json.pode_exportar, false);
+  const r = await admin('GET', '/api/carteira/exportar');
   assert.equal(r.status, 200);
   assert.match(r.headers.get('content-disposition'), /carteira-de-condominios-/);
   const linhas = r.texto.replace(/^﻿/, '').trim().split('\r\n');

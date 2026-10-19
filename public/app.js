@@ -1885,7 +1885,7 @@
     return '<details class="painel" style="padding:12px 16px;margin-bottom:16px"><summary style="cursor:pointer;display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
       '<b>Seu acesso:</b><span class="etiqueta azul">' + esc(a.voce.nivel) + (a.voce.setores.length ? ' · ' + esc(a.voce.setores.join(', ')) : '') + '</span><span>' + esc(resumo) + '</span>' +
       '<span class="ajuda" style="margin:0 0 0 auto">ver quem edita o quê</span></summary>' +
-      '<p style="margin:12px 0 4px"><b>Todos veem e exportam a carteira.</b> ' + (eu.papel === 'admin' ? 'Como administrador, você edita tudo.' : pode.length ? 'Além disso, você pode:' : 'Você não tem permissão de edição.') + '</p>' +
+      '<p style="margin:12px 0 4px"><b>Todos veem a carteira.</b> ' + (eu.papel === 'admin' ? 'Como administrador, você edita tudo.' : pode.length ? 'Além disso, você pode:' : 'Você não tem permissão de edição.') + '</p>' +
       (eu.papel !== 'admin' && pode.length ? '<ul style="margin:0 0 10px;padding-left:20px">' + pode.map(function (x) { return '<li>' + esc(x.rotulo) + ' <span class="sec" style="display:inline">· por ' + esc(x.motivo) + '</span></li>'; }).join('') + '</ul>' : '') +
       '<h4 style="margin:12px 0 6px;font-family:var(--display)">Quem pode cada coisa hoje</h4><div class="tabela-wrap"><table><thead><tr><th>O que</th><th>Quem (além da administração)</th></tr></thead><tbody>' +
       a.permissoes.map(function (p) {
@@ -1903,7 +1903,7 @@
       var q;
       try { q = await api('GET', '/api/admin/carteira/acessos'); } catch (e) { cont.innerHTML = '<div class="msg erro">' + esc(e.message) + '</div>'; return; }
       var nomeSetor = {}; q.setores.forEach(function (x) { nomeSetor[x.id] = x.nome; });
-      cont.innerHTML = '<p class="sub" style="margin-top:0"><b>Todos veem e exportam a carteira.</b> Aqui se define quem <b>edita</b> cada coisa. A administração (' + esc(q.admins.join(', ')) + ') edita tudo, sempre.' +
+      cont.innerHTML = '<p class="sub" style="margin-top:0"><b>Todos veem a carteira.</b> Aqui se define quem <b>edita</b> e quem <b>exporta</b>. A administração (' + esc(q.admins.join(', ')) + ') edita tudo, sempre.' +
         (q.admin ? '' : ' Você libera pessoas nas permissões do seu setor; as demais são configuradas pela administração.') + '</p>' +
         q.permissoes.map(function (p, i) {
           var r = p.regra;
@@ -1985,7 +1985,7 @@
       '<a href="#/carteira/responsaveis" class="' + (aba === 'responsaveis' ? 'on' : '') + '">Responsáveis</a>' +
       (adicionar ? '<a href="#/carteira/novos" class="' + (aba === 'novos' ? 'on' : '') + '">Adicionar novos</a>' : '') + '</nav><div id="cCorpo"></div></div>';
 
-    var acoes = '<button class="btn ghost" id="btCExportar"' + (conds.length ? '' : ' disabled') + '>' + IC.baixar + 'Exportar CSV</button>' +
+    var acoes = (j.pode_exportar ? '<button class="btn ghost" id="btCExportar"' + (conds.length ? '' : ' disabled') + '>' + IC.baixar + 'Exportar CSV</button>' : '') +
       (admin ? '<button class="btn primary" id="btCNovo">' + IC.mais + 'Novo condomínio</button>' : '');
 
     if (aba === 'novos' && adicionar) { desenharNovos(); return; }
