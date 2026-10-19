@@ -11,8 +11,10 @@ const BRIDGE_JS = fs.readFileSync(path.join(__dirname, 'bridge.js'), 'utf8');
 const jsonEmScript = (v) => JSON.stringify(v).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
 
 function criarServicoModulos(db, cfg) {
-  const COLUNAS = `m.*, s.nome AS setor_nome, s.ordem AS setor_ordem, v.enviado_em AS versao_em, v.tamanho, v.nome_original
-    FROM modulos m LEFT JOIN setores s ON s.id = m.setor_id LEFT JOIN modulo_versoes v ON v.id = m.versao_id`;
+  const COLUNAS = `m.*, s.nome AS setor_nome, s.ordem AS setor_ordem, v.enviado_em AS versao_em, v.tamanho, v.nome_original,
+    pv.enviado_em AS pendente_em, pv.nome_original AS pendente_nome, pu.nome AS pendente_por
+    FROM modulos m LEFT JOIN setores s ON s.id = m.setor_id LEFT JOIN modulo_versoes v ON v.id = m.versao_id
+    LEFT JOIN modulo_versoes pv ON pv.id = m.versao_pendente_id LEFT JOIN usuarios pu ON pu.id = pv.enviado_por`;
 
   const parse = (m) => (m ? { ...m, config: m.config || {}, ativo: !!m.ativo, tem_arquivo: !!m.versao_id } : null);
 
@@ -29,25 +31,43 @@ function criarServicoModulos(db, cfg) {
     return null;
   }
 
-  /* Grava um novo HTML como versão do módulo (no banco) e passa a usá-lo. */
-  async function salvarVersao(slug, buf, nomeOriginal, usuarioId) {
+  /* Grava um novo HTML como versão do módulo (no banco) e passa a usá-lo.
+     aguardar: fica guardado como versão aguardando a aprovação da administração (a versão em uso não muda). */
+  async function salvarVersao(slug, buf, nomeOriginal, usuarioId, { aguardar = false } = {}) {
     const sha = crypto.createHash('sha256').update(buf).digest('hex');
     return db.tx(async (t) => {
-      const v = await t.um(`INSERT INTO modulo_versoes (modulo_slug, conteudo, nome_original, tamanho, sha256, enviado_por)
-        VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`, [slug, buf, nomeOriginal ? String(nomeOriginal).slice(0, 200) : null, buf.length, sha, usuarioId || null]);
-      await t.q('UPDATE modulos SET versao_id = $1, atualizado_em = now() WHERE slug = $2', [v.id, slug]);
+      const v = await t.um(`INSERT INTO modulo_versoes (modulo_slug, conteudo, nome_original, tamanho, sha256, enviado_por, aprovada)
+        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`, [slug, buf, nomeOriginal ? String(nomeOriginal).slice(0, 200) : null, buf.length, sha, usuarioId || null, !aguardar]);
+      if (aguardar) {
+        // uma versão aguardando por vez: a anterior que ainda não tinha sido aprovada sai
+        await t.q('DELETE FROM modulo_versoes WHERE modulo_slug = $1 AND NOT aprovada AND id <> $2', [slug, v.id]);
+        await t.q('UPDATE modulos SET versao_pendente_id = $1 WHERE slug = $2', [v.id, slug]);
+      } else {
+        await t.q('UPDATE modulos SET versao_id = $1, atualizado_em = now() WHERE slug = $2', [v.id, slug]);
+      }
       return v.id;
     });
   }
 
-  async function restaurarVersao(slug, versaoId) {
-    const v = await db.um('SELECT id FROM modulo_versoes WHERE id = $1 AND modulo_slug = $2', [versaoId, slug]);
-    if (!v) return false;
-    await db.q('UPDATE modulos SET versao_id = $1, atualizado_em = now() WHERE slug = $2', [v.id, slug]);
+  /* volta a uma versão guardada (soAprovadas: a coordenação não põe em uso a que aguarda aprovação) */
+  async function restaurarVersao(slug, versaoId, { soAprovadas = false } = {}) {
+    const v = await db.um('SELECT id, aprovada FROM modulo_versoes WHERE id = $1 AND modulo_slug = $2', [versaoId, slug]);
+    if (!v || (soAprovadas && !v.aprovada)) return false;
+    await db.tx(async (t) => {
+      await t.q('UPDATE modulo_versoes SET aprovada = TRUE WHERE id = $1', [v.id]);
+      await t.q('UPDATE modulos SET versao_id = $1, versao_pendente_id = CASE WHEN versao_pendente_id = $1 THEN NULL ELSE versao_pendente_id END, atualizado_em = now() WHERE slug = $2', [v.id, slug]);
+    });
     return true;
   }
 
-  const listarVersoes = async (slug) => (await db.q(`SELECT v.id, v.nome_original, v.tamanho, v.sha256, v.enviado_em, u.nome AS enviado_por
+  /* a administração recusa a versão que aguardava: ela é apagada */
+  async function recusarVersao(slug, versaoId) {
+    const v = await db.um('DELETE FROM modulo_versoes WHERE id = $1 AND modulo_slug = $2 AND NOT aprovada RETURNING id, enviado_por', [versaoId, slug]);
+    if (v) await db.q('UPDATE modulos SET versao_pendente_id = NULL WHERE slug = $1 AND versao_pendente_id = $2', [slug, versaoId]);
+    return v;
+  }
+
+  const listarVersoes = async (slug) => (await db.q(`SELECT v.id, v.nome_original, v.tamanho, v.sha256, v.enviado_em, v.aprovada, u.nome AS enviado_por
     FROM modulo_versoes v LEFT JOIN usuarios u ON u.id = v.enviado_por WHERE v.modulo_slug = $1 ORDER BY v.id DESC`, [slug])).rows;
 
   // cache do HTML por versão (uma versão nunca muda, então o cache é sempre válido)
@@ -158,7 +178,7 @@ function criarServicoModulos(db, cfg) {
     return null;
   }
 
-  return { SLUG_RE, obter, listar, validarHtml, salvarVersao, restaurarVersao, listarVersoes, lerHtml, cabecalhoDoHtml, montarHtml, reconhecer };
+  return { SLUG_RE, obter, listar, validarHtml, salvarVersao, restaurarVersao, recusarVersao, listarVersoes, lerHtml, cabecalhoDoHtml, montarHtml, reconhecer };
 }
 
 module.exports = { criarServicoModulos, SLUG_RE };

@@ -166,3 +166,17 @@ test('a administração liga e desliga o isolamento; ferramenta não isolada con
   assert.match(pag.texto, /src="\/cdn\/cdnjs\//);
   await admin('PATCH', '/api/admin/modulos/agenda', { isolada: true });
 });
+
+test('prévia de versão e ferramenta aguardando aprovação saem sempre isoladas', async () => {
+  await admin('PATCH', '/api/admin/modulos/agenda', { isolada: false });
+  const v = (await admin('GET', '/api/admin/modulos/agenda/versoes')).json.versoes[0].id;
+  const previa = await admin('GET', `/m/agenda/?versao=${v}`);
+  assert.equal(previa.status, 200);
+  assert.match(previa.headers.get('content-security-policy'), /^sandbox /);
+  assert.ok(chaveDa(previa.texto));
+  assert.equal((await admin('GET', '/m/agenda/?versao=999999')).status, 404);
+  await ctx.db.q("UPDATE modulos SET pendente = TRUE WHERE slug = 'agenda'");
+  assert.match((await admin('GET', '/m/agenda/')).headers.get('content-security-policy'), /^sandbox /);
+  await ctx.db.q("UPDATE modulos SET pendente = FALSE WHERE slug = 'agenda'");
+  await admin('PATCH', '/api/admin/modulos/agenda', { isolada: true });
+});

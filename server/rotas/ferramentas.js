@@ -22,7 +22,7 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, bo
     const lista = (await modulos.listar())
       .filter((m) => (m.ativo || req.usuario.papel === 'admin') && (!permitidos || permitidos.has(m.slug)))
       .map((m) => ({ slug: m.slug, nome: m.nome, descricao: m.descricao, setor: m.setor_nome || 'Outros', setor_ordem: m.setor_ordem ?? 999,
-        icone: m.icone, ativo: m.ativo, tem_arquivo: m.tem_arquivo, versao_em: m.versao_em, isolada: !!m.config.isolada }));
+        icone: m.icone, ativo: m.ativo, tem_arquivo: m.tem_arquivo, versao_em: m.versao_em, isolada: !!m.config.isolada || m.pendente }));
     const { rows: recentes } = await db.q(`SELECT modulo_slug, MAX(quando) AS quando FROM auditoria
       WHERE usuario_id = $1 AND acao = 'modulo_aberto' GROUP BY modulo_slug ORDER BY quando DESC LIMIT 6`, [req.usuario.id]);
     res.json({ modulos: lista, recentes: recentes.map((x) => x.modulo_slug) });
@@ -37,15 +37,25 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, bo
     const m = await modulos.obter(slug);
     if (!m || (!m.ativo && req.usuario.papel !== 'admin')) return res.status(404).send(paginaSimples('Ferramenta não encontrada', 'Esta ferramenta não existe ou foi desativada.'));
     if (!(await seg.podeAcessar(req.usuario, slug))) return res.status(403).send(paginaSimples('Sem acesso', 'Você não tem permissão para esta ferramenta. Peça acesso à administração.'));
-    if (!m.tem_arquivo) {
+    if (!m.tem_arquivo && !req.query.versao) {
       return res.status(404).send(paginaSimples('Ferramenta ainda sem arquivo',
         req.usuario.papel === 'admin' ? 'Envie o HTML desta ferramenta em Administração → Módulos.' : 'A administração ainda não publicou o arquivo desta ferramenta.'));
     }
-    // isolada: o navegador põe a página numa origem própria (sandbox), sem o cookie nem a API do portal
-    const isolada = !!m.config.isolada;
+    // prévia de uma versão que aguarda aprovação (?versao=<id>): administração e coordenação/supervisão do setor
+    let versao = null;
+    if (req.query.versao) {
+      const gestor = req.usuario.papel === 'admin' || (await acessos.gestoresDoSetor(m.setor_id)).includes(req.usuario.id);
+      const v = gestor && await db.um('SELECT id FROM modulo_versoes WHERE id = $1 AND modulo_slug = $2', [Number(req.query.versao) || 0, slug]);
+      if (!v) return res.status(404).send(paginaSimples('Versão não encontrada', 'Esta versão não existe ou você não pode vê-la.'));
+      versao = v.id;
+    }
+    // isolada: o navegador põe a página numa origem própria (sandbox), sem o cookie nem a API do portal.
+    // Ferramenta aguardando aprovação e prévia de versão nova saem sempre isoladas: são HTML que a administração ainda não aprovou.
+    const isolada = !!m.config.isolada || m.pendente || !!versao;
     const chave = isolada ? seg.chaveFerramenta(req, slug) : null;
-    const html = await modulos.montarHtml(m, req.usuario, await acessos.paraFerramenta(req.usuario, m), { chave });
-    await seg.auditar(req, 'modulo_aberto', slug, null);
+    const html = await modulos.montarHtml(m, req.usuario, await acessos.paraFerramenta(req.usuario, m), { chave, versao });
+    if (html == null) return res.status(404).send(paginaSimples('Versão não encontrada', 'Esta versão não existe.'));
+    await seg.auditar(req, 'modulo_aberto', slug, versao ? { previa: versao } : null);
     res.set('Cache-Control', 'no-store');
     if (isolada) res.set('Content-Security-Policy', SANDBOX);
     res.type('html').send(html);

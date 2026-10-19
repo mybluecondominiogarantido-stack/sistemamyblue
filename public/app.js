@@ -641,9 +641,20 @@
   };
 
   /* "Arquivo HTML" da janela do módulo (administrador e coordenador): versões anteriores e envio de versão nova */
+  function avisoVersaoPendente(mod) {
+    if (!mod.versao_pendente_id) return '';
+    var admin = eu.papel === 'admin';
+    return '<div class="msg aviso" id="avisoPendente" style="display:grid;gap:8px"><span><b>Versão nova aguardando aprovação</b>, enviada' +
+      (mod.pendente_por ? ' por ' + esc(mod.pendente_por) : '') + ' em ' + quando(mod.pendente_em) + (mod.pendente_nome ? ' (' + esc(mod.pendente_nome) + ')' : '') + '. ' +
+      (admin ? 'Abra a prévia (isolada, com os dados reais), confira e aprove para pôr em uso.' : 'A versão atual continua em uso até a administração aprovar.') + '</span>' +
+      '<div class="linha"><a class="btn ghost sm" target="_blank" rel="noopener" href="/m/' + esc(mod.slug) + '/?versao=' + mod.versao_pendente_id + '">' + IC.novaAba + 'Ver prévia</a>' +
+      (admin ? '<button class="btn primary sm" type="button" id="btAprovarVersao">Aprovar e usar</button><button class="btn danger sm" type="button" id="btRecusarVersao">Recusar</button>' : '') + '</div></div>';
+  }
   function htmlArquivoModulo(mod) {
-    return '<h4 class="titulo-sec">Arquivo HTML</h4>' +
-      '<p class="ajuda" style="margin-top:-4px">' + (mod.tem_arquivo ? 'Versão em uso enviada em ' + quando(mod.versao_em) + ' (' + tamanho(mod.tamanho) + ').' : '<b style="color:var(--red)">Nenhum arquivo enviado ainda.</b>') + ' Ao enviar um arquivo novo, a versão anterior fica guardada e pode ser restaurada.</p>' +
+    var aprovacao = eu.papel !== 'admin' && !mod.pendente && !mod.isolada && !(mod.config && mod.config.isolada);
+    return '<h4 class="titulo-sec">Arquivo HTML</h4>' + avisoVersaoPendente(mod) +
+      '<p class="ajuda" style="margin-top:-4px">' + (mod.tem_arquivo ? 'Versão em uso enviada em ' + quando(mod.versao_em) + ' (' + tamanho(mod.tamanho) + ').' : '<b style="color:var(--red)">Nenhum arquivo enviado ainda.</b>') + ' Ao enviar um arquivo novo, a versão anterior fica guardada e pode ser restaurada.' +
+      (aprovacao ? ' <b>Esta ferramenta não é isolada: o arquivo novo só entra em uso depois que a administração aprovar.</b>' : '') + '</p>' +
       '<label class="zona-envio" id="zArq">' + IC.enviar + '<div>Clique para escolher ou arraste o arquivo .html desta ferramenta</div><input type="file" accept=".html,.htm,text/html" hidden id="inArq"></label>' +
       '<div id="resArq"></div><details style="margin-top:4px"><summary style="cursor:pointer;font-weight:700;color:var(--ink-2)">Versões anteriores</summary><div id="listaVersoes" class="ajuda">Carregando…</div></details>';
   }
@@ -657,7 +668,7 @@
         var emUso = v.id === mod.versao_id;
         return '<div class="linha" style="padding:8px 12px;border-bottom:1px solid var(--border)"><span style="flex:1;color:var(--ink-2)"><b>' + quando(v.enviado_em) + '</b> · ' + tamanho(v.tamanho) + (v.nome_original ? ' · ' + esc(v.nome_original) : '') + (v.enviado_por ? ' · por ' + esc(v.enviado_por) : '') + '</span>' +
           '<a class="btn ghost sm" href="/api/admin/modulos/' + esc(mod.slug) + '/versoes/' + v.id + '/arquivo" title="Baixar este HTML">' + IC.baixar + 'Baixar</a>' +
-          (emUso ? '<span class="etiqueta verde">em uso</span>' : '<button class="btn ghost sm" data-versao="' + v.id + '">Usar esta</button>') + '</div>';
+          (emUso ? '<span class="etiqueta verde">em uso</span>' : !v.aprovada ? '<span class="etiqueta ambar">aguardando aprovação</span>' : '<button class="btn ghost sm" data-versao="' + v.id + '">Usar esta</button>') + '</div>';
       }).join('') + '</div>';
       $$('[data-versao]', el).forEach(function (b) {
         b.onclick = async function () {
@@ -667,6 +678,20 @@
     }).catch(function () {}); }
     carregarVersoes();
 
+    // versão nova aguardando: a administração aprova ou recusa
+    function decidir(acao) {
+      return async function () {
+        if (acao === 'recusar' && !(await confirmar('Recusar versão nova', 'A versão enviada será apagada e a versão atual continua em uso. Quem enviou é avisado.', 'Recusar', true))) return;
+        try {
+          var r = await api('POST', '/api/admin/modulos/' + mod.slug + '/versoes/' + mod.versao_pendente_id + '/' + acao);
+          toast(acao === 'aprovar' ? 'Versão nova em uso.' + (r.aviso_banco ? ' ' + r.aviso_banco : '') : 'Versão recusada.', acao === 'aprovar' && !r.aviso_banco ? 'ok' : 'aviso');
+          m.fechar(); recarregarQuadro(mod.slug); paginaModulos(); recarregarModulosUsuario();
+        } catch (e) { toast(e.message, 'erro'); }
+      };
+    }
+    if ($('#btAprovarVersao', m)) $('#btAprovarVersao', m).onclick = decidir('aprovar');
+    if ($('#btRecusarVersao', m)) $('#btRecusarVersao', m).onclick = decidir('recusar');
+
     // envio do arquivo
     ligarZona($('#zArq', m), $('#inArq', m), async function (arquivos) {
       var f = arquivos[0];
@@ -674,6 +699,12 @@
       res.innerHTML = '<div class="msg aviso" style="margin-top:8px">Enviando ' + esc(f.name) + '…</div>';
       try {
         var r = await api('PUT', '/api/admin/modulos/' + mod.slug + '/arquivo', await f.arrayBuffer(), { bruto: true, headers: { 'X-Nome-Arquivo': encodeURIComponent(f.name) } });
+        if (r.aguardando_aprovacao) {
+          carregarVersoes();
+          res.innerHTML = '<div class="msg aviso" style="margin-top:8px">Arquivo enviado. Ele <b>entra em uso depois que a administração aprovar</b> (ela recebeu o aviso). Até lá, a versão atual continua valendo. ' +
+            '<a href="/m/' + esc(mod.slug) + '/?versao=' + r.versao + '" target="_blank" rel="noopener">Ver prévia</a></div>' + (r.aviso ? '<div class="msg aviso" style="margin-top:8px">' + esc(r.aviso) + '</div>' : '');
+          return;
+        }
         mod.versao_id = r.versao;
         carregarVersoes();
         if (r.fonte_dados) {
@@ -945,7 +976,8 @@
         return '<tr class="clicavel" data-slug="' + esc(m.slug) + '" data-busca="' + esc(textoBuscaModulo(m)) + '"><td><div class="linha" style="flex-wrap:nowrap"><div class="icone-mod" style="width:34px;height:34px">' + (IC[m.icone] || IC.app) + '</div><div><b>' + esc(m.nome) + '</b><span class="sec">/' + esc(m.slug) + '</span></div></div></td>' +
           '<td>' + esc(m.setor_nome || '—') + '</td>' +
           '<td>' + (m.tem_arquivo ? quando(m.versao_em) + '<span class="sec">' + tamanho(m.tamanho) + (m.nome_original ? ' · ' + esc(m.nome_original) : '') + '</span>' : '<span class="etiqueta vermelha">sem arquivo</span>') + '</td>' +
-          '<td>' + dados + '</td><td>' + (m.pendente ? '<span class="etiqueta ambar">aguardando aprovação</span>' : m.ativo ? '<span class="etiqueta verde">ativo</span>' : '<span class="etiqueta cinza">desativado</span>') + '</td></tr>';
+          '<td>' + dados + '</td><td>' + (m.pendente ? '<span class="etiqueta ambar">aguardando aprovação</span>' : m.ativo ? '<span class="etiqueta verde">ativo</span>' : '<span class="etiqueta cinza">desativado</span>') +
+          (m.versao_pendente_id ? ' <span class="etiqueta ambar">versão nova aguardando</span>' : '') + (m.config && m.config.isolada ? '' : ' <span class="etiqueta cinza" title="O HTML roda com a sessão de quem abre. Isole em Isolamento, depois de testar.">não isolada</span>') + '</td></tr>';
       }).join('') + LINHA_SEM_RESULTADO(5) + '</tbody></table></div></div></div>';
 
     ligarBusca($('#buscaMod'), $('#tbMods'), $('#qtdMods'), mods.length, 'módulos', 'busca.modulos');
@@ -2834,7 +2866,7 @@
   var ROTULO_ACAO = {
     login: 'Entrou no portal', login_falha: 'Tentativa de login falhou', logout: 'Saiu', senha_alterada: 'Trocou a senha', senha_redefinida: 'Redefiniu senha de usuário',
     modulo_aberto: 'Abriu ferramenta', dados_gravados: 'Salvou dados (automático)', usuario_criado: 'Criou usuário', usuario_editado: 'Editou usuário',
-    modulo_criado: 'Criou módulo', modulo_editado: 'Editou módulo', modulo_removido: 'Removeu módulo', arquivo_enviado: 'Enviou HTML', versao_restaurada: 'Restaurou versão',
+    modulo_criado: 'Criou módulo', modulo_editado: 'Editou módulo', modulo_removido: 'Removeu módulo', arquivo_enviado: 'Enviou HTML', arquivo_aguardando: 'Enviou HTML (aguarda aprovação)', versao_aprovada: 'Aprovou versão nova', versao_recusada: 'Recusou versão nova', papeis_recusados: 'Tentou mudar papéis sem permissão', backup_restaurado: 'Restaurou backup', versao_restaurada: 'Restaurou versão',
     dados_importados: 'Importou dados da planilha', dados_exportados: 'Exportou dados', backup_baixado: 'Baixou backup', setor_criado: 'Criou setor', setor_editado: 'Editou setor', setor_removido: 'Removeu setor',
     registro_add: 'Incluiu registro', registro_update: 'Alterou registro', registro_delete: 'Excluiu registro', registro_upsert: 'Gravou registro', registro_addMany: 'Incluiu registros em lote', registro_replaceAll: 'Regravou a aba inteira', registro_dedupe: 'Removeu duplicados',
     catalogo_semeado: 'Sistema instalado', email_teste: 'Enviou e-mail de teste',

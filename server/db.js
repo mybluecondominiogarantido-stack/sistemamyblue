@@ -398,7 +398,10 @@ ALTER TABLE permissoes ADD COLUMN IF NOT EXISTS somente_leitura BOOLEAN NOT NULL
 ALTER TABLE permissoes ADD COLUMN IF NOT EXISTS papeis TEXT[] NOT NULL DEFAULT '{}';
 -- ferramenta nova cadastrada pela coordenação: fica aguardando a aprovação da administração
 ALTER TABLE modulos ADD COLUMN IF NOT EXISTS pendente BOOLEAN NOT NULL DEFAULT FALSE;
-ALTER TABLE modulos ADD COLUMN IF NOT EXISTS criado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
+ALTER TABLE modulos ADD COLUMN IF NOT EXISTS criado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL;
+-- HTML novo enviado pela coordenação numa ferramenta não isolada: fica guardado, aguardando a aprovação da administração
+ALTER TABLE modulo_versoes ADD COLUMN IF NOT EXISTS aprovada BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE modulos ADD COLUMN IF NOT EXISTS versao_pendente_id INTEGER
 `;
 
 /* Funções e gatilhos do banco (cada item é um comando inteiro: o corpo das funções tem ";").

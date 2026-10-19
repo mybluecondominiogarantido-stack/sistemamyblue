@@ -271,7 +271,8 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
       const perms = (await db.q('SELECT usuario_id, modulo_slug FROM permissoes')).rows;
       const setores = (await db.q('SELECT id, nome FROM setores WHERE id = ANY($1::int[]) ORDER BY ordem, nome', [[...req.setoresGeridos]])).rows;
       return res.json({ setores, icones: ICONES, modulos: meus.map((m) => ({ slug: m.slug, nome: m.nome, icone: m.icone, ativo: m.ativo, setor_id: m.setor_id, setor_nome: m.setor_nome, setor_ordem: m.setor_ordem, pendente: m.pendente,
-        tem_arquivo: m.tem_arquivo, versao_id: m.versao_id, versao_em: m.versao_em, tamanho: m.tamanho, nome_original: m.nome_original,
+        tem_arquivo: m.tem_arquivo, versao_id: m.versao_id, versao_em: m.versao_em, tamanho: m.tamanho, nome_original: m.nome_original, isolada: !!m.config.isolada,
+        versao_pendente_id: m.versao_pendente_id, pendente_em: m.pendente_em, pendente_por: m.pendente_por, pendente_nome: m.pendente_nome,
         usuarios: perms.filter((p) => p.modulo_slug === m.slug && esc.gerencia(p.usuario_id)).map((p) => p.usuario_id) })) });
     }
     const lista = [];
@@ -357,6 +358,33 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
   /* envio do HTML (corpo bruto) */
   const corpoBruto = express.raw({ type: () => true, limit: `${cfg.limiteHtmlMb}mb` });
 
+  /* O que o HTML novo muda na configuração do módulo: ferramenta do Claude (banco de documentos), HTML já ligado à
+     planilha interna, ou HTML sem os pontos de ligação. Roda quando a versão entra em uso. */
+  async function ajustarPeloHtml(req, m, buf) {
+    let avisoPatch = null;
+    let fonteAutomatica = null;
+    const html = buf.toString('utf8');
+    if (!m.adaptador && /claude\.use\(\s*["']db["']/.test(html)) {
+      // ferramenta feita como artefato do Claude (window.claude.use('db')): os documentos ficam no banco do portal
+      await db.q("UPDATE modulos SET adaptador = 'claude-db', fonte_dados = 'interno', atualizado_em = now() WHERE slug = $1", [m.slug]);
+      await seg.auditar(req, 'modulo_editado', m.slug, { adaptador: 'claude-db', motivo: 'HTML usa o banco do Claude' });
+      fonteAutomatica = 'interno';
+    }
+    if (m.adaptador && /SHEET_URL_BUILTIN\s*=\s*\\?["']\/api\/gas\//.test(html)) {
+      // HTML já ligado ao banco do portal (sem planilha Google): o módulo passa a usar a planilha interna
+      if (m.fonte_dados !== 'interno') {
+        await db.q("UPDATE modulos SET fonte_dados = 'interno', atualizado_em = now() WHERE slug = $1", [m.slug]);
+        await seg.auditar(req, 'modulo_editado', m.slug, { fonte_dados: 'interno', fonte_anterior: m.fonte_dados, motivo: 'HTML sem planilha Google' });
+      }
+      fonteAutomatica = 'interno';
+    }
+    if (m.adaptador && !fonteAutomatica) {
+      const faltando = (m.config.patches_interno || []).filter((p) => (p.tipo === 'regex' ? !new RegExp(p.busca).test(html) : !html.includes(p.busca)));
+      if (faltando.length) avisoPatch = 'Este HTML não tem os pontos de ligação esperados: o banco interno não poderá ser usado com esta versão.';
+    }
+    return { avisoPatch, fonteAutomatica };
+  }
+
   r.put('/api/admin/modulos/:slug/arquivo', corpoBruto, async (req, res) => {
     const m = await modulos.obter(req.params.slug);
     if (!m) return erro(res, 404, 'Módulo não encontrado.');
@@ -366,32 +394,50 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     let nomeOriginal = null;
     try { nomeOriginal = req.headers['x-nome-arquivo'] ? decodeURIComponent(String(req.headers['x-nome-arquivo'])) : null; } catch { /* nome malformado: fica sem */ }
     const reconhecido = await modulos.reconhecer(buf);
-    const id = await modulos.salvarVersao(m.slug, buf, nomeOriginal, req.usuario.id);
-    await seg.auditar(req, 'arquivo_enviado', m.slug, { versao: id, nome: nomeOriginal, bytes: buf.length });
+    // HTML da coordenação numa ferramenta já aprovada e não isolada: roda com a sessão de quem abre (inclusive a
+    // administração), então só entra em uso depois que a administração aprovar. Isolada, entra na hora.
+    const aguardar = req.usuario.papel !== 'admin' && !m.pendente && !m.config.isolada;
+    const id = await modulos.salvarVersao(m.slug, buf, nomeOriginal, req.usuario.id, { aguardar });
+    await seg.auditar(req, aguardar ? 'arquivo_aguardando' : 'arquivo_enviado', m.slug, { versao: id, nome: nomeOriginal, bytes: buf.length });
     // aviso se o arquivo parece ser de outra ferramenta
     const aviso = reconhecido && reconhecido !== m.slug ? `Atenção: este arquivo parece ser da ferramenta "${(await modulos.obter(reconhecido)).nome}".` : null;
-    let avisoPatch = null;
-    let fonteAutomatica = null;
-    if (!m.adaptador && /claude\.use\(\s*["']db["']/.test(buf.toString('utf8'))) {
-      // ferramenta feita como artefato do Claude (window.claude.use('db')): os documentos ficam no banco do portal
-      await db.q("UPDATE modulos SET adaptador = 'claude-db', fonte_dados = 'interno', atualizado_em = now() WHERE slug = $1", [m.slug]);
-      await seg.auditar(req, 'modulo_editado', m.slug, { adaptador: 'claude-db', motivo: 'HTML usa o banco do Claude' });
-      fonteAutomatica = 'interno';
-    }
-    if (m.adaptador && /SHEET_URL_BUILTIN\s*=\s*\\?["']\/api\/gas\//.test(buf.toString('utf8'))) {
-      // HTML já ligado ao banco do portal (sem planilha Google): o módulo passa a usar a planilha interna
-      if (m.fonte_dados !== 'interno') {
-        await db.q("UPDATE modulos SET fonte_dados = 'interno', atualizado_em = now() WHERE slug = $1", [m.slug]);
-        await seg.auditar(req, 'modulo_editado', m.slug, { fonte_dados: 'interno', fonte_anterior: m.fonte_dados, motivo: 'HTML sem planilha Google' });
+    if (aguardar) {
+      if (avisos) {
+        const admins = (await db.q("SELECT id FROM usuarios WHERE papel = 'admin' AND ativo")).rows.map((x) => x.id);
+        await avisos.notificar(admins, { tipo: 'versao_aguardando', titulo: 'HTML novo aguardando aprovação',
+          texto: `${req.usuario.nome} enviou uma versão nova de "${m.nome}". Veja a prévia e aprove em Módulos e dados.`, link: '#/admin/modulos', email: true, autor_id: req.usuario.id });
       }
-      fonteAutomatica = 'interno';
+      return res.json({ ok: true, versao: id, aguardando_aprovacao: true, aviso });
     }
-    if (m.adaptador && !fonteAutomatica) {
-      const html = buf.toString('utf8');
-      const faltando = (m.config.patches_interno || []).filter((p) => (p.tipo === 'regex' ? !new RegExp(p.busca).test(html) : !html.includes(p.busca)));
-      if (faltando.length) avisoPatch = 'Este HTML não tem os pontos de ligação esperados: o banco interno não poderá ser usado com esta versão.';
-    }
+    const { avisoPatch, fonteAutomatica } = await ajustarPeloHtml(req, m, buf);
     res.json({ ok: true, versao: id, aviso, aviso_banco: avisoPatch, fonte_dados: fonteAutomatica });
+  });
+
+  /* versão que aguardava: a administração aprova (entra em uso) ou recusa (é apagada) */
+  r.post('/api/admin/modulos/:slug/versoes/:id/aprovar', async (req, res) => {
+    const m = await modulos.obter(req.params.slug);
+    const v = m && await db.um('SELECT id, conteudo, enviado_por FROM modulo_versoes WHERE id = $1 AND modulo_slug = $2 AND NOT aprovada', [Number(req.params.id) || 0, m.slug]);
+    if (!v) return erro(res, 404, 'Não há versão aguardando aprovação com este número.');
+    await modulos.restaurarVersao(m.slug, v.id);
+    const { avisoPatch, fonteAutomatica } = await ajustarPeloHtml(req, m, Buffer.from(v.conteudo));
+    await seg.auditar(req, 'versao_aprovada', m.slug, { versao: v.id });
+    if (avisos && v.enviado_por) {
+      await avisos.notificar([v.enviado_por], { tipo: 'versao_aprovada', titulo: 'Versão nova aprovada',
+        texto: `A versão nova de "${m.nome}" foi aprovada e já está em uso.`, link: '#/admin/modulos', email: true, autor_id: req.usuario.id });
+    }
+    res.json({ ok: true, aviso_banco: avisoPatch, fonte_dados: fonteAutomatica });
+  });
+
+  r.post('/api/admin/modulos/:slug/versoes/:id/recusar', async (req, res) => {
+    const v = await modulos.recusarVersao(req.params.slug, Number(req.params.id) || 0);
+    if (!v) return erro(res, 404, 'Não há versão aguardando aprovação com este número.');
+    await seg.auditar(req, 'versao_recusada', req.params.slug, { versao: v.id });
+    if (avisos && v.enviado_por) {
+      const m = await modulos.obter(req.params.slug);
+      await avisos.notificar([v.enviado_por], { tipo: 'versao_recusada', titulo: 'Versão nova não aprovada',
+        texto: `A versão nova de "${m ? m.nome : req.params.slug}" não foi aprovada pela administração. A versão em uso continua a mesma.`, link: '#/admin/modulos', email: true, autor_id: req.usuario.id });
+    }
+    res.json({ ok: true });
   });
 
   /* envio em lote: reconhece cada HTML pelo título */
@@ -553,7 +599,10 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
   });
 
   r.post('/api/admin/modulos/:slug/versoes/:id/usar', async (req, res) => {
-    if (!(await modulos.restaurarVersao(req.params.slug, Number(req.params.id)))) return erro(res, 404, 'Versão não encontrada.');
+    const soAprovadas = req.usuario.papel !== 'admin';
+    if (!(await modulos.restaurarVersao(req.params.slug, Number(req.params.id), { soAprovadas }))) {
+      return erro(res, 404, soAprovadas ? 'Versão não encontrada ou aguardando a aprovação da administração.' : 'Versão não encontrada.');
+    }
     await seg.auditar(req, 'versao_restaurada', req.params.slug, { versao: Number(req.params.id) });
     res.json({ ok: true });
   });
