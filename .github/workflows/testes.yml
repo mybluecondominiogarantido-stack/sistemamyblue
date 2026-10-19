@@ -19,5 +19,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      # gerador do Retorno de Análise de Crédito (PDF), o mesmo do Dockerfile
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends python3-reportlab fonts-dejavu-core
       - run: npm ci
       - run: npm test

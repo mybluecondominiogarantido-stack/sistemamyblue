@@ -40,3 +40,19 @@ test('dias úteis inteiros e feriado configurado', () => {
 test('configuração inválida é recusada', () => {
   assert.throws(() => lerExpediente({ EXPEDIENTE_INICIO: '18', EXPEDIENTE_FIM: '8' }), /Expediente inválido/);
 });
+
+test('prazo no mesmo dia útil com corte às 16h (Análise de Crédito)', () => {
+  igual(exp.fimDoDiaUtil(br('2026-10-06T09:30'), 16), '2026-10-06T17:00'); // terça de manhã → terça
+  igual(exp.fimDoDiaUtil(br('2026-10-06T16:00'), 16), '2026-10-06T17:00'); // 16h em ponto ainda é no dia
+  igual(exp.fimDoDiaUtil(br('2026-10-06T16:01'), 16), '2026-10-07T17:00'); // passou de 16h → quarta
+  igual(exp.fimDoDiaUtil(br('2026-10-06T07:10'), 16), '2026-10-06T17:00'); // antes do expediente → mesmo dia
+  igual(exp.fimDoDiaUtil(br('2026-10-09T16:30'), 16), '2026-10-12T17:00'); // sexta depois das 16h → segunda
+  igual(exp.fimDoDiaUtil(br('2026-10-10T10:00'), 16), '2026-10-12T17:00'); // sábado → segunda
+  igual(exp.fimDoDiaUtil(br('2026-10-30T16:30'), 16), '2026-11-03T17:00'); // sexta tarde, segunda feriado → terça
+});
+
+test('dias úteis inteiros', () => {
+  igual(exp.somarDiasUteis(br('2026-10-06T10:00'), 1), '2026-10-07T10:00');
+  igual(exp.somarDiasUteis(br('2026-10-09T16:30'), 1), '2026-10-12T16:30');
+  igual(exp.somarDiasUteis(br('2026-10-06T20:00'), 1), '2026-10-07T17:00'); // à noite: conta a partir das 8h → fim do dia seguinte
+});

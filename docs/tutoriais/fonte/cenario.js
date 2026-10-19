@@ -86,12 +86,16 @@ async function montarCenario(base, { ferramentas = {} } = {}) {
     ['Davi Rocha', 'davi@myblue.com.br', { setores: [S('Crédito')], modulos: ['credito'] }],
     ['Paula Dias', 'paula@myblue.com.br', { papel: 'coordenador', setores: [S('Administrativa/Financeira'), S('Suprimentos'), S('Parceiros')] }],
     ['Rafa Nunes', 'rafa@myblue.com.br', { setores: [S('Suprimentos')], modulos: ['suprimentos'] }],
+    // Análise de Crédito: executiva de negócios (cadastro de executivo, abaixo) e analista do setor
+    ['Vera Campos', 'vera@myblue.com.br', { setores: [S('Comercial')] }],
+    ['Tiago Moura', 'tiago@myblue.com.br', { setores: [S('Análise de Crédito')] }],
   ];
   const id = {};
   for (const [nome, email, extra] of pessoas) id[email] = (await a('POST', '/api/admin/usuarios', { nome, email, senha: 'Senha1234', ...extra })).id;
   await a('PUT', `/api/admin/equipes/${S('Cobrança')}/membros`, { membros: [{ usuario_id: id['lia@myblue.com.br'], lider: true }, { usuario_id: id['marcos@myblue.com.br'] }] });
   await a('PUT', `/api/admin/equipes/${S('CS')}/membros`, { membros: [{ usuario_id: id['sara@myblue.com.br'], lider: true }] });
   await a('PUT', `/api/admin/equipes/${S('Crédito')}/membros`, { membros: [{ usuario_id: id['caio@myblue.com.br'], lider: true }, { usuario_id: id['bruna@myblue.com.br'] }, { usuario_id: id['davi@myblue.com.br'] }] });
+  await a('POST', '/api/credito/executivos', { nome: 'Vera Campos', uf: 'CE', regiao: 'Ceará', usuario_id: id['vera@myblue.com.br'] });
   const cat = {};
   for (const [setor, nome, prazo_horas, prioridade] of [
     ['Cobrança', '2ª via de boleto', 4, 'alta'], ['Cobrança', 'Proposta de acordo', 18, 'media'], ['Cobrança', 'Negativação / baixa', 9, 'alta'],

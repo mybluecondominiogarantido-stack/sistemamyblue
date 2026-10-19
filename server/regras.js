@@ -33,6 +33,9 @@ const PERMISSOES = [
   { chave: 'carteira.cadastro', grupo: 'Carteira de condomínios', rotulo: 'Cadastrar e excluir condomínios, mudar o ID e importar a planilha',
     descricao: 'Botão "Novo condomínio", "Remover", o ID Vouch e a importação da planilha inteira.',
     padrao: { niveis: [], setores: [] } },
+  { chave: 'credito.diretoria', grupo: 'Análise de Crédito', rotulo: 'Chancelar análises de crédito (diretoria)',
+    descricao: 'Análises com inadimplência acima de 35% só vão ao executivo depois da chancela (CEO e Diretor Comercial).',
+    padrao: { niveis: [], setores: [] } },
 ];
 const porChave = new Map(PERMISSOES.map((p) => [p.chave, p]));
 

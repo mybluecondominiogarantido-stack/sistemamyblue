@@ -22,6 +22,7 @@ const { rotasLinks } = require('./rotas/links');
 const { rotasTutoriais } = require('./rotas/tutoriais');
 const { rotasComissao } = require('./rotas/comissao');
 const { rotasCdn } = require('./rotas/cdn');
+const { rotasCredito } = require('./rotas/credito');
 
 function carregarEnv(arquivo) {
   if (!fs.existsSync(arquivo)) return;
@@ -54,6 +55,7 @@ function lerConfig(sobrescrever = {}) {
     limiteAnexoMb: Number(e.LIMITE_ANEXO_MB) || 10,
     limiteFundoMb: Number(e.LIMITE_FUNDO_MB) || 8,
     limiteVideoMb: Number(e.LIMITE_VIDEO_MB) || 150,
+    limiteCreditoMb: Number(e.LIMITE_CREDITO_MB) || 30,
     silencioso: false,
     ...sobrescrever,
   };
@@ -118,6 +120,7 @@ async function criarApp(cfg) {
   app.use(rotasTutoriais(ctx));
   app.use(rotasComissao(ctx));
   app.use(rotasCdn(ctx));
+  app.use(rotasCredito(ctx));
 
   const publico = path.join(__dirname, '..', 'public');
   app.get('/login', (req, res) => res.sendFile(path.join(publico, 'login.html')));
