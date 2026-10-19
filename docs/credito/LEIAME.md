@@ -14,7 +14,19 @@ faixa e status são código determinístico e testado. Nada vai ao executivo sem
 | Prazos em horário útil | `server/expediente.js` (`fimDoDiaUtil`, `somarDiasUteis`) | pronto |
 | Extração dos PDFs pela IA, leitores por tipo de relatório | — | próxima etapa |
 | Formulário do executivo, fila e revisão do analista | — | depois (telas aprovadas no design) |
-| Retorno em PDF/PPTX e e-mails | — | por último (gerador canônico, fora do repositório) |
+| Retorno em PDF, resumo executivo e e-mail | `server/credito/retorno.js` + `server/credito/retorno/gerador_retorno.py` | pronto (PDF), testes em `test/credito-retorno.test.js` |
+| Retorno em PPTX editável | — | a fazer |
+
+## Retorno em PDF
+
+O gerador é o canônico (ReportLab). Layout, cores, dimensões e classes não mudam; no portal mudam só a entrada e a
+saída (o `DADOS` vem em JSON de `retorno.js`, o PDF sai num arquivo temporário, o logo é o do portal,
+`public/img/logo.png`) e o ícone do status: ✓ e ✗ não existem na Helvetica do ReportLab (saíam como "NO GLYPH"), então
+vêm da DejaVu Sans Bold embutida no PDF. O PDF tem sempre 4 páginas: se o texto passar, `retorno.js` condensa a nota
+da página 2, as observações jurídicas e as observações da página 1, nessa ordem, e gera de novo.
+
+Servidor: `python3`, `python3-reportlab` e `fonts-dejavu-core` (Dockerfile). A assinatura do e-mail vem de
+`CREDITO_ASSINATURA_EMAIL` (o nome real fica na configuração do servidor, não no código).
 
 ## Decisões confirmadas pelo setor (out/2026)
 
