@@ -88,7 +88,8 @@ function rotasCarteira({ db, seg, regras }) {
     const { rows } = await db.q(`${SELECT} ORDER BY c.nome, c.comarca`);
     res.json({ condominios: rows, funcoes: FUNCOES.map((f) => ({ campo: f.campo, rotulo: f.rotulo })), situacoes: SITUACOES,
       pode_editar: await regras.pode(req.usuario, 'carteira.cadastro'), campos_editaveis: await camposEditaveis(req.usuario),
-      funcoes_editaveis: await funcoesEditaveis(req.usuario), pode_adicionar: await regras.pode(req.usuario, 'carteira.adicionar'), acesso: await quadroDeAcesso(req.usuario) });
+      funcoes_editaveis: await funcoesEditaveis(req.usuario), pode_adicionar: await regras.pode(req.usuario, 'carteira.adicionar'), // quem edita o quê: só para administração, coordenação e supervisão (usuário comum só consulta e não vê a lista)
+      acesso: req.usuario.papel === 'admin' || seg.GESTORES_DE_SETOR.includes(req.usuario.papel) ? await quadroDeAcesso(req.usuario) : null });
   });
 
   r.get('/api/carteira/:id', async (req, res) => {
