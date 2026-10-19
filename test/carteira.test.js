@@ -146,14 +146,55 @@ test('transferir a carteira de uma pessoa (toda ou parte)', async () => {
   assert.equal(h[0].acao, 'carteira_transferida');
 });
 
-test('exporta no formato da planilha e o arquivo volta pela importação', async () => {
-  const r = await pessoa('GET', '/api/carteira/exportar');
-  assert.equal(r.status, 200);
-  assert.match(r.headers.get('content-disposition'), /carteira-de-condominios-/);
-  const linhas = r.texto.replace(/^﻿/, '').trim().split('\r\n');
-  assert.ok(linhas[0].startsWith('ID;SITUAÇÃO;COMARCA;CONDOMÍNIO;VENCIMENTO;ANALISTA ADMINISTRATIVA;ANALISTA EXTRAJUDICIAL;ASSISTENTE CRÉDITO'));
-  assert.equal(linhas.length, 4);
-  assert.ok(linhas.some((l) => l.includes('"COND; VILA VERDE"')));
-  const de = await admin('POST', '/api/carteira/importar', Buffer.from(r.texto, 'utf8'));
-  assert.deepEqual([de.json.novos, de.json.atualizados, de.json.iguais], [0, 0, 3], 'exportar e reimportar não muda nada');
+test('a carteira não é exportada: nem a administração tem o endereço', async () => {
+  assert.equal((await admin('GET', '/api/carteira/exportar')).status, 404);
+  assert.equal((await pessoa('GET', '/api/carteira/exportar')).status, 404);
+  assert.equal((await admin('GET', '/api/carteira')).json.pode_exportar, undefined);
+});
+
+test('quem edita o quê na carteira: o portal diz o que identificou e a configuração muda na hora', async () => {
+  const setores = (await admin('GET', '/api/admin/setores')).json.setores;
+  const S = (n) => setores.find((x) => x.nome === n).id;
+  const nova = async (nome, email, extra) => {
+    const u = await admin('POST', '/api/admin/usuarios', { nome, email, senha: 'Senha1234', ...extra });
+    await ctx.db.q('UPDATE usuarios SET trocar_senha = FALSE WHERE id = $1', [u.json.id]);
+    return { id: u.json.id, c: await entrar(email, 'Senha1234') };
+  };
+  const cida = await nova('Cida Coordenadora', 'cida@teste.com', { papel: 'coordenador', setores: [S('Crédito')] });
+  const ivo = await nova('Ivo Usuário', 'ivo@teste.com', { setores: [S('Crédito')] });
+  const cond = (await admin('POST', '/api/carteira', { codigo: '901', nome: 'Teste Acesso', comarca: 'CE', inicio_contrato: '01/2026' })).json.id;
+
+  // regra de hoje: coordenação do Crédito edita o Assistente de crédito; vigência e extrajudicial só a administração
+  let a = (await cida.c('GET', '/api/carteira')).json.acesso;
+  assert.equal(a.voce.nivel, 'Coordenação');
+  assert.deepEqual(a.voce.pode.map((x) => x.rotulo), ['Editar e transferir o Assistente de crédito', 'Adicionar condomínios novos pela planilha de implantação']);
+  assert.equal(a.voce.pode[0].motivo, 'Coordenação · Crédito');
+  assert.deepEqual(a.permissoes.find((x) => x.chave === 'carteira.assistente_credito').quem, [{ nome: 'Cida Coordenadora', motivo: 'Coordenação · Crédito' }]);
+  assert.equal((await cida.c('PATCH', `/api/carteira/${cond}`, { assistente_credito: 'cida - 1' })).status, 200);
+  assert.equal((await cida.c('PATCH', `/api/carteira/${cond}`, { inicio_contrato: '02/2026' })).status, 403);
+  assert.equal((await pessoa('GET', '/api/carteira')).json.acesso, null, 'usuário comum não recebe a lista de quem edita');
+  assert.deepEqual((await pessoa('GET', '/api/carteira')).json.campos_editaveis, [], 'usuário só consulta');
+  assert.equal((await pessoa('GET', '/api/carteira')).status, 200, 'todos veem');
+
+  // a coordenação do Crédito vê as regras e libera uma pessoa na coluna do setor dela, e só nela
+  const cfg = (await cida.c('GET', '/api/admin/carteira/acessos')).json;
+  assert.ok(cfg.permissoes.find((x) => x.chave === 'carteira.assistente_credito').pode_configurar);
+  assert.ok(!cfg.permissoes.find((x) => x.chave === 'carteira.dados').pode_configurar);
+  assert.equal((await cida.c('PUT', '/api/admin/carteira/acessos/carteira.assistente_credito', { pessoas: [ivo.id], niveis: ['usuario'] })).status, 200);
+  const regra = (await admin('GET', '/api/admin/carteira/acessos')).json.permissoes.find((x) => x.chave === 'carteira.assistente_credito').regra;
+  assert.deepEqual(regra.niveis, ['coordenador', 'supervisor'], 'níveis ficam com a administração');
+  assert.deepEqual(regra.pessoas, [ivo.id]);
+  assert.equal((await ivo.c('PATCH', `/api/carteira/${cond}`, { assistente_credito: 'ivo - 2' })).status, 200);
+  assert.equal((await cida.c('PUT', '/api/admin/carteira/acessos/carteira.dados', { pessoas: [cida.id] })).status, 403);
+  assert.equal((await pessoa('GET', '/api/admin/carteira/acessos')).status, 403);
+
+  // a administração libera os dados do condomínio (vigência) para toda coordenação
+  assert.equal((await admin('PUT', '/api/admin/carteira/acessos/carteira.dados', { niveis: ['coordenador'], setores: [], pessoas: [] })).status, 200);
+  assert.equal((await cida.c('PATCH', `/api/carteira/${cond}`, { inicio_contrato: '02/2026' })).status, 200);
+  assert.equal((await cida.c('PATCH', `/api/carteira/${cond}`, { codigo: '902' })).status, 403, 'ID é do cadastro');
+  a = (await cida.c('GET', '/api/carteira')).json;
+  assert.ok(a.campos_editaveis.includes('inicio_contrato'));
+  // volta ao padrão
+  assert.equal((await admin('DELETE', '/api/admin/carteira/acessos/carteira.dados')).status, 200);
+  assert.equal((await cida.c('PATCH', `/api/carteira/${cond}`, { inicio_contrato: '03/2026' })).status, 403);
 });

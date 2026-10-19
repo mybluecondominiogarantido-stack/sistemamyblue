@@ -77,6 +77,26 @@ para as outras pessoas. A **coordenação** abre sem precisar ser marcada, mas *
   editando e sem papel), e a coordenação só vê ali as pessoas do próprio setor. Mudar por ali não apaga o "só consulta"
   nem os papéis de quem continua liberado.
 
+## Carteira de condomínios
+
+**Todos veem a carteira** (ninguém exporta: o portal não tem mais o botão Exportar CSV). O resto é permissão configurável em **Ferramentas do setor → Carteira de condomínios: quem edita**
+(administração: também em Módulos e dados → Carteira: quem edita). Cada permissão tem uma regra: perfis (Coordenação,
+Supervisão, Usuário), setores (vazio = qualquer setor) e pessoas liberadas uma a uma. A administração pode tudo, sempre.
+
+| Permissão | Padrão |
+|---|---|
+| Editar os dados do condomínio (situação, UF, nome, vencimento, administradora, forma de envio, executivo, vigência, razão social, CNPJ, observações) | só a administração |
+| Editar e transferir o Analista de cobrança | Coordenação e Supervisão da Cobrança |
+| Editar e transferir o Analista extrajudicial (ApoioCob) | só a administração |
+| Editar e transferir o Assistente de crédito | Coordenação e Supervisão do Crédito |
+| Adicionar condomínios novos pela planilha de implantação | Coordenação e Supervisão de qualquer setor |
+| Cadastrar e excluir condomínios, mudar o ID e importar a planilha | só a administração |
+
+- A coordenação e a supervisão liberam pessoas nas permissões do setor delas (ex.: Crédito → Assistente de crédito).
+  Perfis e setores de cada regra são da administração.
+- Na Carteira, o quadro **Seu acesso** (só para administração, coordenação e supervisão; usuário comum não o vê) mostra o que o portal identificou para quem está vendo (com o motivo) e quem pode
+  cada coisa hoje. Na ficha do condomínio, só os campos liberados para a pessoa ficam abertos.
+
 ## Contrato para o HTML das ferramentas
 
 Ao gerar ou atualizar o HTML de uma ferramenta, **não crie aba de acessos nem lista de nomes**. Leia do portal:

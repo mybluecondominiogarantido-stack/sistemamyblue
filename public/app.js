@@ -847,6 +847,7 @@
     if (location.hash.indexOf('#/admin/modulos') !== 0) return; // a pessoa já foi para outra tela
     $('#conteudo').innerHTML = '<div class="pagina"><h1>Ferramentas do setor</h1><p class="sub">As ferramentas dos seus setores. Envie uma versão nova do HTML, volte para uma anterior e escolha quem abre cada uma (do seu setor ou de outros), se edita ou só consulta e com qual papel.</p>' +
       '<div class="painel"><div class="cab-painel"><b style="font-family:var(--display)" id="qtdMods"></b><span class="espaco"></span>' +
+      '<button class="btn ghost" id="btCartAcessos">' + IC.casa + 'Carteira de condomínios: quem edita</button>' +
       '<button class="btn primary" id="btNovaFerr">' + IC.mais + 'Nova ferramenta</button>' +
       '<input class="campo" id="buscaMod" type="search" placeholder="Pesquisar módulo, setor ou arquivo…" aria-label="Pesquisar módulo" style="max-width:320px"></div>' +
       '<div class="tabela-wrap"><table><thead><tr><th>Módulo</th><th>Setor</th><th>Arquivo em uso</th></tr></thead><tbody id="tbMods">' +
@@ -857,6 +858,7 @@
       }).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--muted);font-weight:700;padding:30px">Nenhuma ferramenta nos seus setores. Peça à administração para conferir o setor no seu cadastro.</td></tr>') +
       LINHA_SEM_RESULTADO(3) + '</tbody></table></div></div></div>';
     ligarBusca($('#buscaMod'), $('#tbMods'), $('#qtdMods'), mods.length, mods.length === 1 ? 'ferramenta' : 'ferramentas', 'busca.modulos.setor');
+    $('#btCartAcessos').onclick = editorCarteiraAcessos;
     $('#btNovaFerr').onclick = function () {
       var m = modal({
         titulo: 'Nova ferramenta',
@@ -917,6 +919,7 @@
     $('#conteudo').innerHTML = '<div class="pagina"><h1>Módulos e dados</h1><p class="sub">Cada módulo é uma das centrais de ferramentas (um arquivo HTML). Envie novas versões, escolha onde os dados ficam e quem pode abrir.</p>' +
       '<div class="painel"><div class="cab-painel"><b style="font-family:var(--display)" id="qtdMods"></b><span class="espaco"></span>' +
       '<button class="btn ghost" id="btSetores">Setores</button>' +
+      '<button class="btn ghost" id="btCartAcessos">' + IC.casa + 'Carteira: quem edita</button>' +
       '<button class="btn ghost" id="btLote">' + IC.enviar + 'Enviar vários HTMLs</button>' +
       '<button class="btn ghost" id="btZipMods" title="A versão em uso de cada ferramenta, num arquivo .zip">' + IC.baixar + 'Baixar ferramentas (.zip)</button>' +
       '<button class="btn ghost" id="btBackup">' + IC.baixar + 'Backup do banco</button>' +
@@ -938,6 +941,7 @@
     $$('tr[data-slug]').forEach(function (tr) { tr.onclick = function () { editarModulo(mods.find(function (m) { return m.slug === tr.getAttribute('data-slug'); })); }; });
     $('#btNovoMod').onclick = novoModulo;
     $('#btSetores').onclick = gerirSetores;
+    $('#btCartAcessos').onclick = editorCarteiraAcessos;
     $('#btLote').onclick = envioEmLote;
     $('#btBackup').onclick = function () { location.href = '/api/admin/backup'; };
     $('#btZipMods').onclick = function () { location.href = '/api/admin/modulos-em-uso.zip'; };
@@ -1935,9 +1939,86 @@
   function etqSituacao(s) { var x = CART_SIT[s] || [s || '—', 'ambar']; return '<span class="etiqueta ' + x[1] + '">' + esc(x[0]) + '</span>'; }
   function unicos(lista) { return lista.filter(function (v, i, a) { return v && a.indexOf(v) === i; }).sort(function (a, b) { return a.localeCompare(b, 'pt-BR'); }); }
 
+  /* o que o portal identificou sobre quem pode o quê na carteira: o que quem está vendo pode (e por quê)
+     e quem tem cada permissão hoje. A configuração fica em Ferramentas do setor → Carteira de condomínios. */
+  function quadroAcessoCarteira(a) {
+    if (!a) return '';
+    var pode = a.voce.pode;
+    var resumo = eu.papel === 'admin' ? 'edita tudo' : pode.length ? pode.length + ' permiss' + (pode.length === 1 ? 'ão' : 'ões') + ' de edição' : 'só consulta';
+    var configura = eu.papel === 'admin' ? '<a href="#/admin/modulos" data-carteira-acessos>Módulos e dados → Carteira: quem edita</a>' : gestorSetor() ? '<a href="#/admin/modulos" data-carteira-acessos>Ferramentas do setor → Carteira de condomínios</a>' : 'Ferramentas do setor → Carteira de condomínios (administração e coordenação)';
+    return '<details class="painel" style="padding:12px 16px;margin-bottom:16px"><summary style="cursor:pointer;display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
+      '<b>Seu acesso:</b><span class="etiqueta azul">' + esc(a.voce.nivel) + (a.voce.setores.length ? ' · ' + esc(a.voce.setores.join(', ')) : '') + '</span><span>' + esc(resumo) + '</span>' +
+      '<span class="ajuda" style="margin:0 0 0 auto">ver quem edita o quê</span></summary>' +
+      '<p style="margin:12px 0 4px"><b>Todos veem a carteira.</b> ' + (eu.papel === 'admin' ? 'Como administrador, você edita tudo.' : pode.length ? 'Além disso, você pode:' : 'Você não tem permissão de edição.') + '</p>' +
+      (eu.papel !== 'admin' && pode.length ? '<ul style="margin:0 0 10px;padding-left:20px">' + pode.map(function (x) { return '<li>' + esc(x.rotulo) + ' <span class="sec" style="display:inline">· por ' + esc(x.motivo) + '</span></li>'; }).join('') + '</ul>' : '') +
+      '<h4 style="margin:12px 0 6px;font-family:var(--display)">Quem pode cada coisa hoje</h4><div class="tabela-wrap"><table><thead><tr><th>O que</th><th>Quem (além da administração)</th></tr></thead><tbody>' +
+      a.permissoes.map(function (p) {
+        return '<tr><td>' + esc(p.rotulo) + '</td><td>' + (p.quem.length ? p.quem.map(function (q) { return esc(q.nome) + ' <span class="sec" style="display:inline">(' + esc(q.motivo) + ')</span>'; }).join(', ') : '<span style="color:var(--muted)">só a administração</span>') + '</td></tr>';
+      }).join('') + '</tbody></table></div>' +
+      '<p class="ajuda" style="margin:8px 0 0">Administração: ' + esc(a.admins.join(', ') || '—') + '. Onde se configura: ' + configura + '.</p></details>';
+  }
+
+  /* Carteira: quem edita o quê. A administração muda tudo (perfis, setores e pessoas); coordenação e supervisão liberam
+     pessoas nas permissões do setor delas (ex.: Crédito → Assistente de crédito). Ver a carteira é de todos. */
+  async function editorCarteiraAcessos() {
+    var m = modal({ titulo: 'Carteira de condomínios — quem edita o quê', largo: true, corpo: '<div id="edCart">' + carregandoHtml() + '</div>', pe: '<button class="btn ghost" data-fechar>Fechar</button>' });
+    var cont = $('#edCart', m);
+    async function carregar() {
+      var q;
+      try { q = await api('GET', '/api/admin/carteira/acessos'); } catch (e) { cont.innerHTML = '<div class="msg erro">' + esc(e.message) + '</div>'; return; }
+      var nomeSetor = {}; q.setores.forEach(function (x) { nomeSetor[x.id] = x.nome; });
+      cont.innerHTML = '<p class="sub" style="margin-top:0"><b>Todos veem a carteira.</b> Aqui se define quem <b>edita</b> cada coisa. A administração (' + esc(q.admins.join(', ')) + ') edita tudo, sempre.' +
+        (q.admin ? '' : ' Você libera pessoas nas permissões do seu setor; as demais são configuradas pela administração.') + '</p>' +
+        q.permissoes.map(function (p, i) {
+          var r = p.regra;
+          var regraTxt = (r.niveis.length ? r.niveis.map(function (n) { return q.niveis[n]; }).join(' e ') + (r.setores.length ? ' do setor ' + r.setores.map(function (x) { return nomeSetor[x] || '?'; }).join(', ') : ' de qualquer setor') : 'nenhum perfil') +
+            (r.pessoas.length ? ' + ' + r.pessoas.length + ' pessoa(s) liberada(s)' : '');
+          var hoje = p.quem.length ? p.quem.map(function (x) { return esc(x.nome) + ' <span class="sec" style="display:inline">(' + esc(x.motivo) + ')</span>'; }).join(', ') : '<span style="color:var(--muted)">ninguém além da administração</span>';
+          var edita = '';
+          if (p.pode_configurar) {
+            edita = (p.pode_mudar_regra ? '<div class="linha" style="gap:14px;flex-wrap:wrap;margin-top:10px"><b style="min-width:120px">Perfis</b>' +
+                Object.keys(q.niveis).map(function (n) { return '<label class="linha" style="gap:6px"><input type="checkbox" data-nivel="' + n + '"' + (r.niveis.indexOf(n) >= 0 ? ' checked' : '') + '> ' + esc(q.niveis[n]) + '</label>'; }).join('') + '</div>' +
+                '<div class="linha" style="gap:14px;flex-wrap:wrap;margin-top:6px"><b style="min-width:120px">Só dos setores</b>' +
+                q.setores.map(function (x) { return '<label class="linha" style="gap:6px"><input type="checkbox" data-setor="' + x.id + '"' + (r.setores.indexOf(x.id) >= 0 ? ' checked' : '') + '> ' + esc(x.nome) + '</label>'; }).join('') +
+                '<span class="ajuda" style="margin:0">nenhum marcado = qualquer setor</span></div>' : '') +
+              '<details style="margin-top:8px"><summary style="cursor:pointer;font-weight:700;color:var(--ink-2)">Pessoas liberadas individualmente (' + r.pessoas.length + ')</summary>' +
+              '<input class="campo" type="search" data-busca-p placeholder="Buscar pessoa ou setor…" style="max-width:260px;margin:8px 0">' +
+              '<div class="caixa-opcoes" style="max-height:220px;overflow:auto">' + q.pessoas.map(function (x) {
+                return '<label data-t="' + esc(normal(x.nome + ' ' + x.setores.join(' '))) + '"><input type="checkbox" data-pessoa="' + x.id + '"' + (r.pessoas.indexOf(x.id) >= 0 ? ' checked' : '') + '><span>' + esc(x.nome) + ' <span class="sec" style="display:inline;color:var(--muted)">· ' + esc(x.setores.join(', ') || 'sem setor') + '</span></span></label>';
+              }).join('') + '</div></details>' +
+              '<div class="linha" style="margin-top:10px;gap:8px"><button class="btn primary sm" type="button" data-salvar="' + i + '">Salvar</button>' +
+              (p.pode_mudar_regra && r.personalizada ? '<button class="btn ghost sm" type="button" data-padrao="' + i + '">Voltar ao padrão</button>' : '') + '</div>';
+          } else edita = '<p class="ajuda" style="margin:8px 0 0">Quem configura esta permissão: a administração.</p>';
+          return '<div class="painel" data-perm="' + i + '" style="padding:12px 14px;margin-bottom:10px"><b>' + esc(p.rotulo) + '</b><div class="ajuda" style="margin:2px 0 6px">' + esc(p.descricao) + '</div>' +
+            '<div><span class="etiqueta cinza">regra: ' + esc(regraTxt) + '</span></div><div style="margin-top:6px"><b>Hoje:</b> ' + hoje + '</div>' + edita + '</div>';
+        }).join('');
+      $$('[data-busca-p]', cont).forEach(function (b) {
+        b.oninput = function () { var t = normal(b.value); $$('label[data-t]', b.parentNode).forEach(function (l) { l.hidden = t && l.getAttribute('data-t').indexOf(t) < 0; }); };
+      });
+      $$('[data-salvar]', cont).forEach(function (b) {
+        b.onclick = async function () {
+          var i = Number(b.getAttribute('data-salvar')), p = q.permissoes[i], box = $('[data-perm="' + i + '"]', cont);
+          var corpo = { pessoas: $$('[data-pessoa]:checked', box).map(function (x) { return Number(x.getAttribute('data-pessoa')); }) };
+          if (p.pode_mudar_regra) {
+            corpo.niveis = $$('[data-nivel]:checked', box).map(function (x) { return x.getAttribute('data-nivel'); });
+            corpo.setores = $$('[data-setor]:checked', box).map(function (x) { return Number(x.getAttribute('data-setor')); });
+          }
+          try { await api('PUT', '/api/admin/carteira/acessos/' + p.chave, corpo); toast('Salvo. Já vale para quem abrir a carteira.', 'ok'); carregar(); } catch (e) { toast(e.message, 'erro'); }
+        };
+      });
+      $$('[data-padrao]', cont).forEach(function (b) {
+        b.onclick = async function () {
+          var p = q.permissoes[Number(b.getAttribute('data-padrao'))];
+          try { await api('DELETE', '/api/admin/carteira/acessos/' + p.chave); toast('Voltou ao padrão.', 'ok'); carregar(); } catch (e) { toast(e.message, 'erro'); }
+        };
+      });
+    }
+    carregar();
+  }
+
   async function paginaCarteira(aba) {
     aba = aba === 'responsaveis' || aba === 'novos' ? aba : 'condominios';
-    definirBarra('<span class="setor">Carteira</span><span class="sep">/</span><span class="nome">' + ({ responsaveis: 'Responsáveis', novos: 'Adicionar novos' }[aba] || 'Condomínios') + '</span>');
+    definirBarra('<span class="setor">Carteira</span><span class="sep">/</span><span class="nome">' + ({ responsaveis: 'Equipes', novos: 'Adicionar novos' }[aba] || 'Condomínios') + '</span>');
     $('#conteudo').innerHTML = carregandoHtml();
     var j;
     try { j = await api('GET', '/api/carteira'); } catch (e) { toast(e.message, 'erro'); return; }
@@ -1955,6 +2036,7 @@
     }
     $('#conteudo').innerHTML = '<div class="pagina"><h1>Carteira de condomínios</h1>' +
       '<p class="sub">Os condomínios atendidos e quem cuida de cada um: analista de cobrança, analista extrajudicial (ApoioCob) e assistente de crédito.</p>' +
+      quadroAcessoCarteira(j.acesso) +
       (conds.length ? '<div class="tiles" style="margin-bottom:20px;grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">' +
         tile('Condomínios ativos', ativos.length, conds.length - ativos.length + ' distratado' + (conds.length - ativos.length === 1 ? '' : 's')) +
         tile('Comarcas', ufs.length, ufs.slice(0, 4).map(function (u) { return esc(u) + ' ' + porUf[u]; }).join(' · ')) +
@@ -1964,11 +2046,10 @@
         }).join('') +
         tile('Sem responsável', semResp.length, 'ativos com função em branco', semResp.length > 0) + '</div>' : '') +
       '<nav class="abas"><a href="#/carteira" class="' + (aba === 'condominios' ? 'on' : '') + '">Condomínios</a>' +
-      '<a href="#/carteira/responsaveis" class="' + (aba === 'responsaveis' ? 'on' : '') + '">Responsáveis</a>' +
+      '<a href="#/carteira/responsaveis" class="' + (aba === 'responsaveis' ? 'on' : '') + '">Equipes</a>' +
       (adicionar ? '<a href="#/carteira/novos" class="' + (aba === 'novos' ? 'on' : '') + '">Adicionar novos</a>' : '') + '</nav><div id="cCorpo"></div></div>';
 
-    var acoes = '<button class="btn ghost" id="btCExportar"' + (conds.length ? '' : ' disabled') + '>' + IC.baixar + 'Exportar CSV</button>' +
-      (admin ? '<button class="btn primary" id="btCNovo">' + IC.mais + 'Novo condomínio</button>' : '');
+    var acoes = (admin ? '<button class="btn primary" id="btCNovo">' + IC.mais + 'Novo condomínio</button>' : '');
 
     if (aba === 'novos' && adicionar) { desenharNovos(); return; }
     if (!conds.length) {
@@ -1978,8 +2059,8 @@
     ligarAcoes();
 
     function ligarAcoes() {
-      if ($('#btCExportar')) $('#btCExportar').onclick = function () { location.href = '/api/carteira/exportar'; };
       if ($('#btCNovo')) $('#btCNovo').onclick = function () { editarCondominio(null); };
+      $$('[data-carteira-acessos]').forEach(function (a) { a.onclick = function (e) { e.preventDefault(); editorCarteiraAcessos(); }; });
     }
 
     /* ---------- adicionar novos: planilha de implantação → escolhe a vigência → digita o ID Vouch ---------- */
@@ -2252,8 +2333,11 @@
       var novo = !c;
       c = c || { situacao: 'ATIVO' };
       var ro = !admin;
-      // coordenador/supervisor: altera só o responsável do setor dele
-      var parcial = !admin && !novo && editaveis.length > 0;
+      // quem não é do cadastro altera só os campos liberados para ele (Ferramentas do setor → Carteira de condomínios)
+      var editCampos = j.campos_editaveis || [];
+      function podeCampo(cp) { return admin || editCampos.indexOf(cp) >= 0; }
+      var parcial = !admin && !novo && editCampos.length > 0;
+      var lib = function (cp) { return parcial && podeCampo(cp); };
       function campo(id, rotulo, valor, extra, liberado) {
         return '<div><label class="rot" for="' + id + '">' + rotulo + '</label><input class="campo" id="' + id + '" value="' + esc(valor || '') + '"' + (ro && !liberado ? ' readonly' : '') + (extra || '') + '></div>';
       }
@@ -2271,19 +2355,19 @@
       var m = modal({
         titulo: novo ? 'Novo condomínio' : c.nome, largo: true,
         corpo: '<form class="pilha" id="fCond" novalidate>' +
-          '<div class="grade-3">' + campo('cdCodigo', 'ID Vouch' + (novo ? ' *' : ''), c.codigo, novo ? ' placeholder="número do condomínio no Vouch"' : '') +
-          '<div><label class="rot" for="cdSit">Situação</label><select class="campo" id="cdSit"' + (ro ? ' disabled' : '') + '>' +
+          '<div class="grade-3">' + campo('cdCodigo', 'ID Vouch' + (novo ? ' *' : ''), c.codigo, novo ? ' placeholder="número do condomínio no Vouch"' : '', lib('codigo')) +
+          '<div><label class="rot" for="cdSit">Situação</label><select class="campo" id="cdSit"' + (ro && !lib('situacao') ? ' disabled' : '') + '>' +
             unicos(j.situacoes.concat([c.situacao])).map(function (s) { return '<option value="' + esc(s) + '"' + (s === c.situacao ? ' selected' : '') + '>' + esc((CART_SIT[s] || [s])[0]) + '</option>'; }).join('') + '</select></div>' +
-          campo('cdUf', 'UF (comarca)', c.comarca, ' maxlength="30" list="cdUfs"') + '</div>' +
-          campo('cdNome', 'Condomínio (Apelido Vouch)', c.nome, ' maxlength="160"') +
-          '<div class="grade-2">' + campo('cdRazao', 'Razão social', c.razao_social, ' maxlength="200"') + campo('cdCnpj', 'CNPJ', c.cnpj, ' maxlength="20" inputmode="numeric"') + '</div>' +
-          '<div class="grade-3">' + campo('cdVenc', 'Vencimento', c.vencimento, ' maxlength="40" placeholder="10 ou 5º DIA ÚTIL" list="cdVencs"') +
-          campo('cdAdm', 'Administradora', c.administradora, ' maxlength="120" list="cdAdms"') + campo('cdEnvio', 'Forma de envio', c.forma_envio, ' maxlength="60" list="cdEnvios"') + '</div>' +
-          '<div class="grade-3">' + funcoes.map(function (fn) { return campo('cd_' + fn.campo, esc(fn.rotulo), c[fn.campo], ' maxlength="120" list="cdl_' + fn.campo + '" placeholder="NOME - RAMAL"', parcial && editavel(fn.campo)); }).join('') + '</div>' +
-          (parcial ? '<div class="ajuda">Você altera o responsável do seu setor. Os demais dados do condomínio são da administração.</div>' : '') +
-          '<div class="grade-3">' + campo('cdInicio', 'Vigência do contrato' + (novo ? ' *' : ''), mesAno(c.inicio_contrato), ' maxlength="7" inputmode="numeric" placeholder="mm/aaaa"') +
-          campo('cdExec', 'Executivo de negócios', c.executivo, ' maxlength="120" list="cdExecs"') + '</div>' +
-          '<div><label class="rot" for="cdObs">Observações</label><textarea class="campo" id="cdObs" rows="3" maxlength="4000"' + (ro ? ' readonly' : '') + '>' + esc(c.observacoes || '') + '</textarea></div>' +
+          campo('cdUf', 'UF (comarca)', c.comarca, ' maxlength="30" list="cdUfs"', lib('comarca')) + '</div>' +
+          campo('cdNome', 'Condomínio (Apelido Vouch)', c.nome, ' maxlength="160"', lib('nome')) +
+          '<div class="grade-2">' + campo('cdRazao', 'Razão social', c.razao_social, ' maxlength="200"', lib('razao_social')) + campo('cdCnpj', 'CNPJ', c.cnpj, ' maxlength="20" inputmode="numeric"', lib('cnpj')) + '</div>' +
+          '<div class="grade-3">' + campo('cdVenc', 'Vencimento', c.vencimento, ' maxlength="40" placeholder="10 ou 5º DIA ÚTIL" list="cdVencs"', lib('vencimento')) +
+          campo('cdAdm', 'Administradora', c.administradora, ' maxlength="120" list="cdAdms"', lib('administradora')) + campo('cdEnvio', 'Forma de envio', c.forma_envio, ' maxlength="60" list="cdEnvios"', lib('forma_envio')) + '</div>' +
+          '<div class="grade-3">' + funcoes.map(function (fn) { return campo('cd_' + fn.campo, esc(fn.rotulo), c[fn.campo], ' maxlength="120" list="cdl_' + fn.campo + '" placeholder="NOME - RAMAL"', lib(fn.campo)); }).join('') + '</div>' +
+          (parcial ? '<div class="ajuda">Você altera só os campos liberados para você; os outros ficam travados. Quem edita o quê: <b>Seu acesso</b>, no alto da Carteira.</div>' : '') +
+          '<div class="grade-3">' + campo('cdInicio', 'Vigência do contrato' + (novo ? ' *' : ''), mesAno(c.inicio_contrato), ' maxlength="7" inputmode="numeric" placeholder="mm/aaaa"', lib('inicio_contrato')) +
+          campo('cdExec', 'Executivo de negócios', c.executivo, ' maxlength="120" list="cdExecs"', lib('executivo')) + '</div>' +
+          '<div><label class="rot" for="cdObs">Observações</label><textarea class="campo" id="cdObs" rows="3" maxlength="4000"' + (ro && !lib('observacoes') ? ' readonly' : '') + '>' + esc(c.observacoes || '') + '</textarea></div>' +
           lista('cdUfs', conds.map(function (x) { return x.comarca; })) + lista('cdVencs', conds.map(function (x) { return x.vencimento; })) +
           lista('cdAdms', conds.map(function (x) { return x.administradora; })) + lista('cdEnvios', conds.map(function (x) { return x.forma_envio; })) +
           lista('cdExecs', conds.map(function (x) { return x.executivo; })) +
@@ -2294,22 +2378,27 @@
         pe: (admin && !novo ? '<button class="btn danger" id="btCdApagar" style="margin-right:auto">Remover</button>' : '') +
           '<button class="btn ghost" data-fechar>' + (admin || parcial ? 'Cancelar' : 'Fechar') + '</button>' + (admin || parcial ? '<button class="btn primary" id="btCdOk">' + (novo ? 'Cadastrar' : 'Salvar') + '</button>' : ''),
       });
+      // vigência: digita "102026" e vira "10/2026"
+      if (admin || lib('inicio_contrato')) $('#cdInicio', m).oninput = function () {
+        var d = this.value.replace(/\D/g, '').slice(0, 6);
+        this.value = d.length > 2 ? d.slice(0, 2) + '/' + d.slice(2) : d;
+      };
       if (parcial) {
         $('#btCdOk', m).onclick = async function () {
+          var ids = { codigo: 'cdCodigo', situacao: 'cdSit', comarca: 'cdUf', nome: 'cdNome', razao_social: 'cdRazao', cnpj: 'cdCnpj', vencimento: 'cdVenc', administradora: 'cdAdm',
+            forma_envio: 'cdEnvio', inicio_contrato: 'cdInicio', executivo: 'cdExec', observacoes: 'cdObs' };
+          funcoes.forEach(function (fn) { ids[fn.campo] = 'cd_' + fn.campo; });
           var corpo = {};
-          funcoes.forEach(function (fn) { if (editavel(fn.campo)) corpo[fn.campo] = $('#cd_' + fn.campo, m).value; });
+          Object.keys(ids).forEach(function (k) { if (podeCampo(k)) corpo[k] = $('#' + ids[k], m).value; });
+          var msg = $('#cdMsg', m);
+          if (corpo.inicio_contrato && corpo.inicio_contrato.trim() && !/^(0?[1-9]|1[0-2])\/\d{4}$/.test(corpo.inicio_contrato.trim())) { msg.textContent = 'Vigência no formato mês/ano, ex.: 10/2026.'; msg.hidden = false; return; }
           var bt = this; bt.disabled = true;
-          try { await api('PATCH', '/api/carteira/' + c.id, corpo); m.fechar(); toast('Responsável atualizado.', 'ok'); paginaCarteira(aba); }
+          try { await api('PATCH', '/api/carteira/' + c.id, corpo); m.fechar(); toast('Condomínio atualizado.', 'ok'); paginaCarteira(aba); }
           catch (e) { var msg = $('#cdMsg', m); msg.textContent = e.message; msg.hidden = false; bt.disabled = false; }
         };
         return;
       }
       if (!admin) return;
-      // vigência: digita "102026" e vira "10/2026"
-      $('#cdInicio', m).oninput = function () {
-        var d = this.value.replace(/\D/g, '').slice(0, 6);
-        this.value = d.length > 2 ? d.slice(0, 2) + '/' + d.slice(2) : d;
-      };
       $('#btCdOk', m).onclick = async function () {
         var corpo = {
           codigo: $('#cdCodigo', m).value, situacao: $('#cdSit', m).value, comarca: $('#cdUf', m).value, nome: $('#cdNome', m).value,

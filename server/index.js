@@ -10,6 +10,7 @@ const { criarRegistros } = require('./registros');
 const { criarDocumentos } = require('./documentos');
 const { criarBoletosCarteira } = require('./boletos-carteira');
 const { criarAcessos } = require('./acessos');
+const { criarRegras } = require('./regras');
 const { criarNotificador } = require('./notificacoes');
 const { criarExpediente, lerExpediente } = require('./expediente');
 const { rotasAuth } = require('./rotas/auth');
@@ -84,9 +85,10 @@ async function criarApp(cfg) {
   const avisos = criarNotificador(db, cfg);
   const expediente = criarExpediente(lerExpediente());
   const acessos = criarAcessos({ db, seg, modulos, documentos });
+  const regras = criarRegras(db);
   // Controle de Emissão de Boletos: o cadastro acompanha a carteira de condomínios
   const boletosCarteira = criarBoletosCarteira({ db, documentos, espera: cfg.esperaCarteiraMs ?? 3000 });
-  const ctx = { db, seg, modulos, registros, documentos, avisos, expediente, acessos, boletosCarteira, cfg };
+  const ctx = { db, seg, modulos, registros, documentos, avisos, expediente, acessos, regras, boletosCarteira, cfg };
 
   const app = express();
   app.disable('x-powered-by');
