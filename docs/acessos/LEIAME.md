@@ -122,7 +122,7 @@ o contrato acima, o modelo deixa de ser reconhecido e os papéis passam a ser os
 | Análise de Espólio | Cobrança | Dashboard, Fila de acompanhamento, Minhas solicitações, Configurações, Acessos | papéis Gestão, Implantação, Solicitante avulso | papéis agora pelo portal; enquanto ninguém tiver Gestão, todos veem todas as abas |
 | Central de Ferramentas — Cobrança / Gestão | Cobrança | calculadoras | abre | dados só no navegador de cada pessoa |
 | Central de Ferramentas — Crédito | Crédito | Balancetes, Consumos, Divisor, Gerador, Montador, Moradores, Nobre | abre | dados só no navegador de cada pessoa |
-| Controle de Emissão de Boletos | Crédito | Painel, Controle, Cadastro, Comparativo, Feriados, Histórico | edita ou só consulta | já respeita o "só consulta" na tela |
+| Controle de Emissão de Boletos | Crédito | Painel, Comparativo, Controle, Cadastro, Distratados, Feriados, Histórico | edita ou só consulta | já respeita o "só consulta" na tela |
 | Controle de Síndicos | Crédito | Resumo, Base, Histórico, Ignorar, Marketing, Cópia de segurança | edita ou só consulta | já respeita o "só consulta" na tela |
 | Controle de Renegociações e Tickets | CS | Dashboard, Central de dados, Nova Renegociação, Relatório mensal, Tickets | edita ou só consulta | — |
 | Prestação de Contas — Comissão de Parceiros | Parceiros | Lançamento, Prestações do mês, Parceiros, Condomínios | edita ou só consulta | alimenta o PartnerChip e as Comissões |

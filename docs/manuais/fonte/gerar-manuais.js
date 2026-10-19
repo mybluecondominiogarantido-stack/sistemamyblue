@@ -32,6 +32,7 @@ const HISTORICO = [
   ['2.0', '09/10/2026', 'Manuais no padrão visual da MyBlue (timbrado, partes e capítulos); catálogo das ferramentas; Central de Patrocínio e Gestão de Viagens; Central de Ferramentas do Crédito com as sete automações; regra de excedente por boleto da Prestação de Contas (v7); regra de tutoriais sempre em dia.'],
   ['2.1', '13/10/2026', 'Títulos no padrão <b>Manual do Portal – Geral</b> e <b>Manual do Portal – Setor …</b>. Carteira: <i>Adicionar novos</i> pela planilha de implantação (ID Vouch, vigência, executivo de negócios e CNPJ), sem importação de CSV. Comissões de Novos Condomínios: a gestão <i>puxa da carteira</i> os condomínios da vigência, parceiro só da lista e cadastro de parceiro novo pelo financeiro. Pesquisa em Módulos e dados e em Ferramentas do setor.'],
   ['2.2', '15/10/2026', 'Menu <b>Premiações</b>: <b>Minhas Premiações</b> (demonstrativo de cada pessoa, só para leitura, <i>Estou ciente</i>, equipe para coordenação e gerência, diretoria) e a ferramenta <b>Gestão de Premiações</b> (antes Comissionamento MyBlue): planilhas do mês enviadas pelo coordenador do setor (um arquivo por pessoa e um aviso só para a gestão quando todas chegam), Comercial pela planilha de implantações e relatórios de garantia, coordenação comercial, boletos da Implantação e metas do Sucesso do Cliente.'],
+  ['2.3', '19/10/2026', 'Acessos centralizados no portal (<i>Quem abre e com qual papel</i>: edita ou só consulta e papel em cada ferramenta; ferramenta nova cadastrada pela coordenação aguarda aprovação). Controle de Emissão de Boletos: aba <b>Distratados</b> e distrato pela situação no Cadastro.'],
 ];
 const VERSOES = (doc) => capVersoes({
   titulo: `Manutenção e controle de versão deste manual`,
@@ -592,7 +593,7 @@ function manualSetor(s) {
   <ul>
     <li><b>Como abrir:</b> no menu (ou digite parte do nome na busca) e no cartão da tela inicial. <b>Nova aba</b> abre em tela cheia.</li>
     <li><b>Os dados:</b> ${f.dados}</li>
-    <li><b>Acesso:</b> quem tem a ferramenta liberada no cadastro, mais o coordenador e o supervisor do setor. Peça ao coordenador do setor ou à administração.</li>
+    <li><b>Acesso:</b> quem foi liberado na ferramenta (<i>Quem abre e com qual papel</i>, editando ou só consultando), mais o coordenador e o supervisor do setor. Peça ao coordenador do setor ou à administração.</li>
     <li><b>Atualizações:</b> quando a ferramenta mudar, o coordenador ou supervisor envia o HTML novo em <b>Gestão do setor → Ferramentas do setor</b>.</li>
     ${f.video ? '<li><b>Vídeo:</b> no menu <b>Tutoriais</b> há um vídeo com esta ferramenta sendo usada, passo a passo.</li>' : ''}
   </ul>
