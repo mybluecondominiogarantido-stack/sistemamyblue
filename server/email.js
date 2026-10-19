@@ -13,7 +13,7 @@
  * enviar({ para: { nome, email }, subject, text, html })
  */
 
-/* "Portal MyBlue <naoresponda@myblue.com.br>" → { nome, email } */
+/* "Portal MyBlue <usrserv@myblue.com.br>" → { nome, email } */
 function lerRemetente(s) {
   const m = /^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/.exec(String(s || ''));
   return m ? { nome: m[1].trim(), email: m[2].trim() } : { nome: '', email: String(s || '').trim() };
@@ -21,7 +21,7 @@ function lerRemetente(s) {
 
 function criarEnvioGraph(e, fetchFn) {
   const remetente = lerRemetente(e.EMAIL_REMETENTE);
-  if (!remetente.email) throw new Error('Defina EMAIL_REMETENTE com a caixa que envia os avisos (ex.: naoresponda@myblue.com.br).');
+  if (!remetente.email) throw new Error('Defina EMAIL_REMETENTE com a caixa que envia os avisos (ex.: usrserv@myblue.com.br).');
   let token = null;
   let expira = 0;
 

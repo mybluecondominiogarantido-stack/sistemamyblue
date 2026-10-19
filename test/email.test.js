@@ -4,7 +4,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { criarEnvioEmail, lerRemetente } = require('../server/email');
 
-const ENV = { M365_TENANT_ID: 'tenant-123', M365_CLIENT_ID: 'app-456', M365_CLIENT_SECRET: 'segredo', EMAIL_REMETENTE: 'Portal MyBlue <naoresponda@myblue.com.br>' };
+const ENV = { M365_TENANT_ID: 'tenant-123', M365_CLIENT_ID: 'app-456', M365_CLIENT_SECRET: 'segredo', EMAIL_REMETENTE: 'Portal MyBlue <usrserv@myblue.com.br>' };
 const resposta = (status, corpo) => ({ ok: status < 300, status, json: async () => corpo });
 
 function microsoftFalsa(roteiro = {}) {
@@ -22,7 +22,7 @@ function microsoftFalsa(roteiro = {}) {
 }
 
 test('lê o remetente com ou sem nome', () => {
-  assert.deepEqual(lerRemetente('Portal MyBlue <naoresponda@myblue.com.br>'), { nome: 'Portal MyBlue', email: 'naoresponda@myblue.com.br' });
+  assert.deepEqual(lerRemetente('Portal MyBlue <usrserv@myblue.com.br>'), { nome: 'Portal MyBlue', email: 'usrserv@myblue.com.br' });
   assert.deepEqual(lerRemetente('"Portal" <a@b.com>'), { nome: 'Portal', email: 'a@b.com' });
   assert.deepEqual(lerRemetente('a@b.com'), { nome: '', email: 'a@b.com' });
 });
@@ -47,7 +47,7 @@ test('Microsoft 365: pega o token do aplicativo e envia pela caixa remetente', a
   assert.equal(form.get('scope'), 'https://graph.microsoft.com/.default');
   assert.equal(form.get('client_id'), 'app-456');
 
-  assert.equal(envio.url, 'https://graph.microsoft.com/v1.0/users/naoresponda%40myblue.com.br/sendMail');
+  assert.equal(envio.url, 'https://graph.microsoft.com/v1.0/users/usrserv%40myblue.com.br/sendMail');
   assert.equal(envio.init.headers.authorization, 'Bearer tok-1');
   const corpo = JSON.parse(envio.init.body);
   assert.equal(corpo.message.toRecipients[0].emailAddress.address, 'marcos@myblue.com.br');

@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const { documento, passos, dica, atencao, tabela, pdfTimbrado, playwright } = require('./padrao');
 
-const CAIXA = 'naoresponda@myblue.com.br';
+const CAIXA = 'usrserv@myblue.com.br';
 const APP = 'Portal MyBlue - avisos';
 
 const pre = (linhas) => `<pre>${linhas}</pre>`;
@@ -19,7 +19,7 @@ const cap = (titulo, html, quem) => { est.push({ cap: titulo, html: (quem ? `<sp
 cap('Resumo', `
 <p class="intro">O Portal MyBlue (Central de Tickets) avisa por e-mail quando uma demanda é passada para alguém, quando chega um ticket novo para um setor e quando um ticket é resolvido ou reaberto. O envio é feito pela <b>API Microsoft Graph</b>, como a caixa <b>${CAIXA}</b>.</p>
 ${tabela(['Item', 'Definição'], [
-  ['Caixa remetente', `Caixa <b>compartilhada</b> <code>${CAIXA}</code> (não usa licença)`],
+  ['Caixa remetente', `<code>${CAIXA}</code>`],
   ['Autenticação', 'Aplicativo registrado no Entra ID, fluxo <i>client credentials</i> (segredo do cliente)'],
   ['Permissão', '<b>Application Mail.Send</b> concedida no <b>Exchange Online</b> (RBAC para aplicativos), com escopo <b>só na caixa remetente</b>'],
   ['O que o aplicativo NÃO pode', 'Ler e-mails, enviar como outras caixas, acessar arquivos, agenda ou usuários'],
@@ -43,13 +43,14 @@ ${atencao('<b>Não</b> conceda a permissão <code>Mail.Send</code> em “Permiss
 `) +
 
 cap('Criar a caixa compartilhada', `
+<p>A MyBlue já usa a caixa <b>${CAIXA}</b> para os avisos: pule esta parte. Ela só é necessária para trocar a caixa remetente.</p>
 ${passos([
   'Acesse o <b>Centro de administração do Exchange</b>: <code>admin.exchange.microsoft.com</code>.',
   'Vá em <b>Destinatários → Caixas de correio → Adicionar uma caixa de correio compartilhada</b>.',
-  `Nome de exibição: <b>Portal MyBlue</b>. Endereço de e-mail: <b>${CAIXA}</b>. Clique em <b>Criar</b>.`,
+  `Nome de exibição: <b>Portal MyBlue</b>. Endereço de e-mail: o novo endereço (ex.: <code>portal@myblue.com.br</code>). Clique em <b>Criar</b>.`,
   'Não é preciso adicionar membros. Opcional: ocultar da lista global de endereços.',
 ])}
-${dica(`Se preferir outro endereço (ex.: <code>portal@myblue.com.br</code>), use o mesmo endereço nos passos 5 e 7.`)}`, 'TI') +
+${dica(`Com a caixa nova, use o novo endereço no lugar de <code>${CAIXA}</code> nos passos 5 e 7.`)}`, 'TI') +
 
 cap('Registrar o aplicativo no Entra ID', `
 ${passos([
@@ -185,7 +186,7 @@ code { font-family: "Liberation Mono", Consolas, monospace; font-size: 9pt; back
 
 async function gerar() {
   const html = documento({ chapeu: 'Guia de configuração · TI', titulo: 'E-mail dos avisos do Portal MyBlue', sub: 'Microsoft 365 (Exchange Online) com Microsoft Graph &nbsp;•&nbsp; MyBlue Condomínio Garantido',
-    versao: '1.1', data: 'Outubro de 2026', fim: 'Guia', css: CSS_GUIA }, est);
+    versao: '1.2', data: 'Outubro de 2026', fim: 'Guia', css: CSS_GUIA }, est);
   const { chromium } = playwright();
   const br = await chromium.launch();
   const page = await br.newPage();

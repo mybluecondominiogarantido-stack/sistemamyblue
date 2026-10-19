@@ -189,19 +189,19 @@ O perfil **Supervisão / Coordenação** é marcado no cadastro da pessoa, em *U
 
 O portal envia pela API Microsoft Graph, com um aplicativo registrado na conta Microsoft da empresa. Não usa a senha de nenhuma caixa e não depende do SMTP com senha, que a Microsoft desliga por padrão a partir do fim de 2026. Quem faz é um **administrador global do Microsoft 365**:
 
-1. **Caixa remetente.** No Centro de administração do Exchange, crie uma *caixa compartilhada* (não usa licença), ex.: `naoresponda@myblue.com.br`.
+1. **Caixa remetente.** A MyBlue envia os avisos como `usrserv@myblue.com.br`. Para usar outra caixa, crie no Centro de administração do Exchange uma *caixa compartilhada* (não usa licença) e troque o endereço nos passos 4 e 5.
 2. **Registrar o aplicativo.** Em [entra.microsoft.com](https://entra.microsoft.com): *Aplicativos → Registros de aplicativo → Novo registro*. Nome: `Portal MyBlue – avisos`, contas *somente deste diretório*, sem URI de redirecionamento. Anote o **ID do aplicativo (cliente)** e o **ID do diretório (locatário)**.
 3. **Segredo.** No aplicativo: *Certificados e segredos → Novo segredo do cliente* (validade de 24 meses). Copie o **Valor** na hora, porque ele só aparece uma vez. Anote na agenda para renovar antes de vencer.
 4. **Não** adicione a permissão `Mail.Send` em *Permissões de API* do Entra: dada ali, ela deixa o aplicativo enviar como **qualquer** caixa da empresa. A permissão é dada no Exchange, valendo só para a caixa dos avisos (*RBAC para aplicativos*, o modelo atual da Microsoft). Copie o **ID do objeto** em *Aplicativos empresariais → Portal MyBlue – avisos* (não é o do registro) e rode no PowerShell do Exchange Online:
    ```powershell
    Connect-ExchangeOnline
    New-ServicePrincipal -AppId <ID do aplicativo> -ObjectId <ID do objeto do aplicativo empresarial> -DisplayName "Portal MyBlue – avisos"
-   New-ManagementScope -Name "Portal MyBlue – caixa de avisos" -RecipientRestrictionFilter "PrimarySmtpAddress -eq 'naoresponda@myblue.com.br'"
+   New-ManagementScope -Name "Portal MyBlue – caixa de avisos" -RecipientRestrictionFilter "PrimarySmtpAddress -eq 'usrserv@myblue.com.br'"
    New-ManagementRoleAssignment -App <ID do aplicativo> -Role "Application Mail.Send" -CustomResourceScope "Portal MyBlue – caixa de avisos"
-   Test-ServicePrincipalAuthorization -Identity <ID do aplicativo> -Resource naoresponda@myblue.com.br   # InScope deve ser True
+   Test-ServicePrincipalAuthorization -Identity <ID do aplicativo> -Resource usrserv@myblue.com.br   # InScope deve ser True
    ```
    A permissão pode levar de 30 minutos a 2 horas para começar a valer.
-5. **Variáveis no Railway:** `M365_TENANT_ID`, `M365_CLIENT_ID`, `M365_CLIENT_SECRET`, `EMAIL_REMETENTE` (ex.: `Portal MyBlue <naoresponda@myblue.com.br>`) e `PORTAL_URL`.
+5. **Variáveis no Railway:** `M365_TENANT_ID`, `M365_CLIENT_ID`, `M365_CLIENT_SECRET`, `EMAIL_REMETENTE` (`Portal MyBlue <usrserv@myblue.com.br>`) e `PORTAL_URL`.
 6. **Testar.** Em *Administração → Equipes e tipos de demanda*, clique em **Enviar e-mail de teste para mim**. Se der erro, a mensagem da Microsoft aparece na tela: *Invalid client secret* (segredo errado ou vencido), *Access is denied* (a permissão do passo 4 ainda não valeu ou o filtro não pega a caixa remetente), *MailboxNotEnabledForRESTAPI* (a caixa remetente não existe no Exchange Online).
 
 Fora do Microsoft 365, dá para usar SMTP comum com as variáveis `SMTP_*`.
@@ -318,7 +318,7 @@ Rode `npm ci --omit=dev` e `npm start` com um gerenciador de processos (pm2, sys
 | `EXPEDIENTE_DIAS` | 1,2,3,4,5 | Dias com expediente (0 = domingo … 6 = sábado) |
 | `FERIADOS` | — | Dias sem expediente, ex.: `2026-11-02,2026-11-15,2026-11-20,2026-12-25` |
 | `PORTAL_URL` | — | Endereço público do portal (ex.: `https://portal.myblue.com.br`), usado no link dos e-mails |
-| `EMAIL_REMETENTE` | — | Caixa que envia os avisos, ex.: `Portal MyBlue <naoresponda@myblue.com.br>` |
+| `EMAIL_REMETENTE` | — | Caixa que envia os avisos, ex.: `Portal MyBlue <usrserv@myblue.com.br>` |
 | `M365_TENANT_ID` / `M365_CLIENT_ID` / `M365_CLIENT_SECRET` | — | Envio pelo Microsoft 365 (Graph). Passo a passo na seção Central de Tickets |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USUARIO` / `SMTP_SENHA` / `SMTP_SEGURO` | — / 587 | Alternativa: SMTP comum (usado só sem as variáveis `M365_*`) |
 
