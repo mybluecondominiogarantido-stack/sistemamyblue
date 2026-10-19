@@ -98,12 +98,14 @@ async function criarApp(cfg) {
     res.set('X-Content-Type-Options', 'nosniff');
     res.set('X-Frame-Options', 'SAMEORIGIN');
     res.set('Referrer-Policy', 'same-origin');
+    if (req.secure) res.set('Strict-Transport-Security', 'max-age=31536000');
     next();
   });
   app.get('/saude', async (req, res) => {
     try { await db.q('SELECT 1'); res.json({ ok: true, banco: db.tipo }); } catch { res.status(503).json({ ok: false }); }
   });
   app.use(seg.identificar);
+  app.use(seg.escopoDaChave);
   app.use('/api', seg.mesmaOrigem);
 
   app.use(rotasAuth(ctx));

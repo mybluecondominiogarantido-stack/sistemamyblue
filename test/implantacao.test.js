@@ -202,7 +202,7 @@ test('responsáveis: cada coordenador escolhe só o do setor dele', async () => 
   const item = { nome: 'Vila Nova', comarca: 'RN', inicio_contrato: '10/2026' };
   let r = await caio('POST', '/api/carteira/implantacao/adicionar', { itens: [{ ...item, codigo: '601', assistente_credito: 'CARLA DIAS - 4003' }] });
   assert.equal(r.status, 400);
-  assert.match(r.json.erro, /coordenador\/supervisor do setor/);
+  assert.match(r.json.erro, /não tem permissão para escolher/);
   r = await caio('POST', '/api/carteira/implantacao/adicionar', { itens: [{ ...item, codigo: '601', analista_cobranca: 'ANA LIMA - 4001' }] });
   assert.equal(r.status, 201, r.texto);
   // coordenadora da Implantação adiciona, mas não escolhe responsável de Cobrança/Crédito

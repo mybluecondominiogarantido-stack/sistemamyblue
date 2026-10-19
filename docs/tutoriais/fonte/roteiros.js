@@ -538,7 +538,7 @@ module.exports = [
       await t.clicar('input[name=uPapel][value=coordenador]', { depois: 1400 });
       await t.legenda('Marque o <b>setor</b>: ele forma a equipe do setor na Central de Tickets.', { etapa: N, ms: 300 });
       await t.clicar('.fundo-modal label:has-text("Jurídico") input[name=uSetor]', { depois: 1200 });
-      await t.legenda('Marcações extras: <b>supervisão da Central de Tickets</b> (todos os setores) e <b>Marketing — Central de Links</b>.', { etapa: N, ms: 300 });
+      await t.legenda('Marcações extras: <b>supervisão da Central de Tickets</b> (todos os setores; já vem com coordenador e supervisor) e <b>Marketing — Central de Links</b>.', { etapa: N, ms: 300 });
       await t.mostrar('#uSup', 1800, { dx: 0.05 });
       await t.mostrar('#uLinks', 1800, { dx: 0.05 });
       await t.clicar('#btSalvarU', { depois: 1500 });
@@ -547,9 +547,12 @@ module.exports = [
       await t.legenda('O perfil e as marcações aparecem na lista. Clique na pessoa para mudar.', { etapa: '3 · Editar', ms: 300 });
       await t.clicar('#tbUsu tr:has-text("Sueli Prado")', { depois: 1000 });
       await t.mostrar('#uSup', 2600, { dx: 0.05 });
+      await t.legenda('<b>Tudo o que acessa</b> mostra num lugar só o que a pessoa pode: setores, tickets, Carteira e cada ferramenta.', { etapa: '3 · Editar', ms: 300 });
+      await t.clicar('#btVerAcessos', { depois: 2600 });
+      await t.clicar(fecharModal, { depois: 800 });
       await t.clicar(fecharModal, { depois: 800 });
     },
-    resumo: ['Perfil + <b>setor</b> no cadastro definem o que a pessoa gerencia', 'Supervisão de tickets e Central de Links são marcações', 'Ferramentas liberadas por pessoa'],
+    resumo: ['Perfil + <b>setor</b> no cadastro definem o que a pessoa gerencia', 'Supervisão de tickets e Central de Links são marcações', '<b>Tudo o que acessa</b>: o que a pessoa pode, num lugar só'],
   },
 
   {
@@ -569,6 +572,8 @@ module.exports = [
       await t.clicar('#btCriarMod', { depois: 2200 });
       await t.legenda('Depois de criar, envie o <b>arquivo .html</b> da ferramenta.', { etapa: N, ms: 300 });
       await t.enviarArquivo('#zArq', '#inArq', cen.rec.html, { depois: 2600 });
+      await t.legenda('Ferramenta nova já nasce <b>isolada</b>: roda separada do portal, sem a sessão de quem abre.', { etapa: N, ms: 300 });
+      await t.mostrar('#mIsolada', 2400, { dx: 0.05 });
       await t.legenda('Na mesma janela: onde os dados ficam, quem abre e com qual papel e as versões anteriores.', { etapa: N, ms: 300 });
       await t.rolar(700, '.fundo-modal .modal-corpo');
       await t.pausa(1800);
@@ -580,7 +585,7 @@ module.exports = [
       await t.legenda('<b>Backup do banco</b> baixa uma cópia de tudo. Faça com frequência.', { etapa: O, ms: 300 });
       await t.mostrar('#btBackup', 2600);
     },
-    resumo: ['<b>Novo módulo</b> → envie o HTML', 'Clique no módulo para setor, dados, acesso e versões', '<b>Backup do banco</b> com frequência'],
+    resumo: ['<b>Novo módulo</b> → envie o HTML (nasce isolada)', 'HTML da coordenação em ferramenta não isolada: <b>aprovar</b> na janela', '<b>Backup do banco</b> com frequência'],
   },
 ];
 

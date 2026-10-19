@@ -5,10 +5,56 @@
   'use strict';
   var C = window.__MYBLUE__ || {};
   var noTopo = window.parent && window.parent !== window;
+  var mesmoSite = function (a) { return a.protocol + '//' + a.host === location.protocol + '//' + location.host; };
+
+  /* ---------- ferramenta isolada ----------
+   * Roda em sandbox, numa origem própria: o navegador não manda o cookie do portal para ela e não deixa usar o
+   * armazenamento do navegador. Os pedidos ao portal (/api, /cdn) passam a levar a chave da ferramenta no endereço,
+   * e o servidor só atende o que é desta ferramenta. */
+  var CHAVE = C.isolada && C.chave ? '/t/' + C.chave : '';
+  function comChave(u) {
+    if (!CHAVE || u == null) return u;
+    try {
+      var a = new URL(String(u), location.href);
+      if (!mesmoSite(a) || a.pathname.indexOf('/t/') === 0 || !/^\/(api|cdn)\//.test(a.pathname)) return u;
+      if (/^\/api\/gas\/[^/]+\/[^/]+$/.test(a.pathname)) return u; // já leva a chave no fim
+      return CHAVE + a.pathname + a.search + a.hash;
+    } catch (e) { return u; }
+  }
+  if (CHAVE) {
+    var fetchOriginal = window.fetch;
+    if (fetchOriginal) {
+      window.fetch = function (entrada, init) {
+        if (typeof entrada === 'string' || (typeof URL !== 'undefined' && entrada instanceof URL)) return fetchOriginal.call(window, comChave(String(entrada)), init);
+        if (entrada && entrada.url) { var nova = comChave(entrada.url); if (nova !== entrada.url) return fetchOriginal.call(window, new Request(nova, entrada), init); }
+        return fetchOriginal.call(window, entrada, init);
+      };
+    }
+    if (window.XMLHttpRequest) {
+      var abrirXhr = XMLHttpRequest.prototype.open;
+      XMLHttpRequest.prototype.open = function (metodo, url) { var a = Array.prototype.slice.call(arguments); a[1] = comChave(url); return abrirXhr.apply(this, a); };
+    }
+    // sem armazenamento do navegador na origem isolada: o que a ferramenta guardar ali fica na memória da página
+    var naMemoria = function () {
+      var d = Object.create(null);
+      var x = {
+        getItem: function (k) { k = String(k); return k in d ? d[k] : null; }, setItem: function (k, v) { d[String(k)] = String(v); },
+        removeItem: function (k) { delete d[String(k)]; }, clear: function () { d = Object.create(null); }, key: function (i) { return Object.keys(d)[i] || null; },
+      };
+      Object.defineProperty(x, 'length', { get: function () { return Object.keys(d).length; } });
+      return x;
+    };
+    ['localStorage', 'sessionStorage'].forEach(function (n) {
+      try { window[n].getItem('__mb'); } catch (e) {
+        try { Object.defineProperty(window, n, { configurable: true, enumerable: true, value: naMemoria() }); } catch (x) { /* fica sem */ }
+      }
+    });
+  }
 
   function avisarPortal(tipo, extra) {
     if (!noTopo) return;
-    try { window.parent.postMessage({ myblue: true, tipo: tipo, modulo: C.modulo, extra: extra || null }, location.origin); } catch (e) { /* sem portal */ }
+    // isolada: a origem dela não é a do portal; o aviso é só a situação de gravação (nada sigiloso)
+    try { window.parent.postMessage({ myblue: true, tipo: tipo, modulo: C.modulo, extra: extra || null }, CHAVE ? '*' : location.origin); } catch (e) { /* sem portal */ }
   }
 
   (C.avisos || []).forEach(function (a) {
@@ -302,7 +348,7 @@
 
     /* ---------- quem está usando ---------- */
     var meuId = 'mb-' + U.id;
-    var minhaFoto = U.foto_v ? '/api/usuarios/' + U.id + '/foto?v=' + U.foto_v : '';
+    var minhaFoto = U.foto_v ? comChave('/api/usuarios/' + U.id + '/foto?v=' + U.foto_v) : '';
     var cachePessoas = Object.create(null);
     cachePessoas[meuId] = Object.freeze({ id: meuId, name: U.nome || '', avatarUrl: minhaFoto, color: '#0c77be', email: U.email || null, isMe: true, guest: false });
     var USER = Object.freeze({
@@ -327,7 +373,7 @@
         var p = faltam.length ? pedir('GET', base + '/pessoas?ids=' + encodeURIComponent(faltam.join(','))).then(function (r) {
           faltam.forEach(function (id) {
             var x = (r.pessoas || {})[id];
-            cachePessoas[id] = Object.freeze({ id: id, name: x ? x.name : '', avatarUrl: x ? x.avatarUrl : '', color: '#0c77be', email: x ? x.email : null, isMe: id === meuId, guest: false });
+            cachePessoas[id] = Object.freeze({ id: id, name: x ? x.name : '', avatarUrl: x && x.avatarUrl ? comChave(x.avatarUrl) : '', color: '#0c77be', email: x ? x.email : null, isMe: id === meuId, guest: false });
           });
         }).catch(function () {}) : Promise.resolve();
         return p.then(function () { var s = {}; ids.forEach(function (id) { if (cachePessoas[id]) s[id] = cachePessoas[id]; }); return s; });
@@ -461,6 +507,8 @@
       .then(function (r) {
         return r.json().catch(function () { return {}; }).then(function (j) {
           if (r.status === 409 && j && j.conflito) { var e = new Error('conflito'); e.conflito = j.conflito; throw e; }
+          // recusado pelo portal (só consulta, sem acesso, papéis que a pessoa não pode mudar): não adianta tentar de novo
+          if (r.status === 403) { var x = new Error((j && j.erro) || 'O portal recusou a gravação.'); x.recusado = true; throw x; }
           if (!r.ok) throw new Error('HTTP ' + r.status);
           return j;
         });
@@ -476,10 +524,31 @@
         devolverPendencias(p);
         clearTimeout(timer);
         if (e && e.conflito) { conflito = e.conflito; avisarPortal('conflito'); mostrarConflito(); return; }
+        if (e && e.recusado) {
+          retirarPendencias();
+          avisarPortal('erro', e.message);
+          mostrarRecusa(e.message);
+          // volta a página para o que está no banco
+          buscar(URL_ARM, { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (j) { conhecer(j.dados, j.versoes); }).catch(function () {});
+          return;
+        }
         tentativa++;
         avisarPortal('erro', String(e && e.message || e));
         timer = setTimeout(enviar, Math.min(1000 * Math.pow(2, tentativa), 30000));
       });
+  }
+
+  /* gravação recusada pelo portal: avisa e oferece recarregar */
+  function mostrarRecusa(msg) {
+    if (!document.body) { document.addEventListener('DOMContentLoaded', function () { mostrarRecusa(msg); }); return; }
+    var d = document.createElement('div');
+    d.setAttribute('role', 'alert');
+    d.style.cssText = 'position:fixed;left:12px;right:12px;top:12px;z-index:2147483647;background:#fdecea;color:#7a1f16;border:1px solid #f1b8b1;border-radius:12px;padding:12px 16px;font:500 14px/1.45 system-ui,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.18);display:flex;gap:12px;align-items:center;flex-wrap:wrap';
+    var t = document.createElement('span'); t.style.flex = '1'; t.textContent = msg;
+    var b = document.createElement('button'); b.type = 'button'; b.textContent = 'Recarregar a página';
+    b.style.cssText = 'font:600 14px system-ui,sans-serif;padding:8px 14px;border-radius:8px;cursor:pointer;border:1px solid #c0392b;background:#c0392b;color:#fff';
+    b.onclick = function () { location.reload(); };
+    d.appendChild(t); d.appendChild(b); document.body.appendChild(d);
   }
 
   /* aviso de conflito, dentro da ferramenta */
@@ -520,7 +589,7 @@
   /* leituras e gravações que a ferramenta faz direto na API do armazenamento */
   if (buscar) {
     var ehMinhaUrl = function (u) {
-      try { var a = new URL(u, location.href); return a.origin === location.origin && (a.pathname === URL_ARM || decodeURIComponent(a.pathname) === '/api/armazenamento/' + C.modulo); } catch (e) { return false; }
+      try { var a = new URL(u, location.href); return mesmoSite(a) && (a.pathname === URL_ARM || decodeURIComponent(a.pathname) === '/api/armazenamento/' + C.modulo); } catch (e) { return false; }
     };
     window.fetch = function (entrada, init) {
       var u = typeof entrada === 'string' ? entrada : (entrada && entrada.url) || String(entrada);

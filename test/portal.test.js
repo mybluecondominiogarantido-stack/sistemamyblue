@@ -222,6 +222,18 @@ test('armazenamento no servidor: equipe e por usuário', async () => {
   assert.match(pag.texto, /"versoes":\{"pedidos":\d+\}/);
 });
 
+test('ferramenta desativada: ninguém além da administração lê ou grava os dados dela', async () => {
+  const { c: adm } = await logar('admin@teste.com', 'Admin1234');
+  const { c } = await logar('caio@teste.com', 'Caio123456');
+  assert.equal((await c('GET', '/api/armazenamento/equipe-x')).status, 200);
+  await adm('PATCH', '/api/admin/modulos/equipe-x', { ativo: false });
+  assert.equal((await c('GET', '/api/armazenamento/equipe-x')).status, 403);
+  assert.equal((await c('POST', '/api/armazenamento/equipe-x', { set: { x: '1' } })).status, 403);
+  assert.equal((await adm('GET', '/api/armazenamento/equipe-x')).status, 200);
+  await adm('PATCH', '/api/admin/modulos/equipe-x', { ativo: true });
+  assert.equal((await c('GET', '/api/armazenamento/equipe-x')).status, 200);
+});
+
 test('baixar todas as ferramentas em uso num .zip', async () => {
   const { c } = await logar('admin@teste.com', 'Admin1234');
   await c('POST', '/api/admin/modulos', { slug: 'zip-x', nome: 'Zip X', armazenamento: 'navegador' });
@@ -237,6 +249,7 @@ test('baixar todas as ferramentas em uso num .zip', async () => {
 test('bibliotecas das CDNs vêm do portal', async () => {
   const { c } = await logar('admin@teste.com', 'Admin1234');
   await c('POST', '/api/admin/modulos', { slug: 'cdn-x', nome: 'CDN X', armazenamento: 'navegador' });
+  await c('PATCH', '/api/admin/modulos/cdn-x', { isolada: false }); // ferramenta nova nasce isolada; aqui, o caso sem isolamento
   await c('PUT', '/api/admin/modulos/cdn-x/arquivo', '<!doctype html><html><head><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script></head>' +
     '<body><script>const W = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js"; const U = \'//unpkg.com/a@1.0.0/a.js\';</script></body></html>', { headers: { 'content-type': 'text/html' } });
   const pag = (await c('GET', '/m/cdn-x/')).texto;
@@ -253,6 +266,26 @@ test('bibliotecas das CDNs vêm do portal', async () => {
   assert.equal(r.texto, 'var XLSX={};');
   assert.match(r.headers.get('content-type'), /javascript/);
   assert.match(r.headers.get('cache-control'), /immutable/);
+  // SVG e HTML executam script se abertos direto: nunca saem da origem do portal, vão para a CDN
+  for (const tipo of ['svg', 'html', 'htm', 'xml']) {
+    const x = await c('GET', `/cdn/unpkg/pacote-qualquer@1.0.0/x.${tipo}`);
+    assert.equal(x.status, 302, tipo);
+    assert.equal(x.headers.get('location'), `https://unpkg.com/pacote-qualquer@1.0.0/x.${tipo}`);
+  }
+  // cópia antiga de um SVG (guardada antes): também não é entregue
+  await ctx.db.q("INSERT INTO cdn_cache (url, tipo, conteudo, tamanho) VALUES ('https://unpkg.com/p@1.0.0/i.svg', 'image/svg+xml', $1, 10)", [Buffer.from('<svg></svg>')]);
+  assert.equal((await c('GET', '/cdn/unpkg/p@1.0.0/i.svg')).status, 302);
+  // endereço sem extensão: só se a cópia for script/estilo/JSON
+  await ctx.db.q("INSERT INTO cdn_cache (url, tipo, conteudo, tamanho) VALUES ('https://unpkg.com/lib@2.0.0', 'application/javascript; charset=utf-8', $1, 6), ('https://unpkg.com/pag@1.0.0', 'text/html', $1, 6)", [Buffer.from('var a;')]);
+  const semExt = await c('GET', '/cdn/unpkg/lib@2.0.0');
+  assert.equal(semExt.status, 200);
+  assert.equal(semExt.headers.get('content-security-policy'), null);
+  assert.equal((await c('GET', '/cdn/unpkg/pag@1.0.0')).status, 302);
+  // o que não é script sai com sandbox
+  await ctx.db.q("INSERT INTO cdn_cache (url, tipo, conteudo, tamanho) VALUES ('https://cdn.jsdelivr.net/npm/f@1.0.0/f.png', 'image/png', $1, 3)", [Buffer.from('PNG')]);
+  const png = await c('GET', '/cdn/jsdelivr/npm/f@1.0.0/f.png');
+  assert.equal(png.status, 200);
+  assert.match(png.headers.get('content-security-policy'), /sandbox/);
   // endereço inválido e sem login
   assert.equal((await c('GET', '/cdn/cdnjs/ajax/libs/x/1.0/a;b.js')).status, 400);
   assert.equal((await c('GET', '/cdn/outra/a.js')).status, 404);
@@ -268,10 +301,14 @@ test('planilha interna em linhas (Renegociações): protocolo do Apps Script', a
   assert.match(pag.texto, /script\.google\.com\/macros\/s\/AAA/);
 
   // cabeçalho vem da constante do HTML
-  let r = await c('GET', '/api/gas/renegociacoes?callback=cb_1');
+  let r = await c('GET', '/api/gas/renegociacoes?callback=cb_1', undefined, { headers: { 'sec-fetch-site': 'same-origin' } });
   assert.equal(r.headers.get('content-type').split(';')[0], 'application/javascript');
   assert.equal(r.texto, '/**/cb_1([["ID","Condomínio","Status"]]);');
   assert.equal((await c('GET', '/api/gas/renegociacoes?callback=alert(1)')).status, 400);
+  // leitura por JSONP incluída a partir de outro site (mesmo com o cookie): recusada
+  r = await c('GET', '/api/gas/renegociacoes?callback=cb_2', undefined, { headers: { 'sec-fetch-site': 'same-site' } });
+  assert.equal(r.status, 403);
+  assert.doesNotMatch(r.texto, /Condomínio/);
 
   const post = (corpo) => c('POST', '/api/gas/renegociacoes', JSON.stringify(corpo), { headers: { 'content-type': 'text/plain;charset=utf-8' } });
   assert.equal((await post({ action: 'add', row: ['a1', 'Residencial Alfa', 'Fechado'] })).json.ok, true);
@@ -307,6 +344,10 @@ test('planilha interna em linhas (Renegociações): protocolo do Apps Script', a
   const csv = await c('GET', '/api/admin/modulos/renegociacoes/dados/renegociacoes.csv');
   assert.equal(csv.status, 200);
   assert.match(csv.texto, /ID;Condomínio;Status\r\nz9;Único;Fechado/);
+  // texto que viraria fórmula no Excel sai neutralizado; número negativo continua número
+  await c('POST', '/api/gas/renegociacoes', JSON.stringify({ action: 'add', row: ['f1', '=HYPERLINK("http://x")', '-12,5'] }), { headers: { 'content-type': 'text/plain' } });
+  const csv2 = (await c('GET', '/api/admin/modulos/renegociacoes/dados/renegociacoes.csv')).texto;
+  assert.match(csv2, /f1;"'=HYPERLINK\(""http:\/\/x""\)";-12,5/);
 });
 
 test('planilha interna em objetos (Parceiros): upsert/delete via JSONP', async () => {
@@ -367,7 +408,7 @@ test('planilha posicional (Controle de Pedidos): incluir, alterar pela linha e m
   assert.match(pag.texto, /indexOf\('\/api\/gas\/'\)===0\) return true;/);
 
   // planilha vazia: devolve só o cabeçalho padrão
-  let r = await c('GET', '/api/gas/suprimentos?callback=mbcb_1');
+  let r = await c('GET', '/api/gas/suprimentos?callback=mbcb_1', undefined, { headers: { 'sec-fetch-site': 'same-origin' } });
   assert.match(r.texto, /^\/\*\*\/mbcb_1\(\[\["Nº do Pedido"/);
 
   const post = (corpo) => c('POST', '/api/gas/suprimentos', JSON.stringify(corpo), { headers: { 'content-type': 'text/plain;charset=utf-8' } });
@@ -460,15 +501,22 @@ test('remover módulo exige confirmação e apaga as versões do HTML', async ()
   assert.equal((await c('POST', '/api/admin/modulos', { slug: 'Inválido!', nome: 'x' })).status, 400);
 });
 
-test('backup do banco (JSON, sem hashes de senha)', async () => {
+test('backup do banco (todas as tabelas, sem hashes de senha nem sessões)', async () => {
   const { c } = await logar('admin@teste.com', 'Admin1234');
-  const r = await c('GET', '/api/admin/backup');
+  const r = await c('GET', '/api/admin/backup', undefined, { bruto: true });
   assert.equal(r.status, 200);
-  assert.equal(r.json.sistema, 'portal-myblue');
-  assert.ok(r.json.tabelas.usuarios.length >= 1);
-  assert.ok(r.json.tabelas.usuarios.every((u) => !('senha_hash' in u)));
-  assert.ok(r.json.tabelas.modulo_versoes.length >= 1);
-  assert.equal(typeof r.json.tabelas.modulo_versoes[0].conteudo, 'string');
+  assert.match(r.headers.get('content-disposition'), /\.jsonl\.gz"/);
+  const linhas = require('zlib').gunzipSync(r.buffer).toString().trim().split('\n').map((l) => JSON.parse(l));
+  assert.equal(linhas[0].sistema, 'portal-myblue');
+  assert.equal(linhas[0].versao_backup, 5);
+  assert.ok(linhas.at(-1).fim);
+  const de = (t) => linhas.filter((l) => l.t === t).map((l) => l.r);
+  for (const t of ['regras_acesso', 'comissao_relatorios', 'comissao_leitores', 'comissao_planilhas', 'tutoriais']) assert.ok(linhas[0].tabelas.includes(t), t);
+  assert.ok(!linhas[0].tabelas.includes('sessoes') && !linhas[0].tabelas.includes('cdn_cache'));
+  assert.ok(de('usuarios').length >= 1);
+  assert.ok(de('usuarios').every((u) => !('senha_hash' in u)));
+  assert.ok(de('modulo_versoes').length >= 1);
+  assert.equal(typeof de('modulo_versoes')[0].conteudo, 'string');
 });
 
 test('foto de perfil: enviar, ver, recusar arquivo inválido e remover', async () => {
@@ -506,4 +554,15 @@ test('saúde informa o banco', async () => {
   const r = await fetch(base + '/saude');
   assert.equal(r.status, 200);
   assert.ok(['embutido', 'postgres'].includes((await r.json()).banco));
+});
+
+test('login: limite por IP vale também para quem testa a mesma senha em muitas contas', async () => {
+  // até 30 tentativas erradas do mesmo IP (as dos testes anteriores contam), cada uma num e-mail diferente
+  let n = 0;
+  while (n < 31 && (await logar(`conta${n}@teste.com`, 'Senha12345')).r.status === 401) n++;
+  assert.ok(n > 0 && n <= 30, `bloqueou depois de ${n}`);
+  const r = await logar('outra-conta@teste.com', 'Senha12345');
+  assert.equal(r.r.status, 429);
+  // nem a senha certa entra até passar a janela (o bloqueio é do IP)
+  assert.equal((await logar('admin@teste.com', 'Admin1234')).r.status, 429);
 });

@@ -1,9 +1,11 @@
 'use strict';
 const express = require('express');
-const { hashSenha, validarNovaSenha, senhaAleatoria } = require('../seguranca');
+const zlib = require('zlib');
+const { hashSenha, validarNovaSenha, senhaAleatoria, veTodosOsTickets } = require('../seguranca');
 const { SLUG_RE } = require('../modulos');
 const { criarZip } = require('../zip');
 const { MODULO: MODULO_BOLETOS } = require('../boletos-carteira');
+const { gerarBackup } = require('../backup');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ICONES = ['app', 'calculadora', 'grafico', 'aperto', 'caixa', 'carteira', 'documento', 'pessoas', 'ticket', 'casa', 'calendario', 'escudo'];
@@ -106,7 +108,8 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     const setoresValidos = new Set((await db.q('SELECT id FROM setores')).rows.map((x) => x.id));
     const setores = Array.isArray(body.setores) ? [...new Set(body.setores.map(Number))].filter((x) => setoresValidos.has(x)) : null;
     if (setores && ['coordenador', 'supervisor'].includes(papel) && !setores.length) return { erro: 'Escolha o setor que esta pessoa coordena ou supervisiona.' };
-    return { nome, email, papel, supervisor_tickets: !!body.supervisor_tickets, editor_links: !!body.editor_links, modulos: lista.filter((s) => existentes.has(s)), setores };
+    // Coordenador e Supervisor já têm a Supervisão da Central de Tickets pelo perfil: a marcação fica só para os outros
+    return { nome, email, papel, supervisor_tickets: !!body.supervisor_tickets && !['coordenador', 'supervisor'].includes(papel), editor_links: !!body.editor_links, modulos: lista.filter((s) => existentes.has(s)), setores };
   }
 
   // quem continua liberado numa ferramenta mantém o "só consulta" e os papéis que tinha nela
@@ -188,10 +191,64 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     res.json({ ok: true });
   });
 
+  /* Tudo o que uma pessoa acessa, num lugar só: perfil, setores (e se é líder), marcações, cada ferramenta que abre
+     (por quê, se edita ou só consulta, com quais papéis), o que pode na Carteira e na Central de Tickets. */
+  r.get('/api/admin/usuarios/:id/acessos', async (req, res) => {
+    const id = Number(req.params.id);
+    const esc = await escopoDe(req);
+    if (esc && !esc.gerencia(id)) return erro(res, 404, 'Usuário não encontrado.');
+    const u = await db.um('SELECT id, nome, email, papel, ativo, supervisor_tickets, editor_links FROM usuarios WHERE id = $1', [id]);
+    if (!u) return erro(res, 404, 'Usuário não encontrado.');
+    const setores = (await db.q(`SELECT s.id, s.nome, sm.lider FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id
+      WHERE sm.usuario_id = $1 ORDER BY s.ordem, s.nome`, [id])).rows;
+    const gestor = seg.GESTORES_DE_SETOR.includes(u.papel);
+    const meusSetores = new Set(setores.map((x) => x.id));
+    const ferramentas = [];
+    for (const m of await modulos.listar()) {
+      const a = await acessos.acessoDe(u, m);
+      if (!a.abre) continue;
+      const { lista } = await acessos.papeisDaFerramenta(m);
+      ferramentas.push({ slug: m.slug, nome: m.nome, setor: m.setor_nome || '', ativo: m.ativo, pendente: m.pendente,
+        motivo: u.papel === 'admin' ? 'administração' : gestor && meusSetores.has(m.setor_id) ? (u.papel === 'supervisor' ? 'supervisão do setor' : 'coordenação do setor') : 'liberada',
+        somente_leitura: a.somente_leitura, papeis: a.papeis.map((p) => (lista.find((x) => x.id === p) || { nome: p }).nome) });
+    }
+    const perms = u.papel === 'admin' ? null : await regras.permissoesDe(u);
+    const carteira = regras.PERMISSOES.filter((p) => p.chave.startsWith('carteira.')).map((p) => ({ rotulo: p.rotulo,
+      pode: !perms || perms.has(p.chave), motivo: perms ? (perms.get(p.chave) || null) : 'administração' }));
+    res.json({
+      usuario: { id: u.id, nome: u.nome, email: u.email, papel: u.papel, ativo: u.ativo },
+      setores: setores.map((x) => ({ nome: x.nome, lider: !!x.lider || gestor })),
+      gerencia: u.papel === 'admin' ? 'todos os setores' : gestor ? setores.map((x) => x.nome) : [],
+      marcacoes: { supervisor_tickets: veTodosOsTickets(u.papel, u.supervisor_tickets), supervisor_tickets_pelo_perfil: gestor, editor_links: !!u.editor_links },
+      tickets: { todos_setores: u.papel === 'admin' || veTodosOsTickets(u.papel, u.supervisor_tickets), setores: setores.map((x) => x.nome),
+        lider_em: setores.filter((x) => x.lider || gestor).map((x) => x.nome) },
+      carteira,
+      ferramentas,
+    });
+  });
+
+  async function acessosForaDoEscopo(id, esc) {
+    const u = await db.um('SELECT supervisor_tickets, editor_links FROM usuarios WHERE id = $1', [id]);
+    const motivos = [];
+    if (u.supervisor_tickets) motivos.push('vê os tickets de todos os setores');
+    if (u.editor_links) motivos.push('edita a Central de Links');
+    const setores = (await db.q('SELECT s.id, s.nome FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id WHERE sm.usuario_id = $1', [id])).rows;
+    const outros = setores.filter((x) => !esc.setores.has(x.id)).map((x) => x.nome);
+    if (outros.length) motivos.push('faz parte de ' + outros.join(', '));
+    const mods = (await db.q('SELECT m.slug, m.nome FROM permissoes p JOIN modulos m ON m.slug = p.modulo_slug WHERE p.usuario_id = $1', [id])).rows;
+    const deFora = mods.filter((m) => !esc.modulos.has(m.slug)).map((m) => m.nome);
+    if (deFora.length) motivos.push('abre ' + deFora.join(', '));
+    return motivos;
+  }
+
   r.post('/api/admin/usuarios/:id/senha', json, async (req, res) => {
     const id = Number(req.params.id);
     const esc = await escopoDe(req);
     if ((esc && !esc.gerencia(id)) || !(await db.um('SELECT 1 FROM usuarios WHERE id = $1', [id]))) return erro(res, 404, 'Usuário não encontrado.');
+    // quem tem acesso além dos setores de quem pede (outro setor, ferramenta de fora, marcações da administração) só tem
+    // a senha redefinida pela administração: com a senha temporária, quem pede entraria com os acessos da pessoa
+    const fora = esc ? await acessosForaDoEscopo(id, esc) : [];
+    if (fora.length) return erro(res, 403, `Esta pessoa tem acessos fora dos seus setores (${fora.join('; ')}). Peça à administração para redefinir a senha dela.`);
     let senha = req.body && req.body.senha ? String(req.body.senha) : '';
     if (senha) { const e = validarNovaSenha(senha); if (e) return erro(res, 400, e); } else senha = senhaAleatoria();
     await db.q('UPDATE usuarios SET senha_hash = $1, trocar_senha = TRUE, atualizado_em = now() WHERE id = $2', [hashSenha(senha), id]);
@@ -251,7 +308,8 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
       const perms = (await db.q('SELECT usuario_id, modulo_slug FROM permissoes')).rows;
       const setores = (await db.q('SELECT id, nome FROM setores WHERE id = ANY($1::int[]) ORDER BY ordem, nome', [[...req.setoresGeridos]])).rows;
       return res.json({ setores, icones: ICONES, modulos: meus.map((m) => ({ slug: m.slug, nome: m.nome, icone: m.icone, ativo: m.ativo, setor_id: m.setor_id, setor_nome: m.setor_nome, setor_ordem: m.setor_ordem, pendente: m.pendente,
-        tem_arquivo: m.tem_arquivo, versao_id: m.versao_id, versao_em: m.versao_em, tamanho: m.tamanho, nome_original: m.nome_original,
+        tem_arquivo: m.tem_arquivo, versao_id: m.versao_id, versao_em: m.versao_em, tamanho: m.tamanho, nome_original: m.nome_original, isolada: !!m.config.isolada,
+        versao_pendente_id: m.versao_pendente_id, pendente_em: m.pendente_em, pendente_por: m.pendente_por, pendente_nome: m.pendente_nome,
         usuarios: perms.filter((p) => p.modulo_slug === m.slug && esc.gerencia(p.usuario_id)).map((p) => p.usuario_id) })) });
     }
     const lista = [];
@@ -280,7 +338,8 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     const daCoordenacao = !!req.setoresGeridos;
     const setorId = b.setor_id ? Number(b.setor_id) : null;
     if (daCoordenacao && !(setorId && req.setoresGeridos.has(setorId))) return erro(res, 403, 'Escolha um dos seus setores para a ferramenta nova.');
-    await db.q(`INSERT INTO modulos (slug, nome, descricao, setor_id, icone, ordem, armazenamento, config, pendente, criado_por) VALUES ($1, $2, $3, $4, $5, $6, $7, '{}'::jsonb, $8, $9)`,
+    // ferramenta nova já nasce isolada (a administração desliga se ela precisar de algo que o isolamento não permite)
+    await db.q(`INSERT INTO modulos (slug, nome, descricao, setor_id, icone, ordem, armazenamento, config, pendente, criado_por) VALUES ($1, $2, $3, $4, $5, $6, $7, '{"isolada":true}'::jsonb, $8, $9)`,
       [slug, nome, String(b.descricao || ''), setorId, ICONES.includes(b.icone) ? b.icone : 'app', Number(b.ordem) || 0, daCoordenacao ? 'compartilhado' : arm, daCoordenacao, req.usuario.id]);
     await seg.auditar(req, 'modulo_criado', slug, { nome, pendente: daCoordenacao });
     if (daCoordenacao && avisos) {
@@ -305,6 +364,7 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     if (Array.isArray(req.body.chaves_locais)) config.chaves_locais = expressoes(req.body.chaves_locais);
     if (Array.isArray(req.body.chaves_livres)) config.chaves_livres = expressoes(req.body.chaves_livres);
     if (typeof req.body.google_url === 'string') config.google_url = req.body.google_url.trim();
+    if (typeof req.body.isolada === 'boolean') config.isolada = req.body.isolada;
     await db.q(`UPDATE modulos SET nome = $1, descricao = $2, setor_id = $3, icone = $4, ordem = $5, ativo = $6, armazenamento = $7, fonte_dados = $8,
       config = $9::jsonb, atualizado_em = now() WHERE slug = $10`, [nome, String(b.descricao || ''), b.setor_id ? Number(b.setor_id) : null,
       ICONES.includes(b.icone) ? b.icone : m.icone, Number(b.ordem) || 0, !!b.ativo, arm, fonte, JSON.stringify(config), m.slug]);
@@ -316,7 +376,7 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
       });
     }
     await seg.auditar(req, 'modulo_editado', m.slug, {
-      nome, armazenamento: arm, fonte_dados: fonte, ativo: !!b.ativo,
+      nome, armazenamento: arm, fonte_dados: fonte, ativo: !!b.ativo, isolada: !!config.isolada,
       ...(arm !== m.armazenamento ? { armazenamento_anterior: m.armazenamento } : {}),
       ...(fonte !== m.fonte_dados ? { fonte_anterior: m.fonte_dados } : {}),
     });
@@ -335,27 +395,19 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
   /* envio do HTML (corpo bruto) */
   const corpoBruto = express.raw({ type: () => true, limit: `${cfg.limiteHtmlMb}mb` });
 
-  r.put('/api/admin/modulos/:slug/arquivo', corpoBruto, async (req, res) => {
-    const m = await modulos.obter(req.params.slug);
-    if (!m) return erro(res, 404, 'Módulo não encontrado.');
-    const buf = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
-    const problema = modulos.validarHtml(buf);
-    if (problema) return erro(res, 400, problema);
-    const nomeOriginal = req.headers['x-nome-arquivo'] ? decodeURIComponent(String(req.headers['x-nome-arquivo'])) : null;
-    const reconhecido = await modulos.reconhecer(buf);
-    const id = await modulos.salvarVersao(m.slug, buf, nomeOriginal, req.usuario.id);
-    await seg.auditar(req, 'arquivo_enviado', m.slug, { versao: id, nome: nomeOriginal, bytes: buf.length });
-    // aviso se o arquivo parece ser de outra ferramenta
-    const aviso = reconhecido && reconhecido !== m.slug ? `Atenção: este arquivo parece ser da ferramenta "${(await modulos.obter(reconhecido)).nome}".` : null;
+  /* O que o HTML novo muda na configuração do módulo: ferramenta do Claude (banco de documentos), HTML já ligado à
+     planilha interna, ou HTML sem os pontos de ligação. Roda quando a versão entra em uso. */
+  async function ajustarPeloHtml(req, m, buf) {
     let avisoPatch = null;
     let fonteAutomatica = null;
-    if (!m.adaptador && /claude\.use\(\s*["']db["']/.test(buf.toString('utf8'))) {
+    const html = buf.toString('utf8');
+    if (!m.adaptador && /claude\.use\(\s*["']db["']/.test(html)) {
       // ferramenta feita como artefato do Claude (window.claude.use('db')): os documentos ficam no banco do portal
       await db.q("UPDATE modulos SET adaptador = 'claude-db', fonte_dados = 'interno', atualizado_em = now() WHERE slug = $1", [m.slug]);
       await seg.auditar(req, 'modulo_editado', m.slug, { adaptador: 'claude-db', motivo: 'HTML usa o banco do Claude' });
       fonteAutomatica = 'interno';
     }
-    if (m.adaptador && /SHEET_URL_BUILTIN\s*=\s*\\?["']\/api\/gas\//.test(buf.toString('utf8'))) {
+    if (m.adaptador && /SHEET_URL_BUILTIN\s*=\s*\\?["']\/api\/gas\//.test(html)) {
       // HTML já ligado ao banco do portal (sem planilha Google): o módulo passa a usar a planilha interna
       if (m.fonte_dados !== 'interno') {
         await db.q("UPDATE modulos SET fonte_dados = 'interno', atualizado_em = now() WHERE slug = $1", [m.slug]);
@@ -364,11 +416,65 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
       fonteAutomatica = 'interno';
     }
     if (m.adaptador && !fonteAutomatica) {
-      const html = buf.toString('utf8');
       const faltando = (m.config.patches_interno || []).filter((p) => (p.tipo === 'regex' ? !new RegExp(p.busca).test(html) : !html.includes(p.busca)));
       if (faltando.length) avisoPatch = 'Este HTML não tem os pontos de ligação esperados: o banco interno não poderá ser usado com esta versão.';
     }
+    return { avisoPatch, fonteAutomatica };
+  }
+
+  r.put('/api/admin/modulos/:slug/arquivo', corpoBruto, async (req, res) => {
+    const m = await modulos.obter(req.params.slug);
+    if (!m) return erro(res, 404, 'Módulo não encontrado.');
+    const buf = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+    const problema = modulos.validarHtml(buf);
+    if (problema) return erro(res, 400, problema);
+    let nomeOriginal = null;
+    try { nomeOriginal = req.headers['x-nome-arquivo'] ? decodeURIComponent(String(req.headers['x-nome-arquivo'])) : null; } catch { /* nome malformado: fica sem */ }
+    const reconhecido = await modulos.reconhecer(buf);
+    // HTML da coordenação numa ferramenta já aprovada e não isolada: roda com a sessão de quem abre (inclusive a
+    // administração), então só entra em uso depois que a administração aprovar. Isolada, entra na hora.
+    const aguardar = req.usuario.papel !== 'admin' && !m.pendente && !m.config.isolada;
+    const id = await modulos.salvarVersao(m.slug, buf, nomeOriginal, req.usuario.id, { aguardar });
+    await seg.auditar(req, aguardar ? 'arquivo_aguardando' : 'arquivo_enviado', m.slug, { versao: id, nome: nomeOriginal, bytes: buf.length });
+    // aviso se o arquivo parece ser de outra ferramenta
+    const aviso = reconhecido && reconhecido !== m.slug ? `Atenção: este arquivo parece ser da ferramenta "${(await modulos.obter(reconhecido)).nome}".` : null;
+    if (aguardar) {
+      if (avisos) {
+        const admins = (await db.q("SELECT id FROM usuarios WHERE papel = 'admin' AND ativo")).rows.map((x) => x.id);
+        await avisos.notificar(admins, { tipo: 'versao_aguardando', titulo: 'HTML novo aguardando aprovação',
+          texto: `${req.usuario.nome} enviou uma versão nova de "${m.nome}". Veja a prévia e aprove em Módulos e dados.`, link: '#/admin/modulos', email: true, autor_id: req.usuario.id });
+      }
+      return res.json({ ok: true, versao: id, aguardando_aprovacao: true, aviso });
+    }
+    const { avisoPatch, fonteAutomatica } = await ajustarPeloHtml(req, m, buf);
     res.json({ ok: true, versao: id, aviso, aviso_banco: avisoPatch, fonte_dados: fonteAutomatica });
+  });
+
+  /* versão que aguardava: a administração aprova (entra em uso) ou recusa (é apagada) */
+  r.post('/api/admin/modulos/:slug/versoes/:id/aprovar', async (req, res) => {
+    const m = await modulos.obter(req.params.slug);
+    const v = m && await db.um('SELECT id, conteudo, enviado_por FROM modulo_versoes WHERE id = $1 AND modulo_slug = $2 AND NOT aprovada', [Number(req.params.id) || 0, m.slug]);
+    if (!v) return erro(res, 404, 'Não há versão aguardando aprovação com este número.');
+    await modulos.restaurarVersao(m.slug, v.id);
+    const { avisoPatch, fonteAutomatica } = await ajustarPeloHtml(req, m, Buffer.from(v.conteudo));
+    await seg.auditar(req, 'versao_aprovada', m.slug, { versao: v.id });
+    if (avisos && v.enviado_por) {
+      await avisos.notificar([v.enviado_por], { tipo: 'versao_aprovada', titulo: 'Versão nova aprovada',
+        texto: `A versão nova de "${m.nome}" foi aprovada e já está em uso.`, link: '#/admin/modulos', email: true, autor_id: req.usuario.id });
+    }
+    res.json({ ok: true, aviso_banco: avisoPatch, fonte_dados: fonteAutomatica });
+  });
+
+  r.post('/api/admin/modulos/:slug/versoes/:id/recusar', async (req, res) => {
+    const v = await modulos.recusarVersao(req.params.slug, Number(req.params.id) || 0);
+    if (!v) return erro(res, 404, 'Não há versão aguardando aprovação com este número.');
+    await seg.auditar(req, 'versao_recusada', req.params.slug, { versao: v.id });
+    if (avisos && v.enviado_por) {
+      const m = await modulos.obter(req.params.slug);
+      await avisos.notificar([v.enviado_por], { tipo: 'versao_recusada', titulo: 'Versão nova não aprovada',
+        texto: `A versão nova de "${m ? m.nome : req.params.slug}" não foi aprovada pela administração. A versão em uso continua a mesma.`, link: '#/admin/modulos', email: true, autor_id: req.usuario.id });
+    }
+    res.json({ ok: true });
   });
 
   /* envio em lote: reconhece cada HTML pelo título */
@@ -530,7 +636,10 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
   });
 
   r.post('/api/admin/modulos/:slug/versoes/:id/usar', async (req, res) => {
-    if (!(await modulos.restaurarVersao(req.params.slug, Number(req.params.id)))) return erro(res, 404, 'Versão não encontrada.');
+    const soAprovadas = req.usuario.papel !== 'admin';
+    if (!(await modulos.restaurarVersao(req.params.slug, Number(req.params.id), { soAprovadas }))) {
+      return erro(res, 404, soAprovadas ? 'Versão não encontrada ou aguardando a aprovação da administração.' : 'Versão não encontrada.');
+    }
     await seg.auditar(req, 'versao_restaurada', req.params.slug, { versao: Number(req.params.id) });
     res.json({ ok: true });
   });
@@ -571,7 +680,12 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
       cab = [...ks];
       matriz = linhas.map((o) => cab.map((k) => o[k]));
     }
-    const cel = (v) => { const s = v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v); return /[";\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    // texto que começa com = + - @ vira fórmula no Excel: ganha um apóstrofo na frente (números negativos ficam como estão)
+    const cel = (v) => {
+      let s = v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v);
+      if (/^[=+\-@\t\r]/.test(s) && !/^[+-]?\d[\d.,]*$/.test(s)) s = "'" + s;
+      return /[";\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
     const csv = '﻿' + [cab, ...matriz].map((l) => l.map(cel).join(';')).join('\r\n');
     res.set('Content-Disposition', `attachment; filename="myblue-${m.slug}-${c}.csv"`);
     res.type('text/csv').send(csv);
@@ -646,25 +760,24 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     res.json({ eventos: (await db.q(sql, args)).rows });
   });
 
-  /* ===================== backup (JSON com todas as tabelas) ===================== */
+  /* ===================== backup (todas as tabelas, sai aos pedaços e comprimido) ===================== */
   r.get('/api/admin/backup', async (req, res) => {
-    const tabelas = ['setores', 'usuarios', 'modulos', 'permissoes', 'modulo_versoes', 'armazenamento', 'colecoes', 'registros', 'documentos', 'auditoria',
-      'setor_membros', 'ticket_categorias', 'tickets', 'ticket_eventos', 'ticket_anexos', 'notificacoes',
-      'condominios', 'links_pagina', 'links', 'links_campanhas'];
-    const saida = { sistema: 'portal-myblue', versao_backup: 4, gerado_em: new Date().toISOString(), tabelas: {} };
-    for (const t of tabelas) {
-      const { rows } = await db.q(`SELECT * FROM ${t}`);
-      // arquivos (HTMLs, anexos, fundos de campanha) em base64; hashes de senha ficam fora do backup por segurança
-      saida.tabelas[t] = rows.map((l) => {
-        const c = { ...l };
-        for (const k of Object.keys(c)) if (Buffer.isBuffer(c[k])) c[k] = c[k].toString('base64'); // HTMLs e fotos
-        delete c.senha_hash;
-        return c;
-      });
+    const gz = zlib.createGzip();
+    let parou = false;
+    res.on('close', () => { if (!res.writableFinished) parou = true; });
+    res.set('Content-Type', 'application/gzip');
+    res.set('Content-Disposition', `attachment; filename="myblue-backup-${new Date().toISOString().slice(0, 10)}.jsonl.gz"`);
+    res.set('Cache-Control', 'no-store');
+    gz.pipe(res);
+    try {
+      const linhas = await gerarBackup(db, gz, { deveParar: () => parou });
+      gz.end();
+      await seg.auditar(req, 'backup_baixado', null, { linhas });
+    } catch (e) {
+      if (!parou) console.error('[backup]', e);
+      gz.destroy();
+      res.destroy();
     }
-    await seg.auditar(req, 'backup_baixado', null, null);
-    res.set('Content-Disposition', `attachment; filename="myblue-backup-${new Date().toISOString().slice(0, 10)}.json"`);
-    res.json(saida);
   });
 
   return r;

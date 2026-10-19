@@ -29,7 +29,7 @@ function rotasCarteira({ db, seg, regras, boletosCarteira }) {
     next();
   });
   // quem edita o quê vem das regras de acesso (Ferramentas do setor → Carteira); consultar é de todos
-  const QUEM_LIBERA = ' Quem libera: administração ou coordenação, em Ferramentas do setor → Carteira de condomínios.';
+  const QUEM_LIBERA = ' Quem libera: a administração (Módulos e dados → Carteira: quem edita) ou, nas permissões do setor dela, a coordenação/supervisão (Ferramentas do setor → Carteira de condomínios: quem edita).';
   const exigir = (chave, msg) => async (req, res, next) => {
     try { if (await regras.pode(req.usuario, chave)) return next(); return res.status(403).json({ erro: msg + QUEM_LIBERA }); } catch (e) { return next(e); }
   };
@@ -229,7 +229,7 @@ function rotasCarteira({ db, seg, regras, boletosCarteira }) {
       if (!d.inicio_contrato) return falha('Informe a vigência.');
       if (d.cnpj && d.cnpj.replace(/\D/g, '').length !== 14) return falha(`CNPJ incompleto (${d.cnpj}): são 14 dígitos.`);
       const fora = FUNCOES.filter((f) => d[f.campo] && !editaveis.includes(f.campo));
-      if (fora.length) return falha(`${fora.map((f) => f.rotulo).join(', ')}: quem escolhe é o coordenador/supervisor do setor.`);
+      if (fora.length) return falha(`${fora.map((f) => f.rotulo).join(', ')}: você não tem permissão para escolher. Deixe em branco (é preenchido depois na ficha) ou peça a quem pode.`);
       if (existentes.has(d.codigo)) return falha(`O ID Vouch ${d.codigo} já está na carteira.`);
       if (vistos.has(d.codigo)) return falha(`O ID Vouch ${d.codigo} foi digitado em mais de um condomínio.`);
       vistos.add(d.codigo);

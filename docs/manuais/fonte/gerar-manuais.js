@@ -211,7 +211,7 @@ ${tabela(['Perfil', 'Para quem', 'O que faz'], [
 </ul>
 <h2>Marcações à parte</h2>
 ${tabela(['Marcação', 'O que libera'], [
-  ['<b>Supervisão da Central de Tickets</b>', 'Ver e direcionar os tickets de <b>todos</b> os setores, e o painel de todos. Para quem acompanha a empresa toda (ex.: Gerência).'],
+  ['<b>Supervisão da Central de Tickets</b>', 'Ver e direcionar os tickets de <b>todos</b> os setores, e o painel de todos. Já vem com os perfis Coordenador e Supervisor; para usuário comum que acompanha a empresa toda (ex.: Gerência), é marcada no cadastro.'],
   ['<b>Marketing — Central de Links</b>', 'Editar os links e o fundo da campanha da Central de Links.'],
 ])}
 ${fig('15b-usuario', 'Cadastro da pessoa: perfil, marcações, setor(es) e ferramentas liberadas.')}`;

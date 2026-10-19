@@ -165,9 +165,16 @@
     };
 
     window.addEventListener('message', function (ev) {
-      if (ev.origin !== location.origin || !ev.data || !ev.data.myblue) return;
-      statusSync[ev.data.modulo] = ev.data.tipo;
-      if (ev.data.modulo === atual) desenharStatus();
+      if (!ev.data || !ev.data.myblue) return;
+      var modulo = ev.data.modulo;
+      if (ev.origin !== location.origin) {
+        // ferramenta isolada (origem "null"): vale só se vier de um dos quadros abertos, e o módulo é o do quadro
+        var dono = Object.keys(quadros).find(function (s) { return quadros[s].contentWindow === ev.source; });
+        if (ev.origin !== 'null' || !dono) return;
+        modulo = dono;
+      }
+      statusSync[modulo] = ev.data.tipo;
+      if (modulo === atual) desenharStatus();
     });
     window.addEventListener('beforeunload', function (e) {
       var pendente = Object.keys(statusSync).some(function (k) { return statusSync[k] === 'salvando' || statusSync[k] === 'erro' || statusSync[k] === 'conflito'; });
@@ -327,7 +334,11 @@
       f.title = m.nome;
       f.setAttribute('data-slug', slug);
       f.src = '/m/' + encodeURIComponent(slug) + '/';
-      f.setAttribute('allow', 'clipboard-read; clipboard-write; fullscreen');
+      if (m.isolada) {
+        // isolada: origem própria, sem acesso ao portal (o servidor também manda o sandbox no cabeçalho)
+        f.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads');
+        f.setAttribute('allow', 'clipboard-read *; clipboard-write *; fullscreen *');
+      } else f.setAttribute('allow', 'clipboard-read; clipboard-write; fullscreen');
       var carregando = document.createElement('div');
       carregando.className = 'carregando';
       carregando.innerHTML = '<div><div class="giro"></div>Abrindo ' + esc(m.nome) + '…</div>';
@@ -558,11 +569,11 @@
           (coord ? '' :
           '<div><label class="rot">Perfil</label><div class="grade-2">' +
           '<label class="opcao-radio"><input type="radio" name="uPapel" value="usuario"' + (u.papel === 'usuario' || !PAPEL[u.papel] ? ' checked' : '') + '><div><b>Usuário</b><span>Abre só as ferramentas marcadas abaixo.</span></div></label>' +
-          '<label class="opcao-radio"><input type="radio" name="uPapel" value="supervisor"' + (u.papel === 'supervisor' ? ' checked' : '') + '><div><b>Supervisor</b><span>Gerencia o(s) setor(es) dele: usuários comuns, ferramentas, equipe, tipos de demanda e carteira. Mesmos poderes do coordenador.</span></div></label>' +
-          '<label class="opcao-radio"><input type="radio" name="uPapel" value="coordenador"' + (u.papel === 'coordenador' ? ' checked' : '') + '><div><b>Coordenador</b><span>Gerencia o(s) setor(es) dele: usuários comuns, ferramentas, equipe, tipos de demanda e carteira.</span></div></label>' +
+          '<label class="opcao-radio"><input type="radio" name="uPapel" value="supervisor"' + (u.papel === 'supervisor' ? ' checked' : '') + '><div><b>Supervisor</b><span>Gerencia o(s) setor(es) dele: usuários comuns, ferramentas, equipe e tipos de demanda; na Carteira, o que estiver liberado em Carteira: quem edita. Vê e direciona os tickets de todos os setores. Mesmos poderes do coordenador.</span></div></label>' +
+          '<label class="opcao-radio"><input type="radio" name="uPapel" value="coordenador"' + (u.papel === 'coordenador' ? ' checked' : '') + '><div><b>Coordenador</b><span>Gerencia o(s) setor(es) dele: usuários comuns, ferramentas, equipe e tipos de demanda; na Carteira, o que estiver liberado em Carteira: quem edita. Vê e direciona os tickets de todos os setores.</span></div></label>' +
           '<label class="opcao-radio"><input type="radio" name="uPapel" value="admin"' + (u.papel === 'admin' ? ' checked' : '') + '><div><b>Administrador</b><span>Acessa tudo e gerencia usuários, módulos e dados.</span></div></label></div></div>' +
           '<label class="opcao-radio" style="margin:0"><input type="checkbox" id="uSup"' + (u.supervisor_tickets ? ' checked' : '') + '><div><b>Supervisão da Central de Tickets</b>' +
-          '<span>Vê os tickets de todos os setores e direciona: troca o responsável, transfere, muda situação, prioridade e prazo. Para quem acompanha a empresa toda (ex.: Gerência).</span></div></label>' +
+          '<span>Vê os tickets de todos os setores e direciona: troca o responsável, transfere, muda situação, prioridade e prazo. Para quem acompanha a empresa toda (ex.: Gerência). Não dá acesso à administração.</span><span id="uSupPerfil" hidden><b>Já vem com o perfil Coordenador e Supervisor.</b></span></div></label>' +
           '<label class="opcao-radio" style="margin:0"><input type="checkbox" id="uLinks"' + (u.editor_links ? ' checked' : '') + '><div><b>Marketing — Central de Links</b>' +
           '<span>Troca o fundo da campanha do mês e edita os links da Central de Links. Não dá acesso à administração do portal.</span></div></label>') +
           blocoSetores +
@@ -572,14 +583,22 @@
           (novo ? '<div><label class="rot" for="uSenha">Senha inicial (opcional)</label><input class="campo" id="uSenha" type="text" autocomplete="off" placeholder="Deixe em branco para gerar uma automaticamente"><div class="ajuda">A pessoa precisará trocar a senha no primeiro acesso.</div></div>' :
             '<label class="linha" style="font-weight:700"><input type="checkbox" id="uAtivo"' + (u.ativo ? ' checked' : '') + '> Usuário ativo (desmarque para bloquear o acesso)</label>') +
           '<div id="uMsg" class="msg erro" hidden></div></form>',
-        pe: (novo ? '' : '<button class="btn ghost" id="btResetSenha" style="margin-right:auto">Redefinir senha</button>') +
+        pe: (novo ? '' : '<button class="btn ghost" id="btResetSenha">Redefinir senha</button><button class="btn ghost" id="btVerAcessos" style="margin-right:auto">Tudo o que acessa</button>') +
           '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="btSalvarU">' + (novo ? 'Criar usuário' : 'Salvar') + '</button>',
       });
       ligarGrupos(m);
       function papelMudou() {
         var r = $('input[name=uPapel]:checked', m);
         $('#blocoMods', m).hidden = !!r && r.value === 'admin';
-        if ($('#ajudaGestor', m)) $('#ajudaGestor', m).hidden = !r || (r.value !== 'coordenador' && r.value !== 'supervisor');
+        var gestor = !!r && (r.value === 'coordenador' || r.value === 'supervisor');
+        if ($('#ajudaGestor', m)) $('#ajudaGestor', m).hidden = !gestor;
+        // Coordenador e Supervisor já veem e direcionam os tickets de todos os setores (vem com o perfil)
+        var sup = $('#uSup', m);
+        if (sup) {
+          if (gestor) { if (!sup.disabled) sup.dataset.marcado = sup.checked ? '1' : ''; sup.checked = true; sup.disabled = true; }
+          else if (sup.disabled) { sup.disabled = false; sup.checked = sup.dataset.marcado === '1'; }
+          $('#uSupPerfil', m).hidden = !gestor;
+        }
       }
       $$('input[name=uPapel]', m).forEach(function (r) { r.onchange = papelMudou; });
       papelMudou();
@@ -591,7 +610,7 @@
         };
         if (!coord) {
           corpo.papel = $('input[name=uPapel]:checked', m).value;
-          corpo.supervisor_tickets = $('#uSup', m).checked;
+          corpo.supervisor_tickets = $('#uSup', m).checked && !$('#uSup', m).disabled; // no perfil, não precisa marcar
           corpo.editor_links = $('#uLinks', m).checked;
         }
         try {
@@ -610,6 +629,7 @@
         } catch (e) { var x = $('#uMsg', m); x.textContent = e.message; x.hidden = false; }
       };
       if (!novo) {
+        $('#btVerAcessos', m).onclick = function () { verAcessosPessoa(u.id); };
         $('#btResetSenha', m).onclick = async function () {
           if (!(await confirmar('Redefinir senha', 'Será gerada uma senha temporária para <b>' + esc(u.nome) + '</b> e as sessões abertas dessa pessoa serão encerradas.', 'Redefinir'))) return;
           try {
@@ -622,6 +642,34 @@
     }
   }
 
+  /* tudo o que uma pessoa acessa, num lugar só (perfil, setores, marcações, ferramentas, Carteira, tickets) */
+  async function verAcessosPessoa(id) {
+    var j;
+    try { j = await api('GET', '/api/admin/usuarios/' + id + '/acessos'); } catch (e) { toast(e.message, 'erro'); return; }
+    var sim = '<span class="etiqueta verde">sim</span>', nao = '<span class="etiqueta cinza">não</span>';
+    var sec = function (t) { return '<h4 style="font-family:var(--display);font-size:15px;margin:18px 0 8px">' + t + '</h4>'; };
+    var linha = function (a, b) { return '<div class="linha" style="padding:7px 12px;border-bottom:1px solid var(--border);gap:10px"><span style="flex:1">' + a + '</span><span>' + b + '</span></div>'; };
+    var html = '<p class="ajuda" style="margin-top:0"><b>' + esc(j.usuario.nome) + '</b> · ' + esc(j.usuario.email) + ' · perfil <b>' + esc(PAPEL[j.usuario.papel] || 'Usuário') + '</b>' + (j.usuario.ativo ? '' : ' · <b style="color:var(--red)">desativado</b>') + '</p>' +
+      sec('Setores e o que gerencia') + '<div class="caixa-opcoes" style="max-height:none">' +
+      (j.setores.length ? j.setores.map(function (x) { return linha(esc(x.nome), x.lider ? '<span class="etiqueta azul">líder nos tickets</span>' : 'equipe'); }).join('') : '<div class="ajuda" style="padding:8px 12px;margin:0">Sem setor.</div>') + '</div>' +
+      '<div class="ajuda">' + (j.gerencia === 'todos os setores' ? 'Administração: gerencia tudo.' : j.gerencia.length ? 'Gerencia (usuários comuns, ferramentas, equipe e tipos de demanda): ' + esc(j.gerencia.join(', ')) + '.' : 'Não gerencia setor.') + '</div>' +
+      sec('Marcações') + '<div class="caixa-opcoes" style="max-height:none">' +
+      linha('Supervisão da Central de Tickets (vê e direciona os tickets de todos os setores)', j.marcacoes.supervisor_tickets ? sim + (j.marcacoes.supervisor_tickets_pelo_perfil ? ' <span class="sec" style="display:inline">vem com o perfil</span>' : '') : nao) +
+      linha('Marketing — Central de Links (edita a Central de Links)', j.marcacoes.editor_links ? sim : nao) + '</div>' +
+      sec('Central de Tickets') + '<div class="caixa-opcoes" style="max-height:none">' +
+      linha('Vê os tickets de', j.tickets.todos_setores ? 'todos os setores' : (j.tickets.setores.length ? esc(j.tickets.setores.join(', ')) + ' (e os que abriu)' : 'só os que abriu')) +
+      linha('Distribui (responsável, prioridade, prazo) em', j.tickets.todos_setores ? 'todos os setores' : (j.tickets.lider_em.length ? esc(j.tickets.lider_em.join(', ')) : '—')) + '</div>' +
+      sec('Carteira de condomínios') + '<div class="caixa-opcoes" style="max-height:none">' + linha('Consultar', sim) +
+      j.carteira.map(function (c) { return linha(esc(c.rotulo), c.pode ? sim + (c.motivo ? ' <span class="sec" style="display:inline">' + esc(c.motivo) + '</span>' : '') : nao); }).join('') + '</div>' +
+      sec('Ferramentas que abre (' + j.ferramentas.length + ')') + '<div class="caixa-opcoes" style="max-height:none">' +
+      (j.ferramentas.length ? j.ferramentas.map(function (f) {
+        return linha('<b>' + esc(f.nome) + '</b> <span class="sec" style="display:inline">' + esc(f.setor) + ' · ' + esc(f.motivo) + '</span>' + (f.ativo ? '' : ' <span class="etiqueta cinza">desativada</span>') + (f.pendente ? ' <span class="etiqueta ambar">aguardando aprovação</span>' : ''),
+          (f.somente_leitura ? '<span class="etiqueta cinza">só consulta</span>' : '<span class="etiqueta verde">edita</span>') + (f.papeis.length ? ' <span class="etiqueta azul">' + esc(f.papeis.join(', ')) + '</span>' : ''));
+      }).join('') : '<div class="ajuda" style="padding:8px 12px;margin:0">Nenhuma.</div>') + '</div>' +
+      '<div class="ajuda">Ferramentas: o portal confere quem abre, se edita ou só consulta e os papéis. O que cada papel faz dentro da ferramenta é definido pelo HTML dela.</div>';
+    modal({ titulo: 'Tudo o que acessa', largo: true, corpo: html, pe: '<button class="btn primary" data-fechar>Fechar</button>' });
+  }
+
   /* ======================= admin: módulos ======================= */
   var ROTULO_ARM = {
     navegador: ['Só no navegador', 'Como era antes: cada pessoa vê apenas o que salvou no próprio computador.'],
@@ -630,9 +678,20 @@
   };
 
   /* "Arquivo HTML" da janela do módulo (administrador e coordenador): versões anteriores e envio de versão nova */
+  function avisoVersaoPendente(mod) {
+    if (!mod.versao_pendente_id) return '';
+    var admin = eu.papel === 'admin';
+    return '<div class="msg aviso" id="avisoPendente" style="display:grid;gap:8px"><span><b>Versão nova aguardando aprovação</b>, enviada' +
+      (mod.pendente_por ? ' por ' + esc(mod.pendente_por) : '') + ' em ' + quando(mod.pendente_em) + (mod.pendente_nome ? ' (' + esc(mod.pendente_nome) + ')' : '') + '. ' +
+      (admin ? 'Abra a prévia (isolada, com os dados reais), confira e aprove para pôr em uso.' : 'A versão atual continua em uso até a administração aprovar.') + '</span>' +
+      '<div class="linha"><a class="btn ghost sm" target="_blank" rel="noopener" href="/m/' + esc(mod.slug) + '/?versao=' + mod.versao_pendente_id + '">' + IC.novaAba + 'Ver prévia</a>' +
+      (admin ? '<button class="btn primary sm" type="button" id="btAprovarVersao">Aprovar e usar</button><button class="btn danger sm" type="button" id="btRecusarVersao">Recusar</button>' : '') + '</div></div>';
+  }
   function htmlArquivoModulo(mod) {
-    return '<h4 class="titulo-sec">Arquivo HTML</h4>' +
-      '<p class="ajuda" style="margin-top:-4px">' + (mod.tem_arquivo ? 'Versão em uso enviada em ' + quando(mod.versao_em) + ' (' + tamanho(mod.tamanho) + ').' : '<b style="color:var(--red)">Nenhum arquivo enviado ainda.</b>') + ' Ao enviar um arquivo novo, a versão anterior fica guardada e pode ser restaurada.</p>' +
+    var aprovacao = eu.papel !== 'admin' && !mod.pendente && !mod.isolada && !(mod.config && mod.config.isolada);
+    return '<h4 class="titulo-sec">Arquivo HTML</h4>' + avisoVersaoPendente(mod) +
+      '<p class="ajuda" style="margin-top:-4px">' + (mod.tem_arquivo ? 'Versão em uso enviada em ' + quando(mod.versao_em) + ' (' + tamanho(mod.tamanho) + ').' : '<b style="color:var(--red)">Nenhum arquivo enviado ainda.</b>') + ' Ao enviar um arquivo novo, a versão anterior fica guardada e pode ser restaurada.' +
+      (aprovacao ? ' <b>Esta ferramenta não é isolada: o arquivo novo só entra em uso depois que a administração aprovar.</b>' : '') + '</p>' +
       '<label class="zona-envio" id="zArq">' + IC.enviar + '<div>Clique para escolher ou arraste o arquivo .html desta ferramenta</div><input type="file" accept=".html,.htm,text/html" hidden id="inArq"></label>' +
       '<div id="resArq"></div><details style="margin-top:4px"><summary style="cursor:pointer;font-weight:700;color:var(--ink-2)">Versões anteriores</summary><div id="listaVersoes" class="ajuda">Carregando…</div></details>';
   }
@@ -646,7 +705,7 @@
         var emUso = v.id === mod.versao_id;
         return '<div class="linha" style="padding:8px 12px;border-bottom:1px solid var(--border)"><span style="flex:1;color:var(--ink-2)"><b>' + quando(v.enviado_em) + '</b> · ' + tamanho(v.tamanho) + (v.nome_original ? ' · ' + esc(v.nome_original) : '') + (v.enviado_por ? ' · por ' + esc(v.enviado_por) : '') + '</span>' +
           '<a class="btn ghost sm" href="/api/admin/modulos/' + esc(mod.slug) + '/versoes/' + v.id + '/arquivo" title="Baixar este HTML">' + IC.baixar + 'Baixar</a>' +
-          (emUso ? '<span class="etiqueta verde">em uso</span>' : '<button class="btn ghost sm" data-versao="' + v.id + '">Usar esta</button>') + '</div>';
+          (emUso ? '<span class="etiqueta verde">em uso</span>' : !v.aprovada ? '<span class="etiqueta ambar">aguardando aprovação</span>' : '<button class="btn ghost sm" data-versao="' + v.id + '">Usar esta</button>') + '</div>';
       }).join('') + '</div>';
       $$('[data-versao]', el).forEach(function (b) {
         b.onclick = async function () {
@@ -656,6 +715,20 @@
     }).catch(function () {}); }
     carregarVersoes();
 
+    // versão nova aguardando: a administração aprova ou recusa
+    function decidir(acao) {
+      return async function () {
+        if (acao === 'recusar' && !(await confirmar('Recusar versão nova', 'A versão enviada será apagada e a versão atual continua em uso. Quem enviou é avisado.', 'Recusar', true))) return;
+        try {
+          var r = await api('POST', '/api/admin/modulos/' + mod.slug + '/versoes/' + mod.versao_pendente_id + '/' + acao);
+          toast(acao === 'aprovar' ? 'Versão nova em uso.' + (r.aviso_banco ? ' ' + r.aviso_banco : '') : 'Versão recusada.', acao === 'aprovar' && !r.aviso_banco ? 'ok' : 'aviso');
+          m.fechar(); recarregarQuadro(mod.slug); paginaModulos(); recarregarModulosUsuario();
+        } catch (e) { toast(e.message, 'erro'); }
+      };
+    }
+    if ($('#btAprovarVersao', m)) $('#btAprovarVersao', m).onclick = decidir('aprovar');
+    if ($('#btRecusarVersao', m)) $('#btRecusarVersao', m).onclick = decidir('recusar');
+
     // envio do arquivo
     ligarZona($('#zArq', m), $('#inArq', m), async function (arquivos) {
       var f = arquivos[0];
@@ -663,6 +736,12 @@
       res.innerHTML = '<div class="msg aviso" style="margin-top:8px">Enviando ' + esc(f.name) + '…</div>';
       try {
         var r = await api('PUT', '/api/admin/modulos/' + mod.slug + '/arquivo', await f.arrayBuffer(), { bruto: true, headers: { 'X-Nome-Arquivo': encodeURIComponent(f.name) } });
+        if (r.aguardando_aprovacao) {
+          carregarVersoes();
+          res.innerHTML = '<div class="msg aviso" style="margin-top:8px">Arquivo enviado. Ele <b>entra em uso depois que a administração aprovar</b> (ela recebeu o aviso). Até lá, a versão atual continua valendo. ' +
+            '<a href="/m/' + esc(mod.slug) + '/?versao=' + r.versao + '" target="_blank" rel="noopener">Ver prévia</a></div>' + (r.aviso ? '<div class="msg aviso" style="margin-top:8px">' + esc(r.aviso) + '</div>' : '');
+          return;
+        }
         mod.versao_id = r.versao;
         carregarVersoes();
         if (r.fonte_dados) {
@@ -922,7 +1001,7 @@
       '<button class="btn ghost" id="btCartAcessos">' + IC.casa + 'Carteira: quem edita</button>' +
       '<button class="btn ghost" id="btLote">' + IC.enviar + 'Enviar vários HTMLs</button>' +
       '<button class="btn ghost" id="btZipMods" title="A versão em uso de cada ferramenta, num arquivo .zip">' + IC.baixar + 'Baixar ferramentas (.zip)</button>' +
-      '<button class="btn ghost" id="btBackup">' + IC.baixar + 'Backup do banco</button>' +
+      '<button class="btn ghost" id="btBackup" title="Todas as tabelas, com os arquivos (.jsonl.gz). Tem dados de negócio: guarde em local com acesso restrito.">' + IC.baixar + 'Backup do banco</button>' +
       '<button class="btn primary" id="btNovoMod">' + IC.mais + 'Novo módulo</button></div>' +
       '<div class="faixa-busca"><input class="campo" id="buscaMod" type="search" placeholder="Pesquisar módulo, setor ou arquivo…" aria-label="Pesquisar módulo"></div>' +
       '<div class="tabela-wrap"><table><thead><tr><th>Módulo</th><th>Setor</th><th>Arquivo</th><th>Onde ficam os dados</th><th>Situação</th></tr></thead><tbody id="tbMods">' +
@@ -934,7 +1013,8 @@
         return '<tr class="clicavel" data-slug="' + esc(m.slug) + '" data-busca="' + esc(textoBuscaModulo(m)) + '"><td><div class="linha" style="flex-wrap:nowrap"><div class="icone-mod" style="width:34px;height:34px">' + (IC[m.icone] || IC.app) + '</div><div><b>' + esc(m.nome) + '</b><span class="sec">/' + esc(m.slug) + '</span></div></div></td>' +
           '<td>' + esc(m.setor_nome || '—') + '</td>' +
           '<td>' + (m.tem_arquivo ? quando(m.versao_em) + '<span class="sec">' + tamanho(m.tamanho) + (m.nome_original ? ' · ' + esc(m.nome_original) : '') + '</span>' : '<span class="etiqueta vermelha">sem arquivo</span>') + '</td>' +
-          '<td>' + dados + '</td><td>' + (m.pendente ? '<span class="etiqueta ambar">aguardando aprovação</span>' : m.ativo ? '<span class="etiqueta verde">ativo</span>' : '<span class="etiqueta cinza">desativado</span>') + '</td></tr>';
+          '<td>' + dados + '</td><td>' + (m.pendente ? '<span class="etiqueta ambar">aguardando aprovação</span>' : m.ativo ? '<span class="etiqueta verde">ativo</span>' : '<span class="etiqueta cinza">desativado</span>') +
+          (m.versao_pendente_id ? ' <span class="etiqueta ambar">versão nova aguardando</span>' : '') + (m.config && m.config.isolada ? '' : ' <span class="etiqueta cinza" title="O HTML roda com a sessão de quem abre. Isole em Isolamento, depois de testar.">não isolada</span>') + '</td></tr>';
       }).join('') + LINHA_SEM_RESULTADO(5) + '</tbody></table></div></div></div>';
 
     ligarBusca($('#buscaMod'), $('#tbMods'), $('#qtdMods'), mods.length, 'módulos', 'busca.modulos');
@@ -1101,6 +1181,12 @@
 
           htmlArquivoModulo(mod) +
 
+          '<h4 class="titulo-sec">Isolamento</h4>' +
+          '<label class="opcao-radio"><input type="checkbox" id="mIsolada"' + (mod.config && mod.config.isolada ? ' checked' : '') + '><div><b>Isolar esta ferramenta (recomendado)</b>' +
+          '<span>A ferramenta roda separada do portal: o HTML dela não consegue usar a sessão de quem a abre para mexer em outras partes do portal ' +
+          '(usuários, outras ferramentas, backup). Ela continua lendo e gravando os próprios dados. Antes de ligar numa ferramenta em uso, abra e teste: ' +
+          'o que ela guardar "só no navegador" passa a valer só enquanto a página estiver aberta, e ferramentas que usam IndexedDB ou Web Worker podem não funcionar isoladas.</span></div></label>' +
+
           // ferramentas do Claude guardam tudo no banco de documentos: esta escolha não se aplica a elas
           '<div' + (mod.adaptador === 'claude-db' ? ' hidden' : '') + '>' +
           '<h4 class="titulo-sec">Onde ficam os dados salvos pela ferramenta</h4>' +
@@ -1197,12 +1283,15 @@
           await api('PATCH', '/api/admin/modulos/' + mod.slug, {
             nome: $('#mNome', m).value, descricao: $('#mDesc', m).value, setor_id: $('#mSetor', m).value || null,
             icone: $('#mIcone', m).value, ordem: Number($('#mOrdem', m).value) || 0, ativo: $('#mAtivo', m).checked,
-            armazenamento: arm, fonte_dados: fonte,
+            armazenamento: arm, fonte_dados: fonte, isolada: $('#mIsolada', m).checked,
             chaves_locais: $('#mLocais', m).value.split(',').map(function (s) { return s.trim(); }).filter(Boolean),
             chaves_livres: $('#mLivres', m).value.split(',').map(function (s) { return s.trim(); }).filter(Boolean),
           });
           m.fechar(); toast('Módulo salvo.', 'ok');
-          if (arm !== mod.armazenamento || fonte !== mod.fonte_dados) recarregarQuadro(mod.slug);
+          if (arm !== mod.armazenamento || fonte !== mod.fonte_dados || $('#mIsolada', m).checked !== !!(mod.config && mod.config.isolada)) {
+            // o sandbox do quadro só muda criando o quadro de novo
+            if (quadros[mod.slug]) { quadros[mod.slug].remove(); delete quadros[mod.slug]; }
+          }
           paginaModulos(); recarregarModulosUsuario();
         } catch (e) { var x = $('#mMsg', m); x.textContent = e.message; x.hidden = false; }
       };
@@ -1559,7 +1648,7 @@
     ['minha', 'Minha fila', 'Tickets em que você é o responsável.'],
     ['setor', 'Fila do setor', 'Tudo o que chegou para os setores de que você faz parte.'],
     ['abertos', 'Abertos por mim', 'Demandas que você pediu para outros setores.'],
-    ['todos', 'Todos', 'Todos os tickets de todos os setores (administração e supervisão).'],
+    ['todos', 'Todos', 'Todos os tickets de todos os setores (administração e Supervisão da Central de Tickets).'],
   ];
 
   async function paginaTickets(visao) {
@@ -2332,11 +2421,13 @@
     function editarCondominio(c, historico) {
       var novo = !c;
       c = c || { situacao: 'ATIVO' };
-      var ro = !admin;
-      // quem não é do cadastro altera só os campos liberados para ele (Ferramentas do setor → Carteira de condomínios)
+      // condomínio novo: quem tem o cadastro preenche tudo. Condomínio existente: só os campos liberados para a pessoa
+      // (Carteira: quem edita), os mesmos que o servidor aceita
       var editCampos = j.campos_editaveis || [];
-      function podeCampo(cp) { return admin || editCampos.indexOf(cp) >= 0; }
-      var parcial = !admin && !novo && editCampos.length > 0;
+      var tudoLiberado = Object.keys(ROTULO_CAMPO).every(function (cp) { return editCampos.indexOf(cp) >= 0; });
+      var ro = novo ? !admin : !tudoLiberado;
+      function podeCampo(cp) { return (novo && admin) || editCampos.indexOf(cp) >= 0; }
+      var parcial = !tudoLiberado && !novo && editCampos.length > 0;
       var lib = function (cp) { return parcial && podeCampo(cp); };
       function campo(id, rotulo, valor, extra, liberado) {
         return '<div><label class="rot" for="' + id + '">' + rotulo + '</label><input class="campo" id="' + id + '" value="' + esc(valor || '') + '"' + (ro && !liberado ? ' readonly' : '') + (extra || '') + '></div>';
@@ -2364,7 +2455,7 @@
           '<div class="grade-3">' + campo('cdVenc', 'Vencimento', c.vencimento, ' maxlength="40" placeholder="10 ou 5º DIA ÚTIL" list="cdVencs"', lib('vencimento')) +
           campo('cdAdm', 'Administradora', c.administradora, ' maxlength="120" list="cdAdms"', lib('administradora')) + campo('cdEnvio', 'Forma de envio', c.forma_envio, ' maxlength="60" list="cdEnvios"', lib('forma_envio')) + '</div>' +
           '<div class="grade-3">' + funcoes.map(function (fn) { return campo('cd_' + fn.campo, esc(fn.rotulo), c[fn.campo], ' maxlength="120" list="cdl_' + fn.campo + '" placeholder="NOME - RAMAL"', lib(fn.campo)); }).join('') + '</div>' +
-          (parcial ? '<div class="ajuda">Você altera só os campos liberados para você; os outros ficam travados. Quem edita o quê: <b>Seu acesso</b>, no alto da Carteira.</div>' : '') +
+          (parcial ? '<div class="ajuda">Você altera só os campos liberados para você; os outros ficam travados.' + (j.acesso ? ' Quem edita o quê: <b>Seu acesso</b>, no alto da Carteira.' : ' Para mudar o que você pode editar, fale com a coordenação do seu setor.') + '</div>' : '') +
           '<div class="grade-3">' + campo('cdInicio', 'Vigência do contrato' + (novo ? ' *' : ''), mesAno(c.inicio_contrato), ' maxlength="7" inputmode="numeric" placeholder="mm/aaaa"', lib('inicio_contrato')) +
           campo('cdExec', 'Executivo de negócios', c.executivo, ' maxlength="120" list="cdExecs"', lib('executivo')) + '</div>' +
           '<div><label class="rot" for="cdObs">Observações</label><textarea class="campo" id="cdObs" rows="3" maxlength="4000"' + (ro && !lib('observacoes') ? ' readonly' : '') + '>' + esc(c.observacoes || '') + '</textarea></div>' +
@@ -2376,10 +2467,10 @@
           (novo ? '' : '<div class="ajuda">Atualizado em ' + quando(c.atualizado_em) + (c.atualizado_por_nome ? ' por ' + esc(c.atualizado_por_nome) : '') + '.</div>') +
           (hist ? '<hr style="border:0;border-top:1px solid var(--border);margin:4px 0"><div><label class="rot">Histórico</label><div class="linha-tempo">' + hist + '</div></div>' : '') + '</form>',
         pe: (admin && !novo ? '<button class="btn danger" id="btCdApagar" style="margin-right:auto">Remover</button>' : '') +
-          '<button class="btn ghost" data-fechar>' + (admin || parcial ? 'Cancelar' : 'Fechar') + '</button>' + (admin || parcial ? '<button class="btn primary" id="btCdOk">' + (novo ? 'Cadastrar' : 'Salvar') + '</button>' : ''),
+          '<button class="btn ghost" data-fechar>' + (!ro || parcial ? 'Cancelar' : 'Fechar') + '</button>' + (!ro || parcial ? '<button class="btn primary" id="btCdOk">' + (novo ? 'Cadastrar' : 'Salvar') + '</button>' : ''),
       });
       // vigência: digita "102026" e vira "10/2026"
-      if (admin || lib('inicio_contrato')) $('#cdInicio', m).oninput = function () {
+      if (!ro || lib('inicio_contrato')) $('#cdInicio', m).oninput = function () {
         var d = this.value.replace(/\D/g, '').slice(0, 6);
         this.value = d.length > 2 ? d.slice(0, 2) + '/' + d.slice(2) : d;
       };
@@ -2398,7 +2489,10 @@
         };
         return;
       }
-      if (!admin) return;
+      if (ro) {
+        if ($('#btCdApagar', m)) ligarRemover();
+        return;
+      }
       $('#btCdOk', m).onclick = async function () {
         var corpo = {
           codigo: $('#cdCodigo', m).value, situacao: $('#cdSit', m).value, comarca: $('#cdUf', m).value, nome: $('#cdNome', m).value,
@@ -2419,10 +2513,11 @@
           paginaCarteira(aba);
         } catch (e) { msg.textContent = e.message; msg.hidden = false; bt.disabled = false; }
       };
-      if ($('#btCdApagar', m)) $('#btCdApagar', m).onclick = async function () {
+      if ($('#btCdApagar', m)) ligarRemover();
+      function ligarRemover() { $('#btCdApagar', m).onclick = async function () {
         if (!(await confirmar('Remover ' + c.nome + '?', 'O condomínio sai da carteira. Se ele apenas deixou de ser atendido, prefira mudar a situação para Distratado e manter o histórico.', 'Remover', true))) return;
         try { await api('DELETE', '/api/carteira/' + c.id); m.fechar(); toast('Condomínio removido.', 'ok'); paginaCarteira(aba); } catch (e) { toast(e.message, 'erro'); }
-      };
+      }; }
     }
   }
 
@@ -2814,7 +2909,7 @@
   var ROTULO_ACAO = {
     login: 'Entrou no portal', login_falha: 'Tentativa de login falhou', logout: 'Saiu', senha_alterada: 'Trocou a senha', senha_redefinida: 'Redefiniu senha de usuário',
     modulo_aberto: 'Abriu ferramenta', dados_gravados: 'Salvou dados (automático)', usuario_criado: 'Criou usuário', usuario_editado: 'Editou usuário',
-    modulo_criado: 'Criou módulo', modulo_editado: 'Editou módulo', modulo_removido: 'Removeu módulo', arquivo_enviado: 'Enviou HTML', versao_restaurada: 'Restaurou versão',
+    modulo_criado: 'Criou módulo', modulo_editado: 'Editou módulo', modulo_removido: 'Removeu módulo', arquivo_enviado: 'Enviou HTML', arquivo_aguardando: 'Enviou HTML (aguarda aprovação)', versao_aprovada: 'Aprovou versão nova', versao_recusada: 'Recusou versão nova', papeis_recusados: 'Tentou mudar papéis sem permissão', backup_restaurado: 'Restaurou backup', versao_restaurada: 'Restaurou versão',
     dados_importados: 'Importou dados da planilha', dados_exportados: 'Exportou dados', backup_baixado: 'Baixou backup', setor_criado: 'Criou setor', setor_editado: 'Editou setor', setor_removido: 'Removeu setor',
     registro_add: 'Incluiu registro', registro_update: 'Alterou registro', registro_delete: 'Excluiu registro', registro_upsert: 'Gravou registro', registro_addMany: 'Incluiu registros em lote', registro_replaceAll: 'Regravou a aba inteira', registro_dedupe: 'Removeu duplicados',
     catalogo_semeado: 'Sistema instalado', email_teste: 'Enviou e-mail de teste',

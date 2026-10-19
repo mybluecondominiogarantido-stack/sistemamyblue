@@ -103,7 +103,8 @@ test('coordenador edita a equipe sem tirar o que é de outros setores', async ()
   assert.equal(u.nome, 'Ivo Silva');
   assert.equal(u.papel, 'usuario', 'não muda o perfil');
   assert.deepEqual(u.modulos.sort(), ['boletos', 'parceiros'], 'tira crédito, põe boletos e mantém parceiros (outro setor)');
-  assert.equal((await coord('POST', `/api/admin/usuarios/${ivo}/senha`, {})).status, 200);
+  // abre Parceiros (outro setor): a senha dele só a administração redefine
+  assert.equal((await coord('POST', `/api/admin/usuarios/${ivo}/senha`, {})).status, 403);
 });
 
 test('coordenador não mexe em quem é de outro setor, nem em coordenadores, supervisores e administradores', async () => {
@@ -125,8 +126,9 @@ test('supervisor tem os mesmos poderes no setor dele, e não fica acima do coord
   assert.deepEqual(r.json.usuarios.map((u) => u.email), ['olga@teste.com']);
   assert.equal((await sup('PATCH', `/api/admin/usuarios/${coordId}`, { nome: 'X' })).status, 404, 'não gerencia coordenador');
   assert.equal((await sup('POST', '/api/admin/usuarios', { nome: 'Y', email: 'y@teste.com', setores: [S('Cobrança')] })).status, 201);
-  // tickets: só os setores dele (não vê "todos")
-  assert.equal((await sup('GET', '/api/tickets?vis=todos')).status, 403);
+  // tickets: o perfil já traz a Supervisão da Central de Tickets (vê e direciona todos os setores)
+  assert.equal((await sup('GET', '/api/tickets?vis=todos')).status, 200);
+  assert.equal((await sup('GET', '/api/auth/eu')).json.usuario.supervisor_tickets, true);
   assert.equal((await sup('GET', '/api/tickets/painel/indicadores')).status, 200);
 });
 
@@ -177,12 +179,41 @@ test('ferramentas do setor: HTML, versões e quem pode abrir', async () => {
   const lista = await coord('GET', '/api/admin/modulos');
   assert.equal(lista.status, 200, lista.texto);
   assert.deepEqual(lista.json.modulos.map((m) => m.slug).sort(), ['boletos', 'credito']);
-  assert.equal((await coord('PUT', '/api/admin/modulos/boletos/arquivo', html('Boletos v1'))).status, 200);
-  assert.equal((await coord('PUT', '/api/admin/modulos/boletos/arquivo', html('Boletos v2'))).status, 200);
+  // ferramenta não isolada: o HTML da coordenação aguarda a aprovação da administração
+  let r = await coord('PUT', '/api/admin/modulos/boletos/arquivo', html('Boletos v1'));
+  assert.equal(r.status, 200, r.texto);
+  assert.equal(r.json.aguardando_aprovacao, true);
+  const v1 = r.json.versao;
+  const emUso = async () => (await ctx.db.um("SELECT versao_id, versao_pendente_id FROM modulos WHERE slug = 'boletos'"));
+  assert.equal((await emUso()).versao_id, null, 'nada em uso ainda');
+  assert.equal((await emUso()).versao_pendente_id, v1);
+  assert.equal((await coord('POST', `/api/admin/modulos/boletos/versoes/${v1}/usar`)).status, 404, 'a coordenação não põe em uso a versão que aguarda');
+  assert.equal((await coord('POST', `/api/admin/modulos/boletos/versoes/${v1}/aprovar`)).status, 403, 'só a administração aprova');
+  const avisoAdmin = await ctx.db.um("SELECT titulo FROM notificacoes WHERE usuario_id = 1 AND tipo = 'versao_aguardando'");
+  assert.ok(avisoAdmin, 'a administração é avisada');
+  // prévia: sempre isolada, para a administração e a coordenação do setor
+  const previa = await admin('GET', `/m/boletos/?versao=${v1}`);
+  assert.equal(previa.status, 200);
+  assert.match(previa.texto, /Boletos v1/);
+  assert.equal((await coord('GET', `/m/boletos/?versao=${v1}`)).status, 200);
+  assert.equal((await admin('POST', `/api/admin/modulos/boletos/versoes/${v1}/aprovar`)).status, 200);
+  assert.equal((await emUso()).versao_id, v1);
+  assert.equal((await emUso()).versao_pendente_id, null);
+  // versão recusada é apagada; a em uso continua
+  r = await coord('PUT', '/api/admin/modulos/boletos/arquivo', html('Boletos v2'));
+  assert.equal((await admin('POST', `/api/admin/modulos/boletos/versoes/${r.json.versao}/recusar`)).status, 200);
+  assert.equal((await emUso()).versao_id, v1);
+  assert.equal((await coord('GET', '/api/admin/modulos/boletos/versoes')).json.versoes.length, 1);
+  // ferramenta isolada: o HTML da coordenação entra em uso na hora
+  await admin('PATCH', '/api/admin/modulos/boletos', { isolada: true });
+  r = await coord('PUT', '/api/admin/modulos/boletos/arquivo', html('Boletos v3'));
+  assert.equal(r.json.aguardando_aprovacao, undefined);
+  assert.equal((await emUso()).versao_id, r.json.versao);
+  await admin('PATCH', '/api/admin/modulos/boletos', { isolada: false });
   assert.equal((await coord('PUT', '/api/admin/modulos/cobranca/arquivo', html('Cobrança'))).status, 403, 'outro setor');
   const v = await coord('GET', '/api/admin/modulos/boletos/versoes');
   assert.equal(v.json.versoes.length, 2);
-  assert.equal((await coord('POST', `/api/admin/modulos/boletos/versoes/${v.json.versoes[1].id}/usar`)).status, 200);
+  assert.equal((await coord('POST', `/api/admin/modulos/boletos/versoes/${v.json.versoes[1].id}/usar`)).status, 200, 'versão aprovada: a coordenação volta a ela');
   // baixar o HTML de uma versão: como foi enviado, só para quem gerencia a ferramenta
   const baixado = await coord('GET', `/api/admin/modulos/boletos/versoes/${v.json.versoes[1].id}/arquivo`);
   assert.equal(baixado.status, 200);
@@ -214,4 +245,60 @@ test('admin cria e edita os quatro perfis', async () => {
     assert.equal((await admin('PATCH', `/api/admin/usuarios/${id}`, { papel })).status, 200);
     assert.equal((await ctx.db.um('SELECT papel FROM usuarios WHERE id = $1', [id])).papel, papel);
   }
+});
+
+test('coordenador não redefine a senha de quem tem acesso além dos setores dele', async () => {
+  const soCredito = await criar('Lia do Crédito', 'lia@teste.com', { setores: [S('Crédito')], modulos: ['credito'] });
+  let r = await coord('POST', `/api/admin/usuarios/${soCredito}/senha`, {});
+  assert.equal(r.status, 200, r.texto);
+  assert.ok(r.json.senha_temporaria);
+  // Ivo abre uma ferramenta de outro setor (Parceiros): com a senha temporária, a coordenação entraria nela
+  r = await coord('POST', `/api/admin/usuarios/${ids['ivo@teste.com']}/senha`, {});
+  assert.equal(r.status, 403);
+  assert.match(r.json.erro, /fora dos seus setores/);
+  // marcação dada pela administração (tickets de todos os setores)
+  await admin('PATCH', `/api/admin/usuarios/${soCredito}`, { supervisor_tickets: true });
+  r = await coord('POST', `/api/admin/usuarios/${soCredito}/senha`, {});
+  assert.equal(r.status, 403);
+  assert.match(r.json.erro, /tickets de todos os setores/);
+  // a administração redefine normalmente
+  assert.equal((await admin('POST', `/api/admin/usuarios/${soCredito}/senha`, {})).status, 200);
+});
+
+test('tudo o que uma pessoa acessa, num lugar só', async () => {
+  const ivo = ids['ivo@teste.com'];
+  let r = await admin('GET', `/api/admin/usuarios/${ivo}/acessos`);
+  assert.equal(r.status, 200, r.texto);
+  assert.equal(r.json.usuario.papel, 'usuario');
+  assert.deepEqual(r.json.setores.map((x) => x.nome), ['Crédito']);
+  const slugs = r.json.ferramentas.map((f) => f.slug).sort();
+  const liberadas = (await ctx.db.q('SELECT modulo_slug FROM permissoes WHERE usuario_id = $1', [ivo])).rows.map((x) => x.modulo_slug).sort();
+  assert.deepEqual(slugs, liberadas, 'as ferramentas liberadas para ele');
+  assert.ok(r.json.ferramentas.every((f) => f.motivo === 'liberada'));
+  assert.ok(r.json.carteira.length >= 5);
+  assert.equal(r.json.tickets.todos_setores, false);
+  // coordenação: abre as do setor dela por ser coordenação
+  r = await admin('GET', `/api/admin/usuarios/${coordId}/acessos`);
+  assert.ok(r.json.ferramentas.some((f) => f.slug === 'credito' && f.motivo === 'coordenação do setor'));
+  assert.deepEqual(r.json.gerencia, ['Crédito']);
+  // a coordenação vê o resumo de quem ela gerencia, não o dos outros
+  assert.equal((await coord('GET', `/api/admin/usuarios/${ivo}/acessos`)).status, 200);
+  assert.equal((await coord('GET', `/api/admin/usuarios/${ids['olga@teste.com']}/acessos`)).status, 404);
+});
+
+test('Supervisão da Central de Tickets vem com o perfil Coordenador e Supervisor e sai junto com ele', async () => {
+  const id = await criar('Teo Temporário', 'teo@teste.com', { papel: 'coordenador', setores: [S('Crédito')], supervisor_tickets: true });
+  // no perfil, a marcação não é gravada: ela vem do perfil
+  assert.equal((await ctx.db.um('SELECT supervisor_tickets FROM usuarios WHERE id = $1', [id])).supervisor_tickets, false);
+  const teo = await entrar('teo@teste.com', 'Senha1234');
+  assert.equal((await teo('GET', '/api/tickets?vis=todos')).status, 200);
+  const r = (await admin('GET', `/api/admin/usuarios/${id}/acessos`)).json;
+  assert.equal(r.marcacoes.supervisor_tickets, true);
+  assert.equal(r.marcacoes.supervisor_tickets_pelo_perfil, true);
+  // voltou a usuário comum: deixa de ver todos os setores
+  assert.equal((await admin('PATCH', `/api/admin/usuarios/${id}`, { papel: 'usuario' })).status, 200);
+  assert.equal((await teo('GET', '/api/tickets?vis=todos')).status, 403);
+  // usuário comum só vê todos com a marcação
+  assert.equal((await admin('PATCH', `/api/admin/usuarios/${id}`, { supervisor_tickets: true })).status, 200);
+  assert.equal((await teo('GET', '/api/tickets?vis=todos')).status, 200);
 });
