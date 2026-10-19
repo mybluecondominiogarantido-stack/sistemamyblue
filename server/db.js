@@ -1,6 +1,7 @@
 'use strict';
 const { conectar } = require('./banco');
 const { SETORES, SETORES_RENOMEADOS, MODULOS, CHAVES_DE_SISTEMA } = require('./catalogo');
+const { semearPolitica } = require('./credito/banco');
 
 /* Esquema em Postgres. Os HTMLs das ferramentas também ficam no banco (coluna conteudo),
    então o servidor não precisa de disco persistente. */
@@ -349,13 +350,181 @@ CREATE TABLE IF NOT EXISTS comissao_planilhas (
 );
 CREATE INDEX IF NOT EXISTS idx_comissao_plan_usuario ON comissao_planilhas(usuario_id, competencia);
 CREATE INDEX IF NOT EXISTS idx_comissao_plan_chave ON comissao_planilhas(modulo_slug, competencia, chave);
+
+-- Análise de Crédito: política versionada (parâmetros + faixas), executivos, análises e o que sai delas.
+-- O motor de regras (server/credito/motor.js) grava o resultado em analises.resultado_motor, e as tabelas
+-- de unidades, lançamentos, exclusões e alertas guardam o detalhe para auditoria e para o painel.
+CREATE TABLE IF NOT EXISTS parametros_politica (
+  versao TEXT PRIMARY KEY,
+  descricao TEXT NOT NULL DEFAULT '',
+  parametros JSONB NOT NULL,
+  ativa BOOLEAN NOT NULL DEFAULT FALSE,
+  vigente_desde TIMESTAMPTZ NOT NULL DEFAULT now(),
+  criado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_politica_ativa ON parametros_politica (ativa) WHERE ativa;
+
+CREATE TABLE IF NOT EXISTS faixas_precificacao (
+  versao TEXT NOT NULL REFERENCES parametros_politica(versao) ON DELETE CASCADE,
+  ordem INTEGER NOT NULL,
+  ate NUMERIC(6,2) NOT NULL,
+  taxa_adm NUMERIC(6,2) NOT NULL,
+  PRIMARY KEY (versao, ordem)
+);
+
+-- executivos de negócios: cadastrados no portal (nomes reais não ficam no código). boleto vazio = regra da política
+CREATE TABLE IF NOT EXISTS executivos (
+  id SERIAL PRIMARY KEY,
+  nome TEXT NOT NULL UNIQUE,
+  email TEXT,
+  uf TEXT NOT NULL DEFAULT '',
+  regiao TEXT NOT NULL DEFAULT '',
+  boleto NUMERIC(8,2),
+  usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  ativo BOOLEAN NOT NULL DEFAULT TRUE,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- contador do protocolo AC-AAAA-MM-DD-NN (um por dia, nunca repete)
+CREATE TABLE IF NOT EXISTS analise_protocolos (
+  dia DATE PRIMARY KEY,
+  ultimo INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS analises (
+  id SERIAL PRIMARY KEY,
+  protocolo TEXT NOT NULL UNIQUE,
+  origem_id INTEGER REFERENCES analises(id) ON DELETE SET NULL,
+  motivo_reanalise TEXT,
+  etapa TEXT NOT NULL DEFAULT 'rascunho' CHECK (etapa IN ('rascunho','pendencia','fila','em_analise','diretoria','validada','enviada','cancelada')),
+  resultado TEXT CHECK (resultado IN ('aprovada','ressalvas','reprovada','pendente')),
+  condominio TEXT NOT NULL DEFAULT '',
+  cnpj TEXT NOT NULL DEFAULT '',
+  uf TEXT NOT NULL DEFAULT '',
+  cidade TEXT NOT NULL DEFAULT '',
+  tipo_contratacao TEXT CHECK (tipo_contratacao IN ('nova','portabilidade')),
+  executivo_id INTEGER REFERENCES executivos(id) ON DELETE SET NULL,
+  solicitante_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  analista_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  formulario JSONB NOT NULL DEFAULT '{}'::jsonb,
+  dados_analista JSONB NOT NULL DEFAULT '{}'::jsonb,
+  resultado_motor JSONB,
+  politica_versao TEXT REFERENCES parametros_politica(versao),
+  inad_media NUMERIC(9,4),
+  taxa_adm NUMERIC(6,2),
+  boleto NUMERIC(8,2),
+  uh_escopo NUMERIC(10,4),
+  receita_liquida NUMERIC(14,2),
+  exposicao NUMERIC(14,2),
+  documentacao_completa_em TIMESTAMPTZ,
+  assumida_em TIMESTAMPTZ,
+  prazo_analista TIMESTAMPTZ,
+  prazo_executivo TIMESTAMPTZ,
+  chancela_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  chancela_em TIMESTAMPTZ,
+  chancela_obs TEXT,
+  liberada_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  liberada_em TIMESTAMPTZ,
+  enviada_em TIMESTAMPTZ,
+  validade_ate DATE,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_analises_etapa ON analises(etapa, prazo_analista);
+CREATE INDEX IF NOT EXISTS idx_analises_solicitante ON analises(solicitante_id);
+CREATE INDEX IF NOT EXISTS idx_analises_origem ON analises(origem_id);
+
+-- anexos (convenção, relatório, atas…) e os retornos gerados (PDF e PPTX), com o que a IA extraiu de cada um
+CREATE TABLE IF NOT EXISTS analise_documentos (
+  id SERIAL PRIMARY KEY,
+  analise_id INTEGER NOT NULL REFERENCES analises(id) ON DELETE CASCADE,
+  tipo TEXT NOT NULL CHECK (tipo IN ('convencao','relatorio','ata_extra','retomadas','historico','dre','retorno_pdf','retorno_pptx','outro')),
+  nome TEXT NOT NULL,
+  mime TEXT NOT NULL DEFAULT 'application/pdf',
+  tamanho INTEGER NOT NULL DEFAULT 0,
+  sha256 TEXT,
+  conteudo BYTEA,
+  paginas INTEGER,
+  tem_texto BOOLEAN,
+  ocr_confianca NUMERIC(4,3),
+  extracao JSONB,
+  extraido_em TIMESTAMPTZ,
+  enviado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  enviado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  substituido_em TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_analise_docs ON analise_documentos(analise_id, tipo);
+
+-- unidades e lançamentos lidos do relatório (fonte = página e trecho, para conferir no painel)
+CREATE TABLE IF NOT EXISTS analise_unidades (
+  id SERIAL PRIMARY KEY,
+  analise_id INTEGER NOT NULL REFERENCES analises(id) ON DELETE CASCADE,
+  unidade TEXT NOT NULL,
+  titular TEXT NOT NULL DEFAULT '',
+  documento TEXT NOT NULL DEFAULT '',
+  tipo_pessoa TEXT NOT NULL DEFAULT '' CHECK (tipo_pessoa IN ('PF','PJ','')),
+  flag TEXT,
+  espolio BOOLEAN NOT NULL DEFAULT FALSE,
+  fonte JSONB
+);
+CREATE INDEX IF NOT EXISTS idx_analise_unidades ON analise_unidades(analise_id);
+
+CREATE TABLE IF NOT EXISTS analise_lancamentos (
+  id SERIAL PRIMARY KEY,
+  unidade_id INTEGER NOT NULL REFERENCES analise_unidades(id) ON DELETE CASCADE,
+  competencia TEXT NOT NULL,
+  vencimento DATE,
+  tipo TEXT NOT NULL CHECK (tipo IN ('ordinaria','extra','agua_gas','acordo','multa','juros','correcao','honorarios','fundo_reserva','outro')),
+  valor NUMERIC(14,2) NOT NULL,
+  fonte JSONB
+);
+CREATE INDEX IF NOT EXISTS idx_analise_lanc ON analise_lancamentos(unidade_id, competencia);
+
+CREATE TABLE IF NOT EXISTS analise_exclusoes (
+  id SERIAL PRIMARY KEY,
+  analise_id INTEGER NOT NULL REFERENCES analises(id) ON DELETE CASCADE,
+  unidade TEXT NOT NULL,
+  motivo TEXT NOT NULL CHECK (motivo IN ('espolio','retomada','abandono')),
+  detalhe TEXT NOT NULL DEFAULT '',
+  debito NUMERIC(14,2) NOT NULL DEFAULT 0,
+  origem TEXT NOT NULL DEFAULT 'analista' CHECK (origem IN ('relatorio','analista'))
+);
+CREATE INDEX IF NOT EXISTS idx_analise_exclusoes ON analise_exclusoes(analise_id);
+
+CREATE TABLE IF NOT EXISTS analise_alertas (
+  id SERIAL PRIMARY KEY,
+  analise_id INTEGER NOT NULL REFERENCES analises(id) ON DELETE CASCADE,
+  codigo TEXT NOT NULL,
+  nivel TEXT NOT NULL DEFAULT 'atencao' CHECK (nivel IN ('info','atencao','critico')),
+  mensagem TEXT NOT NULL,
+  dados JSONB,
+  visto_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  visto_em TIMESTAMPTZ,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_analise_alertas ON analise_alertas(analise_id);
+
+-- trilha de auditoria: envio, pendência, extração, ajustes (quem, quando, justificativa), motor, diretoria, liberação, reemissão
+CREATE TABLE IF NOT EXISTS analise_eventos (
+  id SERIAL PRIMARY KEY,
+  analise_id INTEGER NOT NULL REFERENCES analises(id) ON DELETE CASCADE,
+  usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  tipo TEXT NOT NULL,
+  detalhe JSONB NOT NULL DEFAULT '{}'::jsonb,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_analise_eventos ON analise_eventos(analise_id, criado_em);
 `;
 
 /* Supabase publica o schema "public" pela API dele (PostgREST). Com RLS ligado e sem
    políticas, ninguém lê nem grava por lá; o portal conecta como dono das tabelas e não é afetado. */
 const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 'permissoes', 'armazenamento', 'colecoes', 'registros', 'documentos', 'auditoria',
   'setor_membros', 'ticket_categorias', 'tickets', 'ticket_eventos', 'ticket_anexos', 'notificacoes', 'condominios',
-  'links_pagina', 'links', 'links_campanhas', 'tutoriais', 'comissao_relatorios', 'comissao_leitores', 'comissao_planilhas', 'cdn_cache', 'regras_acesso'];
+  'links_pagina', 'links', 'links_campanhas', 'tutoriais', 'comissao_relatorios', 'comissao_leitores', 'comissao_planilhas', 'cdn_cache', 'regras_acesso',
+  'parametros_politica', 'faixas_precificacao', 'executivos', 'analise_protocolos', 'analises', 'analise_documentos', 'analise_unidades',
+  'analise_lancamentos', 'analise_exclusoes', 'analise_alertas', 'analise_eventos'];
 const RLS = TABELAS.map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`).join(';\n');
 
 /* Ajustes em bancos já existentes (rodam a cada início e não fazem nada se já estiverem aplicados). */
@@ -511,6 +680,7 @@ async function abrir(cfg) {
     await semearNovosModulos(t);
     await sincronizarCatalogo(t);
     await migrarCarteira(t);
+    await semearPolitica(t);
   });
   return db;
 }
