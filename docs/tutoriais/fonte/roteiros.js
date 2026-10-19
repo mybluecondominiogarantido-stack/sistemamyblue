@@ -108,14 +108,12 @@ module.exports = [
       await t.legenda('Filtre por <b>responsável</b>, UF, administradora ou situação.', { etapa: '3 · Filtrar', ms: 500 });
       await t.escolher('#cfPes', { value: 'analista_cobranca|MARCOS LIMA - 4701' }, { depois: 2600 });
       await t.escolher('#cfPes', { value: '' }, { depois: 800 });
-      await t.legenda('Na aba <b>Responsáveis</b>: quantos condomínios cada pessoa tem, por função.', { etapa: '4 · Responsáveis', ms: 500 });
+      await t.legenda('Na aba <b>Equipes</b>: quantos condomínios cada pessoa tem, por função.', { etapa: '4 · Equipes', ms: 500 });
       await t.clicar('nav.abas a[href="#/carteira/responsaveis"]', { depois: 2400 });
-      await t.legenda('Clique no número para ver a lista de condomínios da pessoa.', { etapa: '4 · Responsáveis', ms: 300 });
+      await t.legenda('Clique no número para ver a lista de condomínios da pessoa.', { etapa: '4 · Equipes', ms: 300 });
       await t.mostrar('[data-ver]', 2600);
-      await t.legenda('<b>Exportar CSV</b> baixa a carteira para abrir no Excel.', { etapa: '4 · Responsáveis', ms: 300 });
-      await t.mostrar('#btCExportar', 2600);
     },
-    resumo: ['Busca por nome, CNPJ ou ID', 'Filtro por responsável, UF, administradora e situação', 'Aba <b>Responsáveis</b>: a carteira de cada pessoa'],
+    resumo: ['Busca por nome, CNPJ ou ID', 'Filtro por responsável, UF, administradora e situação', 'Aba <b>Equipes</b>: a carteira de cada pessoa'],
   },
 
   {
@@ -431,7 +429,7 @@ module.exports = [
     nome: 'gestao-ferramentas',
     entrar: 'caio@myblue.com.br',
     inicio: '#/admin/modulos',
-    abertura: ['Para coordenadores e supervisores.', ['Enviar o HTML novo de uma ferramenta', 'Voltar para uma versão anterior', 'Quem abre, como e com qual papel', 'Cadastrar uma ferramenta nova']],
+    abertura: ['Para coordenadores e supervisores.', ['Enviar o HTML novo de uma ferramenta', 'Voltar para uma versão anterior', 'Quem abre, como e com qual papel', 'Cadastrar uma ferramenta nova', 'Quem edita a carteira']],
     async gravar(t, cen) {
       await t.legenda('Em <b>Ferramentas do setor</b> ficam as ferramentas dos seus setores. Clique numa delas.', { etapa: '1 · Ferramentas do setor', ms: 2600 });
       await t.clicar('tr[data-slug="boletos"]', { depois: 1200 });
@@ -460,8 +458,15 @@ module.exports = [
       await t.digitar('#nNome', 'Agenda do Crédito', { depois: 900 });
       await t.legenda('Ela fica <b>aguardando aprovação</b>: só a coordenação abre até a administração conferir o HTML e aprovar.', { etapa: N, ms: 3600 });
       await t.clicar('.fundo-modal [data-fechar]', { depois: 800 });
+      const C = '5 · Carteira: quem edita';
+      await t.legenda('<b>Carteira de condomínios: quem edita</b> mostra quem pode editar cada coisa na carteira, e por quê.', { etapa: C, ms: 300 });
+      await t.clicar('#btCartAcessos', { depois: 2400 });
+      await t.legenda('Na coluna do seu setor, você libera pessoas da equipe. O resto é configurado pela administração.', { etapa: C, ms: 300 });
+      await t.rolar(620, '#edCart');
+      await t.pausa(2600);
+      await t.clicar('.fundo-modal [data-fechar]', { depois: 800 });
     },
-    resumo: ['<b>Ferramentas do setor</b> → clique na ferramenta', 'Envie o HTML novo · <b>Versões anteriores</b> para voltar', '<b>Quem abre</b>: do setor ou de outros, edita ou só consulta, papel', '<b>Nova ferramenta</b>: aguarda a aprovação da administração'],
+    resumo: ['<b>Ferramentas do setor</b> → clique na ferramenta', 'Envie o HTML novo · <b>Versões anteriores</b> para voltar', '<b>Quem abre</b>: do setor ou de outros, edita ou só consulta, papel', '<b>Nova ferramenta</b>: aguarda a aprovação da administração', '<b>Carteira: quem edita</b>: libere pessoas na coluna do seu setor'],
   },
 
   {
@@ -504,7 +509,7 @@ module.exports = [
       await t.digitar('#cd_analista_cobranca', 'MARCOS LIMA - 4701', { atraso: 40 });
       await t.clicar('#btCdOk', { depois: 2000 });
       const T = '2 · Transferir';
-      await t.legenda('Quando alguém sai ou a carteira é redistribuída, use <b>Transferir</b> na aba <b>Responsáveis</b>.', { etapa: T, ms: 300 });
+      await t.legenda('Quando alguém sai ou a carteira é redistribuída, use <b>Transferir</b> na aba <b>Equipes</b>.', { etapa: T, ms: 300 });
       await t.clicar('nav.abas a[href="#/carteira/responsaveis"]', { depois: 1600 });
       await t.clicar('[data-transferir^="analista_cobranca|MARCOS"]', { depois: 1000 });
       await t.digitar('#trPara', 'ANA COSTA - 4702', { atraso: 40 });
@@ -514,7 +519,7 @@ module.exports = [
       await t.clicar('#btTrOk', { depois: 2400 });
       await t.legenda('Cada mudança fica no <b>histórico</b> do condomínio.', { etapa: T, ms: 2800 });
     },
-    resumo: ['Clique no condomínio → troque o responsável do seu setor', 'Aba <b>Responsáveis</b> → <b>Transferir</b> a carteira', 'Tudo fica no histórico'],
+    resumo: ['Clique no condomínio → troque o responsável do seu setor', 'Aba <b>Equipes</b> → <b>Transferir</b> a carteira', 'Tudo fica no histórico'],
   },
 
   /* ======================= Administração ======================= */

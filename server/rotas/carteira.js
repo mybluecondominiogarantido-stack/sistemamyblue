@@ -1,38 +1,49 @@
 'use strict';
 /*
  * Aba Carteira de condomínios.
- * Todos que entram no portal consultam; a administração cadastra, edita, importa e transfere carteiras.
- * Coordenador e supervisor adicionam condomínios novos (planilha de implantação) e editam e transferem
- * só a coluna de responsável do setor deles
- * (Cobrança → analista de cobrança, Crédito → assistente de crédito).
+ * Todos que entram no portal consultam (a carteira não é exportada). Quem edita o quê (dados do condomínio, cada coluna de responsável,
+ * adicionar novos, cadastrar/importar) vem das regras de acesso (server/regras.js), configuradas em
+ * Ferramentas do setor → Carteira de condomínios. A administração pode tudo.
  * Cada alteração fica no histórico (auditoria) com o que mudou, quem mudou e quando.
  */
 const express = require('express');
-const { FUNCOES, CAMPOS, SITUACOES, interpretar, normalizar, exportar } = require('../carteira');
+const { FUNCOES, CAMPOS, SITUACOES, interpretar, normalizar } = require('../carteira');
 const { interpretarImplantacao, compararComCarteira } = require('../implantacao');
 
 const COLUNAS = CAMPOS.map((c) => c.campo);
+const ROTULOS = { codigo: 'ID Vouch', situacao: 'situação', comarca: 'UF', nome: 'nome', vencimento: 'vencimento', administradora: 'administradora', forma_envio: 'forma de envio',
+  executivo: 'executivo', inicio_contrato: 'vigência', razao_social: 'razão social', cnpj: 'CNPJ', observacoes: 'observações',
+  ...Object.fromEntries(FUNCOES.map((f) => [f.campo, f.rotulo])) };
 // DATE volta como texto (evita deslocar o dia pelo fuso)
 const SELECT = `SELECT c.id, ${COLUNAS.filter((x) => x !== 'inicio_contrato').map((x) => 'c.' + x).join(', ')},
   to_char(c.inicio_contrato, 'YYYY-MM-DD') AS inicio_contrato, c.criado_em, c.atualizado_em, u.nome AS atualizado_por_nome
   FROM condominios c LEFT JOIN usuarios u ON u.id = c.atualizado_por`;
 
-function rotasCarteira({ db, seg }) {
+function rotasCarteira({ db, seg, regras }) {
   const r = express.Router();
   const json = express.json({ limit: '1mb' });
   r.use('/api/carteira', seg.exigirLogin);
-  const soAdmin = (req, res, next) => (req.usuario.papel === 'admin' ? next() : res.status(403).json({ erro: 'Só a administração altera a carteira.' }));
-  // adicionar condomínios novos pela planilha de implantação: administrador, coordenador e supervisor
-  const podeAdicionar = (u) => u.papel === 'admin' || seg.GESTORES_DE_SETOR.includes(u.papel);
-  const soGestor = (req, res, next) => (podeAdicionar(req.usuario) ? next() : res.status(403).json({ erro: 'Só administrador, coordenador e supervisor adicionam condomínios novos.' }));
+  // quem edita o quê vem das regras de acesso (Ferramentas do setor → Carteira); consultar é de todos
+  const QUEM_LIBERA = ' Quem libera: administração ou coordenação, em Ferramentas do setor → Carteira de condomínios.';
+  const exigir = (chave, msg) => async (req, res, next) => {
+    try { if (await regras.pode(req.usuario, chave)) return next(); return res.status(403).json({ erro: msg + QUEM_LIBERA }); } catch (e) { return next(e); }
+  };
+  const soCadastro = exigir('carteira.cadastro', 'Você não tem permissão para cadastrar, excluir ou importar condomínios.');
+  const soAdicionar = exigir('carteira.adicionar', 'Você não tem permissão para adicionar condomínios novos.');
 
-  /* colunas de responsável que a pessoa pode alterar: todas (administrador) ou as dos setores dela (coordenador/supervisor) */
+  /* colunas de responsável que a pessoa altera e transfere */
   async function funcoesEditaveis(u) {
     if (u.papel === 'admin') return FUNCOES.map((f) => f.campo);
-    const setores = await seg.setoresGeridos(u);
-    if (!setores || !setores.size) return [];
-    const nomes = new Set((await db.q('SELECT nome FROM setores WHERE id = ANY($1::int[])', [[...setores]])).rows.map((x) => x.nome));
-    return FUNCOES.filter((f) => f.setor && nomes.has(f.setor)).map((f) => f.campo);
+    const p = await regras.permissoesDe(u);
+    return FUNCOES.filter((f) => p.has('carteira.' + f.campo)).map((f) => f.campo);
+  }
+  /* todos os campos que a pessoa altera num condomínio */
+  const DADOS = CAMPOS.map((c) => c.campo).filter((c) => c !== 'codigo' && !FUNCOES.some((f) => f.campo === c));
+  async function camposEditaveis(u) {
+    if (u.papel === 'admin') return CAMPOS.map((c) => c.campo);
+    const p = await regras.permissoesDe(u);
+    return [...(p.has('carteira.cadastro') ? ['codigo'] : []), ...(p.has('carteira.dados') ? DADOS : []),
+      ...FUNCOES.filter((f) => p.has('carteira.' + f.campo)).map((f) => f.campo)];
   }
   const erro = (res, status, msg) => res.status(status).json({ erro: msg });
   const ehDuplicado = (e) => e && (e.code === '23505' || /duplicate key|unique/i.test(String(e.message)));
@@ -55,20 +66,29 @@ function rotasCarteira({ db, seg }) {
       [...cols.map((c) => dados[c]), usuarioId, id]);
   }
 
+  /* O que o portal identificou sobre quem pode o quê na carteira (mostrado na própria tela):
+     o que quem está vendo pode, com o motivo, e quem tem cada permissão hoje. */
+  const NIVEL = { admin: 'Administrador', coordenador: 'Coordenação', supervisor: 'Supervisão', usuario: 'Usuário' };
+  async function quadroDeAcesso(u) {
+    const meusSetores = (await db.q('SELECT s.nome FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id WHERE sm.usuario_id = $1 ORDER BY s.ordem, s.nome', [u.id])).rows.map((x) => x.nome);
+    const minhas = await regras.permissoesDe(u);
+    const quem = await regras.quemPode();
+    const admins = (await db.q("SELECT nome FROM usuarios WHERE ativo AND papel = 'admin' ORDER BY nome")).rows.map((x) => x.nome);
+    const lista = regras.PERMISSOES.filter((p) => p.chave.startsWith('carteira.'));
+    return {
+      voce: { nivel: NIVEL[u.papel] || u.papel, setores: meusSetores,
+        pode: lista.filter((p) => minhas.has(p.chave)).map((p) => ({ rotulo: p.rotulo, motivo: minhas.get(p.chave) })) },
+      admins,
+      permissoes: lista.map((p) => ({ chave: p.chave, rotulo: p.rotulo, quem: quem.get(p.chave) })),
+    };
+  }
+
   /* ===================== consulta ===================== */
   r.get('/api/carteira', async (req, res) => {
     const { rows } = await db.q(`${SELECT} ORDER BY c.nome, c.comarca`);
-    res.json({ condominios: rows, funcoes: FUNCOES.map((f) => ({ campo: f.campo, rotulo: f.rotulo })), situacoes: SITUACOES, pode_editar: req.usuario.papel === 'admin',
-      funcoes_editaveis: await funcoesEditaveis(req.usuario), pode_adicionar: podeAdicionar(req.usuario) });
-  });
-
-  r.get('/api/carteira/exportar', async (req, res) => {
-    const { rows } = await db.q(`${SELECT} ORDER BY c.nome, c.comarca`);
-    await seg.auditar(req, 'carteira_exportada', null, { condominios: rows.length });
-    res.set('Content-Type', 'text/csv; charset=utf-8');
-    res.set('Content-Disposition', `attachment; filename="carteira-de-condominios-${new Date().toISOString().slice(0, 10)}.csv"`);
-    res.set('Cache-Control', 'private, no-store');
-    res.send(exportar(rows));
+    res.json({ condominios: rows, funcoes: FUNCOES.map((f) => ({ campo: f.campo, rotulo: f.rotulo })), situacoes: SITUACOES,
+      pode_editar: await regras.pode(req.usuario, 'carteira.cadastro'), campos_editaveis: await camposEditaveis(req.usuario),
+      funcoes_editaveis: await funcoesEditaveis(req.usuario), pode_adicionar: await regras.pode(req.usuario, 'carteira.adicionar'), acesso: await quadroDeAcesso(req.usuario) });
   });
 
   r.get('/api/carteira/:id', async (req, res) => {
@@ -81,7 +101,7 @@ function rotasCarteira({ db, seg }) {
   });
 
   /* ===================== cadastro e edição (administração) ===================== */
-  r.post('/api/carteira', soAdmin, json, async (req, res) => {
+  r.post('/api/carteira', soCadastro, json, async (req, res) => {
     const b = req.body || {};
     // o ID Vouch vem do Vouch: quem cadastra informa (não é gerado aqui)
     if (!String(b.codigo || '').trim()) return erro(res, 400, 'Informe o ID Vouch do condomínio.');
@@ -103,8 +123,8 @@ function rotasCarteira({ db, seg }) {
   });
 
   r.patch('/api/carteira/:id', json, async (req, res) => {
-    const editaveis = await funcoesEditaveis(req.usuario);
-    if (!editaveis.length) return erro(res, 403, 'Só a administração altera a carteira.');
+    const editaveis = await camposEditaveis(req.usuario);
+    if (!editaveis.length) return erro(res, 403, 'Você só consulta a carteira.' + QUEM_LIBERA);
     const atual = await db.um(`${SELECT} WHERE c.id = $1`, [Number(req.params.id) || 0]);
     if (!atual) return erro(res, 404, 'Condomínio não encontrado.');
     const v = normalizar(req.body || {});
@@ -112,7 +132,7 @@ function rotasCarteira({ db, seg }) {
     const mudancas = diferencas(atual, v.dados);
     if (req.usuario.papel !== 'admin') {
       const fora = Object.keys(mudancas).filter((k) => !editaveis.includes(k));
-      if (fora.length) return erro(res, 403, 'Você altera só o responsável do seu setor neste condomínio.');
+      if (fora.length) return erro(res, 403, `Você não tem permissão para alterar: ${fora.map((k) => ROTULOS[k] || k).join(', ')}.` + QUEM_LIBERA);
     }
     if (!Object.keys(mudancas).length) return res.json({ ok: true, sem_mudanca: true });
     const dados = {};
@@ -127,7 +147,7 @@ function rotasCarteira({ db, seg }) {
     res.json({ ok: true });
   });
 
-  r.delete('/api/carteira/:id', soAdmin, async (req, res) => {
+  r.delete('/api/carteira/:id', soCadastro, async (req, res) => {
     const atual = await db.um('SELECT id, nome, codigo FROM condominios WHERE id = $1', [Number(req.params.id) || 0]);
     if (!atual) return erro(res, 404, 'Condomínio não encontrado.');
     await db.q('DELETE FROM condominios WHERE id = $1', [atual.id]);
@@ -137,7 +157,7 @@ function rotasCarteira({ db, seg }) {
 
   /* ===================== importar o CSV da planilha ===================== */
   // atualiza pelo ID; quem não está no arquivo continua como está
-  r.post('/api/carteira/importar', soAdmin, express.raw({ type: () => true, limit: '10mb' }), async (req, res) => {
+  r.post('/api/carteira/importar', soCadastro, express.raw({ type: () => true, limit: '10mb' }), async (req, res) => {
     const buf = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
     if (!buf.length) return erro(res, 400, 'Envie o arquivo CSV da carteira.');
     let lidos;
@@ -171,7 +191,7 @@ function rotasCarteira({ db, seg }) {
 
   /* ===================== adicionar novos (planilha de implantação) ===================== */
   // lê a planilha "Controle de Implantações" e diz, para cada condomínio, se é novo ou já está na carteira
-  r.post('/api/carteira/implantacao/ler', soGestor, express.raw({ type: () => true, limit: '15mb' }), async (req, res) => {
+  r.post('/api/carteira/implantacao/ler', soAdicionar, express.raw({ type: () => true, limit: '15mb' }), async (req, res) => {
     const buf = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
     if (!buf.length) return erro(res, 400, 'Envie a planilha de implantação (.xlsx ou .csv).');
     let itens;
@@ -182,7 +202,7 @@ function rotasCarteira({ db, seg }) {
   });
 
   // grava os condomínios escolhidos; confere todos antes e só grava se não houver erro
-  r.post('/api/carteira/implantacao/adicionar', soGestor, json, async (req, res) => {
+  r.post('/api/carteira/implantacao/adicionar', soAdicionar, json, async (req, res) => {
     const lista = Array.isArray(req.body && req.body.itens) ? req.body.itens : null;
     if (!lista || !lista.length) return erro(res, 400, 'Escolha ao menos um condomínio.');
     if (lista.length > 500) return erro(res, 400, 'Envie no máximo 500 condomínios por vez.');
