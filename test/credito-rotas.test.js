@@ -1,0 +1,240 @@
+'use strict';
+/* Análise de Crédito pelo portal: do pedido do executivo ao retorno, com diretoria, pendência e reanálise (dados fictícios). */
+const { test, before, after } = require('node:test');
+const assert = require('node:assert/strict');
+const http = require('http');
+const { execFileSync } = require('child_process');
+const { criarApp, lerConfig } = require('../server/index');
+
+let servidor, base, ctx;
+const emails = [];
+let temGerador = true;
+try { execFileSync(process.env.PYTHON || 'python3', ['-c', 'import reportlab'], { stdio: 'ignore' }); } catch { temGerador = false; }
+
+function cliente() {
+  let cookie = '';
+  return async function req(metodo, url, corpo, opts = {}) {
+    const headers = { ...(opts.headers || {}) };
+    if (cookie) headers.cookie = cookie;
+    let body;
+    if (corpo !== undefined) {
+      if (Buffer.isBuffer(corpo)) { body = corpo; headers['content-type'] ||= 'application/octet-stream'; } else { body = JSON.stringify(corpo); headers['content-type'] = 'application/json'; }
+    }
+    const r = await fetch(base + url, { method: metodo, headers, body, redirect: 'manual' });
+    const sc = r.headers.get('set-cookie');
+    if (sc) cookie = sc.split(';')[0].endsWith('=') ? '' : sc.split(';')[0];
+    if (opts.bruto) return { status: r.status, headers: r.headers, buffer: Buffer.from(await r.arrayBuffer()) };
+    const texto = await r.text();
+    let json = null;
+    try { json = JSON.parse(texto); } catch { /* não é JSON */ }
+    return { status: r.status, json, texto };
+  };
+}
+async function entrar(email, senha) {
+  const c = cliente();
+  assert.equal((await c('POST', '/api/auth/login', { email, senha })).status, 200);
+  return c;
+}
+
+let admin, exec, analista, diretor, outro;
+const ids = {};
+async function pessoa(nome, email) {
+  const r = await admin('POST', '/api/admin/usuarios', { nome, email, papel: 'usuario', senha: 'Senha1234' });
+  assert.equal(r.status, 201, r.texto);
+  await ctx.db.q('UPDATE usuarios SET trocar_senha = FALSE WHERE id = $1', [r.json.id]);
+  ids[email] = r.json.id;
+  return entrar(email, 'Senha1234');
+}
+const avisosDe = async (email) => (await ctx.db.q('SELECT titulo, texto, link FROM notificacoes WHERE usuario_id = $1 ORDER BY id', [ids[email]])).rows;
+const PDF = Buffer.from('%PDF-1.4\n% documento fictício\n');
+const anexar = (c, id, tipo, nome = `${tipo}.pdf`) => c('POST', `/api/credito/analises/${id}/documentos`, PDF, { headers: { 'x-tipo': tipo, 'x-nome-arquivo': encodeURIComponent(nome) } });
+
+const FORM = {
+  razao_social: 'Condomínio Residencial Fictício', cnpj: '11.222.333/0001-81', uf: 'CE', cidade: 'Fortaleza', tipo_contratacao: 'nova',
+  uh_total: 24, taxa_ordinaria: 1840, dia_vencimento: 10, desconto_pontualidade: { tipo: 'nenhum' },
+  taxas_extras: [{ descricao: 'Reforma da fachada', valor_por_uh: 700, inicio: '2026-01', fim: '2026-12', ata: true }], sindico: { tipo: 'condomino', isencao: 'integral' },
+};
+/* relatório colado: competências dos 3 meses fechados antes do mês de hoje, emitido hoje */
+function mesesBase() {
+  const hoje = new Date();
+  return [3, 2, 1].map((k) => { const d = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth() - k, 1)); return `${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`; });
+}
+const hojeIso = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+function planilha(valor) {
+  const linhas = ['Unidade;Titular;Documento;Competência;Tipo;Valor'];
+  for (const c of mesesBase()) {
+    linhas.push(`A-101;Titular Fictício 1;111.111.111-11;${c};Taxa ordinária;${valor}`);
+    linhas.push(`A-101;Titular Fictício 1;111.111.111-11;${c};Multa;36,80`);
+  }
+  return linhas.join('\n');
+}
+
+before(async () => {
+  const cfg = lerConfig({ dataDir: ':memoria:', databaseUrl: '', adminEmail: 'admin@teste.com', adminSenha: 'Admin1234', silencioso: true, porta: 0,
+    portalUrl: 'https://portal.teste', enviarEmail: async (msg) => { emails.push(msg); } });
+  const r = await criarApp(cfg);
+  ctx = r.ctx;
+  await ctx.db.q('UPDATE usuarios SET trocar_senha = FALSE');
+  servidor = http.createServer(r.app);
+  await new Promise((ok) => servidor.listen(0, '127.0.0.1', ok));
+  base = `http://127.0.0.1:${servidor.address().port}`;
+  admin = await entrar('admin@teste.com', 'Admin1234');
+  exec = await pessoa('Executiva Fictícia', 'exec@teste.com');
+  analista = await pessoa('Analista Fictício', 'analista@teste.com');
+  diretor = await pessoa('Diretor Fictício', 'diretor@teste.com');
+  outro = await pessoa('Outra Pessoa', 'outro@teste.com');
+  const setor = await ctx.db.um("SELECT id FROM setores WHERE nome = 'Análise de Crédito'");
+  await ctx.db.q('INSERT INTO setor_membros (setor_id, usuario_id) VALUES ($1, $2)', [setor.id, ids['analista@teste.com']]);
+  const ex = await admin('POST', '/api/credito/executivos', { nome: 'Executiva Fictícia', uf: 'CE', regiao: 'Ceará', usuario_id: ids['exec@teste.com'] });
+  assert.equal(ex.status, 201, ex.texto);
+  ids.executivo = ex.json.id;
+  assert.equal((await admin('PUT', '/api/credito/diretoria', { pessoas: [ids['diretor@teste.com']] })).status, 200);
+});
+after(async () => { servidor.close(); await ctx.db.fechar(); });
+
+test('perfis: executivo, analista (setor Análise de Crédito), diretoria e quem não tem acesso', async () => {
+  assert.deepEqual((await exec('GET', '/api/credito/meta')).json.perfil, { admin: false, analista: false, diretoria: false, executivo: { id: ids.executivo, nome: 'Executiva Fictícia', uf: 'CE', regiao: 'Ceará', boleto: null } });
+  const a = (await analista('GET', '/api/credito/meta')).json.perfil;
+  assert.equal(a.analista, true);
+  assert.equal(a.diretoria, false);
+  assert.equal((await diretor('GET', '/api/credito/meta')).json.perfil.diretoria, true);
+  assert.equal((await outro('GET', '/api/credito/resumo')).json.acesso, false);
+  assert.equal((await outro('POST', '/api/credito/analises', { formulario: FORM })).status, 403);
+  assert.equal((await exec('GET', '/api/credito/analises?vis=fila')).status, 403);
+  assert.equal((await analista('POST', '/api/credito/executivos', { nome: 'X' })).status, 403); // cadastro é da administração
+});
+
+let idA;
+test('executivo pede, o envio confere o que falta, e o analista é avisado com o prazo', async () => {
+  const r = await exec('POST', '/api/credito/analises', { formulario: { ...FORM, cnpj: '11.111.111/1111-11' } });
+  assert.equal(r.status, 201, r.texto);
+  idA = r.json.id;
+  let env = await exec('POST', `/api/credito/analises/${idA}/enviar`, {});
+  assert.equal(env.status, 400);
+  assert.ok(env.json.faltas.some((f) => /CNPJ/.test(f)));
+  assert.ok(env.json.faltas.some((f) => /relatório/.test(f)));
+  assert.ok(env.json.faltas.some((f) => /convenção/.test(f)));
+  assert.equal((await exec('PATCH', `/api/credito/analises/${idA}`, { formulario: FORM })).status, 200);
+  assert.equal((await anexar(exec, idA, 'relatorio')).status, 201);
+  assert.equal((await anexar(exec, idA, 'convencao')).status, 201);
+  assert.equal((await outro('GET', `/api/credito/analises/${idA}`)).status, 404);
+  env = await exec('POST', `/api/credito/analises/${idA}/enviar`, {});
+  assert.equal(env.status, 200, env.texto);
+  assert.match(env.json.protocolo, /^AC-\d{4}-\d{2}-\d{2}-01$/);
+  assert.equal(env.json.etapa, 'fila');
+  const av = await avisosDe('analista@teste.com');
+  assert.match(av.at(-1).titulo, /^Nova análise de crédito · AC-/);
+  assert.equal(av.at(-1).link, `#/credito/${idA}`);
+  assert.equal((await exec('PATCH', `/api/credito/analises/${idA}`, { formulario: FORM })).status, 403); // enviada: não muda mais
+  const fila = (await analista('GET', '/api/credito/analises?vis=fila')).json.analises;
+  assert.equal(fila[0].id, idA);
+});
+
+test('analista assume, cola o relatório, calcula; o executivo não vê o cálculo antes do envio', async () => {
+  assert.equal((await analista('POST', `/api/credito/analises/${idA}/calcular`, {})).status, 403); // ainda não assumiu
+  assert.equal((await analista('POST', `/api/credito/analises/${idA}/assumir`, {})).status, 200);
+  const colado = await analista('POST', `/api/credito/analises/${idA}/relatorio-colado`, { texto: planilha('2.800,00') });
+  assert.equal(colado.status, 200, colado.texto);
+  assert.equal(colado.json.unidades.length, 1);
+  assert.equal((await analista('POST', `/api/credito/analises/${idA}/calcular`, {})).status, 400); // relatório ainda não lançado
+  const dados = { convencao: { registro: 'RI', uh: 24 }, relatorio: { data_emissao: hojeIso(), unidades: colado.json.unidades } };
+  assert.equal((await analista('PATCH', `/api/credito/analises/${idA}`, { dados_analista: { ...dados, ajustes: { taxa_adm: { valor: 2.5 } } } })).status, 400); // ajuste sem justificativa
+  assert.equal((await analista('PATCH', `/api/credito/analises/${idA}`, { dados_analista: dados })).status, 200);
+  const calc = await analista('POST', `/api/credito/analises/${idA}/calcular`, {});
+  assert.equal(calc.status, 200, calc.texto);
+  // 2.800 / (23 × 2.540) = 4,79% → 2,00% + R$ 2,00
+  assert.equal(calc.json.resultado.status.rotulo, 'APROVADA');
+  assert.equal(calc.json.resultado.precificacao.taxa_adm, 2);
+  const visto = (await exec('GET', `/api/credito/analises/${idA}`)).json;
+  assert.equal(visto.analise.dados_analista, undefined);
+  assert.equal(visto.analise.resultado_motor, undefined);
+  assert.equal(visto.analise.taxa_adm, null);
+  const unidades = await ctx.db.q('SELECT count(*)::int AS n FROM analise_lancamentos l JOIN analise_unidades u ON u.id = l.unidade_id WHERE u.analise_id = $1', [idA]);
+  assert.equal(unidades.rows[0].n, 6);
+});
+
+test('liberar gera o retorno em PDF, avisa o executivo e permite pedir reanálise', { skip: !temGerador && 'python3 com reportlab não instalado' }, async () => {
+  const lib = await analista('POST', `/api/credito/analises/${idA}/liberar`, {});
+  assert.equal(lib.status, 200, lib.texto);
+  assert.equal(lib.json.email.assunto, 'Retorno de Análise de Crédito — Condomínio Residencial Fictício');
+  assert.match(lib.json.email.corpo, /Status: APROVADA — 2,00% ADM \+ R\$ 2,00\/boleto \| 23 UH no escopo\./);
+  const av = await avisosDe('exec@teste.com');
+  assert.equal(av.at(-1).titulo, 'Retorno de Análise de Crédito — Condomínio Residencial Fictício');
+  assert.ok(emails.some((e) => e.subject === 'Retorno de Análise de Crédito — Condomínio Residencial Fictício'));
+  const det = (await exec('GET', `/api/credito/analises/${idA}`)).json;
+  assert.equal(det.analise.etapa, 'enviada');
+  assert.equal(det.analise.resultado, 'aprovada');
+  const pdf = det.documentos.find((d) => d.tipo === 'retorno_pdf');
+  assert.match(pdf.nome, /^Retorno_Analise_Credito_Residencial_Ficticio_AC-/);
+  const arq = await exec('GET', `/api/credito/analises/${idA}/documentos/${pdf.id}?ver=1`, undefined, { bruto: true });
+  assert.equal(arq.headers.get('content-type'), 'application/pdf');
+  assert.equal(arq.buffer.subarray(0, 5).toString(), '%PDF-');
+  assert.equal(det.pode.reanalise, true);
+
+  const re = await exec('POST', `/api/credito/analises/${idA}/reanalise`, { motivo: 'Relatório novo' });
+  assert.equal(re.status, 201, re.texto);
+  const nova = (await exec('GET', `/api/credito/analises/${re.json.id}`)).json;
+  assert.equal(nova.analise.origem_id, idA);
+  assert.equal(nova.analise.etapa, 'rascunho');
+  assert.equal(nova.analise.protocolo, null); // o protocolo novo sai no envio
+  assert.deepEqual(nova.documentos.map((d) => d.tipo), ['convencao']); // a convenção vai junto; o relatório é novo
+  assert.ok(nova.faltas.some((f) => /relatório/.test(f)));
+});
+
+test('pendência devolve ao executivo, para o prazo, e o reenvio volta para o mesmo analista', async () => {
+  const r = await exec('POST', '/api/credito/analises', { formulario: FORM });
+  const id = r.json.id;
+  await anexar(exec, id, 'relatorio');
+  await anexar(exec, id, 'convencao');
+  await exec('POST', `/api/credito/analises/${id}/enviar`, {});
+  await analista('POST', `/api/credito/analises/${id}/assumir`, {});
+  const p = await analista('POST', `/api/credito/analises/${id}/pendencia`, { itens: ['Relatório detalhado por competência'] });
+  assert.equal(p.status, 200, p.texto);
+  assert.match(p.json.mensagem, /1\. Relatório detalhado por competência/);
+  let det = (await exec('GET', `/api/credito/analises/${id}`)).json;
+  assert.equal(det.analise.etapa, 'pendencia');
+  assert.equal(det.analise.prazo_analista, null);
+  assert.equal(det.pode.documentos, true);
+  assert.match((await avisosDe('exec@teste.com')).at(-1).titulo, /^Pendência na análise de crédito/);
+  await anexar(exec, id, 'relatorio', 'relatorio-detalhado.pdf');
+  const env = await exec('POST', `/api/credito/analises/${id}/enviar`, {});
+  assert.equal(env.json.etapa, 'em_analise');
+  det = (await analista('GET', `/api/credito/analises/${id}`)).json;
+  assert.equal(det.analise.analista_id, ids['analista@teste.com']);
+  assert.equal(det.documentos.filter((d) => d.tipo === 'relatorio' && !d.substituido_em).length, 1);
+  assert.match((await avisosDe('analista@teste.com')).at(-1).titulo, /^Pendência respondida/);
+});
+
+test('inadimplência acima de 35%: só libera depois da chancela da diretoria', { skip: !temGerador && 'python3 com reportlab não instalado' }, async () => {
+  const r = await exec('POST', '/api/credito/analises', { formulario: FORM });
+  const id = r.json.id;
+  await anexar(exec, id, 'relatorio');
+  await anexar(exec, id, 'convencao');
+  await exec('POST', `/api/credito/analises/${id}/enviar`, {});
+  await analista('POST', `/api/credito/analises/${id}/assumir`, {});
+  const colado = (await analista('POST', `/api/credito/analises/${id}/relatorio-colado`, { texto: planilha('21.500,00') })).json; // 36,8%
+  await analista('PATCH', `/api/credito/analises/${id}`, { dados_analista: { convencao: { registro: 'RI', uh: 24 }, relatorio: { data_emissao: hojeIso(), unidades: colado.unidades } } });
+  assert.equal((await analista('POST', `/api/credito/analises/${id}/liberar`, {})).status, 400);
+  const d = await analista('POST', `/api/credito/analises/${id}/diretoria`, {});
+  assert.equal(d.status, 200, d.texto);
+  assert.match((await avisosDe('diretor@teste.com')).at(-1).titulo, /^Chancela da diretoria/);
+  assert.equal((await diretor('GET', '/api/credito/analises?vis=diretoria')).json.analises[0].id, id);
+  assert.equal((await analista('POST', `/api/credito/analises/${id}/chancela`, { aprovar: true })).status, 403);
+  assert.equal((await diretor('POST', `/api/credito/analises/${id}/chancela`, { aprovar: true, observacao: 'De acordo' })).status, 200);
+  const lib = await analista('POST', `/api/credito/analises/${id}/liberar`, {});
+  assert.equal(lib.status, 200, lib.texto);
+  assert.match(lib.json.email.corpo, /APROVADA COM RESSALVAS — 6,00% ADM/);
+});
+
+test('administração: executivos com boleto próprio e nova versão da política', async () => {
+  assert.equal((await admin('PATCH', `/api/credito/executivos/${ids.executivo}`, { nome: 'Executiva Fictícia', uf: 'MA', boleto: '5,50', usuario_id: ids['exec@teste.com'] })).status, 200);
+  assert.equal((await exec('GET', '/api/credito/meta')).json.perfil.executivo.boleto, '5.50');
+  assert.equal((await admin('POST', '/api/credito/politica', { versao: '1.2.2' })).status, 409);
+  assert.equal((await admin('POST', '/api/credito/politica', { versao: '1.3-teste', faixas: [{ ate: 10, taxa_adm: 2 }] })).status, 400); // não cobre até 40%
+  const nova = await admin('POST', '/api/credito/politica', { versao: '1.3-teste', descricao: 'teste', parametros: { boleto_padrao: 2.5 } });
+  assert.equal(nova.status, 201, nova.texto);
+  const pol = (await analista('GET', '/api/credito/politica')).json;
+  assert.equal(pol.ativa.versao, '1.3-teste');
+  assert.equal(pol.ativa.boleto_padrao, 2.5);
+  assert.equal(pol.versoes.length, 2);
+});

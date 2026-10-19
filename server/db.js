@@ -395,7 +395,7 @@ CREATE TABLE IF NOT EXISTS analise_protocolos (
 
 CREATE TABLE IF NOT EXISTS analises (
   id SERIAL PRIMARY KEY,
-  protocolo TEXT NOT NULL UNIQUE,
+  protocolo TEXT UNIQUE,
   origem_id INTEGER REFERENCES analises(id) ON DELETE SET NULL,
   motivo_reanalise TEXT,
   etapa TEXT NOT NULL DEFAULT 'rascunho' CHECK (etapa IN ('rascunho','pendencia','fila','em_analise','diretoria','validada','enviada','cancelada')),
