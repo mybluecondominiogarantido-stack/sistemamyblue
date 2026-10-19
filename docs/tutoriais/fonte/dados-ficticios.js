@@ -32,6 +32,11 @@ function boletos(agora = new Date()) {
     const emi = somaDias(meta, i % 5 === 4 ? 2 : -((i % 3) + 1));
     itens[id(i)] = { emi, em: emi + 'T14:' + String(10 + i).padStart(2, '0') + ':00.000Z', por: conds[id(i)].resp, obs: '' };
   });
+  // condomínios encerrados (aba Distratados): o distrato é de meses anteriores, então já não entram na competência
+  const inicio = `${comp}-01`;
+  conds.d01 = { nome: 'Cond. Brisa do Mar', uf: 'CE', dia: 10, regra: 'Dia fixo', sit: 'Distrato', distrato: somaDias(inicio, -18), resp: 'Bruna Reis', obs: 'Distrato a pedido do síndico' };
+  conds.d02 = { nome: 'Cond. Pedra Branca', uf: 'RN', dia: 5, regra: 'Dia útil', sit: 'Distrato', distrato: somaDias(inicio, -47), resp: 'Davi Rocha', obs: 'Troca de administradora' };
+  conds.d03 = { nome: 'Cond. Rio Claro', uf: 'PB', dia: 15, regra: 'Dia fixo', sit: 'Distrato', resp: 'Bruna Reis', obs: '' };
   // um erro de emissão já corrigido
   Object.assign(itens[id(1)], {
     err: true, errTipo: 'Vencimento', errGrav: 'Não grave', errSt: 'Reemitido', errMsg: 'Boleto saiu com o vencimento do mês anterior. Reemitido.',

@@ -19,10 +19,15 @@ const SELECT = `SELECT c.id, ${COLUNAS.filter((x) => x !== 'inicio_contrato').ma
   to_char(c.inicio_contrato, 'YYYY-MM-DD') AS inicio_contrato, c.criado_em, c.atualizado_em, u.nome AS atualizado_por_nome
   FROM condominios c LEFT JOIN usuarios u ON u.id = c.atualizado_por`;
 
-function rotasCarteira({ db, seg, regras }) {
+function rotasCarteira({ db, seg, regras, boletosCarteira }) {
   const r = express.Router();
   const json = express.json({ limit: '1mb' });
   r.use('/api/carteira', seg.exigirLogin);
+  // carteira alterada: o Controle de Emissão de Boletos recebe a mudança (depois da 1ª conferência)
+  r.use('/api/carteira', (req, res, next) => {
+    if (req.method !== 'GET' && boletosCarteira) res.on('finish', () => { if (res.statusCode < 400) boletosCarteira.agendar(req.usuario); });
+    next();
+  });
   // quem edita o quê vem das regras de acesso (Ferramentas do setor → Carteira); consultar é de todos
   const QUEM_LIBERA = ' Quem libera: administração ou coordenação, em Ferramentas do setor → Carteira de condomínios.';
   const exigir = (chave, msg) => async (req, res, next) => {

@@ -708,6 +708,66 @@
   /* Quem abre a ferramenta, se edita ou só consulta e com qual papel: a mesma tela para a administração e para a
      coordenação do setor (que pode liberar pessoas de qualquer setor). Os papéis de ferramentas com aba "Acessos"
      própria são lidos e gravados no formato delas. */
+  /* Controle de Emissão de Boletos: o cadastro vem da Carteira de condomínios. A 1ª vez a coordenação
+     confere aqui (nomes parecidos, condomínios fora da carteira); depois o portal aplica sozinho. */
+  async function secaoCarteiraBoletos(cont, slug) {
+    cont.innerHTML = '<div class="ajuda">Comparando o cadastro com a Carteira…</div>';
+    var p;
+    try { p = await api('GET', '/api/admin/modulos/' + slug + '/carteira'); } catch (e) { cont.innerHTML = '<div class="msg erro">' + esc(e.message) + '</div>'; return; }
+    var MES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+    var comp = function (c) { return c ? MES[+c.slice(5, 7) - 1] + '/' + c.slice(2, 4) : '—'; };
+    var data = function (d) { return d ? d.slice(8, 10) + '/' + d.slice(5, 7) + '/' + d.slice(0, 4) : 'sem data'; };
+    var venc = function (x) { return x.regra === 'Dia útil' ? x.dia + 'º dia útil' : 'dia ' + x.dia; };
+    var ROT = { nome: 'Nome', resp: 'Responsável', uf: 'UF', regra: 'Regra', dia: 'Dia', sit: 'Situação', distrato: 'Distrato' };
+    var mudancas = function (a) {
+      return a ? Object.keys(a.patch).filter(function (f) { return f !== 'desde'; }).map(function (f) {
+        var de = a.ant[f], para = a.patch[f];
+        if (f === 'distrato') { de = de ? data(de) : '—'; para = para ? data(para) : '—'; }
+        return ROT[f] + ': <s style="color:var(--muted)">' + esc(de == null || de === '' ? '—' : de) + '</s> → <b>' + esc(para == null ? '—' : para) + '</b>';
+      }).join('<br>') : '';
+    };
+    var altPor = {}; p.alteracoes.forEach(function (a) { altPor[a.k] = a; });
+    var alts = p.alteracoes.filter(function (a) { return a.k.indexOf('a:') === 0; });
+    var pend = p.parecidos.length + p.novos.length + alts.length + p.fora.length;
+    var marca = function (k, on) { return '<input type="checkbox" data-k="' + esc(k) + '"' + (on ? ' checked' : '') + ' aria-label="Aplicar">'; };
+    var tabela = function (titulo, ajuda, cab, linhas) {
+      return linhas.length ? '<details open style="margin-top:12px"><summary style="cursor:pointer;font-weight:800">' + titulo + ' (' + linhas.length + ')</summary><p class="ajuda" style="margin:6px 0">' + ajuda + '</p>' +
+        '<div class="tabela-wrap" style="max-height:340px;overflow-y:auto"><table><thead><tr><th></th>' + cab.map(function (c) { return '<th>' + c + '</th>'; }).join('') + '</tr></thead><tbody>' + linhas.join('') + '</tbody></table></div></details>' : '';
+    };
+    cont.innerHTML =
+      (p.ativa ? '<div class="msg ok">Automático ligado: quando a Carteira muda ou uma competência é criada, o controle recebe as mudanças a partir de <b>' + comp(p.comp) + '</b> (primeira competência ainda sem emissão).</div>'
+        : '<div class="msg aviso">Confira e aplique uma vez. Depois disso, cada mudança na Carteira (e cada competência criada) chega sozinha ao controle.</div>') +
+      '<p class="ajuda">Vinculados à Carteira pelo ID Vouch: <b>' + p.vinculados + '</b>. As mudanças valem a partir de <b>' + comp(p.comp) + '</b>: os meses em andamento continuam como estão (inclusive o vencimento).</p>' +
+      (p.avisos.length ? '<div class="msg aviso">Fora do controle por vencimento não reconhecido na Carteira: ' + p.avisos.map(function (a) { return esc(a.nome) + ' (' + esc(a.motivo) + ')'; }).join(', ') + '.</div>' : '') +
+      (!pend ? '<div class="msg ok" style="margin-top:8px">O cadastro do controle está igual à Carteira.</div>' :
+        tabela('Nomes parecidos', 'Mesmo condomínio com outra grafia? Marque para vincular (o controle passa a seguir a Carteira). Desmarcado fica para depois.', ['No controle', 'Na Carteira', 'Muda'],
+          p.parecidos.map(function (x) {
+            return '<tr><td>' + marca(x.k, x.mesma_uf) + '</td><td>' + esc(x.nome) + ' <span class="sec">' + esc(x.uf) + '</span></td><td>' + esc(x.nome_carteira) + ' <span class="sec">' + esc(x.uf_carteira) + '</span>' +
+              (x.mesma_uf ? '' : ' <span class="etiqueta ambar">UF diferente</span>') + (x.situacao_carteira === 'DISTRATADO' ? ' <span class="etiqueta cinza">distratado</span>' : '') + '</td><td>' + (mudancas(altPor[x.k]) || '—') + '</td></tr>';
+          })) +
+        tabela('Novos na Carteira', 'Entram a partir da competência indicada (no mês seguinte à vigência, o 1º boleto sai pela Implantação). Distratados só ficam registrados na aba Distratados.', ['Condomínio', 'Responsável', 'Vencimento', 'Entra'],
+          p.novos.map(function (x) {
+            var d = x.dados;
+            return '<tr><td>' + marca(x.k, true) + '</td><td><b>' + esc(d.nome) + '</b> <span class="sec">' + esc(d.uf) + '</span></td><td>' + esc(d.resp) + '</td><td>' + venc(d) + '</td><td>' + (d.sit === 'Distrato' ? '<span class="etiqueta cinza">distratado</span>' : comp(d.desde)) + '</td></tr>';
+          })) +
+        tabela('Mudanças da Carteira', 'Distrato, responsável, UF, vencimento ou nome diferentes da Carteira.', ['Condomínio', 'Muda'],
+          alts.map(function (a) { return '<tr><td>' + marca(a.k, true) + '</td><td><b>' + esc(a.nome) + '</b></td><td>' + mudancas(a) + '</td></tr>'; })) +
+        tabela('No controle e não na Carteira', 'Marque os que devem sair do controle a partir de ' + comp(p.comp) + ' (ficam como distratados).', ['Condomínio', 'Responsável'],
+          p.fora.map(function (x) { return '<tr><td>' + marca(x.k, false) + '</td><td><b>' + esc(x.nome) + '</b> <span class="sec">' + esc(x.uf) + '</span></td><td>' + esc(x.resp) + '</td></tr>'; })) +
+        '<div class="linha" style="margin-top:12px"><button class="btn primary sm" type="button" id="btAplicarCarteira">Aplicar no controle</button><span class="ajuda" style="margin:0">Quem estiver com o controle aberto vê em alguns segundos. Tudo fica no Histórico da ferramenta.</span></div>');
+    var bt = $('#btAplicarCarteira', cont);
+    if (bt) bt.onclick = async function () {
+      // vínculos e mudanças automáticas vão sempre junto: são o que o portal faria sozinho
+      var chaves = p.vinculos.map(function (v) { return v.k; }).concat($$('input[data-k]', cont).filter(function (i) { return i.checked; }).map(function (i) { return i.getAttribute('data-k'); }));
+      bt.disabled = true;
+      try {
+        var r = await api('POST', '/api/admin/modulos/' + slug + '/carteira', { chaves: chaves });
+        toast(r.aplicadas ? r.aplicadas + ' condomínio(s) atualizado(s) no controle.' : 'Nada para mudar no controle.', 'ok');
+        secaoCarteiraBoletos(cont, slug);
+      } catch (e) { bt.disabled = false; toast(e.message, 'erro'); }
+    };
+  }
+
   async function editorAcessos(cont, slug) {
     cont.innerHTML = '<div class="ajuda">Carregando quem tem acesso…</div>';
     var q;
@@ -831,12 +891,14 @@
           titulo: mod.nome, largo: true,
           corpo: '<style>.titulo-sec{font-family:var(--display);font-size:15px;margin:22px 0 10px;padding-top:18px;border-top:1px solid var(--border)}.titulo-sec:first-child{margin-top:0;padding-top:0;border-top:0}</style><div class="pilha">' + htmlArquivoModulo(mod) +
             (mod.pendente ? '<div class="msg aviso">Aguardando a aprovação da administração. Até lá, só a coordenação do setor abre esta ferramenta.</div>' : '') +
+            (mod.slug === 'boletos' ? '<h4 class="titulo-sec">Cadastro pela Carteira de condomínios</h4><div id="edCarteira"></div>' : '') +
             '<h4 class="titulo-sec">Quem abre e com qual papel</h4><div id="edAcessos"></div></div>',
           pe: '<a class="btn ghost" href="#/m/' + esc(mod.slug) + '" id="btAbrirMod" style="margin-right:auto">' + IC.novaAba + 'Abrir</a><button class="btn ghost" data-fechar>Fechar</button>',
           aoFechar: function () { if (location.hash.indexOf('#/admin/modulos') === 0) paginaModulosCoord(); },
         });
         $('#btAbrirMod', m).onclick = function () { m.fechar(); };
         ligarArquivoEVersoes(m, mod);
+        if ($('#edCarteira', m)) secaoCarteiraBoletos($('#edCarteira', m), mod.slug);
         editorAcessos($('#edAcessos', m), mod.slug);
       };
     });
@@ -1051,6 +1113,7 @@
           '<label class="fl" for="mLivres" style="margin-top:12px;display:block">Chaves gravadas sem conferir conflito</label><input class="campo" id="mLivres" value="' + esc(((mod.config && mod.config.chaves_livres) || []).join(', ')) + '" placeholder="^pp:conferido$">' +
           '<div class="ajuda">Por padrão, se outra pessoa alterou um dado depois que a página abriu, a gravação é recusada e a ferramenta avisa. Chaves que combinarem aqui (dados calculados, preferências) gravam por cima sem conferir.</div></details></div>' +
           secPlanilha +
+          (mod.slug === 'boletos' ? '<h4 class="titulo-sec">Cadastro pela Carteira de condomínios</h4><div id="edCarteira"></div>' : '') +
 
           '<h4 class="titulo-sec">Quem abre e com qual papel</h4><div id="edAcessos"></div>' +
 
@@ -1063,6 +1126,7 @@
       $('#btAbrirMod', m).onclick = function () { m.fechar(); };
 
       ligarArquivoEVersoes(m, mod);
+      if ($('#edCarteira', m)) secaoCarteiraBoletos($('#edCarteira', m), mod.slug);
       editorAcessos($('#edAcessos', m), mod.slug);
       if ($('#btAprovarMod', m)) $('#btAprovarMod', m).onclick = async function () {
         try { await api('POST', '/api/admin/modulos/' + mod.slug + '/aprovar'); toast('Ferramenta aprovada. As pessoas liberadas já a veem.', 'ok'); m.fechar(); paginaModulos(); recarregarModulosUsuario(); } catch (e) { toast(e.message, 'erro'); }
