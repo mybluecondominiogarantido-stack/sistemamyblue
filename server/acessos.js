@@ -175,7 +175,7 @@ function criarAcessos({ db, seg, modulos, documentos }) {
       modelo: modelo ? modelo.nome : null,
       papeis: lista,
       pessoas: rows.map((u) => {
-        const automatico = u.papel === 'admin' ? 'administração' : gestores.has(u.id) ? 'coordenação do setor' : null;
+        const automatico = u.papel === 'admin' ? 'administração' : gestores.has(u.id) ? (u.papel === 'supervisor' ? 'supervisão do setor' : 'coordenação do setor') : null;
         const l = linhas.get(u.id);
         return { id: u.id, nome: u.nome, email: u.email, papel: u.papel, setores: u.setores, do_setor: (u.setor_ids || []).includes(m.setor_id),
           automatico, abre: !!(automatico || l), liberado: !!l, somente_leitura: !automatico && !!(l && l.somente_leitura),

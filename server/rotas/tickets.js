@@ -24,7 +24,7 @@ const PROXIMO_PRAZO = 'CASE WHEN t.primeira_resposta_em IS NULL THEN t.prazo ELS
 const PRAZO_PADRAO_HORAS = { urgente: 4, alta: 9, media: 27, baixa: 45 };
 
 const texto = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
-// administração e supervisão: veem e direcionam os tickets de todos os setores
+// administração e quem tem a marcação Supervisão da Central de Tickets (não é o perfil Supervisor): todos os setores
 const ehGestor = (u) => u.papel === 'admin' || !!u.supervisor_tickets;
 // coordenador e supervisor têm, no setor deles, os poderes do líder
 const gestorDeSetor = (u) => u.papel === 'coordenador' || u.papel === 'supervisor';
@@ -152,7 +152,7 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
       if (ehGestor(u) && !equipes.size) where.push('TRUE');
       else where.push('t.setor_id = ANY(' + p([...equipes.keys()]) + '::int[])');
     } else if (vis === 'todos') {
-      if (!ehGestor(u)) return erro(res, 403, 'Apenas a administração e a supervisão veem todos os tickets.');
+      if (!ehGestor(u)) return erro(res, 403, 'Só a administração e quem tem a marcação Supervisão da Central de Tickets veem os tickets de todos os setores.');
     } else return erro(res, 400, 'Visão inválida.');
 
     const st = String(req.query.status || 'abertos');
@@ -371,7 +371,7 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
     } else if (b.responsavel_id !== undefined) {
       const alvo = b.responsavel_id === null || b.responsavel_id === '' ? null : Number(b.responsavel_id);
       if (alvo !== t.responsavel_id) {
-        if (!p.atribuir) return erro(res, 403, 'Só o líder do setor (ou a gestão) muda o responsável.');
+        if (!p.atribuir) return erro(res, 403, 'Só o líder do setor (a coordenação/supervisão do setor é líder), a Supervisão da Central de Tickets ou a administração muda o responsável.');
         let nome = null;
         if (alvo !== null) {
           const pessoa = await db.um('SELECT id, nome FROM usuarios WHERE id = $1 AND ativo', [alvo]);
@@ -388,7 +388,7 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
     }
 
     if (b.prioridade !== undefined && b.prioridade !== t.prioridade) {
-      if (!p.prazos) return erro(res, 403, 'Só o líder do setor (ou a gestão) muda a prioridade.');
+      if (!p.prazos) return erro(res, 403, 'Só o líder do setor (a coordenação/supervisão do setor é líder), a Supervisão da Central de Tickets ou a administração muda a prioridade.');
       if (!PRIORIDADES.includes(b.prioridade)) return erro(res, 400, 'Prioridade inválida.');
       set('prioridade', b.prioridade);
       eventos.push(['prioridade', null, { de: t.prioridade, para: b.prioridade }]);
@@ -401,7 +401,7 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
     }
 
     if (b.prazo !== undefined) {
-      if (!p.prazos) return erro(res, 403, 'Só o líder do setor (ou a gestão) muda o prazo para resposta.');
+      if (!p.prazos) return erro(res, 403, 'Só o líder do setor (a coordenação/supervisão do setor é líder), a Supervisão da Central de Tickets ou a administração muda o prazo para resposta.');
       const novo = b.prazo ? new Date(b.prazo) : null;
       if (novo && isNaN(novo)) return erro(res, 400, 'Prazo para resposta inválido.');
       if (String(novo && novo.toISOString()) !== String(t.prazo && new Date(t.prazo).toISOString())) {

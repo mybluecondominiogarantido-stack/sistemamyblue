@@ -263,3 +263,24 @@ test('coordenador não redefine a senha de quem tem acesso além dos setores del
   // a administração redefine normalmente
   assert.equal((await admin('POST', `/api/admin/usuarios/${soCredito}/senha`, {})).status, 200);
 });
+
+test('tudo o que uma pessoa acessa, num lugar só', async () => {
+  const ivo = ids['ivo@teste.com'];
+  let r = await admin('GET', `/api/admin/usuarios/${ivo}/acessos`);
+  assert.equal(r.status, 200, r.texto);
+  assert.equal(r.json.usuario.papel, 'usuario');
+  assert.deepEqual(r.json.setores.map((x) => x.nome), ['Crédito']);
+  const slugs = r.json.ferramentas.map((f) => f.slug).sort();
+  const liberadas = (await ctx.db.q('SELECT modulo_slug FROM permissoes WHERE usuario_id = $1', [ivo])).rows.map((x) => x.modulo_slug).sort();
+  assert.deepEqual(slugs, liberadas, 'as ferramentas liberadas para ele');
+  assert.ok(r.json.ferramentas.every((f) => f.motivo === 'liberada'));
+  assert.ok(r.json.carteira.length >= 5);
+  assert.equal(r.json.tickets.todos_setores, false);
+  // coordenação: abre as do setor dela por ser coordenação
+  r = await admin('GET', `/api/admin/usuarios/${coordId}/acessos`);
+  assert.ok(r.json.ferramentas.some((f) => f.slug === 'credito' && f.motivo === 'coordenação do setor'));
+  assert.deepEqual(r.json.gerencia, ['Crédito']);
+  // a coordenação vê o resumo de quem ela gerencia, não o dos outros
+  assert.equal((await coord('GET', `/api/admin/usuarios/${ivo}/acessos`)).status, 200);
+  assert.equal((await coord('GET', `/api/admin/usuarios/${ids['olga@teste.com']}/acessos`)).status, 404);
+});

@@ -190,6 +190,42 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     res.json({ ok: true });
   });
 
+  /* Tudo o que uma pessoa acessa, num lugar só: perfil, setores (e se é líder), marcações, cada ferramenta que abre
+     (por quê, se edita ou só consulta, com quais papéis), o que pode na Carteira e na Central de Tickets. */
+  r.get('/api/admin/usuarios/:id/acessos', async (req, res) => {
+    const id = Number(req.params.id);
+    const esc = await escopoDe(req);
+    if (esc && !esc.gerencia(id)) return erro(res, 404, 'Usuário não encontrado.');
+    const u = await db.um('SELECT id, nome, email, papel, ativo, supervisor_tickets, editor_links FROM usuarios WHERE id = $1', [id]);
+    if (!u) return erro(res, 404, 'Usuário não encontrado.');
+    const setores = (await db.q(`SELECT s.id, s.nome, sm.lider FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id
+      WHERE sm.usuario_id = $1 ORDER BY s.ordem, s.nome`, [id])).rows;
+    const gestor = seg.GESTORES_DE_SETOR.includes(u.papel);
+    const meusSetores = new Set(setores.map((x) => x.id));
+    const ferramentas = [];
+    for (const m of await modulos.listar()) {
+      const a = await acessos.acessoDe(u, m);
+      if (!a.abre) continue;
+      const { lista } = await acessos.papeisDaFerramenta(m);
+      ferramentas.push({ slug: m.slug, nome: m.nome, setor: m.setor_nome || '', ativo: m.ativo, pendente: m.pendente,
+        motivo: u.papel === 'admin' ? 'administração' : gestor && meusSetores.has(m.setor_id) ? (u.papel === 'supervisor' ? 'supervisão do setor' : 'coordenação do setor') : 'liberada',
+        somente_leitura: a.somente_leitura, papeis: a.papeis.map((p) => (lista.find((x) => x.id === p) || { nome: p }).nome) });
+    }
+    const perms = u.papel === 'admin' ? null : await regras.permissoesDe(u);
+    const carteira = regras.PERMISSOES.filter((p) => p.chave.startsWith('carteira.')).map((p) => ({ rotulo: p.rotulo,
+      pode: !perms || perms.has(p.chave), motivo: perms ? (perms.get(p.chave) || null) : 'administração' }));
+    res.json({
+      usuario: { id: u.id, nome: u.nome, email: u.email, papel: u.papel, ativo: u.ativo },
+      setores: setores.map((x) => ({ nome: x.nome, lider: !!x.lider || gestor })),
+      gerencia: u.papel === 'admin' ? 'todos os setores' : gestor ? setores.map((x) => x.nome) : [],
+      marcacoes: { supervisor_tickets: !!u.supervisor_tickets, editor_links: !!u.editor_links },
+      tickets: { todos_setores: u.papel === 'admin' || !!u.supervisor_tickets, setores: setores.map((x) => x.nome),
+        lider_em: setores.filter((x) => x.lider || gestor).map((x) => x.nome) },
+      carteira,
+      ferramentas,
+    });
+  });
+
   async function acessosForaDoEscopo(id, esc) {
     const u = await db.um('SELECT supervisor_tickets, editor_links FROM usuarios WHERE id = $1', [id]);
     const motivos = [];
