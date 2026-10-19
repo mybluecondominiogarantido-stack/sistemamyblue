@@ -254,7 +254,7 @@ const CARTEIRA = `
 <p class="intro">A <b>Carteira de condomínios</b> reúne os condomínios atendidos e quem cuida de cada um: <b>analista de cobrança</b>, <b>analista extrajudicial</b> (ApoioCob) e <b>assistente de crédito</b>.</p>
 <ul>
   <li><b>Condomínios:</b> indicadores (ativos, comarcas, pessoas por função, ativos sem responsável), busca por nome, razão social, CNPJ ou ID, filtros por situação, UF, administradora e responsável. Clique no condomínio para ver a ficha completa e o histórico de alterações.</li>
-  <li><b>Responsáveis:</b> quantos condomínios ativos cada pessoa tem, por UF. Clique no número para ver a lista.</li>
+  <li><b>Equipes:</b> quantos condomínios ativos cada pessoa tem, por UF. Clique no número para ver a lista.</li>
   <li><b>Adicionar novos:</b> a implantação envia o <i>Controle de Implantações</i> (.xlsx ou .csv, como está), escolhe a <b>vigência</b> (mês/ano da data do contrato) e confere os condomínios que ainda não estão na carteira.</li>
 </ul>
 <h2>Cadastro do condomínio</h2>
@@ -274,7 +274,7 @@ ${passos([
 ${fig('18-carteira', 'Carteira de condomínios: indicadores, filtros e a lista com os responsáveis.')}
 ${tabela(['Quem', 'O que pode'], [
   ['Todos', 'Consultar.'],
-  ['Coordenador e supervisor de Cobrança ou Crédito', 'Alterar e <b>transferir</b> o responsável do setor deles (aba Responsáveis → Transferir).'],
+  ['Coordenador e supervisor de Cobrança ou Crédito', 'Alterar e <b>transferir</b> o responsável do setor deles (aba Equipes → Transferir).'],
   ['Coordenador e supervisor', '<b>Adicionar novos</b> pela planilha de implantação (os responsáveis só do setor deles).'],
   ['Administração', 'Cadastrar, editar, remover, adicionar novos e transferir qualquer função.'],
 ])}
