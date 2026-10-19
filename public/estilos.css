@@ -366,3 +366,22 @@ input[type=checkbox],input[type=radio]{accent-color:var(--teal);width:16px;heigh
 .pedido-plan .arq { display: inline-flex; align-items: center; gap: 5px; }
 .pedido-plan .arq svg { width: 14px; height: 14px; }
 .pedido-plan label.btn { cursor: pointer; }
+
+/* Análise de Crédito */
+.grade-4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+@media (max-width:1000px){.grade-4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:640px){.grade-4{grid-template-columns:1fr}}
+.painel .corpo{padding:18px 16px}
+.grade-2>*,.grade-3>*,.grade-4>*{min-width:0}
+.anexos .anexo{max-width:100%}
+.painel .cab-painel h2{font-family:var(--display);font-size:16px;margin:0}
+.titulo-passo{margin:0;font-size:16px}
+.opcao-radio{flex:1 1 220px;margin-bottom:0}
+.alerta-item{display:flex;gap:10px;align-items:flex-start;padding:12px 16px;border-bottom:1px solid var(--border);font-size:13.5px}
+.alerta-item:last-child{border-bottom:0}
+.alerta-item.ambar{border-left:3px solid var(--amber)}
+.alerta-item.azul{border-left:3px solid var(--teal)}
+details.painel>summary{list-style:none}
+details.painel>summary::-webkit-details-marker{display:none}
+details.painel>summary::before{content:"▸";color:var(--muted);margin-right:6px}
+details.painel[open]>summary::before{content:"▾"}

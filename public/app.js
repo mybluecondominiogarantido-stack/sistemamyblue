@@ -224,7 +224,9 @@
         '<i data-contador="fila" class="contador" hidden></i></a>' +
         (souEquipe() ? '<a href="#/tickets/painel" class="' + (rota.indexOf('#/tickets/painel') === 0 ? 'on' : '') + '">' + IC.grafico + 'Painel de tickets</a>' : '') +
         '<div class="grupo">Carteira</div>' +
-        '<a href="#/carteira" class="' + (rota.indexOf('#/carteira') === 0 ? 'on' : '') + '">' + IC.casa + 'Carteira de condomínios</a>';
+        '<a href="#/carteira" class="' + (rota.indexOf('#/carteira') === 0 ? 'on' : '') + '">' + IC.casa + 'Carteira de condomínios</a>' +
+        (resumoCredito && resumoCredito.acesso ? '<div class="grupo">Análise de Crédito</div><a href="#/credito" class="' + (rota.indexOf('#/credito') === 0 ? 'on' : '') + '">' + IC.escudo +
+          '<span>Análise de Crédito</span><i data-contador="credito" class="contador" hidden></i></a>' : '');
       // Comissões: a ferramenta (só para quem tem acesso) e os demonstrativos de cada pessoa
       var modCom = modulos.find(function (m) { return m.slug === MOD_COMISSAO; });
       var pendC = resumoComissao ? resumoComissao.pendentes + (resumoComissao.planilhas || 0) : 0;
@@ -256,6 +258,7 @@
         '<a href="#/admin/equipes" class="' + (rota.indexOf('#/admin/equipes') === 0 ? 'on' : '') + '">' + IC.pessoas + 'Equipe e tipos de demanda</a>';
     }
     $('#nav').innerHTML = html;
+    desenharContadorCredito();
     if (resumoTickets) { var bc = $('#nav [data-contador=fila]'); if (bc) { bc.textContent = resumoTickets.minha_fila; bc.hidden = !resumoTickets.minha_fila; if (resumoTickets.minha_fila_atrasados) bc.classList.add('alerta'); } }
     $$('#nav a').forEach(function (a) { a.addEventListener('click', function () { $('#casca').classList.remove('menu-aberto'); }); });
   }
@@ -291,6 +294,7 @@
       return paginaTickets(lembrar('tickets.visao', 'minha'));
     }
     if (partes[0] === 'carteira') return paginaCarteira(partes[1]);
+    if (partes[0] === 'credito') return /^\d+$/.test(partes[1] || '') ? paginaAnaliseCredito(Number(partes[1])) : paginaCredito(partes[1]);
     if (partes[0] === 'premiacoes') return paginaComissoes(partes[1]);
     if (partes[0] === 'links') {
       if (partes[1] === 'gestao' && editorLinks()) return paginaGestaoLinks(partes[2]);
@@ -3252,6 +3256,561 @@
     if (x.meu) setTimeout(atualizarComissao, 800);
   }
 
+  /* ======================= Análise de Crédito ======================= */
+  var metaCredito = null;
+  var resumoCredito = null;
+  var ETAPA_CR = {
+    rascunho: ['Rascunho', 'cinza'], pendencia: ['Pendência com o executivo', 'ambar'], fila: ['Na fila', 'azul'], em_analise: ['Em análise', 'azul'],
+    diretoria: ['Na diretoria', 'ambar'], validada: ['Chancelada · falta liberar', 'verde'], enviada: ['Retorno enviado', 'verde'], cancelada: ['Cancelada', 'cinza'],
+  };
+  var FONTE_CR = { formulario: 'formulário', relatorio: 'relatório', convencao: 'convenção', formulario_total: 'total no formulário', formulario_detalhe: 'detalhe do formulário' };
+  var CAMPO_CR = { uh_total: 'Nº de unidades', taxa_ordinaria: 'Taxa ordinária', dia_vencimento: 'Dia do vencimento', uh_isentas: 'Unidades isentas', taxa_extra: 'Taxa extra' };
+  var RES_CR = { aprovada: ['APROVADA', 'verde'], ressalvas: ['APROVADA COM RESSALVAS', 'ambar'], reprovada: ['REPROVADA', 'vermelha'], pendente: ['PENDENTE', 'azul'] };
+  var ABAS_CR = [['minhas', 'Minhas solicitações'], ['fila', 'Fila'], ['diretoria', 'Diretoria'], ['todas', 'Histórico'], ['executivos', 'Executivos'], ['chancela', 'Quem chancela'], ['politica', 'Política e faixas']];
+  var EVENTO_CR = {
+    criada: 'criou a solicitação', formulario: 'alterou o formulário', documento: 'anexou um documento', documento_removido: 'removeu um documento',
+    enviada: 'enviou para análise', reenviada: 'reenviou depois da pendência', assumida: 'assumiu a análise', motor: 'calculou a análise', ajuste: 'ajustou um valor',
+    pendencia: 'devolveu com pendência', diretoria: 'enviou à diretoria', chancelada: 'chancelou', chancela_recusada: 'não chancelou', liberada: 'liberou o retorno',
+    reanalise_pedida: 'pediu reanálise', cancelada: 'cancelou',
+  };
+
+  function etqCr(mapa, k) { return k && mapa[k] ? etq(mapa[k]) : ''; }
+  function pctCr(v) { return v == null ? '—' : Number(v).toFixed(2).replace('.', ',') + '%'; }
+  function numCr(v) {
+    var s = String(v == null ? '' : v).trim().replace(/[R$\s%]/g, '');
+    if (!s) return null;
+    if (/,\d{1,2}$/.test(s) || (s.indexOf(',') >= 0 && s.indexOf('.') >= 0)) s = s.replace(/\./g, '').replace(',', '.');
+    else s = s.replace(',', '.');
+    var n = Number(s);
+    return isFinite(n) ? n : null;
+  }
+  function fmtNumCr(v) { return v == null || v === '' ? '' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: Number.isInteger(Number(v)) ? 0 : 2, maximumFractionDigits: 2 }); }
+  function dataHoraCr(s) { return s ? new Date(s).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'; }
+  function prazoCr(s, etapa) {
+    if (!s || ['enviada', 'cancelada', 'rascunho', 'pendencia'].indexOf(etapa) >= 0) return '<span class="sec">—</span>';
+    var atrasado = new Date(s) < new Date();
+    return '<span' + (atrasado ? ' style="color:#a3352c;font-weight:800"' : '') + '>' + (atrasado ? 'Venceu ' : 'Até ') + dataHoraCr(s) + '</span>';
+  }
+  async function carregarMetaCredito(forcar) {
+    if (!metaCredito || forcar) metaCredito = await api('GET', '/api/credito/meta');
+    return metaCredito;
+  }
+  async function atualizarCredito() {
+    try { resumoCredito = await api('GET', '/api/credito/resumo'); } catch (e) { return; }
+    desenharContadorCredito();
+  }
+  function desenharContadorCredito() {
+    var b = $('#nav [data-contador=credito]');
+    if (!b || !resumoCredito) return;
+    var r = resumoCredito;
+    var n = (r.fila || 0) + (r.minhas || 0) + (r.diretoria || 0) + (r.pendencias || 0);
+    b.textContent = n;
+    b.hidden = !n;
+    b.className = 'contador' + (r.atrasadas ? ' alerta' : '');
+    b.title = [r.fila ? r.fila + ' na fila' : '', r.minhas ? r.minhas + ' com você' : '', r.atrasadas ? r.atrasadas + ' atrasada(s)' : '', r.diretoria ? r.diretoria + ' na diretoria' : '', r.pendencias ? r.pendencias + ' com pendência' : ''].filter(Boolean).join(' · ');
+  }
+
+  /* ---------- lista ---------- */
+  async function paginaCredito(aba) {
+    var m;
+    try { m = await carregarMetaCredito(true); } catch (e) { $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">' + esc(e.message) + '</div></div>'; return; }
+    var p = m.perfil;
+    var pode = { minhas: !!p.executivo || p.analista, fila: p.analista, diretoria: p.diretoria, todas: p.analista || p.diretoria, executivos: p.admin, chancela: p.admin, politica: p.analista || p.diretoria };
+    var abas = ABAS_CR.filter(function (a) { return pode[a[0]]; });
+    if (!abas.length) {
+      $('#conteudo').innerHTML = '<div class="pagina"><h1>Análise de Crédito</h1><div class="vazio">Você ainda não tem acesso à Análise de Crédito. Executivos de negócios são ligados ao cadastro pela administração; analistas são do setor ' + esc(m.politica.setor_analistas) + '.</div></div>';
+      return;
+    }
+    if (!abas.some(function (a) { return a[0] === aba; })) aba = p.analista ? 'fila' : p.diretoria && !p.executivo ? 'diretoria' : abas[0][0];
+    definirBarra('<span class="setor">Análise de Crédito</span><span class="sep">/</span><span class="nome">' + esc(abas.find(function (a) { return a[0] === aba; })[1]) + '</span>');
+    var novo = (p.executivo || p.analista) && ['minhas', 'fila'].indexOf(aba) >= 0;
+    $('#conteudo').innerHTML = '<div class="pagina"><div class="linha" style="align-items:flex-end;margin-bottom:6px"><div style="flex:1 1 420px"><h1>Análise de Crédito</h1>' +
+      '<p class="sub" style="margin:0">Pedido do executivo, análise pelo setor e retorno em PDF. Prazo de resposta: ' + m.politica.sla_horas + 'h a partir da documentação completa (' + m.politica.sla_horas_diretoria + 'h quando vai à diretoria).</p></div>' +
+      (novo ? '<button class="btn primary" id="btNovaCr">' + IC.mais + 'Nova solicitação</button>' : '') + '</div>' +
+      '<nav class="abas" style="margin-top:16px">' + abas.map(function (a) { return '<a href="#/credito/' + a[0] + '" class="' + (a[0] === aba ? 'on' : '') + '">' + esc(a[1]) + '</a>'; }).join('') + '</nav><div id="corpoCr"></div></div>';
+    if ($('#btNovaCr')) $('#btNovaCr').onclick = novaSolicitacaoCredito;
+    if (aba === 'executivos') return abaExecutivosCredito();
+    if (aba === 'chancela') return abaChancelaCredito();
+    if (aba === 'politica') return abaPoliticaCredito(p);
+    var interno = p.analista || p.diretoria;
+    var tiles = '';
+    if (aba === 'fila' && resumoCredito) {
+      tiles = '<div class="tiles" style="margin-bottom:16px"><div class="tile"><span class="rot-tile">Na fila, sem analista</span><b>' + (resumoCredito.fila || 0) + '</b></div>' +
+        '<div class="tile"><span class="rot-tile">Com você</span><b>' + (resumoCredito.minhas || 0) + '</b></div>' +
+        '<div class="tile' + (resumoCredito.atrasadas ? ' alerta' : '') + '"><span class="rot-tile">Atrasadas</span><b>' + (resumoCredito.atrasadas || 0) + '</b><span class="sec">prazo do analista vencido</span></div></div>';
+    }
+    $('#corpoCr').innerHTML = tiles + '<div class="painel"><div class="cab-painel"><input class="campo" id="qCr" type="search" placeholder="Buscar por condomínio, CNPJ ou protocolo" style="max-width:360px"><span class="espaco"></span>' +
+      (aba === 'fila' ? '<span class="ajuda" style="margin:0">Ordenado pelo prazo</span>' : '') + '</div>' +
+      '<div class="tabela-wrap"><table style="min-width:900px"><thead><tr><th>Protocolo</th><th>Condomínio</th><th>' + (aba === 'minhas' ? 'Analista' : 'Executivo') + '</th><th>Situação</th><th>' + (interno ? 'Prévia do motor' : 'Resultado') + '</th><th>Prazo</th></tr></thead><tbody id="tbCr"></tbody></table></div></div>';
+    var seq = 0;
+    async function carregar() {
+      var meu = ++seq;
+      var q = $('#qCr').value.trim();
+      var r;
+      try { r = await api('GET', '/api/credito/analises?vis=' + aba + (q ? '&q=' + encodeURIComponent(q) : '')); } catch (e) { toast(e.message, 'erro'); return; }
+      if (meu !== seq) return;
+      $('#tbCr').innerHTML = r.analises.map(function (a) {
+        var prev = a.resultado ? etqCr(RES_CR, a.resultado) + '<span class="sec">' + pctCr(a.inad_media) + (a.taxa_adm != null ? ' · ' + pctCr(a.taxa_adm) + ' + ' + reais(a.boleto) : '') + '</span>' : '<span class="sec">—</span>';
+        return '<tr class="clicavel" data-id="' + a.id + '"><td style="white-space:nowrap"><b>' + esc(a.protocolo || 'Rascunho') + '</b><span class="sec">' + (a.origem_protocolo ? 'reanálise de ' + esc(a.origem_protocolo) : dataHoraCr(a.documentacao_completa_em || a.criado_em)) + '</span></td>' +
+          '<td><b>' + esc(a.condominio || 'Sem nome') + '</b><span class="sec">' + esc([a.uf, a.tipo_contratacao === 'portabilidade' ? 'Portabilidade' : a.tipo_contratacao === 'nova' ? 'Nova contratação' : ''].filter(Boolean).join(' · ')) + '</span></td>' +
+          '<td>' + esc((aba === 'minhas' ? a.analista_nome : a.executivo_nome) || '—') + '</td><td>' + etqCr(ETAPA_CR, a.etapa) + (a.atrasada ? ' <span class="etiqueta vermelha">atrasada</span>' : '') + '</td>' +
+          '<td>' + prev + '</td><td style="white-space:nowrap">' + prazoCr(aba === 'minhas' ? a.prazo_executivo : a.prazo_analista, a.etapa) + '</td></tr>';
+      }).join('') || '<tr><td colspan="6"><div class="vazio" style="border:0;padding:34px">' + (aba === 'minhas' ? 'Você ainda não pediu análises.' : 'Nada por aqui.') + '</div></td></tr>';
+      $$('#tbCr tr[data-id]').forEach(function (tr) { tr.onclick = function () { location.hash = '#/credito/' + tr.getAttribute('data-id'); }; });
+    }
+    var espera;
+    $('#qCr').oninput = function () { clearTimeout(espera); espera = setTimeout(carregar, 300); };
+    carregar();
+    atualizarCredito();
+  }
+
+  async function novaSolicitacaoCredito() {
+    var m = await carregarMetaCredito();
+    var corpo = { formulario: {} };
+    if (!m.perfil.executivo) {
+      if (!m.executivos.length) { toast('Cadastre os executivos em Análise de Crédito → Executivos antes.', 'erro'); return; }
+      corpo.executivo_id = m.executivos[0].id;
+    }
+    try { var r = await api('POST', '/api/credito/analises', corpo); location.hash = '#/credito/' + r.id; } catch (e) { toast(e.message, 'erro'); }
+  }
+
+  /* ---------- formulário do executivo ---------- */
+  function campoCr(id, rotulo, valor, extra) {
+    return '<div' + (extra && extra.span ? ' style="grid-column:span ' + extra.span + '"' : '') + '><label class="rot" for="' + id + '">' + esc(rotulo) + '</label>' +
+      '<input class="campo" id="' + id + '" value="' + esc(valor == null ? '' : valor) + '"' + (extra && extra.ph ? ' placeholder="' + esc(extra.ph) + '"' : '') + (extra && extra.tipo ? ' type="' + extra.tipo + '"' : '') + (extra && extra.dis ? ' disabled' : '') + '>' +
+      (extra && extra.ajuda ? '<div class="ajuda">' + extra.ajuda + '</div>' : '') + '</div>';
+  }
+  function selCr(id, rotulo, valor, opcoes, dis) {
+    return '<div><label class="rot" for="' + id + '">' + esc(rotulo) + '</label><select class="campo" id="' + id + '"' + (dis ? ' disabled' : '') + '>' +
+      opcoes.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(o[0]) === String(valor == null ? '' : valor) ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select></div>';
+  }
+  function linhaExtraCr(x) {
+    x = x || {};
+    return '<tr><td><input class="campo" data-x="descricao" value="' + esc(x.descricao || '') + '" placeholder="Ex.: reforma da fachada"></td>' +
+      '<td><input class="campo" data-x="valor_por_uh" value="' + esc(fmtNumCr(x.valor_por_uh)) + '" placeholder="0,00"></td>' +
+      '<td><input class="campo" type="month" data-x="inicio" value="' + esc(x.inicio || '') + '"></td><td><input class="campo" type="month" data-x="fim" value="' + esc(x.fim || '') + '"></td>' +
+      '<td style="text-align:center"><input type="checkbox" data-x="ata"' + (x.ata ? ' checked' : '') + ' aria-label="Tem ata de aprovação"></td>' +
+      '<td><button type="button" class="btn icon ghost" data-tirar aria-label="Remover taxa extra">' + IC.fechar + '</button></td></tr>';
+  }
+  function htmlFormCredito(f, a, m, dis) {
+    var s = f.sindico || {};
+    var outros = (f.outros_isentos || [])[0] || null;
+    var ag = f.agua_gas || {};
+    var d = f.desconto_pontualidade || {};
+    var execSel = m.perfil.analista && !dis ? selCr('fExec', 'Executivo de negócios', a.executivo_id, m.executivos.map(function (e) { return [e.id, e.nome + (e.uf ? ' — ' + e.uf : '')]; }))
+      : campoCr('fExecV', 'Executivo de negócios', a.executivo_nome ? a.executivo_nome + (a.executivo_uf ? ' — ' + a.executivo_uf : '') : '—', { dis: true });
+    return '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">1</span>Identificação do condomínio</h2></div><div class="corpo pilha">' +
+      '<div class="grade-3">' + campoCr('fRs', 'Razão social', f.razao_social, { span: 2 }) + campoCr('fCnpj', 'CNPJ', f.cnpj, { ph: '00.000.000/0000-00' }) +
+      campoCr('fUf', 'UF', f.uf, { ph: 'CE' }) + campoCr('fCid', 'Cidade', f.cidade) + campoCr('fAdm', 'Administradora', f.administradora) +
+      campoCr('fSis', 'Sistema de gestão condominial', f.sistema_gestao, { ph: 'Superlógica, Gestart, ClasseCon…' }) + campoCr('fGar', 'Garantidora atual (se houver)', f.garantidora_atual) +
+      campoCr('fVig', 'Vigência do contrato atual', f.vigencia_atual) + execSel + '</div>' +
+      '<div><span class="rot">Tipo de contratação</span><div class="linha" style="align-items:stretch">' +
+      '<label class="opcao-radio"><input type="radio" name="fTipo" value="nova"' + (f.tipo_contratacao === 'nova' ? ' checked' : '') + '><div><b>Nova contratação</b><span>O condomínio não tem garantidora hoje.</span></div></label>' +
+      '<label class="opcao-radio"><input type="radio" name="fTipo" value="portabilidade"' + (f.tipo_contratacao === 'portabilidade' ? ' checked' : '') + '><div><b>Portabilidade de garantidora</b><span>Sai de outra garantidora para a MyBlue.</span></div></label></div></div></div></section>' +
+
+      '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">2</span>Características da operação</h2></div><div class="corpo pilha">' +
+      '<div class="grade-4">' + campoCr('fUh', 'Unidades (UH)', f.uh_total) + campoCr('fOrd', 'Taxa ordinária (R$)', fmtNumCr(f.taxa_ordinaria), { ph: '0,00' }) + campoCr('fVenc', 'Dia do vencimento', f.dia_vencimento, { ph: '1 a 31' }) +
+      selCr('fDescT', 'Desconto de pontualidade', d.tipo || 'nenhum', [['nenhum', 'Não possui'], ['percentual', 'Percentual (%)'], ['valor', 'Valor por unidade (R$)']]) +
+      campoCr('fDescV', 'Desconto (% ou R$)', fmtNumCr(d.valor), { ph: 'só se houver' }) + campoCr('fAgT', 'Água + gás — média mensal total (R$)', fmtNumCr(ag.total_mensal)) +
+      campoCr('fAgU', 'Água + gás — por unidade (R$)', fmtNumCr(ag.por_unidade)) + selCr('fAgB', 'Água + gás no boleto?', ag.compoe_boleto ? 'sim' : 'nao', [['nao', 'Não compõe o boleto'], ['sim', 'Compõe o boleto']]) +
+      campoCr('fBol', 'Custo atual do boleto (R$/UH)', fmtNumCr(f.custo_boleto_atual), { ph: 'opcional', ajuda: 'Sem informação, o comparativo usa R$ 2,50.' }) + '</div>' +
+      '<div><div class="linha" style="margin-bottom:8px"><span class="rot" style="margin:0">Taxas extras vigentes</span><span class="espaco"></span><button type="button" class="btn ghost sm" id="btExtra">' + IC.mais + 'Adicionar taxa extra</button></div>' +
+      '<div class="painel tabela-wrap" style="box-shadow:none"><table style="min-width:720px"><thead><tr><th>Descrição</th><th>Valor por UH</th><th>Início</th><th>Fim</th><th>Ata</th><th></th></tr></thead>' +
+      '<tbody id="tbExtras">' + (f.taxas_extras || []).map(linhaExtraCr).join('') + '</tbody></table></div>' +
+      '<div class="ajuda">Informe o valor por unidade, não o total. Anexe a ata em Documentos.</div></div></div></section>' +
+
+      '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">3</span>Síndico e isenções</h2></div><div class="corpo grade-4">' +
+      selCr('fSind', 'Tipo de síndico', s.tipo || '', [['', 'Escolha'], ['condomino', 'Condômino'], ['profissional', 'Profissional (externo)']]) +
+      selCr('fIse', 'Síndico isento?', s.isencao || 'nao', [['nao', 'Não'], ['integral', 'Integral'], ['parcial', 'Parcial (%)']]) +
+      campoCr('fIseP', 'Isenção parcial do síndico (%)', s.percentual, { ph: 'só se parcial' }) +
+      campoCr('fOutP', 'Subsíndico/conselheiros isentos (% somado)', outros ? outros.percentual : '', { ph: 'ex.: 50', ajuda: 'Duas isenções de 50% contam como 1 unidade.' }) +
+      campoCr('fIseT', 'Total de unidades isentas', f.uh_isentas_informadas) + '</div></section>';
+  }
+  function lerFormCredito() {
+    var v = function (id) { var el = $('#' + id); return el ? el.value.trim() : ''; };
+    var tipo = $('input[name=fTipo]:checked');
+    var outrosP = numCr(v('fOutP'));
+    return {
+      razao_social: v('fRs'), cnpj: v('fCnpj'), uf: v('fUf').toUpperCase(), cidade: v('fCid'), administradora: v('fAdm'), sistema_gestao: v('fSis'),
+      garantidora_atual: v('fGar'), vigencia_atual: v('fVig'), tipo_contratacao: tipo ? tipo.value : '',
+      uh_total: numCr(v('fUh')), taxa_ordinaria: numCr(v('fOrd')), dia_vencimento: numCr(v('fVenc')),
+      desconto_pontualidade: { tipo: v('fDescT'), valor: numCr(v('fDescV')) },
+      agua_gas: { total_mensal: numCr(v('fAgT')), por_unidade: numCr(v('fAgU')), compoe_boleto: v('fAgB') === 'sim' },
+      custo_boleto_atual: numCr(v('fBol')),
+      taxas_extras: $$('#tbExtras tr').map(function (tr) {
+        var g = function (k) { return $('[data-x=' + k + ']', tr); };
+        return { descricao: g('descricao').value.trim(), valor_por_uh: numCr(g('valor_por_uh').value), inicio: g('inicio').value, fim: g('fim').value, ata: g('ata').checked };
+      }).filter(function (x) { return x.descricao || x.valor_por_uh; }),
+      sindico: { tipo: v('fSind'), isencao: v('fIse'), percentual: numCr(v('fIseP')) },
+      outros_isentos: outrosP ? [{ cargo: 'subsíndico/conselheiros', percentual: outrosP }] : [],
+      uh_isentas_informadas: numCr(v('fIseT')),
+      sem_convencao: !!($('#fSemConv') && $('#fSemConv').checked),
+    };
+  }
+
+  /* ---------- documentos ---------- */
+  async function enviarDocCredito(id, tipo, arquivo) {
+    var r = await fetch('/api/credito/analises/' + id + '/documentos', {
+      method: 'POST', credentials: 'same-origin', body: arquivo,
+      headers: { 'Content-Type': arquivo.type || 'application/octet-stream', 'X-Nome-Arquivo': encodeURIComponent(arquivo.name), 'X-Tipo': tipo },
+    });
+    if (r.status === 413) throw new Error('"' + arquivo.name + '" passa do tamanho máximo permitido.');
+    if (!r.ok) { var j = {}; try { j = await r.json(); } catch (e) { /* sem JSON */ } throw new Error(j.erro || 'Falha ao enviar ' + arquivo.name); }
+  }
+  function htmlDocsCredito(dd, a, podeDocs, m, semConv, comSemConv) {
+    var vig = dd.filter(function (x) { return !x.substituido_em; });
+    var nomeTipo = {};
+    m.tipos_documento.forEach(function (t) { nomeTipo[t.tipo] = t.nome; });
+    nomeTipo.retorno_pdf = 'Retorno (PDF)';
+    function lnk(x) {
+      return '<a class="anexo" href="/api/credito/analises/' + a.id + '/documentos/' + x.id + (x.mime === 'application/pdf' ? '?ver=1' : '') + '" target="_blank" rel="noopener">' + IC.documento + '<span>' + esc(x.nome) + '</span><span class="sec">' + tamanho(x.tamanho) + '</span></a>' +
+        (podeDocs && x.tipo !== 'retorno_pdf' ? '<button type="button" class="btn icon ghost" data-tirar-doc="' + x.id + '" aria-label="Remover ' + esc(x.nome) + '">' + IC.fechar + '</button>' : '');
+    }
+    function bloco(tipo, titulo, ajuda) {
+      var atual = vig.filter(function (x) { return x.tipo === tipo; });
+      return '<div class="painel" style="box-shadow:none;padding:16px;display:flex;flex-direction:column;gap:10px"><div class="linha"><b>' + esc(titulo) + '</b><span class="espaco"></span>' +
+        (atual.length ? '<span class="etiqueta verde">Anexado</span>' : '<span class="etiqueta ambar">Falta</span>') + '</div>' +
+        (atual.length ? '<div class="anexos" style="margin:0">' + atual.map(lnk).join('') + '</div>' : '<span class="ajuda" style="margin:0">' + ajuda + '</span>') +
+        (podeDocs ? '<label class="btn ghost sm" style="align-self:flex-start">' + IC.enviar + (atual.length ? 'Trocar arquivo' : 'Escolher arquivo') + '<input type="file" accept="application/pdf" data-doc="' + tipo + '" hidden></label>' : '') + '</div>';
+    }
+    var opc = vig.filter(function (x) { return ['convencao', 'relatorio', 'retorno_pdf'].indexOf(x.tipo) < 0; });
+    return '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">4</span>Documentos</h2></div><div class="corpo pilha"><div class="grade-3">' +
+      bloco('convencao', 'Convenção registrada', 'Registrada em cartório (Registro de Imóveis).') +
+      bloco('relatorio', 'Relatório de inadimplência', 'Contas a receber detalhado por competência, emitido há menos de 3 meses.') +
+      '<div class="painel" style="box-shadow:none;padding:16px;display:flex;flex-direction:column;gap:10px"><b>Outros documentos</b>' +
+      (opc.length ? '<div class="anexos" style="margin:0">' + opc.map(function (x) { return '<span class="sec" style="width:100%">' + esc(nomeTipo[x.tipo] || x.tipo) + '</span>' + lnk(x); }).join('') + '</div>' : '<span class="ajuda" style="margin:0">Atas de taxa extra, unidades retomadas, histórico, DRE 12 meses.</span>') +
+      (podeDocs ? '<div class="linha"><select class="campo" id="tipoOutro" style="max-width:200px" aria-label="Tipo do documento">' + m.tipos_documento.filter(function (t) { return ['convencao', 'relatorio'].indexOf(t.tipo) < 0; }).map(function (t) { return '<option value="' + t.tipo + '">' + esc(t.nome) + '</option>'; }).join('') + '</select>' +
+        '<label class="btn ghost sm">' + IC.enviar + 'Anexar<input type="file" id="arqOutro" hidden></label></div>' : '') + '</div></div>' +
+      (comSemConv ? '<label class="linha" style="font-weight:700;font-size:13px;color:var(--ink-2)"><input type="checkbox" id="fSemConv"' + (semConv ? ' checked' : '') + '> A convenção será entregue antes da assinatura do contrato (a análise sai com ressalva)</label>' : '') +
+      '</div></section>';
+  }
+  function ligarDocsCredito(a, recarregar) {
+    $$('input[data-doc]').forEach(function (inp) {
+      inp.onchange = async function () {
+        if (!inp.files[0]) return;
+        try { await enviarDocCredito(a.id, inp.getAttribute('data-doc'), inp.files[0]); toast('Documento anexado.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+      };
+    });
+    if ($('#arqOutro')) $('#arqOutro').onchange = async function () {
+      var f = $('#arqOutro').files[0];
+      if (!f) return;
+      try { await enviarDocCredito(a.id, $('#tipoOutro').value, f); toast('Documento anexado.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+    };
+    $$('[data-tirar-doc]').forEach(function (b) {
+      b.onclick = async function () {
+        if (!(await confirmar('Remover documento', 'O arquivo sai desta solicitação.', 'Remover', true))) return;
+        try { await api('DELETE', '/api/credito/analises/' + a.id + '/documentos/' + b.getAttribute('data-tirar-doc')); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+      };
+    });
+  }
+
+  /* ---------- resultado do motor ---------- */
+  function htmlResultadoCredito(r) {
+    if (!r) return '';
+    var st = r.status.codigo;
+    var cor = { aprovada: ['var(--green-bg)', '#bfe7d6', '#17734f'], ressalvas: ['var(--amber-bg)', '#ecd8a8', '#8a5a10'], reprovada: ['var(--red-bg)', '#f3c6c2', '#a3352c'], pendente: ['var(--teal-bg)', '#bfdde5', '#0f6878'] }[st];
+    var pr = r.precificacao;
+    var lista = function (titulo, itens, campo) { return itens && itens.length ? '<div><b style="font-size:13px">' + titulo + '</b><ul style="margin:6px 0 0;padding-left:18px;font-size:13px;font-weight:600;color:var(--ink-2)">' + itens.map(function (x) { return '<li>' + esc(x[campo] || x) + '</li>'; }).join('') + '</ul></div>' : ''; };
+    return '<div class="painel" style="background:' + cor[0] + ';border-color:' + cor[1] + ';padding:16px 18px;margin-bottom:16px"><div class="linha">' +
+      '<b style="font-family:var(--display);font-size:20px;color:' + cor[2] + '">' + esc(r.status.rotulo) + '</b>' +
+      (pr ? '<span style="font-weight:800">' + pctCr(pr.taxa_adm) + ' de taxa ADM + ' + reais(pr.boleto) + ' por boleto · ' + fmtNumCr(r.escopo.uh_escopo) + ' UH no escopo</span>' : '') +
+      '<span class="espaco"></span><span class="etiqueta cinza">Política ' + esc(r.politica_versao) + '</span></div>' +
+      (pr && pr.faixa ? '<div class="ajuda" style="margin-top:4px">Faixa “até ' + fmtNumCr(pr.faixa.ate) + '%” · janela ' + esc(r.janela.texto) + ' · proposta válida até ' + dataBr(r.validade_ate) + '</div>' : '') +
+      '<div class="pilha" style="gap:8px;margin-top:10px">' + lista('Por que reprova', r.reprovacoes, 'texto') + lista('Pendências', r.pendencias, 'mensagem') + lista('Ressalvas', r.ressalvas, 'texto') + '</div></div>' +
+      '<div class="tiles" style="margin-bottom:16px">' +
+      '<div class="tile"><span class="rot-tile">Inadimplência média</span><b>' + pctCr(r.inad_media) + '</b><span class="sec">' + (r.inad_media_rs != null ? reais(r.inad_media_rs) + ' por mês' : '') + '</span></div>' +
+      '<div class="tile"><span class="rot-tile">Receita líquida</span><b>' + (r.valores.receita_liquida != null ? reais(r.valores.receita_liquida) : '—') + '</b><span class="sec">bruta ' + (r.valores.receita_bruta != null ? reais(r.valores.receita_bruta) : '—') + '</span></div>' +
+      '<div class="tile"><span class="rot-tile">Receita MyBlue</span><b>' + (r.indicadores ? reais(r.indicadores.receita_myblue) : '—') + '</b><span class="sec">por mês</span></div>' +
+      '<div class="tile' + (r.indicadores && r.indicadores.exposicao > 40000 ? ' alerta' : '') + '"><span class="rot-tile">Exposição mensal</span><b>' + (r.indicadores ? reais(r.indicadores.exposicao) : '—') + '</b><span class="sec">' + (r.comparativo ? 'ganho anual ' + reais(r.comparativo.ganho_anual) : '') + '</span></div></div>' +
+      '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Memória de cálculo</h2></div><div class="tabela-wrap"><table><thead><tr><th>Competência</th><th>Vencimento</th><th class="num">Inadimplentes</th><th class="num">Valor em aberto</th><th class="num">% da receita bruta</th></tr></thead><tbody>' +
+      r.meses.map(function (x) { return '<tr><td><b>' + esc(x.rotulo) + '</b></td><td>' + dataBr(x.vencimento) + '</td><td class="num">' + x.inadimplentes + '</td><td class="num">' + reais(x.valor) + '</td><td class="num">' + pctCr(x.pct) + '</td></tr>'; }).join('') +
+      '</tbody></table></div><div class="corpo" style="border-top:1px solid var(--border);font-size:13px;font-weight:600;color:var(--ink-2)">Escopo: ' + fmtNumCr(r.escopo.uh_total) + ' UH (' + esc({ convencao: 'convenção', formulario: 'formulário' }[r.escopo.uh_fonte] || '—') + ') − ' + fmtNumCr(r.escopo.uh_isentas) + ' isentas − ' + r.escopo.exclusoes.length + ' fora do escopo = <b>' + fmtNumCr(r.escopo.uh_escopo) + ' UH</b>. Valor por UH ' + (r.valores.valor_por_uh != null ? reais(r.valores.valor_por_uh) : '—') + '.' +
+      (r.escopo.exclusoes.length ? '<div style="margin-top:6px">' + r.escopo.exclusoes.map(function (x) { return esc(x.unidade) + ' — ' + esc(x.motivo) + (x.detalhe ? ' (' + esc(x.detalhe) + ')' : '') + ', débito ' + reais(x.debito); }).join('; ') + '</div>' : '') + '</div></section>' +
+      (r.alertas.length ? '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Alertas</h2><span class="espaco"></span><span class="etiqueta ambar">' + r.alertas.length + '</span></div>' +
+        r.alertas.map(function (x) { return '<div class="alerta-item ' + (x.nivel === 'info' ? 'azul' : 'ambar') + '">' + (x.nivel === 'critico' ? '<span class="etiqueta vermelha">diretoria</span>' : '') + '<div><b>' + esc(x.mensagem) + '</b></div></div>'; }).join('') + '</section>' : '') +
+      (r.divergencias.length ? '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Divergência entre as fontes</h2></div><div class="corpo" style="font-size:13px;font-weight:600">' +
+        r.divergencias.map(function (x) { return '<div><b>' + esc(CAMPO_CR[x.campo] || x.campo) + '</b>: ' + esc(Object.keys(x.valores).map(function (k) { return (FONTE_CR[k] || k) + ' ' + x.valores[k]; }).join(' × ')) + ' — vale ' + esc(String(x.usado)) + ' (' + esc(FONTE_CR[x.fonte] || x.fonte) + ')</div>'; }).join('') + '</div></section>' : '') +
+      '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Consulta Assertiva (espólios)</h2></div><div class="corpo pilha"><div class="msg ' + (r.assertiva.indicada ? 'aviso' : 'ok') + '">' + esc(r.assertiva.texto) + '</div>' +
+      (r.assertiva.candidatos.length ? '<div class="tabela-wrap"><table><thead><tr><th>Unidade</th><th>Titular</th><th>Documento</th><th class="num">Taxas em aberto</th><th>Desde</th><th>Padrão</th></tr></thead><tbody>' +
+        r.assertiva.candidatos.map(function (x) { return '<tr><td><b>' + esc(x.unidade) + '</b></td><td>' + esc(x.titular) + '</td><td>' + esc(x.documento) + '</td><td class="num">' + x.taxas_em_aberto + '</td><td>' + esc(mesAno(x.desde + '-01')) + '</td><td>' +
+          (x.cessacao_abrupta ? '<span class="etiqueta ambar">parou de pagar de vez</span> ' : '') + (x.unidade_unica ? '<span class="etiqueta cinza">unidade única</span>' : '') + '</td></tr>'; }).join('') + '</tbody></table></div>' : '') + '</div></section>' +
+      (r.observacoes.length ? '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Observações automáticas</h2></div><div class="corpo"><ul style="margin:0;padding-left:18px;font-size:13px;font-weight:600;color:var(--ink-2)">' + r.observacoes.map(function (o) { return '<li>' + esc(o) + '</li>'; }).join('') + '</ul></div></section>' : '');
+  }
+
+  /* ---------- dados do analista ---------- */
+  var AJUSTES_CR = [['janela', 'Meses-base (mm/aaaa, mm/aaaa, mm/aaaa)'], ['uh_total', 'Nº de unidades'], ['taxa_ordinaria', 'Taxa ordinária (R$)'], ['dia_vencimento', 'Dia do vencimento'],
+    ['uh_isentas', 'Unidades isentas'], ['taxa_adm', 'Taxa ADM acima da tabela (%)'], ['boleto', 'Boleto acima da tabela (R$)']];
+  function linhasCr(lista, campos) { return (lista || []).map(function (x) { return campos.map(function (c) { return x[c] || ''; }).join(' — '); }).join('\n'); }
+  function lerLinhasCr(txt, campos) {
+    return String(txt || '').split(/\n/).map(function (l) { return l.trim(); }).filter(Boolean).map(function (l) {
+      var p = l.split(/\s+[—–-]\s+|;/); var o = {}; campos.forEach(function (c, i) { o[c] = (p[i] || '').trim(); }); return o;
+    });
+  }
+  function htmlDadosAnalista(d, editavel) {
+    var rel = d.relatorio || {};
+    var conv = d.convencao || {};
+    var aj = d.ajustes || {};
+    var tx = d.textos || {};
+    var dis = editavel ? '' : ' disabled';
+    return '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Relatório de inadimplência</h2><span class="espaco"></span><span class="etiqueta ' + ((rel.unidades || []).length || rel.sem_inadimplencia ? 'verde' : 'ambar') + '">' +
+      ((rel.unidades || []).length ? (rel.unidades || []).length + ' unidades lançadas' : rel.sem_inadimplencia ? 'sem inadimplência' : 'falta lançar') + '</span></div><div class="corpo pilha">' +
+      '<div class="grade-4">' + campoCr('dEmis', 'Data de emissão do relatório', rel.data_emissao || '', { tipo: 'date', dis: !editavel }) + campoCr('dIni', 'Primeira competência do relatório', rel.periodo_inicio || '', { tipo: 'month', dis: !editavel }) +
+      '<label class="linha" style="font-weight:700;font-size:13px;align-self:end"><input type="checkbox" id="dComp"' + (rel.tem_competencia !== false ? ' checked' : '') + dis + '> detalhado por competência</label>' +
+      '<label class="linha" style="font-weight:700;font-size:13px;align-self:end"><input type="checkbox" id="dNomes"' + (rel.tem_nomes !== false ? ' checked' : '') + dis + '> traz o nome dos devedores</label></div>' +
+      (editavel ? '<div><label class="rot" for="dCola">Colar a planilha (unidade ; titular ; CPF/CNPJ ; competência ; tipo ; valor ; vencimento)</label><textarea class="campo" id="dCola" rows="5" placeholder="A-101;Fulano;111.111.111-11;04/2026;Taxa ordinária;1.840,00"></textarea>' +
+        '<div class="linha" style="margin-top:8px"><button type="button" class="btn ghost sm" id="btColar">Ler planilha</button><label class="linha" style="font-weight:700;font-size:13px"><input type="checkbox" id="dSemInad"' + (rel.sem_inadimplencia ? ' checked' : '') + '> não há inadimplência no período</label><span class="ajuda" id="dColaInfo" style="margin:0"></span></div></div>' : '') +
+      '</div></section>' +
+      '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Convenção</h2></div><div class="corpo grade-4">' +
+      selCr('dReg', 'Registro', conv.registro || '', [['', 'Escolha'], ['RI', 'Registro de Imóveis (inclui Livro 3)'], ['cartorio', 'Cartório (sem especificar)'], ['RTD', 'Só Títulos e Documentos (RTD)'], ['nenhum', 'Sem registro']], !editavel) +
+      campoCr('dCuh', 'Nº de unidades na convenção', conv.uh || '', { dis: !editavel }) + campoCr('dMulta', 'Multa por atraso (%)', fmtNumCr(conv.multa_pct), { dis: !editavel }) + campoCr('dForo', 'Foro', conv.foro || '', { dis: !editavel }) +
+      campoCr('dCart', 'Cartório e matrícula', conv.cartorio || '', { dis: !editavel, span: 2 }) + campoCr('dClaus', 'Cláusula que limita garantidora (se houver)', conv.clausula_restritiva || '', { dis: !editavel, span: 2 }) + '</div></section>' +
+      '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Espólios, retomadas e condições</h2></div><div class="corpo grade-3">' +
+      '<div><label class="rot" for="dEsp">Espólios confirmados (Assertiva) — um por linha: unidade — nome</label><textarea class="campo" id="dEsp" rows="3"' + dis + '>' + esc(linhasCr(d.espolios, ['unidade', 'nome'])) + '</textarea></div>' +
+      '<div><label class="rot" for="dRet">Retomadas Caixa/banco — unidade — banco</label><textarea class="campo" id="dRet" rows="3"' + dis + '>' + esc(linhasCr(d.retomadas, ['unidade', 'banco'])) + '</textarea></div>' +
+      '<div><label class="rot" for="dAban">Abandono ou litígio — unidade — motivo</label><textarea class="campo" id="dAban" rows="3"' + dis + '>' + esc(linhasCr(d.abandonos, ['unidade', 'motivo'])) + '</textarea></div>' +
+      '<div style="grid-column:span 2"><label class="rot" for="dRess">Ressalvas do analista — ressalva — justificativa operacional</label><textarea class="campo" id="dRess" rows="3"' + dis + '>' + esc(linhasCr(d.ressalvas, ['texto', 'justificativa'])) + '</textarea></div>' +
+      '<div><label class="rot" for="dEstr">Condição estrutural que reprova (concordata, fraude, processo relevante)</label><textarea class="campo" id="dEstr" rows="3"' + dis + '>' + esc(d.condicao_estrutural || '') + '</textarea></div></div></section>' +
+      '<details class="painel" style="margin-bottom:16px"' + (Object.keys(aj).length ? ' open' : '') + '><summary class="cab-painel" style="cursor:pointer"><h2 style="display:inline">Ajustes do analista</h2> <span class="ajuda" style="margin:0">sempre com justificativa; no retorno, a nota não diz quem ajustou</span></summary><div class="corpo pilha">' +
+      AJUSTES_CR.map(function (x) { var a = aj[x[0]] || {}; return '<div class="grade-2">' + campoCr('aj_' + x[0], x[1], Array.isArray(a.valor) ? a.valor.join(', ') : (a.valor == null ? '' : a.valor), { dis: !editavel }) + campoCr('ajj_' + x[0], 'Justificativa', a.justificativa || '', { dis: !editavel }) + '</div>'; }).join('') + '</div></details>' +
+      '<details class="painel" style="margin-bottom:16px"' + (tx.observacoes_status || tx.observacoes_juridicas || tx.proximos_passos ? ' open' : '') + '><summary class="cab-painel" style="cursor:pointer"><h2 style="display:inline">Textos do retorno</h2> <span class="ajuda" style="margin:0">em branco, o portal escreve sozinho a partir do cálculo</span></summary><div class="corpo pilha">' +
+      '<div><label class="rot" for="tObs">Observações da análise (página 1)</label><textarea class="campo" id="tObs" rows="4"' + dis + '>' + esc(tx.observacoes_status || '') + '</textarea></div>' +
+      '<div class="grade-2"><div><label class="rot" for="tJur">Observações jurídicas — uma por linha</label><textarea class="campo" id="tJur" rows="5"' + dis + '>' + esc((tx.observacoes_juridicas || []).join('\n')) + '</textarea></div>' +
+      '<div><label class="rot" for="tPas">Próximos passos — um por linha</label><textarea class="campo" id="tPas" rows="5"' + dis + '>' + esc((tx.proximos_passos || []).join('\n')) + '</textarea></div></div></div></details>';
+  }
+  function lerDadosAnalista(d, unidades) {
+    var v = function (id) { var el = $('#' + id); return el ? el.value.trim() : ''; };
+    var rel = Object.assign({}, d.relatorio || {}, { data_emissao: v('dEmis'), periodo_inicio: v('dIni'), tem_competencia: $('#dComp').checked, tem_nomes: $('#dNomes').checked, sem_inadimplencia: !!($('#dSemInad') && $('#dSemInad').checked) });
+    if (unidades) rel.unidades = unidades;
+    var ajustes = {};
+    AJUSTES_CR.forEach(function (x) {
+      var val = v('aj_' + x[0]);
+      if (!val) return;
+      ajustes[x[0]] = { valor: x[0] === 'janela' ? val.split(/[,;\s]+/).filter(Boolean) : numCr(val), justificativa: v('ajj_' + x[0]) };
+    });
+    var linhas = function (id) { return v(id).split(/\n/).map(function (l) { return l.trim(); }).filter(Boolean); };
+    var textos = { observacoes_status: v('tObs') || undefined, observacoes_juridicas: linhas('tJur').length ? linhas('tJur') : undefined, proximos_passos: linhas('tPas').length ? linhas('tPas') : undefined };
+    return Object.assign({}, d, {
+      relatorio: rel,
+      convencao: { registro: v('dReg'), uh: numCr(v('dCuh')), multa_pct: numCr(v('dMulta')), foro: v('dForo'), cartorio: v('dCart'), clausula_restritiva: v('dClaus') },
+      espolios: lerLinhasCr(v('dEsp'), ['unidade', 'nome']), retomadas: lerLinhasCr(v('dRet'), ['unidade', 'banco']), abandonos: lerLinhasCr(v('dAban'), ['unidade', 'motivo']),
+      ressalvas: lerLinhasCr(v('dRess'), ['texto', 'justificativa']), condicao_estrutural: v('dEstr'), ajustes: ajustes, textos: textos,
+    });
+  }
+
+  /* ---------- detalhe ---------- */
+  async function paginaAnaliseCredito(id) {
+    definirBarra('<span class="setor">Análise de Crédito</span><span class="sep">/</span><span class="nome">…</span>');
+    $('#conteudo').innerHTML = carregandoHtml();
+    var d, m;
+    try { d = await api('GET', '/api/credito/analises/' + id); m = await carregarMetaCredito(); } catch (e) {
+      $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">' + esc(e.message) + '<br><a class="btn ghost" style="margin-top:14px" href="#/credito">Voltar</a></div></div>';
+      return;
+    }
+    var a = d.analise, pd = d.pode, f = a.formulario || {};
+    var recarregar = function () { paginaAnaliseCredito(id); atualizarCredito(); };
+    var acoes = '<a class="btn ghost sm" href="#/credito">Voltar</a>';
+    if (pd.assumir) acoes += '<button class="btn primary sm" id="btAssumirCr">' + (a.analista_id ? 'Assumir para mim' : 'Assumir') + '</button>';
+    if (pd.analisar) {
+      acoes += '<button class="btn ghost sm" id="btPendCr">Devolver com pendência</button>';
+      if (a.resultado_motor && a.resultado_motor.diretoria && a.etapa === 'em_analise') acoes += '<button class="btn ghost sm" id="btDirCr">Enviar à diretoria</button>';
+      if (a.resultado_motor) acoes += '<a class="btn ghost sm" href="/api/credito/analises/' + a.id + '/previa.pdf" target="_blank" rel="noopener">Prévia do retorno</a>';
+      acoes += '<button class="btn primary sm" id="btLibCr">Validar e liberar</button>';
+    }
+    if (pd.chancelar) acoes += '<button class="btn ghost sm" id="btNaoChCr">Não chancelar</button><button class="btn primary sm" id="btChCr">Chancelar</button>';
+    if (pd.reanalise) acoes += '<button class="btn primary sm" id="btReCr">Solicitar reanálise</button>';
+    definirBarra('<span class="setor">Análise de Crédito</span><span class="sep">/</span><span class="nome">' + esc(a.protocolo || 'Rascunho') + '</span>', acoes);
+
+    var ultimaPend = d.eventos.filter(function (e) { return e.tipo === 'pendencia'; }).pop();
+    var retornoPdf = d.documentos.filter(function (x) { return x.tipo === 'retorno_pdf' && !x.substituido_em; })[0];
+    var cab = '<div class="linha" style="align-items:flex-start;margin-bottom:16px"><div style="flex:1 1 420px">' +
+      '<div class="linha" style="margin-bottom:6px">' + etqCr(ETAPA_CR, a.etapa) + (a.resultado && (pd.interno || a.etapa === 'enviada') ? etqCr(RES_CR, a.resultado) : '') +
+      (a.origem_protocolo ? '<a class="etiqueta cinza" href="#/credito/' + a.origem_id + '">reanálise de ' + esc(a.origem_protocolo) + '</a>' : '') +
+      d.reanalises.map(function (x) { return '<a class="etiqueta cinza" href="#/credito/' + x.id + '">reanálise: ' + esc(x.protocolo || 'rascunho') + '</a>'; }).join('') + '</div>' +
+      '<h1>' + esc(a.condominio || 'Nova solicitação') + '</h1><p class="sub" style="margin:0">' + esc([a.cnpj, [a.cidade, a.uf].filter(Boolean).join('/'), a.executivo_nome ? 'Executivo: ' + a.executivo_nome : '', a.analista_nome ? 'Analista: ' + a.analista_nome : ''].filter(Boolean).join(' · ')) + '</p></div>' +
+      '<dl class="info-ticket" style="min-width:260px">' + (a.protocolo ? '<dt>Protocolo</dt><dd>' + esc(a.protocolo) + '</dd>' : '') +
+      (a.documentacao_completa_em ? '<dt>Documentação completa</dt><dd>' + dataHoraCr(a.documentacao_completa_em) + '</dd>' : '') +
+      (a.prazo_executivo && ['enviada', 'cancelada'].indexOf(a.etapa) < 0 ? '<dt>Resposta ao executivo</dt><dd>' + prazoCr(a.prazo_executivo, a.etapa) + '</dd>' : '') +
+      (pd.interno && a.prazo_analista ? '<dt>Prazo do analista</dt><dd>' + prazoCr(a.prazo_analista, a.etapa) + '</dd>' : '') +
+      (a.motivo_reanalise ? '<dt>Motivo da reanálise</dt><dd>' + esc(a.motivo_reanalise) + '</dd>' : '') + '</dl></div>';
+
+    var html = '<div class="pagina">' + cab;
+    if (a.etapa === 'pendencia' && ultimaPend) html += '<div class="msg aviso" style="margin-bottom:16px;white-space:pre-wrap">' + esc(ultimaPend.detalhe.mensagem || '') + '</div>';
+    if (a.etapa === 'enviada') {
+      var rm = a.resultado_motor;
+      html += '<div class="painel" style="padding:18px;margin-bottom:16px"><div class="linha"><b style="font-family:var(--display);font-size:18px">Retorno enviado em ' + dataHoraCr(a.enviada_em) + '</b>' +
+        (rm && rm.precificacao ? '<span style="font-weight:800">' + esc(rm.status.rotulo) + ' — ' + pctCr(rm.precificacao.taxa_adm) + ' ADM + ' + reais(rm.precificacao.boleto) + '/boleto · ' + fmtNumCr(rm.escopo.uh_escopo) + ' UH no escopo</span>' : '') +
+        '<span class="espaco"></span>' + (retornoPdf ? '<a class="btn primary" href="/api/credito/analises/' + a.id + '/documentos/' + retornoPdf.id + '?ver=1" target="_blank" rel="noopener">' + IC.documento + 'Abrir o PDF</a>' : '') + '</div>' +
+        (a.validade_ate ? '<div class="ajuda">Proposta válida até ' + dataBr(String(a.validade_ate).slice(0, 10)) + '. Depois disso, ou se o condomínio mudar desconto, taxa extra ou inadimplência, peça reanálise.</div>' : '') + '</div>';
+    }
+    if (pd.editar) {
+      html += (d.faltas.length ? '<div class="msg aviso" style="margin-bottom:16px"><b>Para enviar, falta:</b><ul style="margin:6px 0 0;padding-left:18px">' + d.faltas.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>' : '') +
+        '<div class="pilha" style="gap:18px">' + htmlFormCredito(f, a, m, false) + htmlDocsCredito(d.documentos, a, pd.documentos, m, f.sem_convencao, true) +
+        '<div class="linha" style="justify-content:flex-end"><span class="ajuda" style="flex:1 1 320px;margin:0">Ao enviar, o portal confere o que falta. Se estiver tudo certo, gera o protocolo e o prazo começa a contar.</span>' +
+        (pd.cancelar ? '<button class="btn danger" id="btCancCr">Cancelar solicitação</button>' : '') + '<button class="btn ghost" id="btSalvarCr">Salvar rascunho</button><button class="btn primary" id="btEnviarCr">' + (a.etapa === 'pendencia' ? 'Reenviar para análise' : 'Enviar para análise') + '</button></div></div>';
+    } else if (pd.interno && a.etapa !== 'rascunho') {
+      html += htmlResultadoCredito(a.resultado_motor) +
+        (pd.analisar ? htmlDadosAnalista(a.dados_analista || {}, true) + '<div class="linha" style="justify-content:flex-end;margin-bottom:18px"><button class="btn ghost" id="btSalvarDadosCr">Salvar dados</button><button class="btn primary" id="btCalcCr">Salvar e calcular</button></div>'
+          : a.dados_analista ? htmlDadosAnalista(a.dados_analista, false) : '') +
+        '<details class="painel" style="margin-bottom:16px"><summary class="cab-painel" style="cursor:pointer"><h2 style="display:inline">Formulário do executivo</h2></summary><div class="corpo pilha" style="gap:18px">' + htmlFormCredito(f, a, m, true) + '</div></details>' +
+        htmlDocsCredito(d.documentos, a, pd.documentos, m, f.sem_convencao);
+    } else {
+      html += htmlDocsCredito(d.documentos, a, false, m, f.sem_convencao);
+    }
+    html += '<section class="painel" style="margin-top:16px"><div class="cab-painel"><h2>Histórico</h2></div><div class="corpo pilha" style="gap:8px;font-size:13px;font-weight:600;color:var(--ink-2)">' +
+      d.eventos.map(function (e) {
+        var x = e.detalhe || {};
+        var extra = e.tipo === 'documento' || e.tipo === 'documento_removido' ? ': ' + esc(x.nome) : e.tipo === 'ajuste' ? ': ' + esc(x.campo) + ' → ' + esc(Array.isArray(x.valor) ? x.valor.join(', ') : x.valor) + ' (' + esc(x.justificativa) + ')'
+          : e.tipo === 'motor' ? ': ' + esc(x.status) + (x.inad_media != null ? ', ' + pctCr(x.inad_media) : '') : e.tipo === 'enviada' ? ' (' + esc(x.protocolo) + ')' : (e.tipo === 'chancela_recusada' || e.tipo === 'chancelada') && x.observacao ? ': ' + esc(x.observacao) : '';
+        return '<div><b style="color:var(--ink)">' + dataHoraCr(e.criado_em) + '</b> · ' + esc(e.usuario_nome || 'Sistema') + ' ' + (EVENTO_CR[e.tipo] || esc(e.tipo)) + extra + '</div>';
+      }).join('') + '</div></section></div>';
+    $('#conteudo').innerHTML = html;
+    ligarDocsCredito(a, recarregar);
+
+    if (pd.editar) {
+      $('#btExtra').onclick = function () { $('#tbExtras').insertAdjacentHTML('beforeend', linhaExtraCr()); ligarTirar(); };
+      var ligarTirar = function () { $$('#tbExtras [data-tirar]').forEach(function (b) { b.onclick = function () { b.closest('tr').remove(); }; }); };
+      ligarTirar();
+      var salvar = async function () {
+        var corpo = { formulario: lerFormCredito() };
+        if ($('#fExec')) corpo.executivo_id = Number($('#fExec').value);
+        await api('PATCH', '/api/credito/analises/' + a.id, corpo);
+      };
+      $('#btSalvarCr').onclick = async function () { try { await salvar(); toast('Rascunho salvo.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
+      $('#btEnviarCr').onclick = async function () {
+        try {
+          await salvar();
+          var r = await api('POST', '/api/credito/analises/' + a.id + '/enviar', {});
+          toast('Enviado: protocolo ' + r.protocolo + '.', 'ok');
+          recarregar();
+        } catch (e) { toast(e.message, 'erro'); recarregar(); }
+      };
+      if ($('#btCancCr')) $('#btCancCr').onclick = async function () {
+        if (!(await confirmar('Cancelar solicitação', 'A solicitação fica no histórico como cancelada.', 'Cancelar solicitação', true))) return;
+        try { await api('POST', '/api/credito/analises/' + a.id + '/cancelar', {}); location.hash = '#/credito'; } catch (e) { toast(e.message, 'erro'); }
+      };
+    }
+    if ($('#btAssumirCr')) $('#btAssumirCr').onclick = async function () { try { await api('POST', '/api/credito/analises/' + a.id + '/assumir', {}); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
+    if (pd.analisar) {
+      var unidadesLidas = null;
+      var salvarDados = async function () { await api('PATCH', '/api/credito/analises/' + a.id, { dados_analista: lerDadosAnalista(a.dados_analista || {}, unidadesLidas) }); };
+      $('#btColar').onclick = async function () {
+        try {
+          var r = await api('POST', '/api/credito/analises/' + a.id + '/relatorio-colado', { texto: $('#dCola').value });
+          unidadesLidas = r.unidades;
+          $('#dColaInfo').textContent = r.linhas + ' lançamentos de ' + r.unidades.length + ' unidades lidos' + (r.erros.length ? '; ' + r.erros.length + ' linha(s) com problema: ' + r.erros.slice(0, 3).join(' ') : '') + '. Salve para guardar.';
+        } catch (e) { toast(e.message, 'erro'); }
+      };
+      $('#btSalvarDadosCr').onclick = async function () { try { await salvarDados(); toast('Dados salvos.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
+      $('#btCalcCr').onclick = async function () {
+        try { await salvarDados(); await api('POST', '/api/credito/analises/' + a.id + '/calcular', {}); toast('Análise calculada.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+      };
+      $('#btPendCr').onclick = function () {
+        var sugestao = a.resultado_motor ? a.resultado_motor.pendencias.map(function (x) { return x.mensagem; }).join('\n') : '';
+        var mo = modal({ titulo: 'Devolver ao executivo com pendência', corpo: '<label class="rot" for="mPend">O que falta — um item por linha</label><textarea class="campo" id="mPend" rows="6">' + esc(sugestao) + '</textarea><div class="ajuda">O executivo recebe a lista no portal e por e-mail. O prazo para e volta a contar quando ele reenviar.</div>',
+          pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mPendOk">Devolver</button>' });
+        $('#mPendOk', mo).onclick = async function () {
+          try { await api('POST', '/api/credito/analises/' + a.id + '/pendencia', { itens: $('#mPend', mo).value.split(/\n/) }); mo.fechar(); toast('Devolvida ao executivo.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+        };
+      };
+      if ($('#btDirCr')) $('#btDirCr').onclick = async function () {
+        if (!(await confirmar('Enviar à diretoria', 'A análise vai para a chancela do CEO e do Diretor Comercial. O prazo de resposta ao executivo passa para 48h.', 'Enviar'))) return;
+        try { await salvarDados(); await api('POST', '/api/credito/analises/' + a.id + '/diretoria', {}); toast('Enviada à diretoria.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+      };
+      $('#btLibCr').onclick = async function () {
+        if (!(await confirmar('Validar e liberar o retorno', 'O portal recalcula, gera o PDF assinado por você e avisa o executivo. Confira antes a prévia do retorno.', 'Liberar'))) return;
+        try {
+          await salvarDados();
+          var r = await api('POST', '/api/credito/analises/' + a.id + '/liberar', {});
+          modal({ titulo: 'Retorno liberado', largo: true, corpo: '<p class="ajuda" style="margin-top:0">O executivo já foi avisado. Texto do e-mail de entrega, se quiser enviar também por fora:</p>' +
+            '<label class="rot">Assunto</label><input class="campo" readonly value="' + esc(r.email.assunto) + '"><label class="rot" style="margin-top:10px">Mensagem</label><textarea class="campo" rows="9" readonly>' + esc(r.email.corpo) + '</textarea>' +
+            '<label class="rot" style="margin-top:10px">Resumo executivo</label><textarea class="campo" rows="4" readonly>' + esc(r.resumo) + '</textarea>', aoFechar: recarregar });
+        } catch (e) { toast(e.message, 'erro'); }
+      };
+    }
+    if (pd.chancelar) {
+      var chancela = function (aprovar) {
+        var mo = modal({ titulo: aprovar ? 'Chancelar a análise' : 'Não chancelar', corpo: '<label class="rot" for="mCh">' + (aprovar ? 'Observação (opcional)' : 'Motivo') + '</label><textarea class="campo" id="mCh" rows="4"></textarea>',
+          pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn ' + (aprovar ? 'primary' : 'danger') + '" id="mChOk">' + (aprovar ? 'Chancelar' : 'Não chancelar') + '</button>' });
+        $('#mChOk', mo).onclick = async function () {
+          try { await api('POST', '/api/credito/analises/' + a.id + '/chancela', { aprovar: aprovar, observacao: $('#mCh', mo).value }); mo.fechar(); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+        };
+      };
+      $('#btChCr').onclick = function () { chancela(true); };
+      $('#btNaoChCr').onclick = function () { chancela(false); };
+    }
+    if (pd.reanalise) {
+      $('#btReCr').onclick = function () {
+        var mo = modal({ titulo: 'Solicitar reanálise de crédito', corpo: '<label class="rot" for="mRe">Motivo</label><select class="campo" id="mReT"><option>Relatório de inadimplência novo</option><option>Proposta vencida (30 dias)</option><option>Mudou o desconto de pontualidade ou a taxa extra</option><option>Contestação do resultado</option><option>Outro</option></select>' +
+          '<textarea class="campo" id="mRe" rows="3" style="margin-top:8px" placeholder="Detalhe (opcional)"></textarea><div class="ajuda">O formulário vem preenchido e a convenção vai junto. Anexe o relatório novo e os documentos que tiver; a reanálise recebe um protocolo novo, ligado a este.</div>',
+          pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mReOk">Criar reanálise</button>' });
+        $('#mReOk', mo).onclick = async function () {
+          var motivo = $('#mReT', mo).value + ($('#mRe', mo).value.trim() ? ': ' + $('#mRe', mo).value.trim() : '');
+          try { var r = await api('POST', '/api/credito/analises/' + a.id + '/reanalise', { motivo: motivo }); mo.fechar(); location.hash = '#/credito/' + r.id; } catch (e) { toast(e.message, 'erro'); }
+        };
+      };
+    }
+  }
+
+  /* ---------- administração ---------- */
+  async function abaExecutivosCredito() {
+    var j;
+    try { j = await api('GET', '/api/credito/executivos'); } catch (e) { $('#corpoCr').innerHTML = '<div class="vazio">' + esc(e.message) + '</div>'; return; }
+    $('#corpoCr').innerHTML = '<div class="painel"><div class="cab-painel"><h2>Executivos de negócios</h2><span class="ajuda" style="margin:0">Quem está ligado a um usuário do portal pede análises e acompanha as suas. Boleto vazio segue a política (R$ 2,00; Maranhão R$ 5,50).</span><span class="espaco"></span><button class="btn primary sm" id="btNovoEx">' + IC.mais + 'Novo executivo</button></div>' +
+      '<div class="tabela-wrap"><table><thead><tr><th>Nome</th><th>UF / região</th><th>Boleto próprio</th><th>Usuário do portal</th><th>Situação</th></tr></thead><tbody>' +
+      j.executivos.map(function (e) { return '<tr class="clicavel" data-ex="' + e.id + '"><td><b>' + esc(e.nome) + '</b></td><td>' + esc([e.uf, e.regiao].filter(Boolean).join(' · ') || '—') + '</td><td>' + (e.boleto != null ? reais(e.boleto) : '<span class="sec">da política</span>') + '</td><td>' + esc(e.usuario_nome || '—') + '</td><td>' + (e.ativo ? '<span class="etiqueta verde">ativo</span>' : '<span class="etiqueta cinza">inativo</span>') + '</td></tr>'; }).join('') +
+      '</tbody></table></div></div>';
+    function editar(e) {
+      e = e || { ativo: true };
+      var mo = modal({ titulo: e.id ? 'Executivo' : 'Novo executivo', corpo: '<div class="grade-2">' + campoCr('xNome', 'Nome', e.nome) + campoCr('xEmail', 'E-mail', e.email) + campoCr('xUf', 'UF', e.uf) + campoCr('xReg', 'Região', e.regiao) +
+        campoCr('xBol', 'Boleto próprio (R$)', e.boleto != null ? fmtNumCr(e.boleto) : '', { ph: 'vazio = política' }) +
+        selCr('xUsu', 'Usuário do portal', e.usuario_id || '', [['', '— nenhum —']].concat(j.usuarios.map(function (u) { return [u.id, u.nome + ' · ' + u.email]; }))) + '</div>' +
+        '<label class="linha" style="font-weight:700;margin-top:12px"><input type="checkbox" id="xAtivo"' + (e.ativo ? ' checked' : '') + '> ativo</label>',
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="xOk">Salvar</button>' });
+      $('#xOk', mo).onclick = async function () {
+        var corpo = { nome: $('#xNome', mo).value, email: $('#xEmail', mo).value, uf: $('#xUf', mo).value, regiao: $('#xReg', mo).value, boleto: $('#xBol', mo).value.trim() ? numCr($('#xBol', mo).value) : null, usuario_id: Number($('#xUsu', mo).value) || null, ativo: $('#xAtivo', mo).checked };
+        try { await api(e.id ? 'PATCH' : 'POST', '/api/credito/executivos' + (e.id ? '/' + e.id : ''), corpo); mo.fechar(); metaCredito = null; abaExecutivosCredito(); } catch (er) { toast(er.message, 'erro'); }
+      };
+    }
+    $('#btNovoEx').onclick = function () { editar(); };
+    $$('[data-ex]').forEach(function (tr) { tr.onclick = function () { editar(j.executivos.find(function (x) { return String(x.id) === tr.getAttribute('data-ex'); })); }; });
+  }
+
+  async function abaChancelaCredito() {
+    var j;
+    try { j = await api('GET', '/api/credito/diretoria'); } catch (e) { $('#corpoCr').innerHTML = '<div class="vazio">' + esc(e.message) + '</div>'; return; }
+    $('#corpoCr').innerHTML = '<div class="painel"><div class="cab-painel"><h2>Quem chancela (diretoria)</h2><span class="ajuda" style="margin:0">Análises com inadimplência entre 35% e 40% só vão ao executivo depois da chancela. Marque o CEO e o Diretor Comercial.</span></div>' +
+      '<div class="corpo"><div class="caixa-opcoes">' + j.usuarios.map(function (u) { return '<label><input type="checkbox" value="' + u.id + '"' + (j.pessoas.indexOf(u.id) >= 0 ? ' checked' : '') + '> ' + esc(u.nome) + ' <span class="sec">' + esc(u.email) + '</span></label>'; }).join('') + '</div>' +
+      '<div class="linha" style="justify-content:flex-end;margin-top:12px"><button class="btn primary" id="btChSalvar">Salvar</button></div></div></div>';
+    $('#btChSalvar').onclick = async function () {
+      var pessoas = $$('#corpoCr .caixa-opcoes input:checked').map(function (i) { return Number(i.value); });
+      try { await api('PUT', '/api/credito/diretoria', { pessoas: pessoas }); toast('Diretoria salva.', 'ok'); } catch (e) { toast(e.message, 'erro'); }
+    };
+  }
+
+  async function abaPoliticaCredito(p) {
+    var j;
+    try { j = await api('GET', '/api/credito/politica'); } catch (e) { $('#corpoCr').innerHTML = '<div class="vazio">' + esc(e.message) + '</div>'; return; }
+    var a = j.ativa;
+    var PARAMS = [['boleto_padrao', 'Boleto padrão (R$)'], ['receita_minima', 'Receita líquida mínima (R$)'], ['inad_diretoria', 'Diretoria acima de (%)'], ['inad_reprovacao', 'Reprova acima de (%)'],
+      ['exposicao_maxima', 'Exposição máxima (R$)'], ['exposicao_inad_minima', '… com inadimplência acima de (%)'], ['dias_apos_vencimento', 'Dias após o vencimento (mais de)'], ['extra_aviso_pct', 'Aviso de taxa extra acima de (% da ordinária)'],
+      ['assertiva_min_taxas', 'Assertiva: taxas em aberto (mínimo)'], ['validade_dias', 'Validade da proposta (dias)'], ['sla_horas', 'Prazo ao executivo (h)'], ['sla_horas_diretoria', 'Prazo com diretoria (h)'], ['prazo_analista_corte', 'Corte do prazo do analista (hora)']];
+    var ed = p.admin;
+    $('#corpoCr').innerHTML = '<div class="grade-2" style="align-items:start"><div class="painel"><div class="cab-painel"><h2>Faixas de precificação</h2><span class="ajuda" style="margin:0">teto inclusivo · boleto ' + reais(a.boleto_padrao) + (a.boleto_por_uf && a.boleto_por_uf.MA ? ' (MA ' + reais(a.boleto_por_uf.MA) + ')' : '') + '</span></div>' +
+      '<div class="tabela-wrap"><table><thead><tr><th>Inadimplência até (%)</th><th>Taxa ADM (%)</th></tr></thead><tbody id="tbFaixas">' +
+      a.faixas.map(function (f) { return '<tr><td>' + (ed ? '<input class="campo" data-f="ate" value="' + fmtNumCr(f.ate) + '">' : fmtNumCr(f.ate)) + '</td><td>' + (ed ? '<input class="campo" data-f="taxa" value="' + fmtNumCr(f.taxa_adm) + '">' : pctCr(f.taxa_adm)) + '</td></tr>'; }).join('') + '</tbody></table></div></div>' +
+      '<div class="pilha"><div class="painel"><div class="cab-painel"><h2>Parâmetros</h2><span class="espaco"></span><span class="etiqueta azul">versão ' + esc(a.versao) + '</span></div><div class="corpo grade-2">' +
+      PARAMS.map(function (x) { return campoCr('pp_' + x[0], x[1], fmtNumCr(a[x[0]]), { dis: !ed }); }).join('') + '</div>' +
+      (ed ? '<div class="corpo" style="border-top:1px solid var(--border)"><div class="grade-2">' + campoCr('ppVer', 'Nome da nova versão', '', { ph: 'ex.: 1.3' }) + campoCr('ppDesc', 'O que mudou', '') + '</div>' +
+        '<div class="linha" style="justify-content:flex-end;margin-top:12px"><button class="btn primary" id="btPolSalvar">Salvar como nova versão</button></div><div class="ajuda">As análises já calculadas guardam a versão usada; as próximas usam a nova.</div></div>' : '') + '</div>' +
+      '<div class="painel"><div class="cab-painel"><h2>Versões</h2></div><div class="tabela-wrap"><table><tbody>' + j.versoes.map(function (v) { return '<tr><td><b>' + esc(v.versao) + '</b>' + (v.ativa ? ' <span class="etiqueta verde">em uso</span>' : '') + '<span class="sec">' + esc(v.descricao) + '</span></td><td>' + quando(v.criado_em) + '</td></tr>'; }).join('') + '</tbody></table></div></div></div></div>';
+    if (ed) $('#btPolSalvar').onclick = async function () {
+      var parametros = {};
+      PARAMS.forEach(function (x) { var n = numCr($('#pp_' + x[0]).value); if (n != null) parametros[x[0]] = n; });
+      var faixas = $$('#tbFaixas tr').map(function (tr) { return { ate: numCr($('[data-f=ate]', tr).value), taxa_adm: numCr($('[data-f=taxa]', tr).value) }; });
+      try { await api('POST', '/api/credito/politica', { versao: $('#ppVer').value, descricao: $('#ppDesc').value, parametros: parametros, faixas: faixas }); toast('Nova versão da política em uso.', 'ok'); abaPoliticaCredito(p); } catch (e) { toast(e.message, 'erro'); }
+    };
+  }
+
   async function iniciar() {
     try {
       var r = await fetch('/api/auth/eu', { credentials: 'same-origin' });
@@ -3266,13 +3825,14 @@
       return;
     }
     try { await carregarMeta(); } catch (e) { /* a central carrega depois */ }
+    try { resumoCredito = await api('GET', '/api/credito/resumo'); } catch (e) { /* aparece no próximo ciclo */ }
     montarCasca();
     carregarTutoriais();
     atualizarResumo();
     atualizarComissao();
     buscarAvisos();
     $('#btSino').onclick = abrirAvisos;
-    setInterval(function () { atualizarResumo(); atualizarComissao(); buscarAvisos(); }, 30 * 1000);
+    setInterval(function () { atualizarResumo(); atualizarComissao(); atualizarCredito(); buscarAvisos(); }, 30 * 1000);
     window.addEventListener('hashchange', rotear);
     rotear();
   }
