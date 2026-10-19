@@ -10,16 +10,21 @@ function hashSenha(senha) {
   return `scrypt$${SCRYPT.N}$${SCRYPT.r}$${SCRYPT.p}$${sal.toString('base64')}$${h.toString('base64')}`;
 }
 
+/* Confere a senha sem travar o servidor: o cálculo (proposital, ~50 ms) roda fora da linha principal do Node,
+   então tentativas de login em série não deixam o portal lento para quem já está usando. */
 function conferirSenha(senha, armazenado) {
-  try {
-    const [alg, N, r, p, sal, h] = String(armazenado).split('$');
-    if (alg !== 'scrypt') return false;
-    const esperado = Buffer.from(h, 'base64');
-    const calc = crypto.scryptSync(String(senha), Buffer.from(sal, 'base64'), esperado.length, { N: +N, r: +r, p: +p });
-    return crypto.timingSafeEqual(esperado, calc);
-  } catch {
-    return false;
-  }
+  return new Promise((ok) => {
+    try {
+      const [alg, N, r, p, sal, h] = String(armazenado).split('$');
+      if (alg !== 'scrypt') return ok(false);
+      const esperado = Buffer.from(h, 'base64');
+      crypto.scrypt(String(senha), Buffer.from(sal, 'base64'), esperado.length, { N: +N, r: +r, p: +p }, (e, calc) => {
+        ok(!e && calc.length === esperado.length && crypto.timingSafeEqual(esperado, calc));
+      });
+    } catch {
+      ok(false);
+    }
+  });
 }
 
 // hash fixo para gastar o mesmo tempo quando o e-mail não existe (não revela quais e-mails são válidos)
@@ -179,22 +184,31 @@ function criarSeguranca(db, cfg) {
     next();
   }
 
-  /* Limite de tentativas de login (por IP + e-mail). */
+  /* Limite de tentativas de login erradas: 8 por IP + e-mail (protege a conta) e 30 por IP (quem testa a mesma senha
+     em muitas contas). Fica na memória: zera quando o servidor reinicia. */
   const tentativas = new Map();
   const JANELA = 15 * 60 * 1000;
   const MAX = 8;
-  function bloqueado(chave) {
+  const MAX_IP = 30;
+  const chaveIp = (chave) => 'ip:' + String(chave).split('|')[0];
+  function contagem(chave) {
     const t = tentativas.get(chave);
-    if (!t) return false;
-    if (Date.now() - t.inicio > JANELA) { tentativas.delete(chave); return false; }
-    return t.n >= MAX;
+    if (!t) return 0;
+    if (Date.now() - t.inicio > JANELA) { tentativas.delete(chave); return 0; }
+    return t.n;
   }
+  const bloqueado = (chave) => contagem(chave) >= MAX || contagem(chaveIp(chave)) >= MAX_IP;
   function registrarFalha(chave) {
-    const t = tentativas.get(chave);
-    if (!t || Date.now() - t.inicio > JANELA) tentativas.set(chave, { inicio: Date.now(), n: 1 });
-    else t.n++;
+    for (const k of [chave, chaveIp(chave)]) {
+      const t = tentativas.get(k);
+      if (!t || Date.now() - t.inicio > JANELA) tentativas.set(k, { inicio: Date.now(), n: 1 });
+      else t.n++;
+    }
+    // e-mails inventados não fazem a lista crescer sem fim
+    while (tentativas.size > 20000) tentativas.delete(tentativas.keys().next().value);
   }
   const limparFalhas = (chave) => tentativas.delete(chave);
+  setInterval(() => { for (const [k, t] of tentativas) if (Date.now() - t.inicio > JANELA) tentativas.delete(k); }, 5 * 60 * 1000).unref();
 
   setInterval(() => db.q('DELETE FROM sessoes WHERE expira_em < now()').catch(() => {}), 3600 * 1000).unref();
 

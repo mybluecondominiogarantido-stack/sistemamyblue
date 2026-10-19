@@ -344,7 +344,8 @@ Rode `npm ci --omit=dev` e `npm start` com um gerenciador de processos (pm2, sys
 
 - Senhas com hash scrypt e sal individual. Senha mínima de 8 caracteres com letras e números.
 - Sessão em cookie `HttpOnly` e `SameSite=Lax`, guardada no banco só como hash. Logout, troca de senha e desativação encerram sessões.
-- Bloqueio temporário após 8 tentativas de login erradas.
+- Bloqueio temporário de 15 minutos após 8 tentativas de login erradas no mesmo e-mail, ou 30 no mesmo IP. A conferência
+  da senha roda fora da linha principal do servidor (não deixa o portal lento durante tentativas em série).
 - Proteção contra requisições de outros sites (CSRF) nas gravações, inclusive nas gravações via JSONP da planilha interna.
 - Permissão conferida no servidor em cada ferramenta e em cada leitura ou gravação de dados.
 - Histórico de atividades: logins, falhas de login, aberturas, gravações, importações, envios de HTML e mudanças de permissão.
@@ -375,3 +376,4 @@ test/               testes automatizados (npm test)
 ```
 
 Testes: `npm test` (usam HTMLs sintéticos e o Postgres embutido). Para testar num Postgres de verdade: `TEST_DATABASE_URL=postgres://… npm test` (o banco indicado é apagado).
+O GitHub roda os testes sozinho a cada push e pull request (aba *Actions*, `.github/workflows/testes.yml`): só publique no Railway o que estiver verde.

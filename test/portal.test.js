@@ -554,3 +554,14 @@ test('saúde informa o banco', async () => {
   assert.equal(r.status, 200);
   assert.ok(['embutido', 'postgres'].includes((await r.json()).banco));
 });
+
+test('login: limite por IP vale também para quem testa a mesma senha em muitas contas', async () => {
+  // até 30 tentativas erradas do mesmo IP (as dos testes anteriores contam), cada uma num e-mail diferente
+  let n = 0;
+  while (n < 31 && (await logar(`conta${n}@teste.com`, 'Senha12345')).r.status === 401) n++;
+  assert.ok(n > 0 && n <= 30, `bloqueou depois de ${n}`);
+  const r = await logar('outra-conta@teste.com', 'Senha12345');
+  assert.equal(r.r.status, 429);
+  // nem a senha certa entra até passar a janela (o bloqueio é do IP)
+  assert.equal((await logar('admin@teste.com', 'Admin1234')).r.status, 429);
+});
