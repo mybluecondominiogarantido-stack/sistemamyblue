@@ -131,7 +131,7 @@ ${tabela(['Variável', 'Valor'], [
   ['<code>M365_CLIENT_ID</code>', 'ID do aplicativo (cliente)'],
   ['<code>M365_CLIENT_SECRET</code>', 'Valor do segredo do cliente'],
   ['<code>EMAIL_REMETENTE</code>', `<code>Portal MyBlue &lt;${CAIXA}&gt;</code>`],
-  ['<code>PORTAL_URL</code>', 'Endereço do portal, ex.: <code>https://portal.myblue.com.br</code> (vai no link dos e-mails)'],
+  ['<code>PORTAL_URL</code>', 'Endereço que abre o portal no navegador, copiado da barra de endereços (vai no link dos e-mails). Domínio próprio só depois de cadastrado no Railway e no DNS'],
 ])}
 <p>Depois do reinício, os logs do serviço (aba <b>Deployments → View logs</b>) mostram:</p>
 ${pre(`[avisos] e-mail dos tickets: microsoft365 (${CAIXA})`)}

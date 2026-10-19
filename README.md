@@ -317,7 +317,7 @@ Rode `npm ci --omit=dev` e `npm start` com um gerenciador de processos (pm2, sys
 | `EXPEDIENTE_INICIO` / `EXPEDIENTE_FIM` | 8 / 17 | Horário de expediente usado nos prazos dos tickets |
 | `EXPEDIENTE_DIAS` | 1,2,3,4,5 | Dias com expediente (0 = domingo … 6 = sábado) |
 | `FERIADOS` | — | Dias sem expediente, ex.: `2026-11-02,2026-11-15,2026-11-20,2026-12-25` |
-| `PORTAL_URL` | — | Endereço público do portal (ex.: `https://portal.myblue.com.br`), usado no link dos e-mails |
+| `PORTAL_URL` | — | Endereço que abre o portal no navegador, usado no link dos e-mails. Copie da barra do navegador (ex.: `https://portal-myblue.up.railway.app`); um domínio próprio só vale depois de cadastrado no Railway e no DNS |
 | `EMAIL_REMETENTE` | — | Caixa que envia os avisos, ex.: `Portal MyBlue <usrserv@myblue.com.br>` |
 | `M365_TENANT_ID` / `M365_CLIENT_ID` / `M365_CLIENT_SECRET` | — | Envio pelo Microsoft 365 (Graph). Passo a passo na seção Central de Tickets |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USUARIO` / `SMTP_SENHA` / `SMTP_SEGURO` | — / 587 | Alternativa: SMTP comum (usado só sem as variáveis `M365_*`) |
