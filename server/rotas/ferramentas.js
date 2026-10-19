@@ -307,7 +307,8 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, bo
     const colecao = String(p.sheet || m.config.colecao_padrao || '');
     if (!COLECAO_RE.test(colecao)) return responder(res, cb, { ok: false, error: 'Aba inválida.' }, 400);
     const acao = p.action ? String(p.action) : null;
-    if (acao && req.method === 'GET' && !getDoProprioSite(req)) return responder(res, cb, { ok: false, error: 'Origem não permitida.' }, 403);
+    // gravação por GET e leitura por JSONP (<script> que outro site poderia incluir) só a partir do próprio portal
+    if ((acao || cb) && req.method === 'GET' && !getDoProprioSite(req)) return responder(res, cb, { ok: false, error: 'Origem não permitida.' }, 403);
 
     if (acao && await soConsulta(req, m)) return responder(res, cb, { ok: false, error: MSG_CONSULTA }, 403);
     const uid = req.usuario.id;

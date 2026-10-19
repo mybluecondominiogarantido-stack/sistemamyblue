@@ -103,7 +103,8 @@ test('coordenador edita a equipe sem tirar o que é de outros setores', async ()
   assert.equal(u.nome, 'Ivo Silva');
   assert.equal(u.papel, 'usuario', 'não muda o perfil');
   assert.deepEqual(u.modulos.sort(), ['boletos', 'parceiros'], 'tira crédito, põe boletos e mantém parceiros (outro setor)');
-  assert.equal((await coord('POST', `/api/admin/usuarios/${ivo}/senha`, {})).status, 200);
+  // abre Parceiros (outro setor): a senha dele só a administração redefine
+  assert.equal((await coord('POST', `/api/admin/usuarios/${ivo}/senha`, {})).status, 403);
 });
 
 test('coordenador não mexe em quem é de outro setor, nem em coordenadores, supervisores e administradores', async () => {
@@ -214,4 +215,22 @@ test('admin cria e edita os quatro perfis', async () => {
     assert.equal((await admin('PATCH', `/api/admin/usuarios/${id}`, { papel })).status, 200);
     assert.equal((await ctx.db.um('SELECT papel FROM usuarios WHERE id = $1', [id])).papel, papel);
   }
+});
+
+test('coordenador não redefine a senha de quem tem acesso além dos setores dele', async () => {
+  const soCredito = await criar('Lia do Crédito', 'lia@teste.com', { setores: [S('Crédito')], modulos: ['credito'] });
+  let r = await coord('POST', `/api/admin/usuarios/${soCredito}/senha`, {});
+  assert.equal(r.status, 200, r.texto);
+  assert.ok(r.json.senha_temporaria);
+  // Ivo abre uma ferramenta de outro setor (Parceiros): com a senha temporária, a coordenação entraria nela
+  r = await coord('POST', `/api/admin/usuarios/${ids['ivo@teste.com']}/senha`, {});
+  assert.equal(r.status, 403);
+  assert.match(r.json.erro, /fora dos seus setores/);
+  // marcação dada pela administração (tickets de todos os setores)
+  await admin('PATCH', `/api/admin/usuarios/${soCredito}`, { supervisor_tickets: true });
+  r = await coord('POST', `/api/admin/usuarios/${soCredito}/senha`, {});
+  assert.equal(r.status, 403);
+  assert.match(r.json.erro, /tickets de todos os setores/);
+  // a administração redefine normalmente
+  assert.equal((await admin('POST', `/api/admin/usuarios/${soCredito}/senha`, {})).status, 200);
 });

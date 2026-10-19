@@ -190,10 +190,28 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     res.json({ ok: true });
   });
 
+  async function acessosForaDoEscopo(id, esc) {
+    const u = await db.um('SELECT supervisor_tickets, editor_links FROM usuarios WHERE id = $1', [id]);
+    const motivos = [];
+    if (u.supervisor_tickets) motivos.push('vê os tickets de todos os setores');
+    if (u.editor_links) motivos.push('edita a Central de Links');
+    const setores = (await db.q('SELECT s.id, s.nome FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id WHERE sm.usuario_id = $1', [id])).rows;
+    const outros = setores.filter((x) => !esc.setores.has(x.id)).map((x) => x.nome);
+    if (outros.length) motivos.push('faz parte de ' + outros.join(', '));
+    const mods = (await db.q('SELECT m.slug, m.nome FROM permissoes p JOIN modulos m ON m.slug = p.modulo_slug WHERE p.usuario_id = $1', [id])).rows;
+    const deFora = mods.filter((m) => !esc.modulos.has(m.slug)).map((m) => m.nome);
+    if (deFora.length) motivos.push('abre ' + deFora.join(', '));
+    return motivos;
+  }
+
   r.post('/api/admin/usuarios/:id/senha', json, async (req, res) => {
     const id = Number(req.params.id);
     const esc = await escopoDe(req);
     if ((esc && !esc.gerencia(id)) || !(await db.um('SELECT 1 FROM usuarios WHERE id = $1', [id]))) return erro(res, 404, 'Usuário não encontrado.');
+    // quem tem acesso além dos setores de quem pede (outro setor, ferramenta de fora, marcações da administração) só tem
+    // a senha redefinida pela administração: com a senha temporária, quem pede entraria com os acessos da pessoa
+    const fora = esc ? await acessosForaDoEscopo(id, esc) : [];
+    if (fora.length) return erro(res, 403, `Esta pessoa tem acessos fora dos seus setores (${fora.join('; ')}). Peça à administração para redefinir a senha dela.`);
     let senha = req.body && req.body.senha ? String(req.body.senha) : '';
     if (senha) { const e = validarNovaSenha(senha); if (e) return erro(res, 400, e); } else senha = senhaAleatoria();
     await db.q('UPDATE usuarios SET senha_hash = $1, trocar_senha = TRUE, atualizado_em = now() WHERE id = $2', [hashSenha(senha), id]);
@@ -343,7 +361,8 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     const buf = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
     const problema = modulos.validarHtml(buf);
     if (problema) return erro(res, 400, problema);
-    const nomeOriginal = req.headers['x-nome-arquivo'] ? decodeURIComponent(String(req.headers['x-nome-arquivo'])) : null;
+    let nomeOriginal = null;
+    try { nomeOriginal = req.headers['x-nome-arquivo'] ? decodeURIComponent(String(req.headers['x-nome-arquivo'])) : null; } catch { /* nome malformado: fica sem */ }
     const reconhecido = await modulos.reconhecer(buf);
     const id = await modulos.salvarVersao(m.slug, buf, nomeOriginal, req.usuario.id);
     await seg.auditar(req, 'arquivo_enviado', m.slug, { versao: id, nome: nomeOriginal, bytes: buf.length });
@@ -573,7 +592,12 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
       cab = [...ks];
       matriz = linhas.map((o) => cab.map((k) => o[k]));
     }
-    const cel = (v) => { const s = v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v); return /[";\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    // texto que começa com = + - @ vira fórmula no Excel: ganha um apóstrofo na frente (números negativos ficam como estão)
+    const cel = (v) => {
+      let s = v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v);
+      if (/^[=+\-@\t\r]/.test(s) && !/^[+-]?\d[\d.,]*$/.test(s)) s = "'" + s;
+      return /[";\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
     const csv = '﻿' + [cab, ...matriz].map((l) => l.map(cel).join(';')).join('\r\n');
     res.set('Content-Disposition', `attachment; filename="myblue-${m.slug}-${c}.csv"`);
     res.type('text/csv').send(csv);

@@ -143,10 +143,13 @@ function criarSeguranca(db, cfg) {
     return new Set(rows.map((r) => r.modulo_slug));
   }
 
+  /* ferramenta desativada: só a administração abre, lê ou grava os dados dela */
   async function podeAcessar(usuario, slug) {
     if (!usuario) return false;
     if (usuario.papel === 'admin') return true;
-    return (await modulosDoUsuario(usuario)).has(slug);
+    if (!(await modulosDoUsuario(usuario)).has(slug)) return false;
+    const m = await db.um('SELECT ativo FROM modulos WHERE slug = $1', [slug]);
+    return !!(m && m.ativo);
   }
 
   const exigirLogin = (req, res, next) => {
