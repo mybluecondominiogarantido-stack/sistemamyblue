@@ -3,12 +3,13 @@ const express = require('express');
 const { hashSenha, validarNovaSenha, senhaAleatoria } = require('../seguranca');
 const { SLUG_RE } = require('../modulos');
 const { criarZip } = require('../zip');
+const { MODULO: MODULO_BOLETOS } = require('../boletos-carteira');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ICONES = ['app', 'calculadora', 'grafico', 'aperto', 'caixa', 'carteira', 'documento', 'pessoas', 'ticket', 'casa', 'calendario', 'escudo'];
 const ehDuplicado = (e) => e && (e.code === '23505' || /duplicate key|unique/i.test(String(e.message)));
 
-function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, avisos, cfg }) {
+function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, boletosCarteira, avisos, cfg }) {
   const ehDocs = (m) => m && m.adaptador === 'claude-db';
   const r = express.Router();
   const json = express.json({ limit: '2mb' });
@@ -17,8 +18,8 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, avisos, 
   // Coordenador e supervisor gerenciam o(s) setor(es) do cadastro deles: usuários, ferramentas (HTML, quem abre e com
   // qual papel, inclusive pessoas de outros setores; ferramenta nova aguarda a aprovação da administração), equipe e
   // tipos de demanda (rotas da Central de Tickets). O resto da administração é só do administrador.
-  const FERRAMENTA_SETOR = /^\/modulos\/([a-z0-9][a-z0-9-]{1,40})\/(arquivo|versoes|versoes\/\d+\/usar|versoes\/\d+\/arquivo|acesso)$/;
-  const metodosDe = (acao) => (acao === 'arquivo' ? ['PUT'] : acao === 'acesso' ? ['GET', 'PUT'] : acao === 'versoes' || acao.endsWith('/arquivo') ? ['GET'] : ['POST']);
+  const FERRAMENTA_SETOR = /^\/modulos\/([a-z0-9][a-z0-9-]{1,40})\/(arquivo|versoes|versoes\/\d+\/usar|versoes\/\d+\/arquivo|acesso|carteira)$/;
+  const metodosDe = (acao) => (acao === 'arquivo' ? ['PUT'] : acao === 'acesso' ? ['GET', 'PUT'] : acao === 'carteira' ? ['GET', 'POST'] : acao === 'versoes' || acao.endsWith('/arquivo') ? ['GET'] : ['POST']);
   r.use('/api/admin', seg.exigirLogin, async (req, res, next) => {
     try {
       if (req.usuario.papel === 'admin') return next();
@@ -384,6 +385,22 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, avisos, 
     if (!m) return erro(res, 404, 'Módulo não encontrado.');
     res.json({ modulo: { slug: m.slug, nome: m.nome, setor_id: m.setor_id, setor_nome: m.setor_nome, pendente: m.pendente }, ...(await acessos.quadro(m)),
       pode_definir_papeis: req.usuario.papel === 'admin' });
+  });
+
+  /* Controle de Emissão de Boletos: conferir o cadastro com a carteira de condomínios e aplicar */
+  r.get('/api/admin/modulos/:slug/carteira', async (req, res) => {
+    if (req.params.slug !== MODULO_BOLETOS) return erro(res, 404, 'Esta ferramenta não usa a carteira.');
+    const p = await boletosCarteira.previa();
+    if (!p) return erro(res, 404, 'Módulo não encontrado.');
+    res.json(p);
+  });
+  r.post('/api/admin/modulos/:slug/carteira', json, async (req, res) => {
+    if (req.params.slug !== MODULO_BOLETOS) return erro(res, 404, 'Esta ferramenta não usa a carteira.');
+    const chaves = (req.body || {}).chaves;
+    if (!Array.isArray(chaves) || chaves.some((k) => typeof k !== 'string')) return erro(res, 400, 'Informe o que aplicar.');
+    const r2 = await boletosCarteira.aplicar({ escolhidas: chaves, usuario: req.usuario });
+    await seg.auditar(req, 'boletos_carteira_aplicada', MODULO_BOLETOS, { comp: r2.comp, condominios: r2.aplicadas, escolhidas: chaves.length });
+    res.json(r2);
   });
 
   r.put('/api/admin/modulos/:slug/acesso', json, async (req, res) => {

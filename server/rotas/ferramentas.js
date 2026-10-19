@@ -1,6 +1,7 @@
 'use strict';
 const express = require('express');
 const { hostsDoPortal } = require('../seguranca');
+const { MODULO: MODULO_BOLETOS } = require('../boletos-carteira');
 
 const CALLBACK_RE = /^[A-Za-z_$][\w$]{0,80}$/;
 const COLECAO_RE = /^[A-Za-z0-9_-]{1,40}$/;
@@ -9,7 +10,7 @@ const paginaSimples = (titulo, msg) => `<!doctype html><html lang="pt-BR"><head>
 <title>${titulo}</title><link rel="stylesheet" href="/estilos.css"></head><body class="pagina-aviso"><div class="aviso-card"><img src="/img/logo.png" alt="MyBlue" height="40">
 <h1>${titulo}</h1><p>${msg}</p><a class="btn primary" href="/" target="_top">Voltar ao início</a></div></body></html>`;
 
-function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, cfg }) {
+function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, boletosCarteira, cfg }) {
   const r = express.Router();
 
   /* ---------- lista de ferramentas do usuário ---------- */
@@ -159,6 +160,8 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, cf
       const ops = (req.body || {}).ops;
       const r2 = await documentos.gravar(m.slug, ops, pessoaDe(req.usuario), req.usuario.id);
       await seg.auditar(req, 'documento_gravado', m.slug, { ops: ops.slice(0, 10).map((o) => `${o.op} ${o.path}`) });
+      // competência criada no Controle de Emissão de Boletos: o cadastro puxa da carteira
+      if (m.slug === MODULO_BOLETOS && boletosCarteira && ops.some((o) => o && o.op === 'set' && /^meses\//.test(o.path))) boletosCarteira.agendar(req.usuario);
       res.json(r2);
     } catch (e) { falhaDoc(res, e); }
   });

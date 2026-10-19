@@ -218,11 +218,10 @@ module.exports = [
       await t.digitar(f.locator('input.err-in').first(), 'Valor do condomínio desatualizado, reemitido no mesmo dia.', { atraso: 22, depois: 1200 });
 
       const O = '3 · Cadastro, distratados e feriados';
-      await t.legenda('Em <b>Cadastro</b>, os condomínios acompanhados: responsável, UF, regra e dia do vencimento.', { etapa: O, ms: 300 });
-      await t.clicar(f.locator('button:has-text("Cadastro")').first(), { depois: 2200 });
-      await t.legenda('Condomínio encerrado? Mude a <b>Situação</b> para <b>Distrato</b> e informe a data: ele sai do controle a partir do mês do distrato.', { etapa: O, ms: 300 });
-      await t.mostrar(f.locator('select[data-cf="sit"]').first(), 2600);
-      await t.legenda('Em <b>Distratados</b>, os condomínios encerrados, com a data do distrato e a última emissão registrada. Os sem data ficam em destaque.', { etapa: O, ms: 300 });
+      await t.legenda('Em <b>Cadastro</b>, os condomínios acompanhados: responsável, UF, regra e dia do vencimento. Eles vêm da <b>Carteira de condomínios</b> do portal.', { etapa: O, ms: 300 });
+      await t.clicar(f.locator('button:has-text("Cadastro")').first(), { depois: 2600 });
+      await t.legenda('Condomínio novo ou distratado na <b>Carteira</b> chega sozinho na próxima competência. Os meses em andamento não mudam.', { etapa: O, ms: 3200 });
+      await t.legenda('Em <b>Distratados</b>, os condomínios encerrados, com a data em que saíram e a última emissão registrada. Os sem data ficam em destaque.', { etapa: O, ms: 300 });
       await t.clicar(f.locator('button[data-tab="distratados"]'), { depois: 2800 });
       await t.legenda('Em <b>Feriados</b>, os feriados que não contam como dia útil na meta. Inclua os estaduais e municipais.', { etapa: O, ms: 300 });
       await t.clicar(f.locator('button:has-text("Feriados")').first(), { depois: 2600 });
@@ -237,7 +236,7 @@ module.exports = [
       await t.legenda('<b>Criar</b> abre a próxima competência. O <b>Comparativo</b> compara os meses fechados.', { etapa: F, ms: 300 });
       await t.mostrar(f.locator('#novoMes'), 2600);
     },
-    resumo: ['<b>Painel</b>: a meta da competência', '<b>Emitir</b> grava a data de hoje · <b>Erro na emissão</b> com gravidade e justificativa', 'Distrato no <b>Cadastro</b>, lista em <b>Distratados</b>', '<b>Fechar competência</b> + <b>Salvar backup</b> todo mês'],
+    resumo: ['<b>Painel</b>: a meta da competência', '<b>Emitir</b> grava a data de hoje · <b>Erro na emissão</b> com gravidade e justificativa', 'Condomínios vêm da <b>Carteira</b> · encerrados em <b>Distratados</b>', '<b>Fechar competência</b> + <b>Salvar backup</b> todo mês'],
   },
 
   {
