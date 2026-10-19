@@ -24,6 +24,67 @@ function diaUtil(n) {
 }
 const hoje = () => new Date().toLocaleDateString('sv-SE', { timeZone: FUSO });
 
+/* ---------- Análise de Crédito (dados fictícios) ---------- */
+const os = require('os');
+const path = require('path');
+const SENHA_CR = 'Nova12345';
+/* sessão que também manda cabeçalhos (os anexos levam o tipo do documento no cabeçalho) */
+async function sessaoCr(base, email) {
+  const r = await fetch(base + '/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json', origin: base }, body: JSON.stringify({ email, senha: SENHA_CR }) });
+  const cookie = (r.headers.get('set-cookie') || '').split(';')[0];
+  return async (metodo, url, corpo, cab = {}) => {
+    const bruto = Buffer.isBuffer(corpo);
+    const x = await fetch(base + url, { method: metodo, headers: { cookie, origin: base, 'content-type': bruto ? 'application/pdf' : 'application/json', ...cab }, body: corpo == null ? undefined : bruto ? corpo : JSON.stringify(corpo) });
+    const t = await x.text();
+    try { return JSON.parse(t); } catch { return t; }
+  };
+}
+/* PDFs de exemplo para os anexos (vazios, só para o envio) */
+function pdfsCr() {
+  const pasta = path.join(os.tmpdir(), 'tutoriais-recursos');
+  fs.mkdirSync(pasta, { recursive: true });
+  const r = {};
+  for (const [k, nome] of [['convencao', 'Convencao_Residencial_Exemplo.pdf'], ['relatorio', 'Contas_a_receber_exemplo.pdf']]) {
+    r[k] = path.join(pasta, nome);
+    fs.writeFileSync(r[k], '%PDF-1.4\n% arquivo de exemplo dos tutoriais\n%%EOF\n');
+  }
+  return r;
+}
+/* os 3 meses fechados antes do mês de hoje (mm/aaaa) */
+function mesesCr() {
+  const h = new Date();
+  return [3, 2, 1].map((k) => { const d = new Date(Date.UTC(h.getUTCFullYear(), h.getUTCMonth() - k, 1)); return `${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`; });
+}
+function planilhaCr() {
+  const l = ['Unidade;Titular;Documento;Competência;Tipo;Valor'];
+  mesesCr().forEach((c, i) => {
+    for (const [u, n, doc] of [['A-101', 'Condômino Fictício 1', '111.111.111-11'], ['B-203', 'Condômino Fictício 2', '222.222.222-22']]) l.push(`${u};${n};${doc};${c};Taxa ordinária;1.840,00`, `${u};${n};${doc};${c};Taxa extra;700,00`, `${u};${n};${doc};${c};Multa;36,80`);
+    l.push(`C-305;Condômino Fictício 3;;${c};Taxa ordinária;${['1.840,00', '2.540,00', '1.840,00'][i]}`, `D-402;Condômino Fictício 4;;${c};Taxa ordinária;${['1.200,00', '500,00', '1.500,00'][i]}`);
+  });
+  return l.join('\n');
+}
+const FORM_CR = {
+  razao_social: 'Condomínio Residencial Jardim das Acácias', cnpj: '11.222.333/0001-81', uf: 'CE', cidade: 'Fortaleza', tipo_contratacao: 'nova', administradora: 'Administradora Exemplo',
+  sistema_gestao: 'Superlógica', uh_total: 24, taxa_ordinaria: 1840, dia_vencimento: 10, desconto_pontualidade: { tipo: 'nenhum' }, agua_gas: { compoe_boleto: false },
+  taxas_extras: [{ descricao: 'Reforma da fachada', valor_por_uh: 700, inicio: '2026-01', fim: '2026-12', ata: true }], sindico: { tipo: 'condomino', isencao: 'integral' }, uh_isentas_informadas: 1,
+};
+/* análise pedida pela executiva (Vera) e enviada; com "liberar", o analista (Tiago) faz tudo e libera o retorno */
+async function analiseCr(base, form, { liberar = false } = {}) {
+  const vera = await sessaoCr(base, 'vera@myblue.com.br');
+  const pdf = Buffer.from('%PDF-1.4\n% exemplo\n%%EOF\n');
+  const { id } = await vera('POST', '/api/credito/analises', { formulario: form });
+  for (const tipo of ['convencao', 'relatorio']) await vera('POST', `/api/credito/analises/${id}/documentos`, pdf, { 'x-tipo': tipo, 'x-nome-arquivo': tipo + '.pdf' });
+  await vera('POST', `/api/credito/analises/${id}/enviar`, {});
+  if (liberar) {
+    const tiago = await sessaoCr(base, 'tiago@myblue.com.br');
+    await tiago('POST', `/api/credito/analises/${id}/assumir`, {});
+    const lido = await tiago('POST', `/api/credito/analises/${id}/relatorio-colado`, { texto: planilhaCr() });
+    await tiago('PATCH', `/api/credito/analises/${id}`, { dados_analista: { convencao: { registro: 'RI', uh: form.uh_total }, relatorio: { data_emissao: hoje(), unidades: lido.unidades } } });
+    await tiago('POST', `/api/credito/analises/${id}/liberar`, {});
+  }
+  return id;
+}
+
 module.exports = [
   /* ======================= Primeiros passos ======================= */
   {
@@ -388,6 +449,135 @@ module.exports = [
       await t.clicar('a[href^="#/links/previa/"]', { depois: 3600 });
     },
     resumo: ['<b>Editar links e fundo</b> → aba <b>Links</b>', 'Setas para mudar a ordem', 'Aba <b>Fundo da campanha</b>: agenda o fundo de cada mês'],
+  },
+
+  /* ======================= Análise de Crédito ======================= */
+  {
+    nome: 'credito-solicitar',
+    entrar: 'vera@myblue.com.br',
+    inicio: '#/credito',
+    async preparar(cen, base) {
+      cen.pdfsCr = pdfsCr();
+      // uma análise já com o retorno enviado, para mostrar o PDF e a reanálise
+      cen.analiseEnviada = await analiseCr(base, { ...FORM_CR, razao_social: 'Edifício Mirante do Sol', cidade: 'Caucaia' }, { liberar: true });
+    },
+    abertura: ['Do pedido ao retorno da análise de crédito.', ['Preencher a solicitação', 'Anexar convenção e relatório', 'Enviar e acompanhar', 'Abrir o retorno e pedir reanálise']],
+    async gravar(t, cen) {
+      const A = '1 · Nova solicitação';
+      await t.legenda('No menu, <b>Análise de Crédito</b> mostra as suas solicitações e a situação de cada uma.', { etapa: A, ms: 600 });
+      await t.mostrar(menu('#/credito'), 1800, { dx: 0.3 });
+      await t.mostrar('#tbCr tr', 2200, { dx: 0.3 });
+      await t.legenda('Clique em <b>Nova solicitação</b>. O rascunho fica salvo até você enviar.', { etapa: A, ms: 500 });
+      await t.clicar('#btNovaCr', { depois: 1800 });
+      await t.legenda('No alto, o portal mostra <b>o que ainda falta</b> para enviar.', { etapa: A, ms: 600 });
+      await t.mostrar('.msg.aviso', 2600, { dx: 0.2 });
+
+      const B = '2 · Dados do condomínio';
+      await t.legenda('Preencha a identificação: razão social, CNPJ, UF e cidade.', { etapa: B, ms: 400 });
+      await t.digitar('#fRs', 'Condomínio Residencial Jardim das Acácias', { atraso: 30 });
+      await t.digitar('#fCnpj', '11.222.333/0001-81', { atraso: 45 });
+      await t.digitar('#fUf', 'CE', { atraso: 80 });
+      await t.digitar('#fCid', 'Fortaleza', { atraso: 50 });
+      await t.legenda('Escolha se é <b>nova contratação</b> ou <b>portabilidade</b> de outra garantidora.', { etapa: B, ms: 400 });
+      await t.clicar('input[name=fTipo][value=nova]', { depois: 900 });
+      await t.legenda('Na operação: unidades, <b>taxa ordinária</b> e dia do vencimento.', { etapa: B, ms: 400 });
+      await t.digitar('#fUh', '24', { atraso: 90 });
+      await t.digitar('#fOrd', '1.840,00', { atraso: 60 });
+      await t.digitar('#fVenc', '10', { atraso: 90 });
+      await t.legenda('Taxa extra: informe o <b>valor por unidade</b>, não o total, com início e fim.', { etapa: B, ms: 400 });
+      await t.clicar('#btExtra', { depois: 600 });
+      await t.digitar('#tbExtras [data-x=descricao]', 'Reforma da fachada', { atraso: 35 });
+      await t.digitar('#tbExtras [data-x=valor_por_uh]', '700,00', { atraso: 70 });
+      await t.preencherCampo('#tbExtras [data-x=inicio]', '2026-01');
+      await t.preencherCampo('#tbExtras [data-x=fim]', '2026-12');
+      await t.clicar('#tbExtras [data-x=ata]', { depois: 600 });
+      await t.legenda('E o síndico: condômino ou profissional, e se tem isenção.', { etapa: B, ms: 400 });
+      await t.escolher('#fSind', { value: 'condomino' });
+      await t.escolher('#fIse', { value: 'integral' });
+      await t.digitar('#fIseT', '1', { atraso: 90 });
+      await t.legenda('Clique em <b>Salvar rascunho</b> para guardar o que já preencheu.', { etapa: B, ms: 400 });
+      await t.clicar('#btSalvarCr', { depois: 2200 });
+
+      const C = '3 · Documentos';
+      await t.legenda('Anexe a <b>convenção registrada</b> e o <b>relatório de inadimplência</b> detalhado por competência, emitido há menos de 3 meses.', { etapa: C, ms: 600 });
+      await t.enviarArquivo('label:has(input[data-doc=convencao])', 'input[data-doc=convencao]', cen.pdfsCr.convencao, { depois: 2200 });
+      await t.enviarArquivo('label:has(input[data-doc=relatorio])', 'input[data-doc=relatorio]', cen.pdfsCr.relatorio, { depois: 2200 });
+      await t.legenda('Atas de taxa extra e outros documentos entram em <b>Outros documentos</b>.', { etapa: C, ms: 400 });
+      await t.mostrar('#tipoOutro', 2200);
+
+      const D = '4 · Enviar';
+      await t.legenda('Com tudo certo, clique em <b>Enviar para análise</b>: o portal gera o <b>protocolo</b> e o prazo começa a contar.', { etapa: D, ms: 500 });
+      await t.clicar('#btEnviarCr', { depois: 2600 });
+      await t.legenda('O setor Análise de Crédito é avisado na hora. A resposta vem em até <b>24h úteis</b> (48h quando vai à diretoria).', { etapa: D, ms: 600 });
+      await t.mostrar('.info-ticket', 3000, { dx: 0.3 });
+      await t.legenda('Se faltar algo, a solicitação volta para você com a <b>lista de pendências</b>, no sino e por e-mail. Responda e reenvie.', { etapa: D, ms: 3600 });
+
+      const E = '5 · O retorno';
+      await t.legenda('Quando o analista libera, você recebe o aviso e o retorno fica aqui, em <b>PDF</b>.', { etapa: E, ms: 500 });
+      await t.ir('#/credito/' + cen.analiseEnviada, 1800);
+      await t.mostrar('a.btn.primary[target=_blank]', 3000);
+      await t.legenda('Proposta vencida, relatório novo ou mudança no condomínio? Clique em <b>Solicitar reanálise</b>.', { etapa: E, ms: 500 });
+      await t.clicar('#btReCr', { depois: 1600 });
+      await t.legenda('O formulário vem preenchido e a convenção vai junto. A reanálise recebe um <b>protocolo novo</b>, ligado a este.', { etapa: E, ms: 3600 });
+      await t.clicar(fecharModal, { depois: 800 });
+    },
+    resumo: ['<b>Nova solicitação</b>: dados, taxa extra por unidade e síndico', 'Anexe a convenção e o relatório e clique em <b>Enviar</b>', 'Retorno em PDF no portal · <b>Solicitar reanálise</b> quando precisar'],
+  },
+
+  {
+    nome: 'credito-analisar',
+    entrar: 'tiago@myblue.com.br',
+    inicio: '#/credito/fila',
+    async preparar(cen, base) {
+      cen.analiseFila = await analiseCr(base, FORM_CR);
+    },
+    abertura: ['Da fila ao retorno liberado para o executivo.', ['A fila e os prazos', 'Lançar o relatório e a convenção', 'Calcular e conferir', 'Diretoria, pendência e liberação']],
+    async gravar(t, cen) {
+      const A = '1 · A fila';
+      await t.legenda('A <b>Fila</b> mostra as análises pelo prazo. Chegou no dia útil até as 16h: resposta no mesmo dia; depois disso, no dia útil seguinte.', { etapa: A, ms: 600 });
+      await t.mostrar('.tiles', 2600, { dx: 0.4 });
+      await t.mostrar('#tbCr tr', 2200, { dx: 0.3 });
+      await t.legenda('Abra a análise e clique em <b>Assumir</b>: ela passa a ser sua.', { etapa: A, ms: 400 });
+      await t.clicar('#tbCr tr.clicavel', { depois: 1800 });
+      await t.clicar('#btAssumirCr', { depois: 2200 });
+
+      const B = '2 · Relatório e convenção';
+      await t.legenda('Lance o relatório de inadimplência: <b>cole a planilha</b> (unidade, titular, documento, competência, tipo e valor).', { etapa: B, ms: 500 });
+      await t.apontar('#dCola');
+      await t.p.locator('#dCola').fill(planilhaCr());
+      await t.pausa(1600);
+      await t.clicar('#btColar', { depois: 1800 });
+      await t.mostrar('#dColaInfo', 2200);
+      await t.legenda('Informe a <b>data de emissão</b> do relatório: ela define os meses que entram na base.', { etapa: B, ms: 400 });
+      await t.preencherCampo('#dEmis', hoje());
+      await t.legenda('Na convenção: o <b>tipo de registro</b>, o número de unidades, a multa e o foro.', { etapa: B, ms: 400 });
+      await t.escolher('#dReg', { value: 'RI' });
+      await t.digitar('#dCuh', '24', { atraso: 90 });
+      await t.digitar('#dMulta', '2', { atraso: 90 });
+      await t.legenda('Espólios confirmados, retomadas e ajustes (sempre com justificativa) também ficam aqui.', { etapa: B, ms: 400 });
+      await t.mostrar('#dEsp', 2400);
+
+      const C = '3 · Calcular';
+      await t.legenda('Clique em <b>Salvar e calcular</b>: o motor de regras aplica a política e mostra o resultado.', { etapa: C, ms: 400 });
+      await t.clicar('#btCalcCr', { depois: 2600 });
+      await t.legenda('Status, taxa ADM e boleto, com a faixa aplicada e a janela de meses.', { etapa: C, ms: 600 });
+      await t.mostrar('#conteudo .pagina > .painel', 3000, { dx: 0.3 });
+      await t.legenda('Inadimplência, receitas e exposição, e logo abaixo a <b>memória de cálculo</b> mês a mês.', { etapa: C, ms: 600 });
+      await t.mostrar('.tiles', 3000, { dx: 0.4 });
+      await t.legenda('Os <b>alertas</b> (concentração, multa, divergência entre as fontes) e a lista da <b>Assertiva</b> vêm em seguida.', { etapa: C, ms: 3200 });
+
+      const D = '4 · Liberar';
+      await t.legenda('Confira a <b>Prévia do retorno</b> em PDF. Se faltar documento, use <b>Devolver com pendência</b>.', { etapa: D, ms: 500 });
+      await t.mostrar('#acoesBarra a[href$="previa.pdf"]', 2200);
+      await t.mostrar('#btPendCr', 2000);
+      await t.legenda('Acima de 35% de inadimplência aparece <b>Enviar à diretoria</b>: o retorno só sai depois da chancela.', { etapa: D, ms: 3200 });
+      await t.legenda('Tudo certo? <b>Validar e liberar</b>: o portal gera o PDF assinado por você e avisa o executivo.', { etapa: D, ms: 500 });
+      await t.clicar('#btLibCr', { depois: 1400 });
+      await t.clicar('#mOk', { depois: 4200 });
+      await t.legenda('O texto do e-mail de entrega e o resumo executivo ficam prontos para copiar.', { etapa: D, ms: 3600 });
+      await t.clicar('.fundo-modal [data-fechar]', { depois: 1200 });
+    },
+    resumo: ['<b>Fila</b> pelo prazo · <b>Assumir</b>', 'Cole o relatório, informe emissão e convenção · <b>Salvar e calcular</b>', '<b>Prévia</b>, pendência ou diretoria · <b>Validar e liberar</b>'],
   },
 
   /* ======================= Gestão do setor ======================= */

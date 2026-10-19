@@ -238,3 +238,16 @@ test('administração: executivos com boleto próprio e nova versão da polític
   assert.equal(pol.ativa.boleto_padrao, 2.5);
   assert.equal(pol.versoes.length, 2);
 });
+
+test('tutoriais da Análise de Crédito: executivo vê o de pedir, analista e diretoria veem os dois', async () => {
+  const { visibilidade, porSlug } = require('../server/tutoriais');
+  const ve = async (email) => {
+    const u = await ctx.db.um('SELECT * FROM usuarios WHERE email = $1', [email]);
+    const v = await visibilidade(ctx.db, ctx.seg, u);
+    return ['credito-solicitar', 'credito-analisar'].filter((s) => v(porSlug.get(s)));
+  };
+  assert.deepEqual(await ve('exec@teste.com'), ['credito-solicitar']);
+  assert.deepEqual(await ve('analista@teste.com'), ['credito-solicitar', 'credito-analisar']);
+  assert.deepEqual(await ve('diretor@teste.com'), ['credito-solicitar', 'credito-analisar']);
+  assert.deepEqual(await ve('outro@teste.com'), []);
+});

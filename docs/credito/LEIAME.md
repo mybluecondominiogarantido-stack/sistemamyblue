@@ -12,8 +12,10 @@ faixa e status são código determinístico e testado. Nada vai ao executivo sem
 | Motor de regras | `server/credito/motor.js` | pronto, testes em `test/credito-motor.test.js` |
 | Política no banco, protocolo | `server/credito/banco.js` + tabelas em `server/db.js` | pronto, testes em `test/credito-banco.test.js` |
 | Prazos em horário útil | `server/expediente.js` (`fimDoDiaUtil`, `somarDiasUteis`) | pronto |
-| Extração dos PDFs pela IA, leitores por tipo de relatório | — | próxima etapa |
-| Formulário do executivo, fila e revisão do analista | — | depois (telas aprovadas no design) |
+| Extração dos PDFs pela IA, leitores por tipo de relatório | — | próxima etapa (precisa da chave da API e das amostras); até lá o analista cola a planilha do relatório |
+| API do fluxo (executivo, analista, diretoria, administração) | `server/rotas/credito.js` + `server/credito/colar.js` | pronto, testes em `test/credito-rotas.test.js` |
+| Telas no portal (menu Análise de Crédito) | `public/app.js` | pronto |
+| Tutoriais em vídeo | catálogo em `server/tutoriais.js`, roteiros em `docs/tutoriais/fonte/roteiros.js` | `credito-solicitar` e `credito-analisar` |
 | Retorno em PDF, resumo executivo e e-mail | `server/credito/retorno.js` + `server/credito/retorno/gerador_retorno.py` | pronto (PDF), testes em `test/credito-retorno.test.js` |
 
 ## Retorno em PDF
