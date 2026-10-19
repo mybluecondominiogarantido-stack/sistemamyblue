@@ -25,6 +25,7 @@ Todas ficam como parâmetro da política (tabela `parametros_politica`), sem nad
 | Reprovação por inadimplência | acima de **40%** (35% a 40% = ressalvas + chancela da diretoria) |
 | Regra dos 10 dias | a competência entra se, na emissão do relatório, passaram **mais de 10 dias** do vencimento |
 | Boleto | **R$ 2,00** fixo; Maranhão **R$ 5,50**. Executivo com boleto próprio: no cadastro dele (tabela `executivos`) |
+| Taxa extra | a taxa extra vigente (por unidade, conforme o formulário) entra **inteira**, sem limite; acima de **40% da ordinária** gera aviso ao analista |
 | Assertiva | pessoa física com **24 ou mais taxas ordinárias em aberto**; CNPJ fora |
 | Nº de unidades | **convenção** prevalece; formulário prevalece para taxa, vencimento e isenção |
 | Protocolo | **AC-AAAA-MM-DD-NN**, sequencial por dia (Brasília), gerado pelo banco |
@@ -39,12 +40,9 @@ analista da análise original.
 
 ## Pontos em aberto
 
-- O exemplo de jul/2026 usado como critério de aceite traz receita de R$ 60.600 e exposição de R$ 6.800,67, mas
-  24 UH − 1 isenta × (R$ 1.840 + R$ 700) dá R$ 58.420. O teste usa um caso fictício coerente com a fórmula (14,31%,
-  3,00% + R$ 2,00). Para reproduzir o caso real é preciso a memória de cálculo, anonimizada.
+- O exemplo de jul/2026 do §9.1 registrava receita de R$ 60.600; o setor confirmou que o certo pela regra é
+  23 UH × (R$ 1.840 + R$ 700) = R$ 58.420 (síndico isento descontado). O teste segue a regra (14,31%, 3,00% + R$ 2,00).
 - Uma análise de regressão foi registrada com 3,50% para 22,41%; pela tabela é 3,75%. Confirmar se houve ajuste.
-- Taxa extra acima de 40% da ordinária: hoje entra **até** o limite (`extra_acima_limite: 'limitar'`). Se a regra
-  for tirar a taxa extra inteira, trocar para `'excluir'`.
 
 ## Dados
 

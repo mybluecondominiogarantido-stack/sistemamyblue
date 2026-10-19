@@ -250,14 +250,23 @@ test('§9.7 Assertiva: só pessoa física com 24+ taxas em aberto, CNPJ nunca en
   assert.deepEqual(c.assertiva.candidatos.map((x) => x.unidade), ['G-702']);
 });
 
-test('§3.2 composição: taxa extra até 40% da ordinária, multa/juros/honorários fora, água e gás só no boleto', () => {
+test('§3.2 composição: taxa extra vigente entra inteira, multa/juros/honorários fora, água e gás só no boleto', () => {
   const base = casoA();
-  const alta = analisar({ ...base, formulario: { ...base.formulario, taxas_extras: [{ descricao: 'Obra', valor_por_uh: 1000, inicio: '2026-01', fim: '2026-12', ata: true }] } }, POLITICA_PADRAO, { hoje: '2026-07-20' });
-  assert.equal(alta.valores.extra_por_uh, 736);
-  assert.ok(alta.alertas.some((a) => a.codigo === 'extra_acima_limite'));
-  const excluir = analisar({ ...base, formulario: { ...base.formulario, taxas_extras: [{ descricao: 'Obra', valor_por_uh: 1000, inicio: '2026-01', fim: '2026-12', ata: true }] } }, { ...POLITICA_PADRAO, extra_acima_limite: 'excluir' }, { hoje: '2026-07-20' });
-  assert.equal(excluir.valores.extra_por_uh, 0);
-  assert.equal(excluir.meses[0].valor, 1840 * 3 + 1200);
+  const obra = { ...base, formulario: { ...base.formulario, taxas_extras: [{ descricao: 'Obra', valor_por_uh: 1000, inicio: '2026-01', fim: '2026-12', ata: true }] } };
+  obra.relatorio = { ...base.relatorio, unidades: [{ unidade: 'A-101', titular: 'X', lancamentos: ['2026-04', '2026-05', '2026-06'].flatMap((c) => [lanc(c, 'ordinaria', 1840), lanc(c, 'extra', 1000), lanc(c, 'juros', 50)]) }] };
+  const inteira = analisar(obra, POLITICA_PADRAO, { hoje: '2026-07-20' });
+  assert.equal(inteira.valores.extra_por_uh, 1000); // 54% da ordinária, entra inteira (sem limite na política)
+  assert.equal(inteira.valores.receita_bruta, 23 * 2840);
+  assert.deepEqual(inteira.meses.map((m) => m.valor), [2840, 2840, 2840]);
+  assert.ok(!inteira.alertas.some((a) => a.codigo === 'extra_acima_limite'));
+  assert.match(inteira.alertas.find((a) => a.codigo === 'extra_acima_aviso').mensagem, /\(54,3% da ordinária\) passa de 40%/);
+  assert.ok(!analisar(casoA(), POLITICA_PADRAO, { hoje: '2026-07-20' }).alertas.some((a) => a.codigo === 'extra_acima_aviso')); // R$ 700 = 38%
+  // o limite continua configurável numa versão da política
+  const limitada = analisar(obra, { ...POLITICA_PADRAO, extra_limite_pct: 40 }, { hoje: '2026-07-20' });
+  assert.equal(limitada.valores.extra_por_uh, 736);
+  assert.ok(limitada.alertas.some((a) => a.codigo === 'extra_acima_limite'));
+  assert.equal(analisar(obra, { ...POLITICA_PADRAO, extra_limite_pct: 40, extra_acima_limite: 'excluir' }, { hoje: '2026-07-20' }).meses[0].valor, 1840);
+  assert.ok(validarPolitica({ ...POLITICA_PADRAO, extra_limite_pct: -1 }).length);
 
   const semAta = analisar({ ...base, formulario: { ...base.formulario, taxas_extras: [{ ...base.formulario.taxas_extras[0], ata: false }] } }, POLITICA_PADRAO, { hoje: '2026-07-20' });
   assert.ok(semAta.alertas.some((a) => a.codigo === 'extra_sem_ata'));

@@ -37,8 +37,9 @@ const POLITICA_PADRAO = Object.freeze({
   relatorio_validade_meses: 3,    // relatório emitido há mais tempo que isso não é aceito
 
   // composição
-  extra_limite_pct: 40,           // taxa extra entra até este % da ordinária
-  extra_acima_limite: 'limitar',  // 'limitar' (entra até o limite) | 'excluir' (sai inteira)
+  extra_limite_pct: null,         // taxa extra vigente entra inteira (decisão do setor); um número limita a % da ordinária
+  extra_acima_limite: 'limitar',  // com limite: 'limitar' (entra até o limite) | 'excluir' (sai inteira)
+  extra_aviso_pct: 40,            // taxa extra acima deste % da ordinária: entra do mesmo jeito, mas avisa o analista
   desconto_base: 'ordinaria',     // desconto de pontualidade em % incide sobre a ordinária
 
   // Assertiva (§8.4)
@@ -79,7 +80,7 @@ function validarPolitica(p) {
   if (!p || typeof p !== 'object') return ['política ausente'];
   if (!p.versao) erros.push('versao: obrigatória');
   ['boleto_padrao', 'receita_minima', 'inad_diretoria', 'inad_reprovacao', 'exposicao_maxima', 'exposicao_inad_minima',
-    'meses_base', 'meses_coleta', 'dias_apos_vencimento', 'relatorio_validade_meses', 'extra_limite_pct', 'assertiva_min_taxas',
+    'meses_base', 'meses_coleta', 'dias_apos_vencimento', 'relatorio_validade_meses', 'extra_aviso_pct', 'assertiva_min_taxas',
     'concentracao_unidade_pct', 'concentracao_top3_pct', 'multa_maxima_pct', 'desconto_impreterivel_acima', 'custo_boleto_mercado',
     'validade_dias', 'sla_horas', 'sla_horas_diretoria', 'prazo_analista_corte'].forEach(num);
   if (!Array.isArray(p.faixas) || !p.faixas.length) erros.push('faixas: ao menos uma');
@@ -91,6 +92,7 @@ function validarPolitica(p) {
     const ultimo = p.faixas[p.faixas.length - 1].ate;
     if (ultimo < p.inad_reprovacao) erros.push(`faixas: a última vai até ${ultimo}%, mas só reprova acima de ${p.inad_reprovacao}%`);
   }
+  if (p.extra_limite_pct !== null && p.extra_limite_pct !== undefined && !(Number.isFinite(p.extra_limite_pct) && p.extra_limite_pct > 0)) erros.push('extra_limite_pct: vazio (sem limite) ou número positivo');
   if (p.meses_coleta < p.meses_base) erros.push('meses_coleta: não pode ser menor que meses_base');
   if (!['limitar', 'excluir'].includes(p.extra_acima_limite)) erros.push('extra_acima_limite: limitar ou excluir');
   if (!['em_aberto', 'consecutivas'].includes(p.assertiva_criterio)) erros.push('assertiva_criterio: em_aberto ou consecutivas');

@@ -305,7 +305,8 @@ function analisar(entrada, politica = POLITICA_PADRAO, opcoes = {}) {
   const uhEscopo = uhTotal === null ? null : Math.round((uhTotal - (uhIsentas || 0) - exclusoes.size) * 10000) / 10000;
 
   /* ---------- valores por unidade ---------- */
-  const limiteExtra = ordinaria === null ? 0 : cent(ordinaria) * P.extra_limite_pct / 100;
+  // sem limite na política (padrão): a taxa extra vigente entra inteira
+  const limiteExtra = num(P.extra_limite_pct) === null ? Infinity : ordinaria === null ? 0 : cent(ordinaria) * P.extra_limite_pct / 100;
   const extras = (f.taxas_extras || []).map((x) => ({ ...x, c: cent(x.valor_por_uh), inicio: normalizarCompetencia(x.inicio), fim: normalizarCompetencia(x.fim) }));
   const vigentes = (comp) => extras.filter((x) => (!x.inicio || x.inicio <= comp) && (!x.fim || x.fim >= comp));
   const extraValida = (comp) => {
@@ -318,6 +319,11 @@ function analisar(entrada, politica = POLITICA_PADRAO, opcoes = {}) {
   const somaExtraAtual = vigentes(mesAtual).reduce((s, x) => s + x.c, 0);
   if (somaExtraAtual > limiteExtra + EPS) {
     alerta('extra_acima_limite', 'atencao', `Taxa extra de ${fmtBRL(reais(somaExtraAtual))} por unidade passa de ${P.extra_limite_pct}% da ordinária: ${P.extra_acima_limite === 'limitar' ? `entra só até ${fmtBRL(reais(Math.floor(limiteExtra)))}` : 'fica fora da base'}.`);
+  }
+  const avisoExtra = ordinaria === null ? Infinity : cent(ordinaria) * P.extra_aviso_pct / 100;
+  if (somaExtraAtual > avisoExtra + EPS && somaExtraAtual <= limiteExtra + EPS) {
+    const pct = (somaExtraAtual / cent(ordinaria) * 100).toFixed(1).replace('.', ',');
+    alerta('extra_acima_aviso', 'atencao', `Taxa extra de ${fmtBRL(reais(somaExtraAtual))} por unidade (${pct}% da ordinária) passa de ${P.extra_aviso_pct}% da ordinária: entra inteira na análise; conferir a ata e a permanência da taxa.`);
   }
   for (const x of vigentes(mesAtual)) {
     if (!x.ata) alerta('extra_sem_ata', 'atencao', `Taxa extra "${x.descricao || 'sem descrição'}" sem ata de aprovação anexada.`);
