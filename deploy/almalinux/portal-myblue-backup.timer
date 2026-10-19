@@ -1,0 +1,10 @@
+# Copie para /etc/systemd/system/portal-myblue-backup.timer
+[Unit]
+Description=Backup diário do banco do Portal MyBlue
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

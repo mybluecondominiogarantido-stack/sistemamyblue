@@ -36,6 +36,8 @@ function lerConfig(sobrescrever = {}) {
   const railway = !!(e.RAILWAY_PROJECT_ID || e.RAILWAY_ENVIRONMENT_NAME || e.RAILWAY_ENVIRONMENT);
   return {
     porta: Number(e.PORT) || 3000,
+    // VPS com Nginx/Apache na frente: HOST=127.0.0.1 deixa a porta fechada para a internet
+    host: e.HOST || undefined,
     // Postgres (Supabase, Railway…). Sem ele, usa o Postgres embutido gravado em DATA_DIR.
     databaseUrl: e.DATABASE_URL || '',
     dataDir: path.resolve(e.DATA_DIR || e.RAILWAY_VOLUME_MOUNT_PATH || path.join(__dirname, '..', 'data')),
@@ -156,8 +158,8 @@ async function iniciar(cfg = lerConfig()) {
   }
   // cabeçalhos maiores: algumas ferramentas gravam dados via URL (JSONP), como faziam no Apps Script
   const servidor = http.createServer({ maxHeaderSize: 512 * 1024 }, app);
-  servidor.listen(cfg.porta, () => {
-    if (!cfg.silencioso) console.log(`Portal MyBlue rodando em http://localhost:${servidor.address().port}`);
+  servidor.listen(cfg.porta, cfg.host, () => {
+    if (!cfg.silencioso) console.log(`Portal MyBlue rodando em http://${cfg.host || 'localhost'}:${servidor.address().port}`);
   });
   const fechar = () => servidor.close(async () => { await db.fechar(); process.exit(0); });
   process.once('SIGTERM', fechar);

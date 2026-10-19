@@ -290,7 +290,11 @@ Sem `DATABASE_URL`, o banco embutido fica no volume `dados`. Com `DATABASE_URL`,
 docker compose run --rm -v "$PWD/modulos-originais:/import:ro" portal npm run importar-html -- /import
 ```
 
-### Sem Docker (VPS, servidor interno)
+### Na VPS (Contabo, AlmaLinux 9)
+
+Nginx com HTTPS (Let's Encrypt) na frente, portal como serviço do systemd e PostgreSQL 17 na mesma máquina. Passo a passo completo, do servidor zerado até o backup diário e a cópia dos dados do Railway/Supabase, em [`deploy/almalinux/LEIAME.md`](deploy/almalinux/LEIAME.md). Os arquivos de configuração (Nginx, Apache como alternativa, systemd, `.env`) ficam na mesma pasta.
+
+### Sem Docker (outro servidor)
 
 Rode `npm ci --omit=dev` e `npm start` com um gerenciador de processos (pm2, systemd). Coloque um proxy com HTTPS na frente (Nginx, Caddy) e use `COOKIE_SECURE=true` e `TRUST_PROXY=1`. Outros serviços de nuvem (Render, Fly.io) funcionam desde que tenham **disco persistente** para a pasta `DATA_DIR`.
 
@@ -304,7 +308,9 @@ Rode `npm ci --omit=dev` e `npm start` com um gerenciador de processos (pm2, sys
 | Variável | Padrão | Para que serve |
 |---|---|---|
 | `PORT` | 3000 | Porta HTTP |
+| `HOST` | todas | Endereço em que o portal escuta. `127.0.0.1` na VPS, com Nginx/Apache na frente |
 | `DATABASE_URL` | — | Endereço do Postgres (Supabase, Railway). Sem ele, usa o banco embutido |
+| `DB_SSL` | automático | SSL na conexão com o Postgres: ligado, menos com `localhost`/`127.0.0.1`; `false` ou `true` força |
 | `DATA_DIR` | ./data | Pasta do banco embutido (só quando não há `DATABASE_URL`) |
 | `ADMIN_EMAIL` / `ADMIN_NOME` / `ADMIN_SENHA` | — | Primeiro administrador (só quando o banco está vazio) |
 | `SESSAO_HORAS` | 12 | Duração da sessão (renova sozinha enquanto a pessoa usa) |
@@ -352,6 +358,7 @@ server/
   rotas/            auth, admin, ferramentas (entrega, armazenamento, protocolo Apps Script), tickets, links (Central de Links) e tutoriais
 public/             portal (login, início, menu, administração)
 scripts/            importar-html e criar-admin
+deploy/almalinux/    VPS: Nginx/Apache, systemd, backup e passo a passo
 test/               testes automatizados (npm test)
 ```
 

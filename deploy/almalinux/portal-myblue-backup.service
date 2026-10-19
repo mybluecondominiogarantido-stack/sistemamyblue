@@ -1,0 +1,8 @@
+# Copie para /etc/systemd/system/portal-myblue-backup.service
+[Unit]
+Description=Backup do banco do Portal MyBlue
+After=postgresql-17.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/portal-myblue/deploy/almalinux/backup-banco.sh

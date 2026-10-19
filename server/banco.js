@@ -29,12 +29,14 @@ function api(executor) {
 async function abrirPg(url) {
   const { Pool, types } = require('pg');
   types.setTypeParser(20, (v) => Number(v)); // bigint (COUNT, SUM) como número
-  const local = /@(localhost|127\.0\.0\.1)[:/]/.test(url) || /sslmode=disable/.test(url);
+  // Postgres na mesma máquina (VPS) não usa SSL; DB_SSL=false/true força a escolha
+  const local = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(url) || /sslmode=disable/.test(url) || /[?&]host=\//.test(url);
+  const ssl = process.env.DB_SSL === 'false' ? false : process.env.DB_SSL === 'true' ? true : !local;
   const pool = new Pool({
     connectionString: url,
     max: Number(process.env.DB_CONEXOES) || 10,
     // Supabase e Railway exigem SSL; o certificado do pooler não é de uma CA pública
-    ssl: local ? false : { rejectUnauthorized: false },
+    ssl: ssl ? { rejectUnauthorized: false } : false,
   });
   pool.on('error', (e) => console.error('[banco] conexão perdida:', e.message));
   await pool.query('SELECT 1');

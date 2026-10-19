@@ -1,0 +1,27 @@
+# Copie para /etc/systemd/system/portal-myblue.service
+[Unit]
+Description=Portal MyBlue
+After=network-online.target postgresql-17.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=portal
+Group=portal
+WorkingDirectory=/opt/portal-myblue
+# As variáveis ficam em /opt/portal-myblue/.env (lido pelo próprio portal)
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node server/index.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+# o "-" evita erro se a pasta não existir (com DATABASE_URL o portal não grava em disco)
+ReadWritePaths=-/opt/portal-myblue/data
+
+[Install]
+WantedBy=multi-user.target
