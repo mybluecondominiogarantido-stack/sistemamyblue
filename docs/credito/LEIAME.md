@@ -15,7 +15,6 @@ faixa e status são código determinístico e testado. Nada vai ao executivo sem
 | Extração dos PDFs pela IA, leitores por tipo de relatório | — | próxima etapa |
 | Formulário do executivo, fila e revisão do analista | — | depois (telas aprovadas no design) |
 | Retorno em PDF, resumo executivo e e-mail | `server/credito/retorno.js` + `server/credito/retorno/gerador_retorno.py` | pronto (PDF), testes em `test/credito-retorno.test.js` |
-| Retorno em PPTX editável | — | a fazer |
 
 ## Retorno em PDF
 
@@ -42,6 +41,7 @@ Todas ficam como parâmetro da política (tabela `parametros_politica`), sem nad
 | Nº de unidades | **convenção** prevalece; formulário prevalece para taxa, vencimento e isenção |
 | Protocolo | **AC-AAAA-MM-DD-NN**, sequencial por dia (Brasília), gerado pelo banco |
 | Reanálise | **protocolo novo**, ligado à análise original (`analises.origem_id`) |
+| Formato do retorno | **só PDF** (sem PPTX) |
 | Assinatura do retorno | **nome do analista** que liberou |
 | Desconto de pontualidade | opcional, conforme o formulário (a regra "sempre 10%" foi revogada); em %, incide sobre a taxa ordinária |
 | Prazo do analista | chegou num dia útil até as **16h** → até as 17h do mesmo dia; depois → 17h do próximo dia útil |

@@ -436,11 +436,11 @@ CREATE INDEX IF NOT EXISTS idx_analises_etapa ON analises(etapa, prazo_analista)
 CREATE INDEX IF NOT EXISTS idx_analises_solicitante ON analises(solicitante_id);
 CREATE INDEX IF NOT EXISTS idx_analises_origem ON analises(origem_id);
 
--- anexos (convenção, relatório, atas…) e os retornos gerados (PDF e PPTX), com o que a IA extraiu de cada um
+-- anexos (convenção, relatório, atas…) e os retornos gerados (PDF), com o que a IA extraiu de cada um
 CREATE TABLE IF NOT EXISTS analise_documentos (
   id SERIAL PRIMARY KEY,
   analise_id INTEGER NOT NULL REFERENCES analises(id) ON DELETE CASCADE,
-  tipo TEXT NOT NULL CHECK (tipo IN ('convencao','relatorio','ata_extra','retomadas','historico','dre','retorno_pdf','retorno_pptx','outro')),
+  tipo TEXT NOT NULL CHECK (tipo IN ('convencao','relatorio','ata_extra','retomadas','historico','dre','retorno_pdf','outro')),
   nome TEXT NOT NULL,
   mime TEXT NOT NULL DEFAULT 'application/pdf',
   tamanho INTEGER NOT NULL DEFAULT 0,
