@@ -271,6 +271,12 @@ test('busca por número e texto', async () => {
   assert.deepEqual(porTexto.map((t) => t.id), [ticket]);
 });
 
+test('a lista segue o número do ticket, do mais novo para o mais antigo', async () => {
+  const ids = (await admin('GET', '/api/tickets?vis=todos&status=todos')).json.tickets.map((t) => t.id);
+  assert.ok(ids.length > 1);
+  assert.deepEqual(ids, [...ids].sort((a, b) => b - a));
+});
+
 const esperar = () => new Promise((ok) => setTimeout(ok, 30));
 
 test('quem recebe o ticket é avisado no portal e por e-mail', async () => {

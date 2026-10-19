@@ -18,7 +18,6 @@ const STATUS = ['novo', 'em_andamento', 'aguardando', 'resolvido', 'cancelado'];
 const EM_ABERTO = "('novo','em_andamento','aguardando')";
 // dois prazos: para a resposta (até o 1º retorno da equipe) e para a conclusão (definido por quem atende)
 const ATRASADO = `(t.status IN ${EM_ABERTO} AND ((t.primeira_resposta_em IS NULL AND t.prazo < now()) OR t.prazo_conclusao < now()))`;
-const PROXIMO_PRAZO = 'CASE WHEN t.primeira_resposta_em IS NULL THEN t.prazo ELSE t.prazo_conclusao END';
 // prazo usado quando o tipo de demanda não define um, em horas de expediente
 // (dia útil de 9 h: urgente 4 h, alta 1 dia útil, média 3 dias úteis, baixa 5 dias úteis)
 const PRAZO_PADRAO_HORAS = { urgente: 4, alta: 9, media: 27, baixa: 45 };
@@ -181,9 +180,7 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
       LEFT JOIN ticket_categorias c ON c.id = t.categoria_id LEFT JOIN condominios cd ON cd.id = t.condominio_id
       LEFT JOIN usuarios us ON us.id = t.solicitante_id LEFT JOIN usuarios ur ON ur.id = t.responsavel_id
       ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-      ORDER BY (t.status IN ${EM_ABERTO}) DESC,
-        CASE t.prioridade WHEN 'urgente' THEN 0 WHEN 'alta' THEN 1 WHEN 'media' THEN 2 ELSE 3 END,
-        ${PROXIMO_PRAZO} NULLS LAST, t.id DESC
+      ORDER BY t.id DESC
       LIMIT ${p(limite)}`, args);
     res.json({ tickets: rows });
   });
