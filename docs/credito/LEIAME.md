@@ -30,7 +30,7 @@ Todas ficam como parâmetro da política (tabela `parametros_politica`), sem nad
 | Protocolo | **AC-AAAA-MM-DD-NN**, sequencial por dia (Brasília), gerado pelo banco |
 | Reanálise | **protocolo novo**, ligado à análise original (`analises.origem_id`) |
 | Assinatura do retorno | **nome do analista** que liberou |
-| Desconto de pontualidade | opcional, conforme o formulário (a regra "sempre 10%" foi revogada) |
+| Desconto de pontualidade | opcional, conforme o formulário (a regra "sempre 10%" foi revogada); em %, incide sobre a taxa ordinária |
 | Prazo do analista | chegou num dia útil até as **16h** → até as 17h do mesmo dia; depois → 17h do próximo dia útil |
 | Prazo ao executivo | **24h** a partir da documentação completa, pulando fim de semana e feriado; **48h** com diretoria |
 
@@ -45,7 +45,6 @@ analista da análise original.
 - Uma análise de regressão foi registrada com 3,50% para 22,41%; pela tabela é 3,75%. Confirmar se houve ajuste.
 - Taxa extra acima de 40% da ordinária: hoje entra **até** o limite (`extra_acima_limite: 'limitar'`). Se a regra
   for tirar a taxa extra inteira, trocar para `'excluir'`.
-- Desconto de pontualidade em %: incide sobre a ordinária (`desconto_base`).
 
 ## Dados
 
