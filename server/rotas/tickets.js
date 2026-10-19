@@ -206,7 +206,7 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
     let cond = null;
     if (!interna) {
       cond = await db.um('SELECT id, nome FROM condominios WHERE id = $1', [Number(b.condominio_id) || 0]);
-      if (!cond) return erro(res, 400, 'Escolha o condomínio da carteira ou marque a demanda como interna.');
+      if (!cond) return erro(res, 400, 'Demanda externa: escolha o condomínio da carteira (ou marque a demanda como interna).');
     }
     const prioridade = PRIORIDADES.includes(b.prioridade) ? b.prioridade : cat ? cat.prioridade : 'media';
     const horas = cat && cat.prazo_horas ? cat.prazo_horas : PRAZO_PADRAO_HORAS[prioridade];

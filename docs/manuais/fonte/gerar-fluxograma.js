@@ -120,7 +120,7 @@ function ticketsPagina(total) {
   const Y = [64, 114, 164];
   const nos = [
     { id: 'ini', c: 0, y: Y[0], tipo: 'pilula', t: '<b>INÍCIO</b><br>Precisa de algo de outro setor' },
-    { id: 'abrir', c: 1, y: Y[0], ator: 'colaborador', t: 'Abrir o ticket: setor, tipo de demanda, condomínio ou interna, descrição e anexos' },
+    { id: 'abrir', c: 1, y: Y[0], ator: 'colaborador', t: 'Abrir o ticket: setor, tipo de demanda, externa ou interna, descrição e anexos' },
     { id: 'd1', c: 2, y: Y[0], tipo: 'decisao', ator: 'portal', t: 'De condomínio, em Cobrança ou Crédito?' },
     { id: 'fila', c: 3, y: Y[0], ator: 'portal', t: 'Vai para a fila do setor, sem responsável; os líderes são avisados' },
     { id: 'lider', c: 4, y: Y[0], ator: 'lider', t: 'Escolher o responsável (ou assumir) e ajustar prioridade e prazo para resposta' },
