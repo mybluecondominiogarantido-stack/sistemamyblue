@@ -538,7 +538,7 @@ module.exports = [
       await t.clicar('input[name=uPapel][value=coordenador]', { depois: 1400 });
       await t.legenda('Marque o <b>setor</b>: ele forma a equipe do setor na Central de Tickets.', { etapa: N, ms: 300 });
       await t.clicar('.fundo-modal label:has-text("Jurídico") input[name=uSetor]', { depois: 1200 });
-      await t.legenda('Marcações extras: <b>supervisão da Central de Tickets</b> (todos os setores) e <b>Marketing — Central de Links</b>.', { etapa: N, ms: 300 });
+      await t.legenda('Marcações extras: <b>supervisão da Central de Tickets</b> (todos os setores; já vem com coordenador e supervisor) e <b>Marketing — Central de Links</b>.', { etapa: N, ms: 300 });
       await t.mostrar('#uSup', 1800, { dx: 0.05 });
       await t.mostrar('#uLinks', 1800, { dx: 0.05 });
       await t.clicar('#btSalvarU', { depois: 1500 });

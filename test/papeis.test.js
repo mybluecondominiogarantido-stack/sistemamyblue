@@ -126,8 +126,9 @@ test('supervisor tem os mesmos poderes no setor dele, e não fica acima do coord
   assert.deepEqual(r.json.usuarios.map((u) => u.email), ['olga@teste.com']);
   assert.equal((await sup('PATCH', `/api/admin/usuarios/${coordId}`, { nome: 'X' })).status, 404, 'não gerencia coordenador');
   assert.equal((await sup('POST', '/api/admin/usuarios', { nome: 'Y', email: 'y@teste.com', setores: [S('Cobrança')] })).status, 201);
-  // tickets: só os setores dele (não vê "todos")
-  assert.equal((await sup('GET', '/api/tickets?vis=todos')).status, 403);
+  // tickets: o perfil já traz a Supervisão da Central de Tickets (vê e direciona todos os setores)
+  assert.equal((await sup('GET', '/api/tickets?vis=todos')).status, 200);
+  assert.equal((await sup('GET', '/api/auth/eu')).json.usuario.supervisor_tickets, true);
   assert.equal((await sup('GET', '/api/tickets/painel/indicadores')).status, 200);
 });
 
@@ -283,4 +284,21 @@ test('tudo o que uma pessoa acessa, num lugar só', async () => {
   // a coordenação vê o resumo de quem ela gerencia, não o dos outros
   assert.equal((await coord('GET', `/api/admin/usuarios/${ivo}/acessos`)).status, 200);
   assert.equal((await coord('GET', `/api/admin/usuarios/${ids['olga@teste.com']}/acessos`)).status, 404);
+});
+
+test('Supervisão da Central de Tickets vem com o perfil Coordenador e Supervisor e sai junto com ele', async () => {
+  const id = await criar('Teo Temporário', 'teo@teste.com', { papel: 'coordenador', setores: [S('Crédito')], supervisor_tickets: true });
+  // no perfil, a marcação não é gravada: ela vem do perfil
+  assert.equal((await ctx.db.um('SELECT supervisor_tickets FROM usuarios WHERE id = $1', [id])).supervisor_tickets, false);
+  const teo = await entrar('teo@teste.com', 'Senha1234');
+  assert.equal((await teo('GET', '/api/tickets?vis=todos')).status, 200);
+  const r = (await admin('GET', `/api/admin/usuarios/${id}/acessos`)).json;
+  assert.equal(r.marcacoes.supervisor_tickets, true);
+  assert.equal(r.marcacoes.supervisor_tickets_pelo_perfil, true);
+  // voltou a usuário comum: deixa de ver todos os setores
+  assert.equal((await admin('PATCH', `/api/admin/usuarios/${id}`, { papel: 'usuario' })).status, 200);
+  assert.equal((await teo('GET', '/api/tickets?vis=todos')).status, 403);
+  // usuário comum só vê todos com a marcação
+  assert.equal((await admin('PATCH', `/api/admin/usuarios/${id}`, { supervisor_tickets: true })).status, 200);
+  assert.equal((await teo('GET', '/api/tickets?vis=todos')).status, 200);
 });

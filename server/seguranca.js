@@ -73,6 +73,11 @@ function hostsDoPortal(req) {
   return hosts;
 }
 
+/* Supervisão da Central de Tickets (ver e direcionar os tickets de todos os setores): vem com os perfis Coordenador e
+   Supervisor; para os demais, é a marcação no cadastro. Decidido aqui, num lugar só. */
+const GESTORES_DE_SETOR = ['coordenador', 'supervisor'];
+const veTodosOsTickets = (papel, marcado) => !!marcado || GESTORES_DE_SETOR.includes(papel);
+
 function criarSeguranca(db, cfg) {
   const duracaoMs = cfg.sessaoHoras * 3600 * 1000;
 
@@ -128,7 +133,7 @@ function criarSeguranca(db, cfg) {
     if (!s || !s.ativo || new Date(s.expira_em) <= new Date()) return;
     const esperado = Buffer.from(assinar(s.token_hash, slug));
     if (!crypto.timingSafeEqual(esperado, Buffer.from(assinatura.padEnd(esperado.length).slice(0, esperado.length)))) return;
-    req.usuario = { id: s.id, nome: s.nome, email: s.email, papel: s.papel, trocar_senha: !!s.trocar_senha, foto_v: s.foto_em ? new Date(s.foto_em).getTime() : null, supervisor_tickets: !!s.supervisor_tickets, editor_links: !!s.editor_links };
+    req.usuario = { id: s.id, nome: s.nome, email: s.email, papel: s.papel, trocar_senha: !!s.trocar_senha, foto_v: s.foto_em ? new Date(s.foto_em).getTime() : null, supervisor_tickets: veTodosOsTickets(s.papel, s.supervisor_tickets), editor_links: !!s.editor_links };
     req.ferramenta = slug;
   }
 
@@ -160,7 +165,7 @@ function criarSeguranca(db, cfg) {
             await db.q('UPDATE sessoes SET expira_em = $1 WHERE token_hash = $2', [new Date(Date.now() + duracaoMs), th]);
             res.setHeader('Set-Cookie', montarCookie(req, token, duracaoMs));
           }
-          req.usuario = { id: s.id, nome: s.nome, email: s.email, papel: s.papel, trocar_senha: !!s.trocar_senha, foto_v: s.foto_em ? new Date(s.foto_em).getTime() : null, supervisor_tickets: !!s.supervisor_tickets, editor_links: !!s.editor_links };
+          req.usuario = { id: s.id, nome: s.nome, email: s.email, papel: s.papel, trocar_senha: !!s.trocar_senha, foto_v: s.foto_em ? new Date(s.foto_em).getTime() : null, supervisor_tickets: veTodosOsTickets(s.papel, s.supervisor_tickets), editor_links: !!s.editor_links };
         } else if (s) {
           await db.q('DELETE FROM sessoes WHERE token_hash = $1', [th]);
         }
@@ -173,7 +178,6 @@ function criarSeguranca(db, cfg) {
 
   /* Setores que a pessoa gerencia: o administrador, todos (null); coordenador e supervisor, os setores do cadastro dele;
      os demais, nenhum. O setor de cada pessoa fica em setor_membros (é também a equipe dela na Central de Tickets). */
-  const GESTORES_DE_SETOR = ['coordenador', 'supervisor'];
   async function setoresGeridos(usuario) {
     if (!usuario) return new Set();
     if (usuario.papel === 'admin') return null;
@@ -299,4 +303,4 @@ function criarSeguranca(db, cfg) {
   };
 }
 
-module.exports = { criarSeguranca, hostsDoPortal, hashSenha, conferirSenha, validarNovaSenha, senhaAleatoria, HASH_FALSO, sha256, COOKIE };
+module.exports = { criarSeguranca, veTodosOsTickets, hostsDoPortal, hashSenha, conferirSenha, validarNovaSenha, senhaAleatoria, HASH_FALSO, sha256, COOKIE };

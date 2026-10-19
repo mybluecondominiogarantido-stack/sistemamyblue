@@ -16,7 +16,7 @@ a supervisão, das pessoas que gerenciam.
 | **Perfil** (Administrador, Coordenador, Supervisor, Usuário) | cadastro da pessoa | só a administração |
 | **Setores** da pessoa (formam a equipe do setor nos tickets e o que coordenação/supervisão gerenciam) | cadastro da pessoa; *Equipes e tipos de demanda* | administração; coordenação/supervisão nos setores delas |
 | **Líder** do setor nos tickets (distribui) | *Equipes e tipos de demanda* | administração; coordenação/supervisão nos setores delas. Coordenação e supervisão do setor já são líderes |
-| **Marcações**: *Supervisão da Central de Tickets* e *Marketing — Central de Links* | cadastro da pessoa | só a administração |
+| **Marcações**: *Supervisão da Central de Tickets* (já vem com Coordenador e Supervisor) e *Marketing — Central de Links* | cadastro da pessoa | só a administração |
 | **Ferramenta**: abre? edita ou só consulta? com qual papel? | janela da ferramenta → *Quem abre e com qual papel* | administração; coordenação/supervisão do setor dono da ferramenta |
 | **Carteira**: quem edita o quê | *Módulos e dados → Carteira: quem edita* (e *Ferramentas do setor → Carteira de condomínios: quem edita*) | administração; coordenação/supervisão liberam pessoas nas permissões do setor delas |
 | **Demonstrativos de premiação**: quem lê o de cada pessoa | a própria Gestão de Premiações, ao enviar | quem usa a Gestão de Premiações |
@@ -30,8 +30,8 @@ a supervisão, das pessoas que gerenciam.
 |---|---|---|
 | **Perfil** | Administrador, Coordenador, Supervisor ou Usuário (cadastro da pessoa) | **papel** dentro de uma ferramenta |
 | **Papel** | função dentro de uma ferramenta (ex.: Gestão, Financeiro), dado em *Quem abre e com qual papel* | perfil do portal |
-| **Supervisor** (perfil) | gerencia os setores dele, com os mesmos poderes do coordenador | **Supervisão da Central de Tickets** |
-| **Supervisão da Central de Tickets** (marcação) | vê e direciona os tickets de **todos** os setores (ex.: Gerência); não dá acesso à administração | o perfil Supervisor, que vê só os tickets dos setores dele |
+| **Supervisor** (perfil) | gerencia os setores dele, com os mesmos poderes do coordenador (inclusive a Supervisão da Central de Tickets) | — |
+| **Supervisão da Central de Tickets** | vê e direciona os tickets de **todos** os setores; não dá acesso à administração. Vem com os perfis Coordenador e Supervisor (sai junto se o perfil mudar); para usuário comum (ex.: Gerência), é marcada no cadastro | o perfil Supervisor |
 | **Coordenação do setor** | coordenadores e supervisores daquele setor | a administração |
 | **Líder** | quem distribui os tickets de um setor (marcado em *Equipes e tipos de demanda*; coordenação/supervisão do setor já é líder) | perfil |
 | **Gestão** | papel de algumas ferramentas (Comissões, Análise de Espólio) | o menu **Gestão do setor** (telas da coordenação) |

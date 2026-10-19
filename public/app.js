@@ -569,11 +569,11 @@
           (coord ? '' :
           '<div><label class="rot">Perfil</label><div class="grade-2">' +
           '<label class="opcao-radio"><input type="radio" name="uPapel" value="usuario"' + (u.papel === 'usuario' || !PAPEL[u.papel] ? ' checked' : '') + '><div><b>Usuário</b><span>Abre só as ferramentas marcadas abaixo.</span></div></label>' +
-          '<label class="opcao-radio"><input type="radio" name="uPapel" value="supervisor"' + (u.papel === 'supervisor' ? ' checked' : '') + '><div><b>Supervisor</b><span>Gerencia o(s) setor(es) dele: usuários comuns, ferramentas, equipe e tipos de demanda; na Carteira, o que estiver liberado em Carteira: quem edita. Mesmos poderes do coordenador. Vê os tickets só dos setores dele.</span></div></label>' +
-          '<label class="opcao-radio"><input type="radio" name="uPapel" value="coordenador"' + (u.papel === 'coordenador' ? ' checked' : '') + '><div><b>Coordenador</b><span>Gerencia o(s) setor(es) dele: usuários comuns, ferramentas, equipe e tipos de demanda; na Carteira, o que estiver liberado em Carteira: quem edita. Vê os tickets só dos setores dele.</span></div></label>' +
+          '<label class="opcao-radio"><input type="radio" name="uPapel" value="supervisor"' + (u.papel === 'supervisor' ? ' checked' : '') + '><div><b>Supervisor</b><span>Gerencia o(s) setor(es) dele: usuários comuns, ferramentas, equipe e tipos de demanda; na Carteira, o que estiver liberado em Carteira: quem edita. Vê e direciona os tickets de todos os setores. Mesmos poderes do coordenador.</span></div></label>' +
+          '<label class="opcao-radio"><input type="radio" name="uPapel" value="coordenador"' + (u.papel === 'coordenador' ? ' checked' : '') + '><div><b>Coordenador</b><span>Gerencia o(s) setor(es) dele: usuários comuns, ferramentas, equipe e tipos de demanda; na Carteira, o que estiver liberado em Carteira: quem edita. Vê e direciona os tickets de todos os setores.</span></div></label>' +
           '<label class="opcao-radio"><input type="radio" name="uPapel" value="admin"' + (u.papel === 'admin' ? ' checked' : '') + '><div><b>Administrador</b><span>Acessa tudo e gerencia usuários, módulos e dados.</span></div></label></div></div>' +
           '<label class="opcao-radio" style="margin:0"><input type="checkbox" id="uSup"' + (u.supervisor_tickets ? ' checked' : '') + '><div><b>Supervisão da Central de Tickets</b>' +
-          '<span>Vê os tickets de todos os setores e direciona: troca o responsável, transfere, muda situação, prioridade e prazo. Para quem acompanha a empresa toda (ex.: Gerência). É uma marcação à parte: não é o perfil Supervisor e não dá acesso à administração.</span></div></label>' +
+          '<span>Vê os tickets de todos os setores e direciona: troca o responsável, transfere, muda situação, prioridade e prazo. Para quem acompanha a empresa toda (ex.: Gerência). Não dá acesso à administração.</span><span id="uSupPerfil" hidden><b>Já vem com o perfil Coordenador e Supervisor.</b></span></div></label>' +
           '<label class="opcao-radio" style="margin:0"><input type="checkbox" id="uLinks"' + (u.editor_links ? ' checked' : '') + '><div><b>Marketing — Central de Links</b>' +
           '<span>Troca o fundo da campanha do mês e edita os links da Central de Links. Não dá acesso à administração do portal.</span></div></label>') +
           blocoSetores +
@@ -590,7 +590,15 @@
       function papelMudou() {
         var r = $('input[name=uPapel]:checked', m);
         $('#blocoMods', m).hidden = !!r && r.value === 'admin';
-        if ($('#ajudaGestor', m)) $('#ajudaGestor', m).hidden = !r || (r.value !== 'coordenador' && r.value !== 'supervisor');
+        var gestor = !!r && (r.value === 'coordenador' || r.value === 'supervisor');
+        if ($('#ajudaGestor', m)) $('#ajudaGestor', m).hidden = !gestor;
+        // Coordenador e Supervisor já veem e direcionam os tickets de todos os setores (vem com o perfil)
+        var sup = $('#uSup', m);
+        if (sup) {
+          if (gestor) { if (!sup.disabled) sup.dataset.marcado = sup.checked ? '1' : ''; sup.checked = true; sup.disabled = true; }
+          else if (sup.disabled) { sup.disabled = false; sup.checked = sup.dataset.marcado === '1'; }
+          $('#uSupPerfil', m).hidden = !gestor;
+        }
       }
       $$('input[name=uPapel]', m).forEach(function (r) { r.onchange = papelMudou; });
       papelMudou();
@@ -602,7 +610,7 @@
         };
         if (!coord) {
           corpo.papel = $('input[name=uPapel]:checked', m).value;
-          corpo.supervisor_tickets = $('#uSup', m).checked;
+          corpo.supervisor_tickets = $('#uSup', m).checked && !$('#uSup', m).disabled; // no perfil, não precisa marcar
           corpo.editor_links = $('#uLinks', m).checked;
         }
         try {
@@ -646,7 +654,7 @@
       (j.setores.length ? j.setores.map(function (x) { return linha(esc(x.nome), x.lider ? '<span class="etiqueta azul">líder nos tickets</span>' : 'equipe'); }).join('') : '<div class="ajuda" style="padding:8px 12px;margin:0">Sem setor.</div>') + '</div>' +
       '<div class="ajuda">' + (j.gerencia === 'todos os setores' ? 'Administração: gerencia tudo.' : j.gerencia.length ? 'Gerencia (usuários comuns, ferramentas, equipe e tipos de demanda): ' + esc(j.gerencia.join(', ')) + '.' : 'Não gerencia setor.') + '</div>' +
       sec('Marcações') + '<div class="caixa-opcoes" style="max-height:none">' +
-      linha('Supervisão da Central de Tickets (vê e direciona os tickets de todos os setores)', j.marcacoes.supervisor_tickets ? sim : nao) +
+      linha('Supervisão da Central de Tickets (vê e direciona os tickets de todos os setores)', j.marcacoes.supervisor_tickets ? sim + (j.marcacoes.supervisor_tickets_pelo_perfil ? ' <span class="sec" style="display:inline">vem com o perfil</span>' : '') : nao) +
       linha('Marketing — Central de Links (edita a Central de Links)', j.marcacoes.editor_links ? sim : nao) + '</div>' +
       sec('Central de Tickets') + '<div class="caixa-opcoes" style="max-height:none">' +
       linha('Vê os tickets de', j.tickets.todos_setores ? 'todos os setores' : (j.tickets.setores.length ? esc(j.tickets.setores.join(', ')) + ' (e os que abriu)' : 'só os que abriu')) +

@@ -1,7 +1,7 @@
 'use strict';
 const express = require('express');
 const zlib = require('zlib');
-const { hashSenha, validarNovaSenha, senhaAleatoria } = require('../seguranca');
+const { hashSenha, validarNovaSenha, senhaAleatoria, veTodosOsTickets } = require('../seguranca');
 const { SLUG_RE } = require('../modulos');
 const { criarZip } = require('../zip');
 const { MODULO: MODULO_BOLETOS } = require('../boletos-carteira');
@@ -108,7 +108,8 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     const setoresValidos = new Set((await db.q('SELECT id FROM setores')).rows.map((x) => x.id));
     const setores = Array.isArray(body.setores) ? [...new Set(body.setores.map(Number))].filter((x) => setoresValidos.has(x)) : null;
     if (setores && ['coordenador', 'supervisor'].includes(papel) && !setores.length) return { erro: 'Escolha o setor que esta pessoa coordena ou supervisiona.' };
-    return { nome, email, papel, supervisor_tickets: !!body.supervisor_tickets, editor_links: !!body.editor_links, modulos: lista.filter((s) => existentes.has(s)), setores };
+    // Coordenador e Supervisor já têm a Supervisão da Central de Tickets pelo perfil: a marcação fica só para os outros
+    return { nome, email, papel, supervisor_tickets: !!body.supervisor_tickets && !['coordenador', 'supervisor'].includes(papel), editor_links: !!body.editor_links, modulos: lista.filter((s) => existentes.has(s)), setores };
   }
 
   // quem continua liberado numa ferramenta mantém o "só consulta" e os papéis que tinha nela
@@ -218,8 +219,8 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
       usuario: { id: u.id, nome: u.nome, email: u.email, papel: u.papel, ativo: u.ativo },
       setores: setores.map((x) => ({ nome: x.nome, lider: !!x.lider || gestor })),
       gerencia: u.papel === 'admin' ? 'todos os setores' : gestor ? setores.map((x) => x.nome) : [],
-      marcacoes: { supervisor_tickets: !!u.supervisor_tickets, editor_links: !!u.editor_links },
-      tickets: { todos_setores: u.papel === 'admin' || !!u.supervisor_tickets, setores: setores.map((x) => x.nome),
+      marcacoes: { supervisor_tickets: veTodosOsTickets(u.papel, u.supervisor_tickets), supervisor_tickets_pelo_perfil: gestor, editor_links: !!u.editor_links },
+      tickets: { todos_setores: u.papel === 'admin' || veTodosOsTickets(u.papel, u.supervisor_tickets), setores: setores.map((x) => x.nome),
         lider_em: setores.filter((x) => x.lider || gestor).map((x) => x.nome) },
       carteira,
       ferramentas,

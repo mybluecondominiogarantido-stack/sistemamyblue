@@ -78,12 +78,13 @@ Resumo por perfil:
 | Usuários | — | usuários comuns dos setores dele | todos, todos os perfis |
 | Ferramentas do setor (HTML, versões, quem abre e papel) | — | setores dele (HTML novo em ferramenta não isolada aguarda aprovação) | todas, mais *Módulos e dados* completo |
 | Equipe e tipos de demanda | — | líderes e tipos dos setores dele | todos os setores |
-| Tickets | os do setor dele e os que abriu | líder nos setores dele | todos |
+| Tickets | os do setor dele e os que abriu | todos os setores (a Supervisão da Central de Tickets vem com o perfil) | todos |
 | Carteira | consulta + o que estiver liberado em *Carteira: quem edita* | idem, e libera pessoas nas permissões do setor dele | tudo |
 | Histórico, backup, setores, Central de Links | — | — | sim |
 
 - Marcações à parte, no cadastro (só a administração): **Supervisão da Central de Tickets** (vê e direciona os tickets
-  de **todos** os setores, ex.: Gerência; não é o perfil Supervisor) e **Marketing — Central de Links**.
+  de **todos** os setores; já vem com os perfis Coordenador e Supervisor, então se marca só para usuário comum, ex.:
+  Gerência) e **Marketing — Central de Links**.
 - Ao criar um usuário (ou redefinir a senha), o portal mostra uma senha temporária. A pessoa cria a própria senha no
   primeiro acesso. A coordenação não redefine a senha de quem tem acesso fora dos setores dela (só a administração).
 - Desativar um usuário encerra na hora as sessões abertas dele.
@@ -179,10 +180,10 @@ O ticket fica **atrasado** quando passa do prazo para resposta sem nenhum retorn
 | Qualquer pessoa | Abrir tickets, acompanhar os que abriu, comentar, anexar, cancelar ou reabrir os seus |
 | Equipe do setor | Ver a fila do setor, tratar os tickets, definir o prazo para conclusão dos que estão com ela, mudar a situação, transferir, notas internas |
 | Líder do setor (marcado em *Equipes e tipos de demanda*; a coordenação/supervisão do setor já é líder) | Tudo da equipe, mais escolher e trocar o responsável, a prioridade e o prazo para resposta |
-| Marcação **Supervisão da Central de Tickets** (não é o perfil Supervisor) | Ver e direcionar os tickets de **todos** os setores, com painel geral. Não dá acesso à administração do portal |
+| **Supervisão da Central de Tickets** (vem com os perfis Coordenador e Supervisor; para usuário comum, é uma marcação) | Ver e direcionar os tickets de **todos** os setores, com painel geral. Não dá acesso à administração do portal |
 | Administrador | Tudo, mais montar equipes e tipos de demanda |
 
-A marcação **Supervisão da Central de Tickets** é feita pela administração no cadastro da pessoa, em *Usuários e acessos*. As equipes, os líderes e os **tipos de demanda** de cada setor (com prazo em horas e prioridade sugerida) ficam em *Administração → Equipes e tipos de demanda*. Os prazos contam só o **expediente: segunda a sexta, das 8h às 17h (horário de Brasília)**, ou seja, 9 h = 1 dia útil. Um ticket urgente aberto na sexta às 16h30 vence na segunda às 11h30. Sem tipo cadastrado, o prazo segue a prioridade: urgente 4 h, alta 1 dia útil, média 3 dias úteis e baixa 5 dias úteis. Feriados entram na variável `FERIADOS`.
+A **Supervisão da Central de Tickets** vem com os perfis Coordenador e Supervisor; para usuário comum, a administração marca no cadastro da pessoa, em *Usuários e acessos*. As equipes, os líderes e os **tipos de demanda** de cada setor (com prazo em horas e prioridade sugerida) ficam em *Administração → Equipes e tipos de demanda*. Os prazos contam só o **expediente: segunda a sexta, das 8h às 17h (horário de Brasília)**, ou seja, 9 h = 1 dia útil. Um ticket urgente aberto na sexta às 16h30 vence na segunda às 11h30. Sem tipo cadastrado, o prazo segue a prioridade: urgente 4 h, alta 1 dia útil, média 3 dias úteis e baixa 5 dias úteis. Feriados entram na variável `FERIADOS`.
 
 **Avisos**
 
