@@ -1,17 +1,43 @@
-# Acessos às ferramentas do Portal MyBlue
+# Acessos no Portal MyBlue — referência única
 
-Os acessos são decididos **no portal**, num lugar só: a janela de cada ferramenta, em
-**Administração → Módulos e dados** ou **Gestão do setor → Ferramentas do setor**, seção
-**Quem abre e com qual papel**. O HTML da ferramenta não decide quem entra nem o que cada um faz:
-ele recebe isso pronto do portal.
+Este é **o** documento de acessos do portal: o README e os manuais apontam para cá. Quem abre cada ferramenta, se edita
+ou só consulta e o papel de cada pessoa são decididos **no portal**. O HTML da ferramenta não decide quem entra nem o
+que cada um faz: recebe isso pronto do portal.
 
-## São três coisas diferentes
+**Para ver tudo o que uma pessoa acessa**: *Usuários e acessos* → abrir a pessoa → **Tudo o que acessa**. Mostra perfil,
+setores (e onde é líder nos tickets), o que gerencia, marcações, Central de Tickets, cada permissão da Carteira e cada
+ferramenta que abre (por quê, se edita ou só consulta e com quais papéis). A administração vê de todos; a coordenação e
+a supervisão, das pessoas que gerenciam.
 
-| Pergunta | Onde se define | Quem define |
+## Onde cada acesso é definido
+
+| O quê | Onde se define | Quem define |
 |---|---|---|
-| **1. Qual o perfil da pessoa no portal?** (Administrador, Coordenador, Supervisor, Usuário) | cadastro da pessoa | só a administração |
-| **2. A pessoa abre esta ferramenta? Edita ou só consulta?** | janela da ferramenta → *Quem abre e com qual papel* | administração; coordenação/supervisão do setor dono da ferramenta |
-| **3. O que ela faz dentro da ferramenta?** (papel: Gestão, Financeiro…) | mesma janela, colunas de papéis | os mesmos do item 2 |
+| **Perfil** (Administrador, Coordenador, Supervisor, Usuário) | cadastro da pessoa | só a administração |
+| **Setores** da pessoa (formam a equipe do setor nos tickets e o que coordenação/supervisão gerenciam) | cadastro da pessoa; *Equipes e tipos de demanda* | administração; coordenação/supervisão nos setores delas |
+| **Líder** do setor nos tickets (distribui) | *Equipes e tipos de demanda* | administração; coordenação/supervisão nos setores delas. Coordenação e supervisão do setor já são líderes |
+| **Marcações**: *Supervisão da Central de Tickets* e *Marketing — Central de Links* | cadastro da pessoa | só a administração |
+| **Ferramenta**: abre? edita ou só consulta? com qual papel? | janela da ferramenta → *Quem abre e com qual papel* | administração; coordenação/supervisão do setor dono da ferramenta |
+| **Carteira**: quem edita o quê | *Módulos e dados → Carteira: quem edita* (e *Ferramentas do setor → Carteira de condomínios: quem edita*) | administração; coordenação/supervisão liberam pessoas nas permissões do setor delas |
+| **Demonstrativos de premiação**: quem lê o de cada pessoa | a própria Gestão de Premiações, ao enviar | quem usa a Gestão de Premiações |
+
+> Atenção: mudar os setores de uma pessoa (no cadastro ou em *Equipes e tipos de demanda*) muda também a equipe de
+> tickets dela e, para coordenação/supervisão, quais ferramentas e pessoas ela gerencia.
+
+## Termos (para não confundir)
+
+| Termo | O que é | Não confundir com |
+|---|---|---|
+| **Perfil** | Administrador, Coordenador, Supervisor ou Usuário (cadastro da pessoa) | **papel** dentro de uma ferramenta |
+| **Papel** | função dentro de uma ferramenta (ex.: Gestão, Financeiro), dado em *Quem abre e com qual papel* | perfil do portal |
+| **Supervisor** (perfil) | gerencia os setores dele, com os mesmos poderes do coordenador | **Supervisão da Central de Tickets** |
+| **Supervisão da Central de Tickets** (marcação) | vê e direciona os tickets de **todos** os setores (ex.: Gerência); não dá acesso à administração | o perfil Supervisor, que vê só os tickets dos setores dele |
+| **Coordenação do setor** | coordenadores e supervisores daquele setor | a administração |
+| **Líder** | quem distribui os tickets de um setor (marcado em *Equipes e tipos de demanda*; coordenação/supervisão do setor já é líder) | perfil |
+| **Gestão** | papel de algumas ferramentas (Comissões, Análise de Espólio) | o menu **Gestão do setor** (telas da coordenação) |
+| **Equipes** (aba da Carteira) | pessoas responsáveis pelos condomínios (analista de cobrança, assistente de crédito…) | **Equipes e tipos de demanda** (time de tickets de cada setor) |
+| **Responsável** | quem está com um ticket | os **responsáveis** de um condomínio na Carteira |
+| **Edita / Só consulta** | como a pessoa abre uma ferramenta | as permissões **quem edita** da Carteira |
 
 ## O que cada perfil abre e pode administrar
 
@@ -19,18 +45,24 @@ ele recebe isso pronto do portal.
   marcado; na janela de acessos aparece "todos os papéis"). Pode mudar tudo. É o único que **aprova ferramenta nova**
   e que **cria os papéis** de uma ferramenta.
 - **Coordenador e Supervisor** (mesmos poderes aqui): abrem todas as ferramentas do(s) setor(es) deles, sempre editando,
-  inclusive as que aguardam aprovação. Nessas ferramentas podem: enviar HTML novo e voltar versão; **liberar qualquer
-  pessoa do portal, de qualquer setor**; escolher se ela edita ou só consulta; dar o papel dela; e **cadastrar ferramenta
-  nova** no setor (fica aguardando aprovação). Não mexem em ferramentas de outros setores e não criam papéis, só distribuem.
+  inclusive as que aguardam aprovação. Nessas ferramentas podem: enviar HTML novo (veja *HTML novo da coordenação*) e
+  voltar a uma versão aprovada; **liberar qualquer pessoa do portal, de qualquer setor**; escolher se ela edita ou só
+  consulta; dar o papel dela; e **cadastrar ferramenta nova** no setor (fica aguardando aprovação). Não mexem em
+  ferramentas de outros setores e não criam papéis, só distribuem.
+  ⚠️ Isso vale também para a **Gestão de Premiações**: a coordenação/supervisão do setor dela abre a ferramenta (e os
+  salários) sem precisar ser marcada. Se isso não for desejado, a ferramenta deve ficar num setor sem coordenação.
 - **Usuário**: abre só as ferramentas liberadas para ele, do jeito que foi liberado.
 
 ## Edita x Só consulta
 
 - **Edita**: usa a ferramenta normalmente.
-- **Só consulta**: abre e vê tudo, mas o portal **não grava nada** do que a pessoa fizer. Aparece o selo "Modo consulta".
+- **Só consulta**: abre e vê tudo, mas o portal **recusa as gravações** nos dados da equipe. Aparece o selo "Modo consulta".
   - Boletos, Síndicos e Análise de Espólio já **escondem os botões** de edição sozinhos.
   - Nas demais (Renegociações, Pedidos, Prestação de Contas, Patrocínio), os botões continuam na tela: a pessoa pode até
     mudar algo, mas não é salvo e some ao recarregar. Esconder os botões depende de ajustar o HTML de cada uma (contrato abaixo).
+  - Na Gestão de Premiações, quem só consulta não envia demonstrativos nem mexe nos pedidos de planilha.
+  - Ferramenta com dados **por pessoa** (*Banco do portal · por pessoa*): o que cada um grava é só dele, então o só
+    consulta não bloqueia essas gravações.
 
 ## Papéis
 
@@ -79,7 +111,8 @@ para as outras pessoas. A **coordenação** abre sem precisar ser marcada, mas *
 
 ## Carteira de condomínios
 
-**Todos veem a carteira** (ninguém exporta: o portal não tem mais o botão Exportar CSV). O resto é permissão configurável em **Ferramentas do setor → Carteira de condomínios: quem edita**
+**Todos veem a carteira**: quem consulta vê todos os dados dos condomínios (o portal não tem botão de exportar, mas o
+que aparece na tela pode ser copiado). O resto é permissão configurável em **Ferramentas do setor → Carteira de condomínios: quem edita**
 (administração: também em Módulos e dados → Carteira: quem edita). Cada permissão tem uma regra: perfis (Coordenação,
 Supervisão, Usuário), setores (vazio = qualquer setor) e pessoas liberadas uma a uma. A administração pode tudo, sempre.
 
@@ -90,7 +123,7 @@ Supervisão, Usuário), setores (vazio = qualquer setor) e pessoas liberadas uma
 | Editar e transferir o Analista extrajudicial (ApoioCob) | só a administração |
 | Editar e transferir o Assistente de crédito | Coordenação e Supervisão do Crédito |
 | Adicionar condomínios novos pela planilha de implantação | Coordenação e Supervisão de qualquer setor |
-| Cadastrar e excluir condomínios, mudar o ID e importar a planilha | só a administração |
+| Cadastrar e excluir condomínios, mudar o ID e importar a planilha (cadastrar inclui preencher os dados do condomínio novo) | só a administração |
 
 - A coordenação e a supervisão liberam pessoas nas permissões do setor delas (ex.: Crédito → Assistente de crédito).
   Perfis e setores de cada regra são da administração.
@@ -116,6 +149,10 @@ Ferramentas feitas como artefato do Claude podem usar o mesmo pelo `user`:
 Fora do portal (abrindo o arquivo direto), `window.__MYBLUE__` não existe: a ferramenta deve funcionar
 com tudo liberado, como já fazem as atuais.
 
+A ferramenta também precisa funcionar **isolada** (ferramenta nova já nasce assim): guardar dados pelo portal
+(localStorage com *Banco do portal*, ou `claude.use('db')`), falar com o portal só por `fetch`/XHR em `/api/...`
+(a ponte acrescenta a chave sozinha), sem IndexedDB, sem Web Worker carregado de um endereço e sem `window.parent`.
+
 Depois de publicar um HTML que usa papéis novos, a administração cadastra os papéis da ferramenta
 (identificador igual ao usado no HTML) e a coordenação distribui às pessoas.
 
@@ -130,8 +167,42 @@ e o contrário também.
 | Comissões de Novos Condomínios | Executivo comercial, Gestão, Financeiro | armazenamento da equipe, chave `cnp:p:<id>` (o vínculo com o nome na carteira continua sendo feito na aba da ferramenta) |
 | Análise de Espólio | os do `const PAPEIS` do HTML (hoje Gestão, Implantação, Solicitante avulso) | banco de documentos, `perfis/mb-<id>` (o nome na carteira continua na aba da ferramenta) |
 
+**O servidor confere os papéis** nessas duas ferramentas: o registro de papéis fica nos dados da própria ferramenta,
+que qualquer pessoa que edita consegue gravar. Por isso, mudar os papéis de alguém (inclusive os próprios) pela aba
+Acessos da ferramenta só vale para a administração, a coordenação/supervisão do setor e quem já tem o papel **Gestão**.
+Para as demais pessoas, a gravação é recusada e a ferramenta mostra o aviso (o resto do registro grava normalmente).
+
 O reconhecimento fica em `server/acessos.js` (`MODELOS`). Quando essas ferramentas forem refeitas seguindo
 o contrato acima, o modelo deixa de ser reconhecido e os papéis passam a ser os cadastrados no portal.
+
+## Ferramentas isoladas
+
+O HTML de uma ferramenta é um programa. Sem isolamento, ele roda **com a sessão de quem o abre**: um HTML com erro ou
+mal-intencionado aberto pela administração poderia criar usuários, baixar o backup ou mexer em outras ferramentas.
+Com **Isolar esta ferramenta** (janela da ferramenta, só a administração), o navegador põe a ferramenta numa origem
+própria (sandbox), sem o cookie do portal. Ela continua lendo e gravando **os próprios dados**, pela chave dela, e
+alcança só o que precisa: a carteira (consulta), abrir ticket com anexo, fotos, bibliotecas e, se for de premiação, as
+rotas da comissão. Nada de administração, de outras ferramentas ou dos tickets dos outros.
+
+- **Ferramenta nova já nasce isolada.** Ferramenta aguardando aprovação e prévia de versão nova abrem sempre isoladas.
+- As que já estavam em uso continuam como estavam até a administração ligar. **Antes de ligar, abra e teste**:
+  - o que a ferramenta guarda *só no navegador* (localStorage, sessionStorage) passa a valer só enquanto a página está
+    aberta: use *Banco do portal · por pessoa* ou *equipe* se ela precisa lembrar algo;
+  - IndexedDB, Web Worker carregado de um endereço e acesso à página do portal (`window.parent`) não funcionam isolados;
+  - o resto (fetch/XHR para `/api/...`, bibliotecas das CDNs, imprimir, baixar arquivo, abrir em nova aba, área de
+    transferência) funciona.
+- Pelo que os HTMLs em uso usam hoje (outubro/2026): **Síndicos** usa IndexedDB (teste com cuidado ou ajuste o HTML
+  antes de isolar) e **Prestação de Contas** lê PDF com o Web Worker do pdf.js (isolada, o pdf.js usa a alternativa sem
+  Worker, mais lenta: teste a leitura de PDF). As demais devem funcionar isoladas, mas teste cada uma.
+- A lista de *Módulos e dados* marca **não isolada** as que ainda rodam com a sessão de quem abre.
+
+## HTML novo da coordenação
+
+- Em ferramenta **isolada**, o HTML enviado pela coordenação/supervisão entra em uso na hora.
+- Em ferramenta **não isolada**, ele fica guardado e **aguarda a aprovação da administração** (aviso no sino e por
+  e-mail); a versão atual continua em uso. Na janela da ferramenta aparecem **Ver prévia** (sempre isolada, com os
+  dados reais), **Aprovar e usar** e **Recusar** (a versão é apagada e quem enviou é avisado).
+- A coordenação só volta a versões já aprovadas.
 
 ## Mapa das ferramentas (outubro/2026)
 
