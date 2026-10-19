@@ -460,15 +460,22 @@ test('remover módulo exige confirmação e apaga as versões do HTML', async ()
   assert.equal((await c('POST', '/api/admin/modulos', { slug: 'Inválido!', nome: 'x' })).status, 400);
 });
 
-test('backup do banco (JSON, sem hashes de senha)', async () => {
+test('backup do banco (todas as tabelas, sem hashes de senha nem sessões)', async () => {
   const { c } = await logar('admin@teste.com', 'Admin1234');
-  const r = await c('GET', '/api/admin/backup');
+  const r = await c('GET', '/api/admin/backup', undefined, { bruto: true });
   assert.equal(r.status, 200);
-  assert.equal(r.json.sistema, 'portal-myblue');
-  assert.ok(r.json.tabelas.usuarios.length >= 1);
-  assert.ok(r.json.tabelas.usuarios.every((u) => !('senha_hash' in u)));
-  assert.ok(r.json.tabelas.modulo_versoes.length >= 1);
-  assert.equal(typeof r.json.tabelas.modulo_versoes[0].conteudo, 'string');
+  assert.match(r.headers.get('content-disposition'), /\.jsonl\.gz"/);
+  const linhas = require('zlib').gunzipSync(r.buffer).toString().trim().split('\n').map((l) => JSON.parse(l));
+  assert.equal(linhas[0].sistema, 'portal-myblue');
+  assert.equal(linhas[0].versao_backup, 5);
+  assert.ok(linhas.at(-1).fim);
+  const de = (t) => linhas.filter((l) => l.t === t).map((l) => l.r);
+  for (const t of ['regras_acesso', 'comissao_relatorios', 'comissao_leitores', 'comissao_planilhas', 'tutoriais']) assert.ok(linhas[0].tabelas.includes(t), t);
+  assert.ok(!linhas[0].tabelas.includes('sessoes') && !linhas[0].tabelas.includes('cdn_cache'));
+  assert.ok(de('usuarios').length >= 1);
+  assert.ok(de('usuarios').every((u) => !('senha_hash' in u)));
+  assert.ok(de('modulo_versoes').length >= 1);
+  assert.equal(typeof de('modulo_versoes')[0].conteudo, 'string');
 });
 
 test('foto de perfil: enviar, ver, recusar arquivo inválido e remover', async () => {

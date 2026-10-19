@@ -401,12 +401,107 @@ ALTER TABLE modulos ADD COLUMN IF NOT EXISTS pendente BOOLEAN NOT NULL DEFAULT F
 ALTER TABLE modulos ADD COLUMN IF NOT EXISTS criado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
 `;
 
+/* Funções e gatilhos do banco (cada item é um comando inteiro: o corpo das funções tem ";").
+   Análise de Espólio (ferramenta feita como artefato do Claude, documentos em "documentos"):
+   - a coleção "carteira" acompanha a Carteira de condomínios (a cada mudança em condominios);
+   - avisos no sino: solicitação nova para quem tem o papel Gestão; concluída ou devolvida para quem pediu;
+   - o contador de protocolos nunca volta nem repete número (duas pessoas gravando ao mesmo tempo).
+   Se o módulo não existir, nada acontece, e um erro aqui nunca impede a gravação. */
+const ESPOLIO = 'analise-de-espolio';
+const FUNCOES = [
+  `CREATE OR REPLACE FUNCTION espolio_carteira_json() RETURNS jsonb LANGUAGE sql STABLE SET search_path = pg_catalog, public AS $f$
+  SELECT jsonb_build_object(
+    'origem', 'banco',
+    'atualizadoEm', to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+    'assinatura', 'banco:' || count(*) || ':' || coalesce(max(atualizado_em)::text, ''),
+    'itens', coalesce(jsonb_agg(jsonb_build_object(
+      'codigo', codigo, 'nome', nome, 'razao_social', razao_social, 'cnpj', cnpj, 'comarca', comarca, 'situacao', situacao,
+      'inicio_contrato', inicio_contrato, 'assistente_credito', assistente_credito, 'analista_cobranca', analista_cobranca,
+      'analista_extrajudicial', analista_extrajudicial, 'executivo', executivo, 'administradora', administradora
+    ) ORDER BY nome), '[]'::jsonb))
+  FROM public.condominios
+$f$`,
+  `CREATE OR REPLACE FUNCTION espolio_atualizar_carteira() RETURNS void LANGUAGE plpgsql SET search_path = pg_catalog, public AS $f$
+DECLARE
+  alvo text := '${ESPOLIO}';
+  novo_seq bigint;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.modulos WHERE slug = alvo) THEN RETURN; END IF;
+  SELECT coalesce(max(seq), 0) + 1 INTO novo_seq FROM public.documentos WHERE modulo_slug = alvo;
+  INSERT INTO public.documentos (modulo_slug, colecao, doc_id, dados, seq, atualizado_em)
+  VALUES (alvo, 'carteira', 'atual', public.espolio_carteira_json(), novo_seq, now())
+  ON CONFLICT (modulo_slug, colecao, doc_id) DO UPDATE SET dados = excluded.dados, seq = excluded.seq, atualizado_em = now();
+EXCEPTION WHEN others THEN
+  RAISE WARNING 'espolio_atualizar_carteira: %', sqlerrm;
+END $f$`,
+  `CREATE OR REPLACE FUNCTION espolio_carteira_trigger() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, public AS $f$
+BEGIN PERFORM public.espolio_atualizar_carteira(); RETURN NULL; END $f$`,
+  `CREATE OR REPLACE FUNCTION espolio_notificar() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, public AS $f$
+DECLARE
+  st_antigo text := CASE WHEN tg_op = 'UPDATE' THEN coalesce(old.dados->>'status', '') ELSE '' END;
+  st_novo   text := coalesce(new.dados->>'status', '');
+  cond      text := coalesce(new.dados->'condominio'->>'nome', '');
+  solic     text := coalesce(new.dados->>'solicitanteNome', '');
+  solic_id  int  := CASE WHEN coalesce(new.dados->>'solicitanteId', '') ~ '^(mb-)?[0-9]+$' THEN regexp_replace(new.dados->>'solicitanteId', '^mb-', '')::int END;
+BEGIN
+  IF new.modulo_slug <> '${ESPOLIO}' OR new.colecao <> 'solicitacoes' THEN RETURN new; END IF;
+  IF tg_op = 'INSERT' OR (st_antigo <> 'nova' AND st_novo = 'nova') THEN
+    INSERT INTO public.notificacoes (usuario_id, tipo, titulo, texto, link)
+    SELECT u.id, 'espolio', solic || ' solicitou análise de espólio · ' || cond, 'Abra a aba Solicitações do módulo Análise de Espólio.', '#/m/${ESPOLIO}'
+    FROM public.usuarios u
+    WHERE u.ativo AND u.id::text IN (SELECT regexp_replace(doc_id, '^mb-', '') FROM public.documentos
+      WHERE modulo_slug = '${ESPOLIO}' AND colecao = 'perfis' AND dados->'papeis' ? 'gestao');
+  END IF;
+  IF tg_op = 'UPDATE' AND st_antigo <> st_novo AND st_novo IN ('concluida', 'devolvida') AND solic_id IS NOT NULL THEN
+    INSERT INTO public.notificacoes (usuario_id, tipo, titulo, texto, link) VALUES (solic_id, 'espolio',
+      CASE WHEN st_novo = 'concluida' THEN 'Análise de espólio concluída · ' || cond || ' · ' || coalesce(new.dados->>'protocolo', '') ELSE 'Solicitação de análise devolvida · ' || cond END,
+      CASE WHEN st_novo = 'concluida' THEN 'A ficha está disponível em Minhas solicitações.' ELSE coalesce(new.dados->>'motivoDevolucao', '') END, '#/m/${ESPOLIO}');
+  END IF;
+  RETURN new;
+EXCEPTION WHEN others THEN
+  RAISE WARNING 'espolio_notificar: %', sqlerrm;
+  RETURN new;
+END $f$`,
+  `CREATE OR REPLACE FUNCTION espolio_protocolo_guarda() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, public AS $f$
+DECLARE
+  ano text; v_old bigint; v_new bigint; subiu boolean := false;
+BEGIN
+  IF new.modulo_slug <> '${ESPOLIO}' OR new.colecao <> 'meta' OR new.doc_id <> 'estado' THEN RETURN new; END IF;
+  IF old.dados IS NULL OR old.dados->'seq' IS NULL THEN RETURN new; END IF;
+  IF new.dados IS NULL OR new.dados->'seq' IS NULL THEN
+    RAISE EXCEPTION 'protocolo_conflito: o contador de protocolos não pode ser apagado';
+  END IF;
+  FOR ano IN SELECT jsonb_object_keys(old.dados->'seq') LOOP
+    v_old := coalesce((old.dados->'seq'->>ano)::bigint, 0);
+    v_new := coalesce((new.dados->'seq'->>ano)::bigint, 0);
+    IF v_new < v_old THEN RAISE EXCEPTION 'protocolo_conflito: contador de % voltaria de % para %', ano, v_old, v_new; END IF;
+  END LOOP;
+  FOR ano IN SELECT jsonb_object_keys(new.dados->'seq') LOOP
+    IF coalesce((new.dados->'seq'->>ano)::bigint, 0) > coalesce((old.dados->'seq'->>ano)::bigint, 0) THEN subiu := true; END IF;
+  END LOOP;
+  IF NOT subiu THEN RAISE EXCEPTION 'protocolo_conflito: número já usado, buscar o próximo'; END IF;
+  RETURN new;
+END $f$`,
+  'CREATE OR REPLACE TRIGGER espolio_carteira AFTER INSERT OR DELETE OR UPDATE ON condominios FOR EACH STATEMENT EXECUTE FUNCTION espolio_carteira_trigger()',
+  'CREATE OR REPLACE TRIGGER espolio_notificar AFTER INSERT OR UPDATE OF dados ON documentos FOR EACH ROW EXECUTE FUNCTION espolio_notificar()',
+  `CREATE OR REPLACE TRIGGER espolio_protocolo_guarda BEFORE UPDATE ON documentos FOR EACH ROW
+  WHEN (new.modulo_slug = '${ESPOLIO}' AND new.colecao = 'meta' AND new.doc_id = 'estado') EXECUTE FUNCTION espolio_protocolo_guarda()`,
+];
+
 async function abrir(cfg) {
   const db = await conectar(cfg);
   await db.tx(async (t) => {
     // evita que duas instâncias subindo juntas criem o esquema ao mesmo tempo
     await t.q('SELECT pg_advisory_xact_lock(7240513)');
     for (const cmd of (SCHEMA + ';' + RLS + ';' + AJUSTES).split(';').map((s) => s.trim()).filter(Boolean)) await t.q(cmd);
+    // uma função que não puder ser recriada (ex.: dono diferente no banco) não impede o portal de subir
+    for (const cmd of FUNCOES) {
+      await t.q('SAVEPOINT funcao');
+      try { await t.q(cmd); await t.q('RELEASE SAVEPOINT funcao'); } catch (e) {
+        await t.q('ROLLBACK TO SAVEPOINT funcao');
+        console.warn('[banco] não foi possível criar/atualizar:', cmd.slice(0, 80).replace(/\s+/g, ' '), '→', e.message);
+      }
+    }
     await semear(t);
     await renomearPremiacoes(t); // antes de semear os módulos novos do catálogo
     await semearSetores(t);
@@ -510,4 +605,4 @@ async function renomearPremiacoes(t) {
   await t.q("UPDATE notificacoes SET link = replace(replace(link, '#/m/comissionamento', '#/m/premiacoes'), '#/comissoes', '#/premiacoes') WHERE link LIKE '#/m/comissionamento%' OR link LIKE '#/comissoes%'");
 }
 
-module.exports = { abrir, SCHEMA, RLS };
+module.exports = { abrir, SCHEMA, RLS, FUNCOES };

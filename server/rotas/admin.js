@@ -1,9 +1,11 @@
 'use strict';
 const express = require('express');
+const zlib = require('zlib');
 const { hashSenha, validarNovaSenha, senhaAleatoria } = require('../seguranca');
 const { SLUG_RE } = require('../modulos');
 const { criarZip } = require('../zip');
 const { MODULO: MODULO_BOLETOS } = require('../boletos-carteira');
+const { gerarBackup } = require('../backup');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ICONES = ['app', 'calculadora', 'grafico', 'aperto', 'caixa', 'carteira', 'documento', 'pessoas', 'ticket', 'casa', 'calendario', 'escudo'];
@@ -646,25 +648,24 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     res.json({ eventos: (await db.q(sql, args)).rows });
   });
 
-  /* ===================== backup (JSON com todas as tabelas) ===================== */
+  /* ===================== backup (todas as tabelas, sai aos pedaços e comprimido) ===================== */
   r.get('/api/admin/backup', async (req, res) => {
-    const tabelas = ['setores', 'usuarios', 'modulos', 'permissoes', 'modulo_versoes', 'armazenamento', 'colecoes', 'registros', 'documentos', 'auditoria',
-      'setor_membros', 'ticket_categorias', 'tickets', 'ticket_eventos', 'ticket_anexos', 'notificacoes',
-      'condominios', 'links_pagina', 'links', 'links_campanhas'];
-    const saida = { sistema: 'portal-myblue', versao_backup: 4, gerado_em: new Date().toISOString(), tabelas: {} };
-    for (const t of tabelas) {
-      const { rows } = await db.q(`SELECT * FROM ${t}`);
-      // arquivos (HTMLs, anexos, fundos de campanha) em base64; hashes de senha ficam fora do backup por segurança
-      saida.tabelas[t] = rows.map((l) => {
-        const c = { ...l };
-        for (const k of Object.keys(c)) if (Buffer.isBuffer(c[k])) c[k] = c[k].toString('base64'); // HTMLs e fotos
-        delete c.senha_hash;
-        return c;
-      });
+    const gz = zlib.createGzip();
+    let parou = false;
+    res.on('close', () => { if (!res.writableFinished) parou = true; });
+    res.set('Content-Type', 'application/gzip');
+    res.set('Content-Disposition', `attachment; filename="myblue-backup-${new Date().toISOString().slice(0, 10)}.jsonl.gz"`);
+    res.set('Cache-Control', 'no-store');
+    gz.pipe(res);
+    try {
+      const linhas = await gerarBackup(db, gz, { deveParar: () => parou });
+      gz.end();
+      await seg.auditar(req, 'backup_baixado', null, { linhas });
+    } catch (e) {
+      if (!parou) console.error('[backup]', e);
+      gz.destroy();
+      res.destroy();
     }
-    await seg.auditar(req, 'backup_baixado', null, null);
-    res.set('Content-Disposition', `attachment; filename="myblue-backup-${new Date().toISOString().slice(0, 10)}.json"`);
-    res.json(saida);
   });
 
   return r;

@@ -296,8 +296,26 @@ Rode `npm ci --omit=dev` e `npm start` com um gerenciador de processos (pm2, sys
 
 ### Backup
 
-- Administração → *Módulos e dados* → **Backup do banco** baixa um JSON com todas as tabelas (sem as senhas). O Supabase e o Railway também fazem backup automático do Postgres.
-- Cada módulo tem **Exportar dados** (JSON) e CSV por aba da planilha interna.
+> **Atenção:** o Supabase só faz backup automático nos planos pagos (Pro, Team, Enterprise). No plano **Free não há backup
+> automático**: até migrar de plano, o único backup é o baixado pelo portal. O Postgres do Railway também não guarda cópias
+> sozinho (os backups do volume precisam ser ligados no painel).
+
+- **Backup do banco** (Administração → *Módulos e dados*): baixa `myblue-backup-AAAA-MM-DD.jsonl.gz` com **todas as tabelas**
+  (a lista vem do próprio banco, então tabela nova entra sozinha), inclusive HTMLs e versões, anexos dos tickets, fotos,
+  fundos da Central de Links, vídeos tutoriais, regras de acesso e demonstrativos. Ficam fora só as sessões abertas e a cópia
+  das bibliotecas das CDNs. O arquivo é uma fotografia do banco num instante e sai aos pedaços, sem pesar no servidor.
+- **Hashes de senha não vão para o backup.** O arquivo tem dados de negócio e pessoais: guarde em local com acesso restrito.
+- **Restaurar** (num banco novo ou, com cuidado, no mesmo):
+  ```bash
+  DATABASE_URL=postgres://… npm run restaurar-backup -- myblue-backup-2026-10-19.jsonl.gz
+  ```
+  O banco indicado é **apagado** antes (se já tiver usuários, o script pede `--apagar-o-que-existe`). Depois de restaurar,
+  as senhas de todos ficam bloqueadas e o script mostra uma senha temporária para cada administrador ativo, que entra e
+  redefine a senha das demais pessoas em *Usuários e acessos*. Backups antigos (`.json`, versão 4) também são lidos.
+- **Teste a restauração** de vez em quando: restaure o último backup num Postgres vazio (outro projeto do Supabase ou um
+  Postgres local), suba o portal apontando para ele e confira. Backup que nunca foi restaurado não é garantia.
+- As funções e os gatilhos do banco (Análise de Espólio) estão no código (`server/db.js`) e são recriados ao subir o portal.
+- Cada módulo continua com **Exportar dados** (JSON) e CSV por aba da planilha interna.
 
 ## Configuração (`.env`)
 
@@ -339,7 +357,8 @@ Os links de Apps Script que estão dentro dos HTMLs dão acesso de leitura e esc
 server/
   index.js          configuração, montagem do app e primeiro administrador
   banco.js          conexão com o Postgres (Supabase/Railway) ou o Postgres embutido
-  db.js             esquema do banco e catálogo inicial
+  db.js             esquema do banco, funções/gatilhos e catálogo inicial
+  backup.js         backup de todas as tabelas (aos pedaços) e restauração
   catalogo.js       setores e módulos que já nascem cadastrados
   seguranca.js      senhas, sessões, permissões, CSRF, limite de tentativas, auditoria
   modulos.js        versões dos HTMLs, injeção da ponte e ligação com a planilha interna

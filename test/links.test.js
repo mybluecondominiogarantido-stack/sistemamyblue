@@ -199,9 +199,10 @@ test('campanhas: o fundo troca sozinho na data de início', async () => {
 });
 
 test('backup inclui a Central de Links com as imagens em base64', async () => {
-  const r = await admin('GET', '/api/admin/backup');
+  const r = await admin('GET', '/api/admin/backup', undefined, { bruto: true });
   assert.equal(r.status, 200);
-  const camp = r.json.tabelas.links_campanhas.find((c) => c.fundo);
+  const linhas = require('zlib').gunzipSync(r.buffer).toString().trim().split('\n').map((l) => JSON.parse(l));
+  const camp = linhas.find((l) => l.t === 'links_campanhas' && l.r.fundo).r;
   assert.equal(typeof camp.fundo, 'string');
-  assert.ok(Array.isArray(r.json.tabelas.links));
+  assert.ok(linhas.some((l) => l.t === 'links'));
 });
