@@ -2,6 +2,7 @@
 /*
  * Análise de Crédito no banco: a política versionada (parametros_politica + faixas_precificacao) e o protocolo.
  *  - semearPolitica: grava a política padrão uma única vez (instalação nova); depois a administração cria versões.
+ *    Cria também, uma vez, o setor Análise de Crédito (os analistas).
  *  - politicaAtiva: monta o objeto que o motor de regras recebe (parâmetros + faixas, na ordem).
  *  - proximoProtocolo: AC-AAAA-MM-DD-NN, sequencial por dia (horário de Brasília). O contador sobe numa única
  *    instrução no banco, então duas análises criadas ao mesmo tempo nunca recebem o mesmo número.
@@ -21,8 +22,12 @@ async function gravarPolitica(t, politica, { ativa = false, criadoPor = null } =
 }
 
 async function semearPolitica(t) {
-  if (await t.um('SELECT 1 FROM parametros_politica LIMIT 1')) return;
-  await gravarPolitica(t, POLITICA_PADRAO, { ativa: true });
+  if (!(await t.um('SELECT 1 FROM parametros_politica LIMIT 1'))) await gravarPolitica(t, POLITICA_PADRAO, { ativa: true });
+  // setor dos analistas: criado uma única vez nos portais já instalados (se a administração apagar, não volta)
+  if (!(await t.um("SELECT 1 FROM auditoria WHERE acao = 'setor_analise_credito' LIMIT 1"))) {
+    await t.q('INSERT INTO setores (nome, ordem) VALUES ($1, 14) ON CONFLICT (nome) DO NOTHING', [POLITICA_PADRAO.setor_analistas]);
+    await t.q("INSERT INTO auditoria (acao, detalhe) VALUES ('setor_analise_credito', $1::jsonb)", [JSON.stringify({ setor: POLITICA_PADRAO.setor_analistas })]);
+  }
 }
 
 async function politicaAtiva(db, versao = null) {

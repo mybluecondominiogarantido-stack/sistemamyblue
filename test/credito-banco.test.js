@@ -18,6 +18,17 @@ test('a política padrão é semeada uma vez e volta igual do banco', async () =
   assert.equal(p.boleto_por_uf.MA, 5.5);
   assert.equal(p.inad_reprovacao, 40);
   assert.equal((await db.um('SELECT count(*)::int AS n FROM parametros_politica')).n, 1);
+  assert.equal(p.setor_analistas, 'Análise de Crédito');
+  assert.ok(await db.um("SELECT 1 FROM setores WHERE nome = 'Análise de Crédito'"));
+  assert.ok(await db.um("SELECT 1 FROM setores WHERE nome = 'Crédito'")); // são setores diferentes
+});
+
+test('o setor Análise de Crédito é criado uma vez só: apagado pela administração, não volta', async () => {
+  const { semearPolitica } = require('../server/credito/banco');
+  await db.q("DELETE FROM setores WHERE nome = 'Análise de Crédito'");
+  await db.tx((t) => semearPolitica(t));
+  assert.equal(await db.um("SELECT 1 FROM setores WHERE nome = 'Análise de Crédito'"), null);
+  await db.q("INSERT INTO setores (nome, ordem) VALUES ('Análise de Crédito', 14)");
 });
 
 test('versão nova da política vira a ativa; a antiga continua consultável', async () => {

@@ -69,6 +69,8 @@ const POLITICA_PADRAO = Object.freeze({
 
   // protocolo (§8.6): AC-AAAA-MM-DD-NN, sequencial por dia, gerado pelo banco
   protocolo_prefixo: 'AC',
+  // setor dos analistas de crédito (quem assume e analisa as solicitações)
+  setor_analistas: 'Análise de Crédito',
   // assinatura do retorno (§8.7): 'analista' (nome de quem liberou) | texto fixo
   assinatura: 'analista',
 });

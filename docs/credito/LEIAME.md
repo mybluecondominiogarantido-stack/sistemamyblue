@@ -42,6 +42,7 @@ Todas ficam como parâmetro da política (tabela `parametros_politica`), sem nad
 | Protocolo | **AC-AAAA-MM-DD-NN**, sequencial por dia (Brasília), gerado pelo banco |
 | Reanálise | **protocolo novo**, ligado à análise original (`analises.origem_id`) |
 | Formato do retorno | **só PDF** (sem PPTX) |
+| Analistas | quem é do setor **Análise de Crédito** (diferente do setor Crédito); o portal cria o setor |
 | Assinatura do retorno | **nome do analista** que liberou |
 | Desconto de pontualidade | opcional, conforme o formulário (a regra "sempre 10%" foi revogada); em %, incide sobre a taxa ordinária |
 | Prazo do analista | chegou num dia útil até as **16h** → até as 17h do mesmo dia; depois → 17h do próximo dia útil |
