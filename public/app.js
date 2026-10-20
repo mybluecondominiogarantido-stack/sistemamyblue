@@ -3272,6 +3272,7 @@
     enviada: 'enviou para análise', reenviada: 'reenviou depois da pendência', assumida: 'assumiu a análise', motor: 'calculou a análise', ajuste: 'ajustou um valor',
     pendencia: 'devolveu com pendência', diretoria: 'enviou à diretoria', chancelada: 'chancelou', chancela_recusada: 'não chancelou', liberada: 'liberou o retorno',
     reanalise_pedida: 'pediu reanálise', cancelada: 'cancelou', leitura: 'leu o PDF com IA', leitura_erro: 'não conseguiu ler o PDF com IA',
+    formulario_corrigido: 'corrigiu o formulário do executivo',
   };
 
   function etqCr(mapa, k) { return k && mapa[k] ? etq(mapa[k]) : ''; }
@@ -3280,6 +3281,7 @@
     var s = String(v == null ? '' : v).trim().replace(/[R$\s%]/g, '');
     if (!s) return null;
     if (/,\d{1,2}$/.test(s) || (s.indexOf(',') >= 0 && s.indexOf('.') >= 0)) s = s.replace(/\./g, '').replace(',', '.');
+    else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, ''); // 1.900 = mil e novecentos
     else s = s.replace(',', '.');
     var n = Number(s);
     return isFinite(n) ? n : null;
@@ -3444,7 +3446,7 @@
       sindico: { tipo: v('fSind'), isencao: v('fIse'), percentual: numCr(v('fIseP')) },
       outros_isentos: outrosP ? [{ cargo: 'subsíndico/conselheiros', percentual: outrosP }] : [],
       uh_isentas_informadas: numCr(v('fIseT')),
-      sem_convencao: !!($('#fSemConv') && $('#fSemConv').checked),
+      sem_convencao: $('#fSemConv') ? $('#fSemConv').checked : undefined,
     };
   }
 
@@ -3604,7 +3606,10 @@
     var aj = d.ajustes || {};
     var tx = d.textos || {};
     var dis = editavel ? '' : ' disabled';
-    return '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Relatório de inadimplência</h2><span class="espaco"></span><span class="etiqueta ' + ((rel.unidades || []).length || rel.sem_inadimplencia ? 'verde' : 'ambar') + '">' +
+    return (editavel ? '<details class="painel" style="margin-bottom:16px"><summary class="cab-painel" style="cursor:pointer"><h2 style="display:inline">Colar resultado da skill</h2> <span class="ajuda" style="margin:0">a resposta inteira do Claude (leitura da inadimplência ou da convenção)</span></summary><div class="corpo pilha">' +
+      '<textarea class="campo" id="dSkill" rows="6" placeholder="No Claude, clique em Copiar embaixo da resposta da skill e cole aqui." style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px"></textarea>' +
+      '<div class="linha"><button type="button" class="btn primary sm" id="btSkill">Preencher os campos</button><span class="ajuda" style="margin:0">O portal preenche lançamentos, data de emissão, convenção, textos do retorno e ressalvas. Confira e clique em Salvar e calcular.</span></div><div id="dSkillInfo"></div></div></details>' : '') +
+      '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Relatório de inadimplência</h2><span class="espaco"></span><span class="etiqueta ' + ((rel.unidades || []).length || rel.sem_inadimplencia ? 'verde' : 'ambar') + '">' +
       ((rel.unidades || []).length ? (rel.unidades || []).length + ' unidades lançadas' : rel.sem_inadimplencia ? 'sem inadimplência' : 'falta lançar') + '</span></div><div class="corpo pilha">' +
       (editavel ? '<div class="linha">' + leituraCr(docs.relatorio, ia, 'relatorio') + '</div>' : '') +
       (rel.origem && rel.origem.ia ? '<div class="msg ' + (rel.origem.legivel === false || (rel.origem.observacoes || []).length ? 'aviso' : 'ok') + '">Lido pela IA' + (rel.sistema ? ' · relatório ' + esc(rel.sistema) : '') + ': ' + (rel.unidades || []).length + ' unidades, ' +
@@ -3713,7 +3718,8 @@
       html += htmlResultadoCredito(a.resultado_motor) +
         (pd.analisar ? htmlDadosAnalista(a.dados_analista || {}, true, docsVig, m.ia) + '<div class="linha" style="justify-content:flex-end;margin-bottom:18px"><button class="btn ghost" id="btSalvarDadosCr">Salvar dados</button><button class="btn primary" id="btCalcCr">Salvar e calcular</button></div>'
           : a.dados_analista ? htmlDadosAnalista(a.dados_analista, false) : '') +
-        '<details class="painel" style="margin-bottom:16px"><summary class="cab-painel" style="cursor:pointer"><h2 style="display:inline">Formulário do executivo</h2></summary><div class="corpo pilha" style="gap:18px">' + htmlFormCredito(f, a, m, true) + '</div></details>' +
+        '<details class="painel" id="formExecCr" style="margin-bottom:16px"><summary class="cab-painel" style="cursor:pointer"><h2 style="display:inline">Formulário do executivo</h2>' + (pd.analisar ? ' <span class="ajuda" style="margin:0">corrija aqui o que o executivo informou errado; o histórico guarda o que mudou</span>' : '') + '</summary><div class="corpo pilha" style="gap:18px">' + htmlFormCredito(f, a, m, !pd.analisar) +
+        (pd.analisar ? '<div class="linha" style="justify-content:flex-end"><button type="button" class="btn ghost" id="btFormCr">Salvar correção do formulário</button></div>' : '') + '</div></details>' +
         htmlDocsCredito(d.documentos, a, pd.documentos, m, f.sem_convencao);
     } else {
       html += htmlDocsCredito(d.documentos, a, false, m, f.sem_convencao);
@@ -3723,17 +3729,18 @@
         var x = e.detalhe || {};
         var extra = e.tipo === 'documento' || e.tipo === 'documento_removido' ? ': ' + esc(x.nome) : e.tipo === 'ajuste' ? ': ' + esc(x.campo) + ' → ' + esc(Array.isArray(x.valor) ? x.valor.join(', ') : x.valor) + ' (' + esc(x.justificativa) + ')'
           : e.tipo === 'leitura' ? ': ' + (x.tipo === 'relatorio' ? 'relatório, ' + x.unidades + ' unidades e ' + x.lancamentos + ' lançamentos' : 'convenção') + (x.aplicada ? '' : ' (não trocou o que já estava lançado)')
+          : e.tipo === 'formulario_corrigido' ? ': ' + (x.mudancas || []).map(function (y) { return esc(y.campo) + ' ' + esc(y.de) + ' → ' + esc(y.para); }).join('; ')
           : e.tipo === 'leitura_erro' ? ': ' + (x.tipo === 'relatorio' ? 'relatório' : 'convenção') + ' — ' + esc(x.erro)
           : e.tipo === 'motor' ? ': ' + esc(x.status) + (x.inad_media != null ? ', ' + pctCr(x.inad_media) : '') : e.tipo === 'enviada' ? ' (' + esc(x.protocolo) + ')' : (e.tipo === 'chancela_recusada' || e.tipo === 'chancelada') && x.observacao ? ': ' + esc(x.observacao) : '';
         return '<div><b style="color:var(--ink)">' + dataHoraCr(e.criado_em) + '</b> · ' + esc(e.usuario_nome || (e.tipo.indexOf('leitura') === 0 ? 'O portal' : 'Sistema')) + ' ' + (EVENTO_CR[e.tipo] || esc(e.tipo)) + extra + '</div>';
       }).join('') + '</div></section></div>';
     $('#conteudo').innerHTML = html;
-    if (!pd.editar) ligarDocsCredito(a, recarregar);
+    if (!pd.editar && !pd.analisar) ligarDocsCredito(a, recarregar);
+    if ($('#formExecCr') && !pd.analisar) $$('#formExecCr input, #formExecCr select, #formExecCr button').forEach(function (el) { el.disabled = true; });
+    var ligarTirar = function () { $$('#tbExtras [data-tirar]').forEach(function (b) { b.onclick = function () { b.closest('tr').remove(); $('#conteudo .pagina').dispatchEvent(new Event('change')); }; }); };
+    if ($('#btExtra') && (pd.editar || pd.analisar)) { $('#btExtra').onclick = function () { $('#tbExtras').insertAdjacentHTML('beforeend', linhaExtraCr()); ligarTirar(); }; ligarTirar(); }
 
     if (pd.editar) {
-      $('#btExtra').onclick = function () { $('#tbExtras').insertAdjacentHTML('beforeend', linhaExtraCr()); ligarTirar(); };
-      var ligarTirar = function () { $$('#tbExtras [data-tirar]').forEach(function (b) { b.onclick = function () { b.closest('tr').remove(); $('#conteudo .pagina').dispatchEvent(new Event('change')); }; }); };
-      ligarTirar();
       var salvar = async function () {
         var corpo = { formulario: lerFormCredito() };
         if ($('#fExec')) corpo.executivo_id = Number($('#fExec').value);
@@ -3786,7 +3793,56 @@
       }
       var unidadesLidas = null;
       var colaOriginal = $('#dCola') ? $('#dCola').value : '';
+      var lerFormCorrigido = function () {
+        var nf = lerFormCredito();
+        if (nf.sem_convencao === undefined) nf.sem_convencao = !!f.sem_convencao;
+        return nf;
+      };
+      var formOriginal = JSON.stringify(lerFormCorrigido());
+      var salvarForm = async function () {
+        var nf = lerFormCorrigido();
+        var corpo = {};
+        if (JSON.stringify(nf) !== formOriginal) corpo.formulario = nf;
+        if ($('#fExec') && Number($('#fExec').value) && Number($('#fExec').value) !== a.executivo_id) corpo.executivo_id = Number($('#fExec').value);
+        if (!Object.keys(corpo).length) return false;
+        await api('PATCH', '/api/credito/analises/' + a.id, corpo);
+        formOriginal = JSON.stringify(nf);
+        return true;
+      };
+      $('#btFormCr').onclick = async function () {
+        try { var mudou = await salvarForm(); toast(mudou ? 'Formulário corrigido. Clique em Salvar e calcular para refazer a análise.' : 'Nada mudou no formulário.', 'ok'); if (mudou) recarregar(); } catch (e) { toast(e.message, 'erro'); }
+      };
+      $('#btSkill').onclick = async function () {
+        try {
+          var r = await api('POST', '/api/credito/analises/' + a.id + '/resultado-skill', { texto: $('#dSkill').value });
+          var put = function (id, v) { if ($('#' + id) && v !== undefined && v !== null) $('#' + id).value = v; };
+          if (r.lancamentos && r.lancamentos.linhas) { $('#dCola').value = r.lancamentos.texto; unidadesLidas = r.lancamentos.unidades; if ($('#dSemInad')) $('#dSemInad').checked = false; }
+          put('dEmis', r.relatorio.data_emissao);
+          if (r.relatorio.tem_competencia !== undefined) $('#dComp').checked = r.relatorio.tem_competencia;
+          if (r.relatorio.tem_nomes !== undefined) $('#dNomes').checked = r.relatorio.tem_nomes;
+          if (r.convencao) {
+            var c = r.convencao;
+            // o que a skill diz "não consta" limpa o campo; o que ela não trouxe fica como está
+            var campos = { dReg: 'registro', dCuh: 'uh', dMulta: 'multa_pct', dForo: 'foro', dCart: 'cartorio', dClaus: 'clausula_restritiva' };
+            Object.keys(campos).forEach(function (idc) { var k = campos[idc]; if (k in c) put(idc, c[k] == null ? '' : k === 'multa_pct' ? fmtNumCr(c[k]) : c[k]); });
+            a.dados_analista = Object.assign({}, a.dados_analista || {}, { convencao: Object.assign({}, (a.dados_analista || {}).convencao || {}, { origem: c.origem }) });
+          }
+          if (r.textos.observacoes_juridicas || r.textos.proximos_passos) {
+            put('tJur', (r.textos.observacoes_juridicas || []).join('\n') || undefined); put('tPas', (r.textos.proximos_passos || []).join('\n') || undefined);
+            $('#tJur').closest('details').open = true;
+          }
+          if (r.ressalvas.length) {
+            var atuais = $('#dRess').value.trim();
+            var novas = r.ressalvas.map(function (x) { return x.texto + (x.justificativa ? ' — ' + x.justificativa : ''); }).filter(function (l) { return atuais.indexOf(l) < 0; });
+            $('#dRess').value = [atuais].concat(novas).filter(Boolean).join('\n');
+          }
+          var extras = (r.lancamentos && r.lancamentos.erros.length ? ['Linhas de lançamento com problema: ' + r.lancamentos.erros.slice(0, 3).join(' ')] : []).concat(r.avisos, r.assertiva.length ? ['Assertiva: ' + r.assertiva.join(' ')] : []);
+          $('#dSkillInfo').innerHTML = '<div class="msg ok">Preenchido: ' + esc(r.achados.join(', ')) + '. Confira e clique em <b>Salvar e calcular</b>.</div>' +
+            (extras.length ? '<div class="msg aviso" style="margin-top:8px"><b>Avisos da skill para conferir:</b><ul style="margin:6px 0 0;padding-left:18px">' + extras.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>' : '');
+        } catch (e) { toast(e.message, 'erro'); }
+      };
       var salvarDados = async function () {
+        await salvarForm();
         // planilha mexida e não lida: lê antes de salvar, para a correção não se perder
         if ($('#dCola') && unidadesLidas === null && $('#dCola').value.trim() && $('#dCola').value !== colaOriginal) {
           var r = await api('POST', '/api/credito/analises/' + a.id + '/relatorio-colado', { texto: $('#dCola').value });
@@ -3802,6 +3858,8 @@
         } catch (e) { toast(e.message, 'erro'); }
       };
       $('#btSalvarDadosCr').onclick = async function () { try { await salvarDados(); toast('Dados salvos.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
+      // anexar ou trocar documento recarrega a tela: salva antes o que foi digitado
+      ligarDocsCredito(a, recarregar, salvarDados);
       $('#btCalcCr').onclick = async function () {
         try { await salvarDados(); await api('POST', '/api/credito/analises/' + a.id + '/calcular', {}); toast('Análise calculada.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
       };

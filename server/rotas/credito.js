@@ -19,6 +19,7 @@ const { politicaAtiva, proximoProtocolo, gravarPolitica } = require('../credito/
 const { validarPolitica } = require('../credito/politica');
 const retorno = require('../credito/retorno');
 const { lerRelatorioColado } = require('../credito/colar');
+const { lerRespostaSkill } = require('../credito/skill');
 const { criarExtrator, paraDadosAnalista } = require('../credito/extracao');
 const { cnpjValido } = require('../implantacao');
 
@@ -199,9 +200,31 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
     return res;
   }
 
-  function ctxRetorno(a, nomeAnalista) {
+  async function ctxRetorno(a, nomeAnalista) {
     const d = a.dados_analista || {};
-    return { formulario: a.formulario || {}, protocolo: a.protocolo, analista: nomeAnalista, emissao: d.relatorio && d.relatorio.data_emissao, ajustesTexto: d.textos || {} };
+    const ex = a.executivo_id ? await db.um('SELECT nome, uf FROM executivos WHERE id = $1', [a.executivo_id]) : null;
+    return { formulario: a.formulario || {}, protocolo: a.protocolo, analista: nomeAnalista, executivo: ex ? ex.nome : '', emissao: d.relatorio && d.relatorio.data_emissao, ajustesTexto: d.textos || {} };
+  }
+
+  /* campos do formulário que o analista corrigiu: [{ campo, de, para }] */
+  const ROTULOS_FORM = {
+    razao_social: 'Razão social', cnpj: 'CNPJ', uf: 'UF', cidade: 'Cidade', administradora: 'Administradora', sistema_gestao: 'Sistema de gestão',
+    garantidora_atual: 'Garantidora atual', vigencia_atual: 'Vigência do contrato atual', tipo_contratacao: 'Tipo de contratação', uh_total: 'Unidades (UH)',
+    taxa_ordinaria: 'Taxa ordinária', dia_vencimento: 'Dia do vencimento', 'desconto_pontualidade.tipo': 'Desconto de pontualidade', 'desconto_pontualidade.valor': 'Valor do desconto',
+    'agua_gas.total_mensal': 'Água + gás (total)', 'agua_gas.por_unidade': 'Água + gás (por unidade)', 'agua_gas.compoe_boleto': 'Água + gás no boleto',
+    custo_boleto_atual: 'Custo atual do boleto', taxas_extras: 'Taxas extras', 'sindico.tipo': 'Tipo de síndico', 'sindico.isencao': 'Isenção do síndico',
+    'sindico.percentual': 'Isenção parcial do síndico (%)', outros_isentos: 'Subsíndico/conselheiros isentos', uh_isentas_informadas: 'Total de unidades isentas', sem_convencao: 'Convenção depois',
+  };
+  function mudancasFormulario(antes, depois) {
+    const valor = (o, k) => k.split('.').reduce((x, p) => (x == null ? undefined : x[p]), o);
+    const vazio = (v) => v === undefined || v === null || v === '' || v === false || (Array.isArray(v) && !v.length);
+    // o JSONB do banco reordena as chaves: compara com as chaves em ordem
+    const estavel = (v) => JSON.stringify(v, (k, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort(([p], [q]) => (p < q ? -1 : 1))) : x));
+    const mostra = (v) => (vazio(v) ? '—' : Array.isArray(v) ? v.map((x) => [x.descricao || x.cargo, x.valor_por_uh ?? (x.percentual != null ? `${x.percentual}%` : '')].filter((y) => y !== '' && y != null).join(' ')).join('; ') : String(v));
+    return Object.keys(ROTULOS_FORM).filter((k) => {
+      const x = valor(antes, k), y = valor(depois, k);
+      return !(vazio(x) && vazio(y)) && estavel(x) !== estavel(y);
+    }).map((k) => ({ campo: ROTULOS_FORM[k], de: mostra(valor(antes, k)), para: mostra(valor(depois, k)) }));
   }
 
   /* ===================== perfil e contadores ===================== */
@@ -314,15 +337,17 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
     const sets = [];
     const args = [a.id];
     const s = (col, val, tipo = '') => { args.push(val); sets.push(`${col} = $${args.length}${tipo}`); };
+    // o analista que assumiu corrige o formulário do executivo (ex.: taxa errada); a trilha guarda o que mudou
+    const correcao = b.formulario !== undefined && !pd.editar && pd.analisar;
     if (b.formulario !== undefined) {
-      if (!pd.editar) return erro(res, 403, 'O formulário só muda enquanto a solicitação está em rascunho ou com pendência.');
+      if (!pd.editar && !pd.analisar) return erro(res, 403, 'O formulário só muda enquanto a solicitação está em rascunho ou com pendência, ou pelo analista que assumiu a análise.');
       const f = b.formulario && typeof b.formulario === 'object' ? b.formulario : {};
       s('formulario', JSON.stringify(f), '::jsonb');
       s('condominio', texto(f.razao_social, 200)); s('cnpj', texto(f.cnpj, 20)); s('uf', texto(f.uf, 2).toUpperCase()); s('cidade', texto(f.cidade, 100));
       s('tipo_contratacao', ['nova', 'portabilidade'].includes(f.tipo_contratacao) ? f.tipo_contratacao : null);
     }
     if (b.executivo_id !== undefined) {
-      if (!pd.editar || !p.analista) return erro(res, 403, 'Só o setor Análise de Crédito troca o executivo.');
+      if ((!pd.editar && !pd.analisar) || !p.analista) return erro(res, 403, 'Só o setor Análise de Crédito troca o executivo.');
       const ex = await db.um('SELECT id FROM executivos WHERE id = $1 AND ativo', [Number(b.executivo_id) || 0]);
       if (!ex) return erro(res, 400, 'Executivo não encontrado.');
       s('executivo_id', ex.id);
@@ -342,7 +367,10 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
         && JSON.stringify(aj) !== JSON.stringify(((a.dados_analista || {}).ajustes || {})[k])) : [];
       // ajustes ficam na trilha com quem, quando e por quê (no retorno, a nota não diz quem ajustou)
       for (const [campo, aj] of novos) await evento(t, a.id, req.usuario.id, 'ajuste', { campo, valor: aj.valor, justificativa: aj.justificativa });
-      if (b.formulario !== undefined) await evento(t, a.id, req.usuario.id, 'formulario', {});
+      if (correcao) {
+        const mudancas = mudancasFormulario(a.formulario || {}, b.formulario || {});
+        if (mudancas.length) await evento(t, a.id, req.usuario.id, 'formulario_corrigido', { mudancas });
+      } else if (b.formulario !== undefined) await evento(t, a.id, req.usuario.id, 'formulario', {});
     });
     res.json({ ok: true });
   });
@@ -354,6 +382,16 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
     if (!c.pd.analisar) return erro(res, 403, 'Só o analista que assumiu a análise lança os dados.');
     const lido = lerRelatorioColado(req.body && req.body.texto);
     if (!lido.linhas) return erro(res, 400, lido.erros[0] || 'Nenhuma linha reconhecida.', { erros: lido.erros });
+    res.json(lido);
+  });
+
+  /* resposta das skills do Claude colada inteira → o que vai para cada campo (nada é gravado aqui) */
+  r.post('/api/credito/analises/:id/resultado-skill', json, async (req, res) => {
+    const c = await carregar(req, res);
+    if (!c) return;
+    if (!c.pd.analisar) return erro(res, 403, 'Só o analista que assumiu a análise lança os dados.');
+    const lido = lerRespostaSkill(req.body && req.body.texto);
+    if (!lido.achados.length) return erro(res, 400, 'Não reconheci a resposta da skill. Cole a resposta inteira do Claude, de preferência pelo botão Copiar.');
     res.json(lido);
   });
 
@@ -487,7 +525,7 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
     const a = await db.um('SELECT * FROM analises WHERE id = $1', [c.a.id]);
     if (!a.resultado_motor) return erro(res, 400, 'Calcule a análise antes de ver o retorno.');
     const nome = c.pd.analisar ? req.usuario.nome : (await db.um('SELECT nome FROM usuarios WHERE id = $1', [a.analista_id]) || {}).nome;
-    const { pdf } = await retorno.gerarPdf(retorno.montarDados(a.resultado_motor, ctxRetorno(a, nome)));
+    const { pdf } = await retorno.gerarPdf(retorno.montarDados(a.resultado_motor, await ctxRetorno(a, nome)));
     res.set('Content-Type', 'application/pdf');
     res.set('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(retorno.nomeArquivo(a.condominio, a.protocolo || 'previa'))}`);
     res.set('Cache-Control', 'private, no-store');
@@ -559,7 +597,7 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
     if (resultado.status.codigo === 'pendente') return erro(res, 400, 'A análise está pendente: devolva ao executivo com a lista do que falta.');
     if (resultado.diretoria && !a.chancela_em) return erro(res, 400, 'Inadimplência acima de 35%: envie à diretoria antes de liberar.');
     const atual = await db.um('SELECT * FROM analises WHERE id = $1', [a.id]);
-    const ctx = ctxRetorno(atual, req.usuario.nome);
+    const ctx = await ctxRetorno(atual, req.usuario.nome);
     const { pdf, condensado } = await retorno.gerarPdf(retorno.montarDados(resultado, ctx));
     const email = retorno.emailEntrega(resultado, ctx);
     const resumo = retorno.resumoExecutivo(resultado, ctx);

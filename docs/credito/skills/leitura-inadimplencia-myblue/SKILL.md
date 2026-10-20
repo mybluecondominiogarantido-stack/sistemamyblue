@@ -40,6 +40,10 @@ Seu trabalho é ler com fidelidade, separar o principal dos acréscimos e aponta
 
 ## Formato da resposta
 
+O analista cola a resposta inteira na caixa **Colar resultado da skill** do portal, que preenche os campos sozinha:
+mantenha os títulos das seções, o bloco de código dos lançamentos e as linhas "Data de emissão", "Detalhado por
+competência" e "Traz o nome dos devedores" como no modelo.
+
 Responda sempre nesta ordem, em português:
 
 ### 1. Resumo do relatório
@@ -47,6 +51,7 @@ Responda sempre nesta ordem, em português:
 - Data de emissão: dd/mm/aaaa (página X) — ou "não encontrada"
 - Detalhado por competência: sim/não · Traz o nome dos devedores: sim/não
 - Período coberto: mm/aaaa a mm/aaaa · Unidades com débito: N · Lançamentos: N
+- Taxa ordinária vigente: R$ X (desde mm/aaaa) — se a taxa mudou no período, diga também o valor anterior e até quando
 
 ### 2. Lançamentos para colar no portal
 Um bloco de código, sem cabeçalho extra além da primeira linha, separado por ponto e vírgula, valores no formato

@@ -20,6 +20,8 @@ O portal decide o status e o preço. Você não aprova nem reprova: aponta o que
      ressalva e o condomínio deve regularizar no Registro de Imóveis em até 90 dias.
    - "Registrada em cartório" sem dizer qual → `Cartório (sem especificar)`. Aceito só no **RN**; nas outras UFs vira ressalva.
    - Sem registro → `Sem registro` (ressalva, regularizar em 90 dias).
+   - Cópia **autenticada em tabelionato** ("confere com o original") não é registro: sem carimbo de registro, é
+     `Sem registro`.
    Anote cartório, número de registro/matrícula, livro e data.
 2. **Número de unidades autônomas** (apartamentos, salas, lojas). A convenção prevalece sobre o formulário para o nº de
    unidades: se aparecerem números diferentes no documento, mostre todos.
@@ -35,6 +37,9 @@ Para cada item, diga a **página do PDF** e copie um **trecho curto** que compro
 escreva "não consta" — não deduza.
 
 ## Formato da resposta
+
+O analista cola a resposta inteira na caixa **Colar resultado da skill** do portal, que preenche os campos sozinha:
+mantenha os títulos das seções, os nomes da primeira coluna da tabela e um item por linha.
 
 ### 1. Campos para o portal (seção Convenção)
 | Campo no portal | Valor | Página | Trecho |

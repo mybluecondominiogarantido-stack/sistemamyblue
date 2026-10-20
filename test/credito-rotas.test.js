@@ -341,3 +341,53 @@ test('sem a chave da API, ler o PDF avisa o que falta configurar', async () => {
   assert.equal(ler.status, 503);
   assert.match(ler.json.erro, /ANTHROPIC_API_KEY/);
 });
+
+test('o analista corrige o formulário do executivo e o histórico guarda o que mudou', async () => {
+  const r = await exec('POST', '/api/credito/analises', { formulario: FORM });
+  const id = r.json.id;
+  await anexar(exec, id, 'relatorio');
+  await anexar(exec, id, 'convencao');
+  await exec('POST', `/api/credito/analises/${id}/enviar`, {});
+  const corrigido = { ...FORM, taxa_ordinaria: 1900, sindico: { tipo: 'profissional', isencao: 'nao' } };
+  assert.equal((await analista('PATCH', `/api/credito/analises/${id}`, { formulario: corrigido })).status, 403); // antes de assumir
+  await analista('POST', `/api/credito/analises/${id}/assumir`, {});
+  assert.equal((await exec('PATCH', `/api/credito/analises/${id}`, { formulario: corrigido })).status, 403); // o executivo não muda depois de enviar
+  assert.equal((await analista('PATCH', `/api/credito/analises/${id}`, { formulario: corrigido })).status, 200);
+  const det = (await analista('GET', `/api/credito/analises/${id}`)).json;
+  assert.equal(det.analise.formulario.taxa_ordinaria, 1900);
+  const ev = det.eventos.find((e) => e.tipo === 'formulario_corrigido');
+  assert.deepEqual(ev.detalhe.mudancas, [
+    { campo: 'Taxa ordinária', de: '1840', para: '1900' },
+    { campo: 'Tipo de síndico', de: 'condomino', para: 'profissional' },
+    { campo: 'Isenção do síndico', de: 'integral', para: 'nao' },
+  ]);
+  // o cálculo usa o formulário corrigido: 24 UH sem isenção × (1.900 + 700)
+  const dados = { convencao: { registro: 'RI', uh: 24 }, relatorio: { data_emissao: hojeIso(), unidades: (await analista('POST', `/api/credito/analises/${id}/relatorio-colado`, { texto: planilha('2.800,00') })).json.unidades } };
+  await analista('PATCH', `/api/credito/analises/${id}`, { dados_analista: dados });
+  const calc = await analista('POST', `/api/credito/analises/${id}/calcular`, {});
+  assert.equal(calc.json.resultado.valores.receita_bruta, 62400);
+});
+
+test('caixa "Colar resultado da skill": separa lançamentos, emissão, convenção, textos e ressalvas', async () => {
+  const r = await exec('POST', '/api/credito/analises', { formulario: FORM });
+  const id = r.json.id;
+  await anexar(exec, id, 'relatorio');
+  await anexar(exec, id, 'convencao');
+  await exec('POST', `/api/credito/analises/${id}/enviar`, {});
+  const resposta = ['### 1. Resumo do relatório', '- Data de emissão: 16/10/2026 (página 1)', '- Detalhado por competência: sim · Traz o nome dos devedores: sim', '',
+    '### 2. Lançamentos para colar no portal', '```', planilha('2.800,00'), '```', '', '| Campo no portal | Valor | Página | Trecho |', '|---|---|---|---|',
+    '| Registro | Registro de Imóveis | 38 | "registrada no Livro 3" |', '| Nº de unidades na convenção | 24 | 3 | "24 unidades" |', '| Multa por atraso (%) | 2 | 17 | |',
+    '', '**Observações jurídicas**', '- Convenção registrada no Registro de Imóveis.', '', '**Próximos passos**', '1. Assinar o contrato.', '', '**Ressalvas**', 'Nenhuma'].join('\n');
+  assert.equal((await analista('POST', `/api/credito/analises/${id}/resultado-skill`, { texto: resposta })).status, 403); // antes de assumir
+  await analista('POST', `/api/credito/analises/${id}/assumir`, {});
+  const lido = await analista('POST', `/api/credito/analises/${id}/resultado-skill`, { texto: resposta });
+  assert.equal(lido.status, 200, lido.texto);
+  assert.equal(lido.json.lancamentos.linhas, 6);
+  assert.equal(lido.json.relatorio.data_emissao, '2026-10-16');
+  assert.equal(lido.json.convencao.registro, 'RI');
+  assert.equal(lido.json.convencao.uh, 24);
+  assert.deepEqual(lido.json.convencao.origem.fontes.registro, { pagina: 38, trecho: 'registrada no Livro 3' });
+  assert.deepEqual(lido.json.textos, { observacoes_juridicas: ['Convenção registrada no Registro de Imóveis.'], proximos_passos: ['Assinar o contrato.'] });
+  assert.deepEqual(lido.json.ressalvas, []);
+  assert.equal((await analista('POST', `/api/credito/analises/${id}/resultado-skill`, { texto: 'oi' })).status, 400);
+});

@@ -542,7 +542,7 @@ module.exports = [
       await t.clicar('#btAssumirCr', { depois: 2200 });
 
       const B = '2 · Relatório e convenção';
-      await t.legenda('Lance o relatório de inadimplência: <b>cole a planilha</b> (unidade, titular, documento, competência, tipo e valor).', { etapa: B, ms: 500 });
+      await t.legenda('Lance o relatório de inadimplência: <b>cole a planilha</b> (unidade, titular, documento, competência, tipo e valor), ou cole a resposta inteira da skill do Claude em <b>Colar resultado da skill</b>.', { etapa: B, ms: 500 });
       await t.apontar('#dCola');
       await t.p.locator('#dCola').fill(planilhaCr());
       await t.pausa(1600);

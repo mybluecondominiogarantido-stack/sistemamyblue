@@ -39,6 +39,18 @@ conferências da política e os candidatos à Assertiva; `skills/leitura-convenc
 **Convenção** (com página e trecho) e os textos para **Textos do retorno** (observações jurídicas, próximos passos e
 ressalvas). Para instalar: claude.ai → Configurações → Capacidades → Skills → enviar o `.skill` (ou a pasta em zip).
 
+No portal, o analista cola a resposta inteira do Claude em **Colar resultado da skill** (no topo dos dados do analista)
+e clica em *Preencher os campos*: `server/credito/skill.js` separa os lançamentos, a data de emissão, se o relatório é
+por competência e traz nomes, os campos da convenção (com página e trecho), as observações jurídicas, os próximos passos
+e as ressalvas. Nada é gravado sem o analista conferir e clicar em *Salvar e calcular*. Os avisos da skill (taxa
+reajustada, acordos, Assertiva) aparecem na tela para conferir. Testes em `test/credito-skill.test.js`.
+
+## Correção do formulário pelo analista
+
+Depois do envio o executivo não muda mais o formulário. O analista que assumiu a análise corrige em **Formulário do
+executivo** (ex.: taxa ordinária digitada errada) e clica em *Salvar correção do formulário* (ou *Salvar e calcular*,
+que também salva). O histórico registra cada campo corrigido, de → para.
+
 ## Retorno em PDF
 
 O gerador é o canônico (ReportLab). Layout, cores, dimensões e classes não mudam; no portal mudam só a entrada e a
