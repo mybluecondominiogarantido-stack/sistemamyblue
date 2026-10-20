@@ -19,6 +19,9 @@
 const express = require('express');
 const crypto = require('crypto');
 const { politicaAtiva } = require('../credito/banco');
+const { lerPlanilha } = require('../planilha');
+const { normalizar: normalizarCarteira, semAcento } = require('../carteira');
+const { apelido } = require('../implantacao');
 const F = require('../implantacoes/formulario');
 
 const SETOR = 'Implantação';
@@ -55,11 +58,36 @@ async function tiposVigentes(db, id) {
   return new Set((await db.q('SELECT DISTINCT tipo FROM implantacao_documentos WHERE implantacao_id = $1 AND substituido_em IS NULL', [id])).rows.map((x) => x.tipo));
 }
 
-/* Rotinas (rodam a cada poucos minutos): lembrete diário, por e-mail, dos documentos pendentes ao executivo. */
-function criarRotinasImplantacao({ db, avisos, expediente }) {
+/* Rotinas (rodam a cada poucos minutos):
+ *  - pedido sem ninguém designado: lembrete à coordenação a cada 4h úteis;
+ *  - prazo para iniciar (8h úteis da designação) estourado: aviso, uma vez, à coordenação e a quem foi designado;
+ *  - documentos pendentes: lembrete diário, por e-mail, ao executivo (uma vez por dia útil, no expediente). */
+const HORAS_LEMBRETE_FILA = 4;
+function criarRotinasImplantacao({ db, seg, avisos, expediente }) {
+  async function coordenacao() {
+    const s = await pessoasDoSetor(db, seg, SETOR);
+    return s.gestores.length ? s.gestores : administradores(db);
+  }
   async function executar(agora = new Date()) {
     const m = expediente.momento(agora);
-    const feito = { documentos: 0 };
+    const feito = { documentos: 0, sem_designacao: 0, prazos: 0 };
+    for (const i of (await db.q("SELECT id, protocolo, condominio, enviado_em, lembrete_fila_em FROM implantacoes WHERE etapa = 'fila'")).rows) {
+      if (expediente.somarHorasUteis(i.lembrete_fila_em || i.enviado_em, HORAS_LEMBRETE_FILA) > agora) continue;
+      await avisos.notificar(await coordenacao(), { link: `#/implantacao/${i.id}`, tipo: 'implantacao', email: true,
+        titulo: `Ainda sem ninguém designado · ${i.protocolo} · ${i.condominio}`,
+        texto: `A implantação de ${i.condominio} está na fila desde ${new Date(i.enviado_em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' })} e ainda não foi designada.` });
+      await db.q('UPDATE implantacoes SET lembrete_fila_em = $2 WHERE id = $1', [i.id, agora]);
+      feito.sem_designacao++;
+    }
+    for (const i of (await db.q(`SELECT i.id, i.protocolo, i.condominio, i.responsavel_id, i.prazo_inicio, u.nome AS responsavel_nome FROM implantacoes i
+        LEFT JOIN usuarios u ON u.id = i.responsavel_id
+        WHERE i.etapa = 'em_implantacao' AND i.iniciado_em IS NULL AND i.aviso_prazo_em IS NULL AND i.prazo_inicio < $1`, [agora])).rows) {
+      await avisos.notificar([...(await coordenacao()), i.responsavel_id], { link: `#/implantacao/${i.id}`, tipo: 'implantacao', email: true,
+        titulo: `Passou do prazo para iniciar · ${i.protocolo} · ${i.condominio}`,
+        texto: `${i.responsavel_nome || 'Quem foi designado'} ainda não iniciou a implantação de ${i.condominio}; o prazo de 8h úteis venceu em ${new Date(i.prazo_inicio).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' })}.` });
+      await db.q('UPDATE implantacoes SET aviso_prazo_em = $2 WHERE id = $1', [i.id, agora]);
+      feito.prazos++;
+    }
     if (!m.noExpediente) return feito;
     const { rows } = await db.q(`SELECT id, protocolo, condominio, formulario, solicitante_id, executivo_id FROM implantacoes
       WHERE etapa IN ('fila','em_implantacao','pendencia','concluida') AND (aviso_docs_em IS NULL OR aviso_docs_em < $1::date)`, [m.dia]);
@@ -78,7 +106,10 @@ function criarRotinasImplantacao({ db, avisos, expediente }) {
   return { executar };
 }
 
-function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros }) {
+const HORAS_PARA_INICIAR = 8;
+const normal = (s) => semAcento(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+
+function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente, boletosCarteira }) {
   const r = express.Router();
   const json = express.json({ limit: '1mb' });
   const corpoDoc = express.raw({ type: () => true, limit: (cfg.limiteCreditoMb || 30) * 1024 * 1024 });
@@ -109,7 +140,15 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros }) {
     const interno = p.admin || p.equipe || p.coordenacao || p.diretoria;
     const editavel = ['rascunho', 'pendencia'].includes(i.etapa);
     const aberta = !['cancelada', 'na_carteira'].includes(i.etapa);
+    const responsavel = i.responsavel_id === u.id;
+    const conduz = i.etapa === 'em_implantacao' && !!i.iniciado_em && (responsavel || p.coordenacao);
     return {
+      designar: p.coordenacao && ['fila', 'em_implantacao', 'pendencia'].includes(i.etapa),
+      iniciar: responsavel && i.etapa === 'em_implantacao' && !i.iniciado_em,
+      etapas: conduz,
+      pendencia: conduz,
+      concluir: conduz,
+      carteira: p.coordenacao && i.etapa === 'concluida',
       ver: dono || interno,
       interno,
       editar: editavel && (dono || p.admin),
@@ -160,7 +199,10 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros }) {
       executivos: p.admin ? (await db.q('SELECT id, nome, uf FROM executivos WHERE ativo ORDER BY nome')).rows : p.executivo ? [p.executivo] : [],
       validade_dias: p.politica.implantacao_validade_dias,
       documentos: Object.entries(F.DOCUMENTOS).map(([tipo, d]) => ({ tipo, ...d })),
-      garantias: F.GARANTIAS, receitas_cashback: F.RECEITAS_CASHBACK, origens: ORIGEM,
+      garantias: F.GARANTIAS, receitas_cashback: F.RECEITAS_CASHBACK, origens: ORIGEM, onboarding: F.ONBOARDING, envio: F.ENVIO,
+      horas_para_iniciar: HORAS_PARA_INICIAR,
+      equipe: p.coordenacao ? (await db.q(`SELECT u.id, u.nome FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id JOIN usuarios u ON u.id = sm.usuario_id
+        WHERE s.nome = $1 AND u.ativo ORDER BY u.nome`, [SETOR])).rows : [],
     });
   });
 
@@ -265,7 +307,7 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros }) {
     const busca = texto(req.query.q, 100);
     if (busca) where.push(`(i.condominio ILIKE ${v('%' + busca + '%')} OR i.protocolo ILIKE $${args.length} OR i.cnpj ILIKE $${args.length})`);
     const { rows } = await db.q(`SELECT i.id, i.protocolo, i.etapa, i.origem, i.analise_id, i.analise_protocolo, i.condominio, i.cnpj, i.uf, i.formulario,
-        i.enviado_em, i.prazo_inicio, i.criado_em, i.atualizado_em, e.nome AS executivo_nome, ur.nome AS responsavel_nome,
+        i.enviado_em, i.prazo_inicio, i.iniciado_em, i.criado_em, i.atualizado_em, e.nome AS executivo_nome, ur.nome AS responsavel_nome,
         (SELECT array_agg(DISTINCT d.tipo) FROM implantacao_documentos d WHERE d.implantacao_id = i.id AND d.substituido_em IS NULL) AS tipos
       FROM implantacoes i LEFT JOIN executivos e ON e.id = i.executivo_id LEFT JOIN usuarios ur ON ur.id = i.responsavel_id
       WHERE ${where.join(' AND ')}
@@ -321,7 +363,9 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros }) {
     const docs = new Set(documentos.filter((d) => !d.substituido_em).map((d) => d.tipo));
     await db.q('UPDATE notificacoes SET lida = TRUE WHERE usuario_id = $1 AND link = $2 AND NOT lida', [req.usuario.id, link(i.id)]);
     res.json({
-      implantacao: { ...i, ...info }, documentos, eventos, pode: pd,
+      implantacao: { ...i, ...info, etapas: F.normalizarEtapas(i.etapas) }, documentos, eventos, pode: pd,
+      faltas_etapas: pd.interno && i.etapa === 'em_implantacao' ? F.faltasEtapas(i.etapas) : [],
+      conferencias: pd.interno && i.etapa !== 'rascunho' ? await conferencias(i, docs) : null,
       faltas: pd.enviar ? F.faltas(i.formulario, { docs, origem: i.origem, executivoId: i.executivo_id }) : [],
       pendencias: F.pendencias(i.formulario, docs),
       diferencas: F.diferencas(i.formulario, i.referencia),
@@ -451,6 +495,208 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros }) {
         texto: `Enviada ao setor Implantação. Ainda falta enviar: ${pend.join('; ')}. Você recebe um lembrete por e-mail a cada dia útil até chegarem.` });
     }
     res.json({ protocolo, etapa, pendencias: pend });
+  });
+
+  /* conferências para o setor: formulário × análise, CPF/CNPJ, cadastro de moradores × unidades */
+  async function conferencias(i, docs) {
+    const f = i.formulario || {};
+    const out = { diferencas: F.diferencas(f, i.referencia), cpf_sindico: F.cpfValido(f.sindico_cpf), cnpj: f.sem_cnpj ? null : F.cnpjOk(f.cnpj), cadastro: null };
+    if (docs.has('cadastro_moradores')) {
+      const d = await db.um("SELECT nome, conteudo FROM implantacao_documentos WHERE implantacao_id = $1 AND tipo = 'cadastro_moradores' AND substituido_em IS NULL ORDER BY id DESC LIMIT 1", [i.id]);
+      try {
+        const c = F.conferirCadastro(lerPlanilha(d.conteudo));
+        out.cadastro = c.erro ? c : { ...c, unidades_formulario: Number(f.uh_total) || null };
+      } catch { out.cadastro = { erro: `Não deu para ler "${d.nome}": envie o cadastro em Excel (.xlsx) ou CSV.` }; }
+    }
+    return out;
+  }
+
+  /* ===================== setor: designar, iniciar, etapas, pendência, concluir ===================== */
+  r.post('/api/implantacoes/:id/designar', json, async (req, res) => {
+    const c = await carregar(req, res);
+    if (!c) return;
+    const { i, pd } = c;
+    if (!pd.designar) return erro(res, 403, 'Só a coordenação do setor Implantação designa.');
+    const alvo = await db.um(`SELECT u.id, u.nome FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id JOIN usuarios u ON u.id = sm.usuario_id
+      WHERE s.nome = $1 AND u.id = $2 AND u.ativo`, [SETOR, Number(req.body && req.body.usuario_id) || 0]);
+    if (!alvo) return erro(res, 400, 'Escolha alguém do setor Implantação.');
+    if (alvo.id === i.responsavel_id) return erro(res, 409, `${alvo.nome} já conduz esta implantação.`);
+    const agora = new Date();
+    const prazo = expediente.somarHorasUteis(agora, HORAS_PARA_INICIAR);
+    await db.tx(async (t) => {
+      // quem recebe recomeça o prazo para iniciar; numa pendência, a etapa fica como está
+      await t.q(`UPDATE implantacoes SET responsavel_id = $2, designado_por = $3, designado_em = $4, prazo_inicio = $5, iniciado_em = NULL, aviso_prazo_em = NULL,
+        etapa = CASE WHEN etapa = 'fila' THEN 'em_implantacao' ELSE etapa END, atualizado_em = now() WHERE id = $1`, [i.id, alvo.id, req.usuario.id, agora, prazo]);
+      await evento(t, i.id, req.usuario.id, 'designada', { para: alvo.nome, de: i.responsavel_id || null, prazo });
+    });
+    const quando = prazo.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' });
+    await avisos.notificar([alvo.id], { link: link(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: true,
+      titulo: `Implantação designada para você · ${i.protocolo} · ${i.condominio}`,
+      texto: `${req.usuario.nome} designou a implantação de ${i.condominio} para você. Prazo para iniciar: ${quando} (${HORAS_PARA_INICIAR}h úteis).` });
+    if (i.responsavel_id && i.responsavel_id !== req.usuario.id) {
+      await avisos.notificar([i.responsavel_id], { link: link(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: false,
+        titulo: `${i.protocolo} passou para ${alvo.nome}`, texto: `${req.usuario.nome} designou a implantação de ${i.condominio} para ${alvo.nome}.` });
+    }
+    res.json({ ok: true, prazo_inicio: prazo });
+  });
+
+  r.post('/api/implantacoes/:id/iniciar', json, async (req, res) => {
+    const c = await carregar(req, res);
+    if (!c) return;
+    if (!c.pd.iniciar) return erro(res, 403, 'Só quem foi designado inicia a implantação.');
+    await db.tx(async (t) => {
+      await t.q('UPDATE implantacoes SET iniciado_em = now(), atualizado_em = now() WHERE id = $1', [c.i.id]);
+      await evento(t, c.i.id, req.usuario.id, 'iniciada', { no_prazo: new Date() <= new Date(c.i.prazo_inicio) });
+    });
+    res.json({ ok: true });
+  });
+
+  r.patch('/api/implantacoes/:id/etapas', json, async (req, res) => {
+    const c = await carregar(req, res);
+    if (!c) return;
+    const { i, pd } = c;
+    if (!pd.etapas) return erro(res, 403, 'Só quem conduz a implantação (depois de iniciar) ou a coordenação marca as etapas.');
+    const antes = F.normalizarEtapas(i.etapas);
+    const etapas = F.normalizarEtapas(req.body && req.body.etapas);
+    if (etapas.vouch.id && etapas.vouch.id !== antes.vouch.id && await db.um('SELECT 1 FROM condominios WHERE codigo = $1', [etapas.vouch.id])) {
+      return erro(res, 409, `O ID Vouch ${etapas.vouch.id} já está na Carteira.`);
+    }
+    await db.tx(async (t) => {
+      await t.q('UPDATE implantacoes SET etapas = $2::jsonb, atualizado_em = now() WHERE id = $1', [i.id, JSON.stringify(etapas)]);
+      const mudou = Object.keys(etapas).filter((k) => JSON.stringify(etapas[k]) !== JSON.stringify(antes[k]));
+      if (mudou.length) await evento(t, i.id, req.usuario.id, 'etapas', { mudou, etapas });
+    });
+    res.json({ ok: true, etapas, faltas: F.faltasEtapas(etapas) });
+  });
+
+  r.post('/api/implantacoes/:id/pendencia', json, async (req, res) => {
+    const c = await carregar(req, res);
+    if (!c) return;
+    const { i, pd } = c;
+    if (!pd.pendencia) return erro(res, 403, 'Só quem conduz a implantação (depois de iniciar) ou a coordenação devolve com pendência.');
+    const itens = (Array.isArray(req.body && req.body.itens) ? req.body.itens : []).map((x) => texto(x, 500)).filter(Boolean);
+    if (!itens.length) return erro(res, 400, 'Liste o que falta.');
+    const ex = i.executivo_id ? await db.um('SELECT nome FROM executivos WHERE id = $1', [i.executivo_id]) : null;
+    const mensagem = `Olá${ex ? `, ${ex.nome.split(' ')[0]}` : ''}. Para seguir com a implantação do ${i.condominio} (${i.protocolo}), precisamos de:\n\n${itens.map((x, k) => `${k + 1}. ${x}`).join('\n')}\n\nAjuste o formulário ou anexe o que falta e reenvie pelo portal.`;
+    await db.tx(async (t) => {
+      await t.q("UPDATE implantacoes SET etapa = 'pendencia', atualizado_em = now() WHERE id = $1", [i.id]);
+      await evento(t, i.id, req.usuario.id, 'pendencia', { itens, mensagem });
+    });
+    await avisos.notificar(await donos(db, i), { link: link(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: true,
+      titulo: `Pendência na implantação · ${i.protocolo} · ${i.condominio}`, texto: mensagem });
+    res.json({ ok: true, mensagem });
+  });
+
+  /* condomínio com parceria: entra na base de comissão (Prestação de Contas) ligado ao parceiro, com comissão 0%,
+     para o setor Parceiros cadastrar a condição do contrato */
+  async function levarParaParceiros(i, u) {
+    const f = i.formulario || {};
+    if (f.parceria !== 'sim' || !(f.parceiros || []).length) return null;
+    const out = { criado: null, ja_existia: null, sem_cadastro: [] };
+    const modulo = await db.um("SELECT 1 FROM modulos WHERE slug = 'parceiros'");
+    const base = modulo ? await registros.listar('parceiros', 'partners') : [];
+    const ids = new Set(base.map((x) => String(x.id)));
+    const vinculos = [];
+    for (const p of f.parceiros) {
+      if (p.id && ids.has(String(p.id))) vinculos.push({ partnerId: String(p.id), rate: 0 });
+      else out.sem_cadastro.push(texto(p.nome, 200));
+    }
+    if (modulo && vinculos.length) {
+      const nome = texto(f.nome || i.condominio, 200);
+      const existente = (await registros.listar('parceiros', 'condos')).find((x) => normal(x.nome) === normal(nome) || x.id === `c-${normal(nome)}`);
+      if (existente) out.ja_existia = existente.nome;
+      else {
+        const id = `c-${normal(nome)}`;
+        await registros.upsert('parceiros', 'condos', id, { id, nome, valorBoleto: Number(f.boleto) || 0, vinculosJSON: JSON.stringify(vinculos), custom: true }, u.id);
+        out.criado = nome;
+      }
+    }
+    const membros = (await pessoasDoSetor(db, seg, 'Parceiros')).todos;
+    const nomes = f.parceiros.map((p) => texto(p.nome, 200)).join(' e ');
+    const situacao = out.criado ? 'Já está na Prestação de Contas, ligado ao parceiro com comissão 0%: cadastre a condição do contrato.'
+      : out.ja_existia ? `Já existia "${out.ja_existia}" na Prestação de Contas: confira o vínculo com o parceiro e a condição do contrato.`
+        : 'O parceiro não está na base de comissão: cadastre o parceiro e o condomínio na Prestação de Contas.';
+    await avisos.notificar(membros.length ? membros : await administradores(db), { link: '#/m/parceiros', autor_id: u.id, tipo: 'implantacao', email: true,
+      titulo: `Condomínio novo com parceiro · ${i.condominio}`,
+      texto: `A implantação de ${i.condominio} (${i.protocolo}) foi concluída com parceria: ${nomes}. ${situacao}` });
+    return out;
+  }
+
+  r.post('/api/implantacoes/:id/concluir', json, async (req, res) => {
+    const c = await carregar(req, res);
+    if (!c) return;
+    const { i, pd } = c;
+    if (!pd.concluir) return erro(res, 403, 'Só quem conduz a implantação (depois de iniciar) ou a coordenação conclui.');
+    const lista = F.faltasEtapas(i.etapas);
+    if (lista.length) return erro(res, 400, 'Faltam etapas para concluir.', { faltas: lista });
+    await db.tx(async (t) => {
+      await t.q("UPDATE implantacoes SET etapa = 'concluida', concluido_em = now(), atualizado_em = now() WHERE id = $1", [i.id]);
+      await evento(t, i.id, req.usuario.id, 'concluida', {});
+    });
+    const parceiros = await levarParaParceiros(i, req.usuario);
+    if (parceiros) await db.q('INSERT INTO implantacao_eventos (implantacao_id, usuario_id, tipo, detalhe) VALUES ($1, $2, $3, $4::jsonb)', [i.id, req.usuario.id, 'parceiros', JSON.stringify(parceiros)]);
+    const coord = (await pessoasDoSetor(db, seg, SETOR)).gestores;
+    await avisos.notificar(coord.length ? coord : await administradores(db), { link: link(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: true,
+      titulo: `Pronta para a Carteira · ${i.protocolo} · ${i.condominio}`, texto: `${req.usuario.nome} concluiu a implantação de ${i.condominio}. Confira os dados e confirme a entrada na Carteira.` });
+    await avisos.notificar(await donos(db, i), { link: link(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: false,
+      titulo: `Implantação concluída · ${i.protocolo} · ${i.condominio}`, texto: `O setor Implantação concluiu a implantação de ${i.condominio}.` });
+    res.json({ ok: true, parceiros });
+  });
+
+  /* ===================== Carteira: a coordenação confere e confirma ===================== */
+  async function previaCarteira(i) {
+    const f = i.formulario || {};
+    const e = F.normalizarEtapas(i.etapas);
+    const ex = i.executivo_id ? await db.um('SELECT nome FROM executivos WHERE id = $1', [i.executivo_id]) : null;
+    return {
+      codigo: e.vouch.id, nome: apelido(f.nome || i.condominio), situacao: 'ATIVO', comarca: texto(f.uf, 2).toUpperCase(), vencimento: f.dia_vencimento ? String(f.dia_vencimento) : '',
+      administradora: texto(f.administradora, 120).toUpperCase(), forma_envio: F.ENVIO_CARTEIRA[e.envio.forma] || '', executivo: ex ? ex.nome.toUpperCase() : '',
+      inicio_contrato: texto(f.inicio_contrato, 10), razao_social: texto(f.nome || i.condominio, 200), cnpj: f.sem_cnpj ? '' : texto(f.cnpj, 20),
+      observacoes: [`Implantação ${i.protocolo}`, i.analise_protocolo ? `análise ${i.analise_protocolo}` : '', f.administracao_interna ? 'administração interna' : ''].filter(Boolean).join(' · '),
+    };
+  }
+  async function duplicados(d) {
+    const cnpj = String(d.cnpj || '').replace(/\D/g, '');
+    return (await db.q(`SELECT id, codigo, nome, cnpj FROM condominios WHERE codigo = $1 OR ($2 <> '' AND regexp_replace(cnpj, '\\D', '', 'g') = $2)`, [String(d.codigo || ''), cnpj])).rows;
+  }
+
+  r.get('/api/implantacoes/:id/carteira', async (req, res) => {
+    const c = await carregar(req, res);
+    if (!c) return;
+    if (!c.pd.carteira) return erro(res, 403, 'Só a coordenação do setor Implantação confirma a entrada na Carteira.');
+    const dados = await previaCarteira(c.i);
+    res.json({ dados, duplicados: await duplicados(dados) });
+  });
+
+  r.post('/api/implantacoes/:id/carteira', json, async (req, res) => {
+    const c = await carregar(req, res);
+    if (!c) return;
+    const { i, pd } = c;
+    if (!pd.carteira) return erro(res, 403, 'Só a coordenação do setor Implantação confirma a entrada na Carteira.');
+    const b = req.body && req.body.dados && typeof req.body.dados === 'object' ? req.body.dados : {};
+    const campos = ['codigo', 'nome', 'situacao', 'comarca', 'vencimento', 'administradora', 'forma_envio', 'executivo', 'inicio_contrato', 'razao_social', 'cnpj', 'observacoes'];
+    const v = normalizarCarteira(Object.fromEntries(campos.map((k) => [k, b[k] == null ? '' : b[k]])));
+    if (v.erro) return erro(res, 400, v.erro);
+    const d = v.dados;
+    if (!d.inicio_contrato) return erro(res, 400, 'Informe o início do contrato (vigência).');
+    if (d.cnpj && d.cnpj.replace(/\D/g, '').length !== 14) return erro(res, 400, `CNPJ incompleto (${d.cnpj}): são 14 dígitos.`);
+    const dup = await duplicados(d);
+    if (dup.some((x) => x.codigo === d.codigo)) return erro(res, 409, `O ID Vouch ${d.codigo} já está na Carteira.`);
+    if (dup.length) return erro(res, 409, `Já existe na Carteira um condomínio com este CNPJ: ${dup[0].nome} (ID ${dup[0].codigo}).`);
+    const cols = Object.keys(d);
+    const id = await db.tx(async (t) => {
+      const { id: novo } = await t.um(`INSERT INTO condominios (${cols.join(', ')}, atualizado_por) VALUES (${cols.map((_, k) => '$' + (k + 1)).join(', ')}, $${cols.length + 1}) RETURNING id`,
+        [...cols.map((k) => d[k]), req.usuario.id]);
+      await t.q("UPDATE implantacoes SET etapa = 'na_carteira', condominio_id = $2, atualizado_em = now() WHERE id = $1", [i.id, novo]);
+      await evento(t, i.id, req.usuario.id, 'carteira', { condominio_id: novo, codigo: d.codigo, nome: d.nome });
+      return novo;
+    });
+    await seg.auditar(req, 'condominio_criado', null, { id, nome: d.nome, codigo: d.codigo, origem: `implantação ${i.protocolo}` });
+    // o Controle de Emissão de Boletos acompanha a carteira
+    if (boletosCarteira) boletosCarteira.agendar(req.usuario);
+    await avisos.notificar([...(await donos(db, i)), i.responsavel_id], { link: link(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: false,
+      titulo: `Na Carteira · ${d.nome}`, texto: `${i.condominio} entrou na Carteira (ID ${d.codigo}).` });
+    res.status(201).json({ ok: true, condominio_id: id });
   });
 
   r.post('/api/implantacoes/:id/cancelar', json, async (req, res) => {

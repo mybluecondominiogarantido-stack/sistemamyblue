@@ -3856,7 +3856,11 @@
   var EVENTO_IMP = {
     criada: 'criou a implantação', formulario: 'alterou o formulário', documento: 'anexou um documento', documento_removido: 'removeu um documento',
     enviada: 'enviou ao setor Implantação', reenviada: 'reenviou depois da pendência', cancelada: 'cancelou',
+    designada: 'designou', iniciada: 'iniciou a implantação', etapas: 'atualizou as etapas', pendencia: 'devolveu com pendência',
+    concluida: 'concluiu a implantação', parceiros: 'levou o condomínio à base de Parceiros', carteira: 'confirmou a entrada na Carteira',
   };
+  var ETAPA_SETOR_IMP = [['documentacao', 'Documentação', 'Obrigatórios conferidos; os pendentes seguem com alerta ao executivo.'], ['vouch', 'Cadastro no sistema (Vouch)', 'O ID vai direto para a Carteira.'],
+    ['onboarding', 'Onboarding', 'Reunião de boas-vindas com o síndico.'], ['boletos', 'Emissão de boletos', 'Primeira emissão pelo novo contrato.'], ['envio', 'Envio dos boletos', 'Vai para a Carteira como forma de envio.']];
   var SIT_AN_IMP = {
     valida: ['dentro do prazo', 'verde'], liberada: ['liberada pelo gestor', 'verde'], vencida: ['passou do prazo', 'vermelha'],
     aguardando_gestor: ['aguardando o gestor da Análise de Crédito', 'ambar'], recusada: ['não liberada pelo gestor', 'vermelha'],
@@ -3926,7 +3930,8 @@
         return '<tr class="clicavel" data-id="' + i.id + '"><td style="white-space:nowrap"><b>' + esc(i.protocolo || 'Rascunho') + '</b><span class="sec">' + dataHoraCr(i.enviado_em || i.criado_em) + '</span></td>' +
           '<td><b>' + esc(i.condominio || 'Sem nome') + '</b><span class="sec">' + esc([i.uf, i.uh_total ? i.uh_total + ' unidades' : ''].filter(Boolean).join(' · ')) + '</span></td>' +
           '<td style="white-space:nowrap">' + esc(origemImp(i)) + '</td><td>' + esc(i.executivo_nome || '—') + '</td><td>' + etqCr(ETAPA_IMP, i.etapa) + '</td>' +
-          '<td>' + esc(i.responsavel_nome || (i.etapa === 'fila' ? 'aguardando designação' : '—')) + '</td>' +
+          '<td>' + esc(i.responsavel_nome || (i.etapa === 'fila' ? 'aguardando designação' : '—')) +
+          (i.etapa === 'em_implantacao' && i.prazo_inicio ? (i.iniciado_em ? '<span class="sec">iniciada</span>' : '<span class="sec">' + prazoCr(i.prazo_inicio, i.etapa).replace('Até ', 'iniciar até ').replace('Venceu ', 'prazo para iniciar venceu ') + '</span>') : '') + '</td>' +
           '<td>' + (i.pendentes.length ? '<span class="etiqueta ambar" title="' + esc(i.pendentes.join('; ')) + '">' + i.pendentes.length + ' pendente(s)</span>' : '<span class="sec">—</span>') + '</td></tr>';
       }).join('') || '<tr><td colspan="7"><div class="vazio" style="border:0;padding:34px">' + (aba === 'minhas' ? 'Você ainda não pediu implantações.' : 'Nada por aqui.') + '</div></td></tr>';
       $$('#tbImp tr[data-id]').forEach(function (tr) { tr.onclick = function () { location.hash = '#/implantacao/' + tr.getAttribute('data-id'); }; });
@@ -4239,6 +4244,72 @@
     });
   }
 
+  /* ---------- setor: etapas e conferências ---------- */
+  function htmlSetorImp(d, m) {
+    var i = d.implantacao, pd = d.pode, e = i.etapas, ed = pd.etapas;
+    var dis = ed ? '' : ' disabled';
+    var c = d.conferencias;
+    var html = '';
+    if (['em_implantacao', 'pendencia', 'concluida', 'na_carteira'].indexOf(i.etapa) >= 0 && i.responsavel_id) {
+      var feito = { documentacao: e.documentacao.feito, vouch: !!e.vouch.id, onboarding: ['realizado', 'sindico_myblue'].indexOf(e.onboarding.situacao) >= 0, boletos: e.boletos.feito, envio: !!e.envio.forma };
+      var n = Object.keys(feito).filter(function (k) { return feito[k]; }).length;
+      var campo = {
+        documentacao: '<label class="marca"><input type="checkbox" id="e_doc"' + (e.documentacao.feito ? ' checked' : '') + dis + '> Conferida</label>',
+        vouch: '<label class="rot" for="e_vouch" style="margin:0">ID Vouch</label><input class="campo" id="e_vouch" style="width:140px" value="' + esc(e.vouch.id) + '"' + dis + '>',
+        onboarding: '<select class="campo" id="e_onb" style="width:auto" aria-label="Situação do onboarding"' + dis + '>' + Object.keys(m.onboarding).map(function (k) { return '<option value="' + k + '"' + (k === e.onboarding.situacao ? ' selected' : '') + '>' + esc(m.onboarding[k]) + '</option>'; }).join('') + '</select>' +
+          '<input class="campo" id="e_onb_data" style="width:180px" placeholder="data e hora, se marcado" value="' + esc(e.onboarding.data) + '" aria-label="Data do onboarding"' + dis + '>',
+        boletos: '<label class="marca"><input type="checkbox" id="e_bol"' + (e.boletos.feito ? ' checked' : '') + dis + '> Boletos emitidos</label>',
+        envio: '<div class="marcas">' + Object.keys(m.envio).map(function (k) { return '<label class="marca"><input type="radio" name="e_env" value="' + k + '"' + (k === e.envio.forma ? ' checked' : '') + dis + '> ' + esc(m.envio[k]) + '</label>'; }).join('') + '</div>',
+      };
+      html += '<section class="painel"><div class="cab-painel"><h2>Etapas da implantação</h2><span class="espaco"></span><span class="ajuda" style="margin:0">' + n + ' de 5' + (i.etapa === 'em_implantacao' ? ' · concluir libera com as 5 feitas' : '') + '</span></div>' +
+        ETAPA_SETOR_IMP.map(function (x, k) {
+          return '<div class="doc-linha"><span class="passo"' + (feito[x[0]] ? ' style="background:var(--green);color:#fff"' : '') + '>' + (feito[x[0]] ? '✓' : k + 1) + '</span><div style="flex:1 1 220px"><b>' + esc(x[1]) + '</b><span class="ajuda" style="display:block;margin:0">' + esc(x[2]) + '</span></div><div class="linha">' + campo[x[0]] + '</div></div>';
+        }).join('') +
+        (ed ? '<div class="doc-linha" style="justify-content:flex-end"><button class="btn primary sm" id="btEtapasImp">Salvar etapas</button></div>' : '') + '</section>';
+    }
+    if (c) {
+      var item = function (ok, texto) { return '<div class="doc-linha">' + (ok ? etq(['ok', 'verde']) : etq(['atenção', 'ambar'])) + '<span style="flex:1">' + texto + '</span></div>'; };
+      var cad = c.cadastro;
+      html += '<section class="painel"><div class="cab-painel"><h2>Conferências do portal</h2></div>' +
+        item(!c.diferencas.length, c.diferencas.length ? '<b>Diferente da análise:</b> ' + esc(c.diferencas.map(function (x) { return x.rotulo.replace(/ \((%|R\$)\)$/, ''); }).join(', ')) + '.' : '<b>Condições</b> iguais às da análise.') +
+        item(c.cpf_sindico, '<b>CPF do síndico</b> ' + (c.cpf_sindico ? 'válido.' : 'inválido: confira.')) +
+        (c.cnpj === null ? item(false, '<b>CNPJ</b> ainda não informado (condomínio de entrega).') : item(c.cnpj, '<b>CNPJ</b> ' + (c.cnpj ? 'válido.' : 'inválido: confira.'))) +
+        (!cad ? item(false, '<b>Cadastro de moradores</b> ainda não anexado.') : cad.erro ? item(false, '<b>Cadastro de moradores:</b> ' + esc(cad.erro)) :
+          item(cad.unidades === cad.unidades_formulario && !cad.documentos_invalidos.length, '<b>Cadastro de moradores:</b> ' + cad.unidades + ' unidade(s)' + (cad.unidades_formulario ? (cad.unidades === cad.unidades_formulario ? ', como no formulário' : ', o formulário diz ' + cad.unidades_formulario) : '') +
+            (cad.tem_documento ? (cad.documentos_invalidos.length ? '; ' + cad.documentos_invalidos.length + ' CPF/CNPJ inválido(s) (linha ' + cad.documentos_invalidos.slice(0, 8).join(', ') + (cad.documentos_invalidos.length > 8 ? '…' : '') + ')' : '; CPF/CNPJ válidos') + (cad.sem_documento ? '; ' + cad.sem_documento + ' sem CPF/CNPJ' : '') : '; sem coluna de CPF/CNPJ') + '.')) +
+        '</section>';
+    }
+    return html;
+  }
+  function lerEtapasImp() {
+    var env = $('input[name=e_env]:checked');
+    return { documentacao: { feito: $('#e_doc').checked }, vouch: { id: $('#e_vouch').value.trim() }, onboarding: { situacao: $('#e_onb').value, data: $('#e_onb_data').value.trim() },
+      boletos: { feito: $('#e_bol').checked }, envio: { forma: env ? env.value : '' } };
+  }
+
+  async function confirmarCarteiraImp(i, recarregar) {
+    var j;
+    try { j = await api('GET', '/api/implantacoes/' + i.id + '/carteira'); } catch (e) { toast(e.message, 'erro'); return; }
+    var dd = j.dados;
+    var c = function (k, rot, extra) { return campoCr('k_' + k, rot, dd[k], extra); };
+    var mo = modal({
+      titulo: 'Confirmar a entrada na Carteira', largo: true,
+      corpo: (j.duplicados.length ? '<div class="msg aviso" style="margin-bottom:12px">Já existe na Carteira: ' + esc(j.duplicados.map(function (x) { return x.nome + ' (ID ' + x.codigo + ')'; }).join('; ')) + '. Confira antes de incluir.</div>'
+        : '<div class="msg ok" style="margin-bottom:12px">Nenhum condomínio com este ID ou CNPJ na Carteira.</div>') +
+        '<div class="grade-3">' + c('codigo', 'ID Vouch', { ajuda: 'Da etapa Cadastro no sistema.' }) + c('nome', 'Nome na Carteira', { ajuda: 'Sugerido a partir da razão social.' }) + c('situacao', 'Situação') +
+        c('razao_social', 'Razão social', { span: 2 }) + c('cnpj', 'CNPJ') + c('comarca', 'UF') + c('vencimento', 'Vencimento') + c('inicio_contrato', 'Início do contrato (vigência)', { tipo: 'date' }) +
+        c('administradora', 'Administradora') + selCr('k_forma_envio', 'Forma de envio do boleto', dd.forma_envio, [['', 'Escolha'], ['E-MAIL', 'E-mail'], ['IMPRESSO', 'Impresso'], ['IMPRESSO/E-MAIL', 'Impresso/E-mail']]) + c('executivo', 'Executivo') + '</div>' +
+        '<label class="rot" for="k_observacoes" style="margin-top:12px">Observações</label><textarea class="campo" id="k_observacoes" rows="2">' + esc(dd.observacoes) + '</textarea>' +
+        '<div class="ajuda">Analista de cobrança, extrajudicial e assistente de crédito são escolhidos depois, na ficha do condomínio na Carteira.</div>',
+      pe: '<button class="btn ghost" data-fechar>Ainda não</button><button class="btn primary" id="kOk">Confirmar e incluir na Carteira</button>',
+    });
+    $('#kOk', mo).onclick = async function () {
+      var dados = {};
+      Object.keys(dd).forEach(function (k) { var el = $('#k_' + k, mo); dados[k] = el ? el.value.trim() : dd[k]; });
+      try { await api('POST', '/api/implantacoes/' + i.id + '/carteira', { dados: dados }); mo.fechar(); toast('Condomínio incluído na Carteira.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+    };
+  }
+
   /* ---------- detalhe ---------- */
   async function paginaImplantacaoDetalhe(id) {
     definirBarra('<span class="setor">Implantação</span><span class="sep">/</span><span class="nome">…</span>');
@@ -4256,6 +4327,11 @@
     var recarregar = function () { paginaImplantacaoDetalhe(id); atualizarImp(); };
     var acoes = '<a class="btn ghost sm" href="#/implantacao">Voltar</a>';
     if (pd.cancelar) acoes += '<button class="btn danger sm" id="btCancImp">Cancelar implantação</button>';
+    if (pd.designar) acoes += '<button class="btn ' + (i.responsavel_id ? 'ghost' : 'primary') + ' sm" id="btDesigImp">' + (i.responsavel_id ? 'Redesignar' : 'Designar') + '</button>';
+    if (pd.iniciar) acoes += '<button class="btn primary sm" id="btIniImp">Iniciar implantação</button>';
+    if (pd.pendencia) acoes += '<button class="btn ghost sm" id="btPendImp">Devolver com pendência</button>';
+    if (pd.concluir) acoes += '<button class="btn primary sm" id="btConclImp"' + (d.faltas_etapas.length ? ' disabled title="' + esc(d.faltas_etapas.join(' ')) + '"' : '') + '>Concluir implantação</button>';
+    if (pd.carteira) acoes += '<button class="btn primary sm" id="btCartImp">Confirmar na Carteira</button>';
     definirBarra('<span class="setor">Implantação</span><span class="sep">/</span><span class="nome">' + esc(i.protocolo || 'Rascunho') + '</span>', acoes);
     var difs = {};
     d.diferencas.forEach(function (x) { difs[x.campo] = x; });
@@ -4270,17 +4346,28 @@
       (i.executivo_nome ? '<span class="etiqueta cinza">' + esc(i.executivo_nome + (i.executivo_uf ? ' · ' + i.executivo_uf : '')) + '</span>' : '') + '</div>' +
       '<h1>' + esc(i.condominio || 'Nova implantação') + '</h1><p class="sub" style="margin:0">' + esc([i.cnpj, i.uf, i.responsavel_nome ? 'Responsável: ' + i.responsavel_nome : ''].filter(Boolean).join(' · ')) + '</p></div>' +
       '<dl class="info-ticket" style="min-width:260px">' + (i.protocolo ? '<dt>Protocolo</dt><dd>' + esc(i.protocolo) + '</dd>' : '') +
-      (i.enviado_em ? '<dt>Enviada ao setor</dt><dd>' + dataHoraCr(i.enviado_em) + '</dd>' : '') + '<dt>Pedida por</dt><dd>' + esc(i.solicitante_nome || '—') + '</dd></dl></div>';
+      (i.enviado_em ? '<dt>Enviada ao setor</dt><dd>' + dataHoraCr(i.enviado_em) + '</dd>' : '') + '<dt>Pedida por</dt><dd>' + esc(i.solicitante_nome || '—') + '</dd>' +
+      (i.responsavel_nome ? '<dt>Conduz</dt><dd>' + esc(i.responsavel_nome) + '</dd>' : '') +
+      (i.prazo_inicio && i.etapa === 'em_implantacao' ? '<dt>' + (i.iniciado_em ? 'Iniciada em' : 'Iniciar até (8h úteis)') + '</dt><dd>' + (i.iniciado_em ? dataHoraCr(i.iniciado_em) : prazoCr(i.prazo_inicio, i.etapa)) + '</dd>' : '') +
+      (i.concluido_em ? '<dt>Concluída em</dt><dd>' + dataHoraCr(i.concluido_em) + '</dd>' : '') + '</dl></div>';
     if (d.diferencas.length) html += '<div class="msg aviso" style="margin-bottom:16px"><b>Diferente da análise:</b> ' + d.diferencas.map(function (x) { return esc(x.rotulo.replace(/ \((%|R\$)\)$/, '')) + ' ' + esc(fmtDif(x)); }).join('; ') + '.</div>';
     if (pd.editar && d.faltas.length) html += '<div class="msg aviso" style="margin-bottom:16px"><b>Para enviar, falta:</b><ul style="margin:6px 0 0;padding-left:18px">' + d.faltas.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>';
     if (!pd.editar && i.etapa !== 'rascunho' && d.pendencias.length) html += '<div class="msg aviso" style="margin-bottom:16px"><b>Pendente:</b> ' + esc(d.pendencias.join('; ')) + '. O executivo recebe um lembrete por e-mail a cada dia útil até chegar.</div>';
-    html += '<div class="pilha" style="gap:18px"><div id="formImp" class="pilha" style="gap:18px"' + (pd.editar ? '' : ' data-leitura') + '>' + htmlFormImp(i, m, parceiros, difs) + '</div>' + htmlDocsImp(d, m) +
+    var ultimaPend = d.eventos.filter(function (e) { return e.tipo === 'pendencia'; }).pop();
+    if (i.etapa === 'pendencia' && ultimaPend) html += '<div class="msg aviso" style="margin-bottom:16px;white-space:pre-wrap">' + esc(ultimaPend.detalhe.mensagem || '') + '</div>';
+    var setorHtml = pd.interno ? htmlSetorImp(d, m) : '';
+    var formHtml = '<div id="formImp" class="pilha" style="gap:18px"' + (pd.editar ? '' : ' data-leitura') + '>' + htmlFormImp(i, m, parceiros, difs) + '</div>';
+    // para o setor, o formulário fica recolhido depois das etapas
+    if (setorHtml && !pd.editar) formHtml = '<details class="painel"><summary class="cab-painel" style="cursor:pointer"><h2 style="display:inline">Formulário do comercial</h2></summary><div class="corpo">' + formHtml + '</div></details>';
+    html += '<div class="pilha" style="gap:18px">' + setorHtml + formHtml + htmlDocsImp(d, m) +
       (pd.editar ? '<div class="linha" style="justify-content:flex-end"><span class="ajuda" style="flex:1 1 320px;margin:0">Ao enviar, o portal confere o que falta. Se estiver tudo certo, gera o protocolo e avisa a coordenação e a equipe de implantação.</span>' +
         '<button class="btn ghost" id="btSalvarImp">Salvar rascunho</button><button class="btn primary" id="btEnviarImp">' + (i.etapa === 'pendencia' ? 'Reenviar ao setor Implantação' : 'Enviar ao setor Implantação') + '</button></div>' : '') + '</div>';
     html += '<section class="painel" style="margin-top:16px"><div class="cab-painel"><h2>Histórico</h2></div><div class="corpo pilha" style="gap:8px;font-size:13px;font-weight:600;color:var(--ink-2)">' +
       d.eventos.map(function (e) {
         var x = e.detalhe || {};
-        var extra = e.tipo === 'documento' || e.tipo === 'documento_removido' ? ': ' + esc(x.nome) : e.tipo === 'enviada' ? ' (' + esc(x.protocolo) + ')' : e.tipo === 'criada' && x.analise ? ' a partir da análise ' + esc(x.analise) : '';
+        var extra = e.tipo === 'documento' || e.tipo === 'documento_removido' ? ': ' + esc(x.nome) : e.tipo === 'enviada' ? ' (' + esc(x.protocolo) + ')' : e.tipo === 'criada' && x.analise ? ' a partir da análise ' + esc(x.analise)
+          : e.tipo === 'designada' ? ' para ' + esc(x.para) : e.tipo === 'pendencia' ? ': ' + esc((x.itens || []).join('; ')) : e.tipo === 'carteira' ? ' (ID ' + esc(x.codigo) + ')'
+            : e.tipo === 'parceiros' ? (x.criado ? ': ' + esc(x.criado) : x.ja_existia ? ': já existia ' + esc(x.ja_existia) : ': parceiro sem cadastro') : '';
         return '<div><b style="color:var(--ink)">' + dataHoraCr(e.criado_em) + '</b> · ' + esc(e.usuario_nome || 'Sistema') + ' ' + (EVENTO_IMP[e.tipo] || esc(e.tipo)) + extra + '</div>';
       }).join('') + '</div></section></div>';
     $('#conteudo').innerHTML = html;
@@ -4291,6 +4378,32 @@
       if (!(await confirmar('Cancelar implantação', 'A implantação fica no histórico como cancelada' + (i.analise_id ? ' e a análise volta a ficar disponível' : '') + '.', 'Cancelar implantação', true))) return;
       try { await api('POST', '/api/implantacoes/' + i.id + '/cancelar', {}); location.hash = '#/implantacao'; } catch (e) { toast(e.message, 'erro'); }
     };
+    if ($('#btDesigImp')) $('#btDesigImp').onclick = function () {
+      if (!m.equipe.length) { toast('Ninguém no setor Implantação ainda: inclua a equipe no cadastro das pessoas.', 'erro'); return; }
+      var mo = modal({ titulo: i.responsavel_id ? 'Redesignar a implantação' : 'Designar a implantação', corpo: selCr('mDesig', 'Quem conduz', i.responsavel_id || m.equipe[0].id, m.equipe.map(function (x) { return [x.id, x.nome]; })) +
+        '<div class="ajuda">A pessoa é avisada no sino e por e-mail e tem ' + m.horas_para_iniciar + 'h úteis para iniciar.</div>',
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mDesigOk">Designar</button>' });
+      $('#mDesigOk', mo).onclick = async function () {
+        try { await api('POST', '/api/implantacoes/' + i.id + '/designar', { usuario_id: Number($('#mDesig', mo).value) }); mo.fechar(); toast('Designada.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+      };
+    };
+    if ($('#btIniImp')) $('#btIniImp').onclick = async function () { try { await api('POST', '/api/implantacoes/' + i.id + '/iniciar', {}); toast('Implantação iniciada.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
+    if ($('#btEtapasImp')) $('#btEtapasImp').onclick = async function () {
+      try { var r = await api('PATCH', '/api/implantacoes/' + i.id + '/etapas', { etapas: lerEtapasImp() }); toast(r.faltas.length ? 'Etapas salvas. Falta: ' + r.faltas.length + '.' : 'Etapas salvas: pronta para concluir.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+    };
+    if ($('#btPendImp')) $('#btPendImp').onclick = function () {
+      var mo = modal({ titulo: 'Devolver ao comercial com pendência', corpo: '<label class="rot" for="mPendImp">O que falta — um item por linha</label><textarea class="campo" id="mPendImp" rows="6"></textarea><div class="ajuda">O executivo recebe a lista no portal e por e-mail. Quando reenviar, volta para você.</div>',
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mPendImpOk">Devolver</button>' });
+      $('#mPendImpOk', mo).onclick = async function () {
+        try { await api('POST', '/api/implantacoes/' + i.id + '/pendencia', { itens: $('#mPendImp', mo).value.split(/\n/) }); mo.fechar(); toast('Devolvida ao comercial.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+      };
+    };
+    if ($('#btConclImp')) $('#btConclImp').onclick = async function () {
+      var parc = (i.formulario.parceria === 'sim' && (i.formulario.parceiros || []).length) ? ' Como há parceria, o setor Parceiros é avisado e o condomínio entra na Prestação de Contas ligado ao parceiro (comissão a definir).' : '';
+      if (!(await confirmar('Concluir a implantação', 'A coordenação é avisada para confirmar a entrada na Carteira.' + parc, 'Concluir'))) return;
+      try { await api('POST', '/api/implantacoes/' + i.id + '/concluir', {}); toast('Implantação concluída.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+    };
+    if ($('#btCartImp')) $('#btCartImp').onclick = function () { confirmarCarteiraImp(i, recarregar); };
     if (!pd.editar) {
       $$('input, select, textarea, button', raiz).forEach(function (el) { el.disabled = true; });
       $$('[data-tirar], [data-tirar-parceiro], [data-tirar-contato], #btExtraImp, #btParcImp, #btContatoImp', raiz).forEach(function (el) { el.hidden = true; });

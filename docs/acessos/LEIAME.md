@@ -153,8 +153,8 @@ Tela própria do portal (menu **Implantação**), não é uma ferramenta em HTML
 | Quem | Como entra | Pode |
 |---|---|---|
 | **Comercial** (executivo de negócios) | o mesmo cadastro de executivo da Análise de Crédito | abrir a implantação a partir das suas análises liberadas, preencher o formulário, anexar documentos (inclusive os pendentes, depois do envio) e pedir ao gestor da Análise de Crédito a liberação de análise além do prazo |
-| **Equipe de implantação** | estar no setor **Implantação** | ver a fila e todas as implantações, anexar documentos |
-| **Coordenação** | líder do setor Implantação, ou perfil Coordenador/Supervisor no setor | o da equipe, mais cancelar e (próximas etapas) designar e confirmar na Carteira |
+| **Equipe de implantação** | estar no setor **Implantação** | ver a fila e todas as implantações, anexar documentos; quem foi designado inicia, marca as 5 etapas, devolve com pendência e conclui |
+| **Coordenação** | líder do setor Implantação, ou perfil Coordenador/Supervisor no setor | o da equipe, mais designar quem conduz, conduzir qualquer implantação, cancelar e confirmar a entrada na Carteira |
 | **Gestor da Análise de Crédito** | líder do setor Análise de Crédito, ou perfil Coordenador/Supervisor no setor | liberar (ou não) análises além do prazo da política (`implantacao_validade_dias`, padrão 90) |
 | **Diretoria** | permissão *Chancelar análises de crédito* | ver todas |
 | **Administração** | perfil | tudo |

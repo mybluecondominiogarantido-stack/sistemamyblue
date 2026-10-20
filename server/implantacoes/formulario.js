@@ -139,4 +139,61 @@ function diferencas(f, ref) {
   return l;
 }
 
-module.exports = { DOCUMENTOS, GARANTIAS, RECEITAS_CASHBACK, cpfValido, cnpjOk, daAnalise, faltas, pendencias, diferencas };
+/* ---------- setor Implantação: as 5 etapas ----------
+   etapas = { documentacao: { feito }, vouch: { id }, onboarding: { situacao, data }, boletos: { feito }, envio: { forma } } */
+const ONBOARDING = { a_marcar: 'A marcar', marcado: 'Marcado', sindico_myblue: 'Síndico MyBlue', realizado: 'Realizado' };
+const ENVIO = { email: 'Digital (e-mail)', fisico: 'Físico', ambos: 'Ambos' };
+const ENVIO_CARTEIRA = { email: 'E-MAIL', fisico: 'IMPRESSO', ambos: 'IMPRESSO/E-MAIL' };
+
+function normalizarEtapas(e) {
+  e = e && typeof e === 'object' ? e : {};
+  const o = e.onboarding || {};
+  return {
+    documentacao: { feito: !!(e.documentacao && e.documentacao.feito) },
+    vouch: { id: texto(e.vouch && e.vouch.id).slice(0, 30) },
+    onboarding: { situacao: ONBOARDING[o.situacao] ? o.situacao : 'a_marcar', data: texto(o.data).slice(0, 30) },
+    boletos: { feito: !!(e.boletos && e.boletos.feito) },
+    envio: { forma: ENVIO[e.envio && e.envio.forma] ? e.envio.forma : '' },
+  };
+}
+
+/* o que falta para concluir a implantação */
+function faltasEtapas(e) {
+  e = normalizarEtapas(e);
+  const l = [];
+  if (!e.documentacao.feito) l.push('Conferir a documentação.');
+  if (!e.vouch.id) l.push('Cadastrar no sistema (Vouch) e informar o ID.');
+  if (!['realizado', 'sindico_myblue'].includes(e.onboarding.situacao)) l.push('Fazer o onboarding (ou marcar "Síndico MyBlue").');
+  if (!e.boletos.feito) l.push('Emitir os boletos.');
+  if (!e.envio.forma) l.push('Escolher o envio dos boletos (digital, físico ou ambos).');
+  return l;
+}
+
+/* cadastro de moradores (Excel ou CSV): unidades e CPF/CNPJ de cada linha, para conferir com o formulário */
+function conferirCadastro(linhas) {
+  const norm = (s) => texto(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  let cab = -1, colUn = -1, colDoc = -1;
+  for (let i = 0; i < Math.min(linhas.length, 15) && cab < 0; i++) {
+    const l = (linhas[i] || []).map(norm);
+    const un = l.findIndex((c) => /^(unidade|unid|apto|apartamento|apt|casa|lote|sala|bloco\/?apto|uh)\b/.test(c));
+    if (un >= 0) { cab = i; colUn = un; colDoc = l.findIndex((c) => /\b(cpf|cnpj|documento|cpf\/cnpj)\b/.test(c)); }
+  }
+  if (cab < 0) return { erro: 'Não achei a coluna de unidade no cadastro de moradores (ex.: Unidade, Apto, Casa).' };
+  const unidades = new Set();
+  const invalidos = [];
+  let semDocumento = 0;
+  for (let i = cab + 1; i < linhas.length; i++) {
+    const l = linhas[i] || [];
+    const un = texto(l[colUn]);
+    if (!un) continue;
+    unidades.add(un.toUpperCase());
+    if (colDoc < 0) continue;
+    const d = digitos(l[colDoc]);
+    if (!d) semDocumento++;
+    else if (!(d.length === 11 ? cpfValido(d) : cnpjOk(d))) invalidos.push(i + 1);
+  }
+  return { unidades: unidades.size, tem_documento: colDoc >= 0, documentos_invalidos: invalidos, sem_documento: semDocumento };
+}
+
+module.exports = { DOCUMENTOS, GARANTIAS, RECEITAS_CASHBACK, ONBOARDING, ENVIO, ENVIO_CARTEIRA, cpfValido, cnpjOk, daAnalise, faltas, pendencias, diferencas,
+  normalizarEtapas, faltasEtapas, conferirCadastro };

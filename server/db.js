@@ -550,6 +550,7 @@ CREATE TABLE IF NOT EXISTS implantacoes (
   condominio_id INTEGER REFERENCES condominios(id) ON DELETE SET NULL,
   aviso_docs_em DATE,
   lembrete_fila_em TIMESTAMPTZ,
+  aviso_prazo_em TIMESTAMPTZ,
   criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
   atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );

@@ -91,8 +91,8 @@ async function criarApp(cfg) {
   const regras = criarRegras(db);
   // Controle de Emissão de Boletos: o cadastro acompanha a carteira de condomínios
   const boletosCarteira = criarBoletosCarteira({ db, documentos, espera: cfg.esperaCarteiraMs ?? 3000 });
-  // Implantação: lembretes (documentos pendentes) que rodam sozinhos; o intervalo é ligado em iniciar()
-  const rotinasImplantacao = criarRotinasImplantacao({ db, avisos, expediente });
+  // Implantação: lembretes (fila sem designação, prazo para iniciar, documentos pendentes); o intervalo é ligado em iniciar()
+  const rotinasImplantacao = criarRotinasImplantacao({ db, seg, avisos, expediente });
   const ctx = { db, seg, modulos, registros, documentos, avisos, expediente, acessos, regras, boletosCarteira, rotinasImplantacao, cfg };
 
   const app = express();

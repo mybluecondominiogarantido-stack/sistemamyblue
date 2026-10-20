@@ -12,7 +12,7 @@ Análise de Crédito.
 | Rotas (perfil, análises disponíveis, liberação pelo gestor, formulário, documentos, envio, avisos) | `server/rotas/implantacoes.js` |
 | Regras do formulário: o que vem da análise, o que falta, o que fica pendente, o comparativo | `server/implantacoes/formulario.js` |
 | Tabelas `implantacoes`, `implantacao_documentos`, `implantacao_eventos`, `implantacao_liberacoes`, `implantacao_protocolos` | `server/db.js` |
-| Lembrete diário de pendências (roda a cada 10 min, sai uma vez por dia útil) | `criarRotinasImplantacao` em `server/rotas/implantacoes.js`, ligado em `server/index.js` |
+| Lembretes: fila sem designação (4h úteis), prazo para iniciar vencido, pendências do executivo (uma vez por dia útil) — roda a cada 10 min | `criarRotinasImplantacao` em `server/rotas/implantacoes.js`, ligado em `server/index.js` |
 | Telas | `public/app.js` (bloco Implantação) |
 | Testes (dados fictícios) | `test/implantacoes-formulario.test.js`, `test/implantacoes-rotas.test.js` |
 
@@ -36,14 +36,32 @@ Análise de Crédito.
 - **Envio:** protocolo **IMP-AAAA-MM-DD-NN** (sequencial por dia, horário de Brasília). Avisos (sino e e-mail): a
   coordenação ("Nova implantação", aguardando designação) e a equipe ("Chegou uma nova implantação").
 
+## Setor Implantação
+
+- **Designação:** a coordenação designa cada pedido para alguém do setor (dá para redesignar). Quem recebe é avisado
+  (sino e e-mail) e tem **8h úteis** para iniciar (expediente de `server/expediente.js`; fim de semana e feriado não
+  contam). Sem designação, a coordenação recebe um lembrete a cada **4h úteis**; prazo para iniciar vencido avisa,
+  uma vez, a coordenação e quem foi designado.
+- **As 5 etapas:** documentação conferida, cadastro no Vouch (o ID vai para a Carteira; ID já usado na Carteira é
+  recusado), onboarding (a marcar, marcado, síndico MyBlue ou realizado), emissão de boletos e envio (digital, físico ou
+  ambos; vai para a Carteira como forma de envio). Concluir só com as 5 feitas.
+- **Conferências do portal:** diferenças com a análise, CPF do síndico, CNPJ e o cadastro de moradores (Excel/CSV): nº
+  de unidades contra o formulário e linhas com CPF/CNPJ inválido.
+- **Pendência:** quem conduz devolve ao comercial com a lista do que falta (sino e e-mail); o reenvio volta para a
+  mesma pessoa.
+- **Conclusão:** avisa a coordenação ("Pronta para a Carteira"). Com parceria, o condomínio entra na Prestação de
+  Contas (coleção `condos`) ligado ao parceiro com comissão 0% (`vinculosJSON`), e o setor Parceiros é avisado para
+  cadastrar a condição; se o condomínio já existir lá, ou o parceiro não estiver na base, o aviso diz o que conferir.
+- **Carteira:** a coordenação confere os dados sugeridos (ID Vouch, nome sugerido, UF, vencimento, vigência,
+  administradora, forma de envio, executivo, razão social, CNPJ) e confirma; o portal recusa ID ou CNPJ que já estão na
+  Carteira. Os responsáveis (cobrança, extrajudicial, crédito) são escolhidos depois, na ficha do condomínio. O Controle
+  de Emissão de Boletos acompanha, como em qualquer condomínio novo da Carteira.
+
 ## Próximas etapas
 
-1. Setor: designação pela coordenação (8h úteis para iniciar), lembrete a cada 4h úteis sem designação, as 5 etapas
-   (documentação, cadastro no Vouch, onboarding, emissão de boletos, envio), devolução com pendência, conclusão com aviso
-   ao setor Parceiros e confirmação na Carteira.
-2. Outras origens: condomínio de entrega (diretoria aprova taxa e boleto; "ainda não tem CNPJ") e PDF de análise feita
+1. Outras origens: condomínio de entrega (diretoria aprova taxa e boleto; "ainda não tem CNPJ") e PDF de análise feita
    antes do portal (leitura do retorno de 4 páginas).
-3. Formulário em PDF e tutoriais em vídeo.
+2. Formulário em PDF e tutoriais em vídeo.
 
 ## Dados
 
