@@ -31,6 +31,14 @@ planilha. Configuração: `CREDITO_IA_MODELO` (padrão `claude-opus-5-5`) e `CRE
 `high`; padrão `medium`). Se o modelo recusar o documento por segurança, a API tenta de novo no modelo recomendado
 (`fallbacks`). Os dados do relatório (nomes, CPF) vão para a Anthropic: revisar os termos antes de ligar.
 
+## Skills do Claude (leitura sem a API)
+
+Para ler os documentos pelo Claude do plano da empresa (claude.ai / Cowork), sem a API: `skills/leitura-inadimplencia-myblue`
+devolve os lançamentos no formato da área **Lançamentos** do portal (colar e clicar em *Ler planilha*), com as
+conferências da política e os candidatos à Assertiva; `skills/leitura-convencao-myblue` devolve os campos da seção
+**Convenção** (com página e trecho) e os textos para **Textos do retorno** (observações jurídicas, próximos passos e
+ressalvas). Para instalar: claude.ai → Configurações → Capacidades → Skills → enviar o `.skill` (ou a pasta em zip).
+
 ## Retorno em PDF
 
 O gerador é o canônico (ReportLab). Layout, cores, dimensões e classes não mudam; no portal mudam só a entrada e a
