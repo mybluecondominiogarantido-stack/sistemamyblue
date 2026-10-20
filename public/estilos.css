@@ -385,3 +385,4 @@ details.painel>summary{list-style:none}
 details.painel>summary::-webkit-details-marker{display:none}
 details.painel>summary::before{content:"▸";color:var(--muted);margin-right:6px}
 details.painel[open]>summary::before{content:"▾"}
+#tbPes .campo:disabled{background:var(--surface-2);opacity:.55}
