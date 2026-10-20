@@ -251,3 +251,27 @@ test('tutoriais da Análise de Crédito: executivo vê o de pedir, analista e di
   assert.deepEqual(await ve('diretor@teste.com'), ['credito-solicitar', 'credito-analisar']);
   assert.deepEqual(await ve('outro@teste.com'), []);
 });
+
+test('pessoas e papéis: a administração marca executivo, analista e diretoria entre os usuários do portal', async () => {
+  const uid = ids['outro@teste.com'];
+  assert.equal((await analista('GET', '/api/credito/pessoas')).status, 403);
+  // cadastro antigo sem usuário, com o mesmo nome: passa a ser da pessoa
+  const antigo = await admin('POST', '/api/credito/executivos', { nome: 'Outra Pessoa', uf: 'PB' });
+  assert.equal((await admin('PUT', `/api/credito/pessoas/${uid}`, { executivo: { ativo: true, uf: 'pb', regiao: 'Paraíba', boleto: '' } })).status, 200);
+  assert.equal((await admin('PUT', `/api/credito/pessoas/${uid}`, { analista: true })).status, 200);
+  assert.equal((await admin('PUT', `/api/credito/pessoas/${uid}`, { diretoria: true })).status, 200);
+  let p = (await outro('GET', '/api/credito/meta')).json.perfil;
+  assert.equal(p.executivo.id, antigo.json.id);
+  assert.equal(p.executivo.uf, 'PB');
+  assert.equal(p.analista, true);
+  assert.equal(p.diretoria, true);
+  const lista = (await admin('GET', '/api/credito/pessoas')).json;
+  const eu = lista.pessoas.find((x) => x.id === uid);
+  assert.deepEqual([eu.executivo.ativo, eu.analista, eu.diretoria], [true, true, true]);
+  assert.ok(!lista.executivos_sem_usuario.some((e) => e.id === antigo.json.id));
+  assert.ok(lista.pessoas.find((x) => x.id === ids['diretor@teste.com']).diretoria); // os outros não mudam
+  await admin('PUT', `/api/credito/pessoas/${uid}`, { executivo: { ativo: false }, analista: false, diretoria: false });
+  p = (await outro('GET', '/api/credito/meta')).json.perfil;
+  assert.deepEqual([p.executivo, p.analista, p.diretoria], [null, false, false]);
+  assert.ok((await admin('GET', '/api/credito/pessoas')).json.pessoas.find((x) => x.id === ids['diretor@teste.com']).diretoria);
+});

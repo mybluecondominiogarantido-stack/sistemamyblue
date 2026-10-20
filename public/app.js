@@ -3266,7 +3266,7 @@
   var FONTE_CR = { formulario: 'formulário', relatorio: 'relatório', convencao: 'convenção', formulario_total: 'total no formulário', formulario_detalhe: 'detalhe do formulário' };
   var CAMPO_CR = { uh_total: 'Nº de unidades', taxa_ordinaria: 'Taxa ordinária', dia_vencimento: 'Dia do vencimento', uh_isentas: 'Unidades isentas', taxa_extra: 'Taxa extra' };
   var RES_CR = { aprovada: ['APROVADA', 'verde'], ressalvas: ['APROVADA COM RESSALVAS', 'ambar'], reprovada: ['REPROVADA', 'vermelha'], pendente: ['PENDENTE', 'azul'] };
-  var ABAS_CR = [['minhas', 'Minhas solicitações'], ['fila', 'Fila'], ['diretoria', 'Diretoria'], ['todas', 'Histórico'], ['executivos', 'Executivos'], ['chancela', 'Quem chancela'], ['politica', 'Política e faixas']];
+  var ABAS_CR = [['minhas', 'Minhas solicitações'], ['fila', 'Fila'], ['diretoria', 'Diretoria'], ['todas', 'Histórico'], ['pessoas', 'Pessoas e papéis'], ['politica', 'Política e faixas']];
   var EVENTO_CR = {
     criada: 'criou a solicitação', formulario: 'alterou o formulário', documento: 'anexou um documento', documento_removido: 'removeu um documento',
     enviada: 'enviou para análise', reenviada: 'reenviou depois da pendência', assumida: 'assumiu a análise', motor: 'calculou a análise', ajuste: 'ajustou um valor',
@@ -3315,12 +3315,13 @@
     var m;
     try { m = await carregarMetaCredito(true); } catch (e) { $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">' + esc(e.message) + '</div></div>'; return; }
     var p = m.perfil;
-    var pode = { minhas: !!p.executivo || p.analista, fila: p.analista, diretoria: p.diretoria, todas: p.analista || p.diretoria, executivos: p.admin, chancela: p.admin, politica: p.analista || p.diretoria };
+    var pode = { minhas: !!p.executivo || p.analista, fila: p.analista, diretoria: p.diretoria, todas: p.analista || p.diretoria, pessoas: p.admin, politica: p.analista || p.diretoria };
     var abas = ABAS_CR.filter(function (a) { return pode[a[0]]; });
     if (!abas.length) {
-      $('#conteudo').innerHTML = '<div class="pagina"><h1>Análise de Crédito</h1><div class="vazio">Você ainda não tem acesso à Análise de Crédito. Executivos de negócios são ligados ao cadastro pela administração; analistas são do setor ' + esc(m.politica.setor_analistas) + '.</div></div>';
+      $('#conteudo').innerHTML = '<div class="pagina"><h1>Análise de Crédito</h1><div class="vazio">Você ainda não tem acesso à Análise de Crédito. A administração marca executivos, analistas e diretoria em Análise de Crédito → Pessoas e papéis.</div></div>';
       return;
     }
+    if (aba === 'executivos' || aba === 'chancela') aba = 'pessoas'; // endereços antigos
     if (!abas.some(function (a) { return a[0] === aba; })) aba = p.analista ? 'fila' : p.diretoria && !p.executivo ? 'diretoria' : abas[0][0];
     definirBarra('<span class="setor">Análise de Crédito</span><span class="sep">/</span><span class="nome">' + esc(abas.find(function (a) { return a[0] === aba; })[1]) + '</span>');
     var novo = (p.executivo || p.analista) && ['minhas', 'fila'].indexOf(aba) >= 0;
@@ -3329,8 +3330,7 @@
       (novo ? '<button class="btn primary" id="btNovaCr">' + IC.mais + 'Nova solicitação</button>' : '') + '</div>' +
       '<nav class="abas" style="margin-top:16px">' + abas.map(function (a) { return '<a href="#/credito/' + a[0] + '" class="' + (a[0] === aba ? 'on' : '') + '">' + esc(a[1]) + '</a>'; }).join('') + '</nav><div id="corpoCr"></div></div>';
     if ($('#btNovaCr')) $('#btNovaCr').onclick = novaSolicitacaoCredito;
-    if (aba === 'executivos') return abaExecutivosCredito();
-    if (aba === 'chancela') return abaChancelaCredito();
+    if (aba === 'pessoas') return abaPessoasCredito();
     if (aba === 'politica') return abaPoliticaCredito(p);
     var interno = p.analista || p.diretoria;
     var tiles = '';
@@ -3368,7 +3368,7 @@
     var m = await carregarMetaCredito();
     var corpo = { formulario: {} };
     if (!m.perfil.executivo) {
-      if (!m.executivos.length) { toast('Cadastre os executivos em Análise de Crédito → Executivos antes.', 'erro'); return; }
+      if (!m.executivos.length) { toast('Marque os executivos em Análise de Crédito → Pessoas e papéis antes.', 'erro'); return; }
       corpo.executivo_id = m.executivos[0].id;
     }
     try { var r = await api('POST', '/api/credito/analises', corpo); location.hash = '#/credito/' + r.id; } catch (e) { toast(e.message, 'erro'); }
@@ -3752,39 +3752,68 @@
   }
 
   /* ---------- administração ---------- */
-  async function abaExecutivosCredito() {
+  async function abaPessoasCredito() {
     var j;
-    try { j = await api('GET', '/api/credito/executivos'); } catch (e) { $('#corpoCr').innerHTML = '<div class="vazio">' + esc(e.message) + '</div>'; return; }
-    $('#corpoCr').innerHTML = '<div class="painel"><div class="cab-painel"><h2>Executivos de negócios</h2><span class="ajuda" style="margin:0">Quem está ligado a um usuário do portal pede análises e acompanha as suas. Boleto vazio segue a política (R$ 2,00; Maranhão R$ 5,50).</span><span class="espaco"></span><button class="btn primary sm" id="btNovoEx">' + IC.mais + 'Novo executivo</button></div>' +
-      '<div class="tabela-wrap"><table><thead><tr><th>Nome</th><th>UF / região</th><th>Boleto próprio</th><th>Usuário do portal</th><th>Situação</th></tr></thead><tbody>' +
-      j.executivos.map(function (e) { return '<tr class="clicavel" data-ex="' + e.id + '"><td><b>' + esc(e.nome) + '</b></td><td>' + esc([e.uf, e.regiao].filter(Boolean).join(' · ') || '—') + '</td><td>' + (e.boleto != null ? reais(e.boleto) : '<span class="sec">da política</span>') + '</td><td>' + esc(e.usuario_nome || '—') + '</td><td>' + (e.ativo ? '<span class="etiqueta verde">ativo</span>' : '<span class="etiqueta cinza">inativo</span>') + '</td></tr>'; }).join('') +
-      '</tbody></table></div></div>';
+    try { j = await api('GET', '/api/credito/pessoas'); } catch (e) { $('#corpoCr').innerHTML = '<div class="vazio">' + esc(e.message) + '</div>'; return; }
+    function linha(u) {
+      var e = u.executivo && u.executivo.ativo ? u.executivo : null;
+      var dis = e ? '' : ' disabled';
+      return '<tr data-u="' + u.id + '"><td><b>' + esc(u.nome) + '</b><span class="sec">' + esc(u.email) + '</span></td>' +
+        '<td style="text-align:center"><input type="checkbox" data-c="executivo"' + (e ? ' checked' : '') + ' aria-label="' + esc(u.nome) + ' é executivo de negócios"></td>' +
+        '<td><input class="campo" data-c="uf" maxlength="2" style="width:64px" value="' + esc(e ? e.uf : '') + '" aria-label="UF"' + dis + '></td>' +
+        '<td><input class="campo" data-c="regiao" style="min-width:140px" value="' + esc(e ? e.regiao : '') + '" aria-label="Região"' + dis + '></td>' +
+        '<td><input class="campo" data-c="boleto" style="width:110px" placeholder="política" value="' + esc(e && e.boleto != null ? fmtNumCr(e.boleto) : '') + '" aria-label="Boleto próprio (R$)"' + dis + '></td>' +
+        '<td style="text-align:center"><input type="checkbox" data-c="analista"' + (u.analista ? ' checked' : '') + ' aria-label="' + esc(u.nome) + ' é analista de crédito"></td>' +
+        '<td style="text-align:center"><input type="checkbox" data-c="diretoria"' + (u.diretoria ? ' checked' : '') + ' aria-label="' + esc(u.nome) + ' chancela pela diretoria"></td></tr>';
+    }
+    $('#corpoCr').innerHTML = '<div class="painel"><div class="cab-painel"><h2>Pessoas e papéis</h2>' +
+      '<input class="campo" id="qPes" type="search" placeholder="Buscar pessoa" style="max-width:280px;margin-left:auto">' +
+      '<label class="linha" style="font-weight:700;font-size:13px;color:var(--muted)"><input type="checkbox" id="soPapel"> só quem tem papel</label></div>' +
+      '<div class="corpo" style="padding-top:12px;padding-bottom:4px"><p class="ajuda" style="margin:0">Marque o papel de cada pessoa na Análise de Crédito; vale na hora. <b>Executivo</b>: pede análises e acompanha as suas (boleto vazio segue a política: R$ 2,00; Maranhão R$ 5,50). ' +
+      '<b>Analista</b>: entra no setor ' + esc(j.setor_analistas) + ' e analisa. <b>Diretoria</b>: chancela as análises com inadimplência entre 35% e 40%.</p></div>' +
+      '<div class="tabela-wrap"><table style="min-width:900px"><thead><tr><th>Pessoa</th><th style="text-align:center">Executivo</th><th>UF</th><th>Região</th><th>Boleto próprio (R$)</th><th style="text-align:center">Analista de crédito</th><th style="text-align:center">Diretoria</th></tr></thead>' +
+      '<tbody id="tbPes">' + j.pessoas.map(linha).join('') + '</tbody></table></div></div>' +
+      '<div class="painel" style="margin-top:16px"><div class="cab-painel"><h2>Executivos sem acesso ao portal</h2><span class="ajuda" style="margin:0">quem não entra no portal; o analista pede a análise em nome dele</span><span class="espaco"></span><button class="btn ghost sm" id="btNovoEx">' + IC.mais + 'Novo executivo</button></div>' +
+      '<div class="tabela-wrap"><table><thead><tr><th>Nome</th><th>UF / região</th><th>Boleto próprio</th><th>Situação</th></tr></thead><tbody>' +
+      (j.executivos_sem_usuario.map(function (e) { return '<tr class="clicavel" data-ex="' + e.id + '"><td><b>' + esc(e.nome) + '</b></td><td>' + esc([e.uf, e.regiao].filter(Boolean).join(' · ') || '—') + '</td><td>' + (e.boleto != null ? reais(e.boleto) : '<span class="sec">da política</span>') + '</td><td>' + (e.ativo ? '<span class="etiqueta verde">ativo</span>' : '<span class="etiqueta cinza">inativo</span>') + '</td></tr>'; }).join('') ||
+        '<tr><td colspan="4"><span class="sec">Nenhum.</span></td></tr>') + '</tbody></table></div></div>';
+
+    function filtrar() {
+      var q = normal($('#qPes').value), so = $('#soPapel').checked;
+      $$('#tbPes tr').forEach(function (tr) {
+        var tem = $$('input[type=checkbox]', tr).some(function (c) { return c.checked; });
+        tr.hidden = (q && normal(tr.textContent).indexOf(q) < 0) || (so && !tem);
+      });
+    }
+    $('#qPes').oninput = filtrar;
+    $('#soPapel').onchange = filtrar;
+    async function salvar(tr, campo) {
+      var g = function (c) { return $('[data-c=' + c + ']', tr); };
+      var ex = g('executivo').checked;
+      ['uf', 'regiao', 'boleto'].forEach(function (c) { g(c).disabled = !ex; });
+      var corpo = {};
+      if (campo === 'analista' || campo === 'diretoria') corpo[campo] = g(campo).checked;
+      else corpo.executivo = { ativo: ex, uf: g('uf').value.trim(), regiao: g('regiao').value.trim(), boleto: g('boleto').value.trim() ? numCr(g('boleto').value) : null };
+      try { await api('PUT', '/api/credito/pessoas/' + tr.getAttribute('data-u'), corpo); metaCredito = null; toast('Salvo.', 'ok'); } catch (e) { toast(e.message, 'erro'); abaPessoasCredito(); }
+    }
+    $$('#tbPes tr').forEach(function (tr) {
+      $$('[data-c]', tr).forEach(function (el) { el.onchange = function () { salvar(tr, el.getAttribute('data-c')); }; });
+    });
+
     function editar(e) {
       e = e || { ativo: true };
-      var mo = modal({ titulo: e.id ? 'Executivo' : 'Novo executivo', corpo: '<div class="grade-2">' + campoCr('xNome', 'Nome', e.nome) + campoCr('xEmail', 'E-mail', e.email) + campoCr('xUf', 'UF', e.uf) + campoCr('xReg', 'Região', e.regiao) +
-        campoCr('xBol', 'Boleto próprio (R$)', e.boleto != null ? fmtNumCr(e.boleto) : '', { ph: 'vazio = política' }) +
-        selCr('xUsu', 'Usuário do portal', e.usuario_id || '', [['', '— nenhum —']].concat(j.usuarios.map(function (u) { return [u.id, u.nome + ' · ' + u.email]; }))) + '</div>' +
-        '<label class="linha" style="font-weight:700;margin-top:12px"><input type="checkbox" id="xAtivo"' + (e.ativo ? ' checked' : '') + '> ativo</label>',
+      var mo = modal({ titulo: e.id ? 'Executivo sem acesso ao portal' : 'Novo executivo sem acesso ao portal', corpo: '<div class="grade-2">' + campoCr('xNome', 'Nome', e.nome) + campoCr('xEmail', 'E-mail', e.email) + campoCr('xUf', 'UF', e.uf) + campoCr('xReg', 'Região', e.regiao) +
+        campoCr('xBol', 'Boleto próprio (R$)', e.boleto != null ? fmtNumCr(e.boleto) : '', { ph: 'vazio = política' }) + '</div>' +
+        '<label class="linha" style="font-weight:700;margin-top:12px"><input type="checkbox" id="xAtivo"' + (e.ativo ? ' checked' : '') + '> ativo</label>' +
+        '<p class="ajuda">Se a pessoa usa o portal, marque-a como executivo na tabela acima em vez de cadastrar aqui.</p>',
         pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="xOk">Salvar</button>' });
       $('#xOk', mo).onclick = async function () {
-        var corpo = { nome: $('#xNome', mo).value, email: $('#xEmail', mo).value, uf: $('#xUf', mo).value, regiao: $('#xReg', mo).value, boleto: $('#xBol', mo).value.trim() ? numCr($('#xBol', mo).value) : null, usuario_id: Number($('#xUsu', mo).value) || null, ativo: $('#xAtivo', mo).checked };
-        try { await api(e.id ? 'PATCH' : 'POST', '/api/credito/executivos' + (e.id ? '/' + e.id : ''), corpo); mo.fechar(); metaCredito = null; abaExecutivosCredito(); } catch (er) { toast(er.message, 'erro'); }
+        var corpo = { nome: $('#xNome', mo).value, email: $('#xEmail', mo).value, uf: $('#xUf', mo).value, regiao: $('#xReg', mo).value, boleto: $('#xBol', mo).value.trim() ? numCr($('#xBol', mo).value) : null, usuario_id: null, ativo: $('#xAtivo', mo).checked };
+        try { await api(e.id ? 'PATCH' : 'POST', '/api/credito/executivos' + (e.id ? '/' + e.id : ''), corpo); mo.fechar(); metaCredito = null; abaPessoasCredito(); } catch (er) { toast(er.message, 'erro'); }
       };
     }
     $('#btNovoEx').onclick = function () { editar(); };
-    $$('[data-ex]').forEach(function (tr) { tr.onclick = function () { editar(j.executivos.find(function (x) { return String(x.id) === tr.getAttribute('data-ex'); })); }; });
-  }
-
-  async function abaChancelaCredito() {
-    var j;
-    try { j = await api('GET', '/api/credito/diretoria'); } catch (e) { $('#corpoCr').innerHTML = '<div class="vazio">' + esc(e.message) + '</div>'; return; }
-    $('#corpoCr').innerHTML = '<div class="painel"><div class="cab-painel"><h2>Quem chancela (diretoria)</h2><span class="ajuda" style="margin:0">Análises com inadimplência entre 35% e 40% só vão ao executivo depois da chancela. Marque o CEO e o Diretor Comercial.</span></div>' +
-      '<div class="corpo"><div class="caixa-opcoes">' + j.usuarios.map(function (u) { return '<label><input type="checkbox" value="' + u.id + '"' + (j.pessoas.indexOf(u.id) >= 0 ? ' checked' : '') + '> ' + esc(u.nome) + ' <span class="sec">' + esc(u.email) + '</span></label>'; }).join('') + '</div>' +
-      '<div class="linha" style="justify-content:flex-end;margin-top:12px"><button class="btn primary" id="btChSalvar">Salvar</button></div></div></div>';
-    $('#btChSalvar').onclick = async function () {
-      var pessoas = $$('#corpoCr .caixa-opcoes input:checked').map(function (i) { return Number(i.value); });
-      try { await api('PUT', '/api/credito/diretoria', { pessoas: pessoas }); toast('Diretoria salva.', 'ok'); } catch (e) { toast(e.message, 'erro'); }
-    };
+    $$('[data-ex]').forEach(function (tr) { tr.onclick = function () { editar(j.executivos_sem_usuario.find(function (x) { return String(x.id) === tr.getAttribute('data-ex'); })); }; });
   }
 
   async function abaPoliticaCredito(p) {

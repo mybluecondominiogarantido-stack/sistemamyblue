@@ -8,9 +8,9 @@
  *         pendencia: devolvida ao executivo (o prazo para e recomeça quando ele reenvia). cancelada.
  *
  * Quem faz o quê (definido no portal, nunca no código):
- *  - executivo: quem está ligado a um cadastro de executivo (Análise de Crédito → Executivos); vê e pede as suas;
+ *  - executivo: quem está ligado a um cadastro de executivo (Análise de Crédito → Pessoas e papéis); vê e pede as suas;
  *  - analista: quem é do setor dos analistas (política: setor_analistas, padrão "Análise de Crédito"); vê todas;
- *  - diretoria: pessoas liberadas em "Chancelar análises de crédito (diretoria)" (regras de acesso);
+ *  - diretoria: pessoas liberadas em "Chancelar análises de crédito (diretoria)" (Pessoas e papéis; fica nas regras de acesso);
  *  - administração: tudo, inclusive executivos e política.
  */
 const express = require('express');
@@ -588,6 +588,64 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
       await seg.auditar(req, 'credito_executivo', null, { id: Number(req.params.eid), nome: v[0] });
       res.json({ ok: true });
     } catch (e) { if (e.status) return erro(res, e.status, e.message); if (e.code === '23505') return erro(res, 409, 'Já existe um executivo com esse nome.'); throw e; }
+  });
+
+  /* pessoas e papéis: a administração escolhe, entre os usuários do portal, quem é executivo, analista e diretoria */
+  r.get('/api/credito/pessoas', soAdmin, async (req, res) => {
+    const pol = await politicaAtiva(db);
+    const setor = await db.um('SELECT id FROM setores WHERE nome = $1', [pol.setor_analistas]);
+    const membros = new Set(setor ? (await db.q('SELECT usuario_id FROM setor_membros WHERE setor_id = $1', [setor.id])).rows.map((x) => x.usuario_id) : []);
+    const diretoria = new Set((await regras.regras()).get('credito.diretoria').pessoas);
+    const execs = (await db.q('SELECT id, usuario_id, nome, email, uf, regiao, boleto, ativo FROM executivos ORDER BY nome')).rows;
+    const porUsuario = new Map(execs.filter((e) => e.usuario_id).map((e) => [e.usuario_id, e]));
+    const usuarios = (await db.q('SELECT id, nome, email, papel FROM usuarios WHERE ativo ORDER BY nome')).rows;
+    res.json({
+      setor_analistas: pol.setor_analistas,
+      pessoas: usuarios.map((u) => {
+        const e = porUsuario.get(u.id);
+        return { id: u.id, nome: u.nome, email: u.email, papel: u.papel, analista: membros.has(u.id), diretoria: diretoria.has(u.id),
+          executivo: e ? { id: e.id, ativo: e.ativo, uf: e.uf, regiao: e.regiao, boleto: e.boleto === null ? null : Number(e.boleto) } : null };
+      }),
+      executivos_sem_usuario: execs.filter((e) => !e.usuario_id),
+    });
+  });
+
+  r.put('/api/credito/pessoas/:uid', soAdmin, json, async (req, res) => {
+    const u = await db.um('SELECT id, nome, email FROM usuarios WHERE id = $1 AND ativo', [Number(req.params.uid) || 0]);
+    if (!u) return erro(res, 404, 'Usuário não encontrado.');
+    const b = req.body || {};
+    const pol = await politicaAtiva(db);
+    try {
+      if (b.executivo !== undefined) {
+        const ex = b.executivo || {};
+        const atual = await db.um('SELECT id FROM executivos WHERE usuario_id = $1', [u.id]);
+        if (ex.ativo) {
+          const boleto = ex.boleto === '' || ex.boleto === null || ex.boleto === undefined ? null : Number(String(ex.boleto).replace(',', '.'));
+          if (boleto !== null && !(boleto > 0)) return erro(res, 400, 'Boleto inválido.');
+          const campos = [texto(ex.uf, 2).toUpperCase(), texto(ex.regiao, 120), boleto];
+          // cadastro antigo com o mesmo nome e sem usuário: passa a ser desta pessoa
+          const mesmoNome = atual ? null : await db.um('SELECT id FROM executivos WHERE usuario_id IS NULL AND lower(nome) = lower($1)', [u.nome]);
+          const alvo = atual || mesmoNome;
+          if (alvo) await db.q('UPDATE executivos SET usuario_id = $1, uf = $2, regiao = $3, boleto = $4, ativo = TRUE, atualizado_em = now() WHERE id = $5', [u.id, ...campos, alvo.id]);
+          else await db.q('INSERT INTO executivos (nome, email, uf, regiao, boleto, usuario_id) VALUES ($1, $2, $3, $4, $5, $6)', [u.nome, u.email, ...campos, u.id]);
+        } else if (atual) {
+          // o cadastro fica (as análises antigas apontam para ele), só deixa de valer
+          await db.q('UPDATE executivos SET ativo = FALSE, atualizado_em = now() WHERE id = $1', [atual.id]);
+        }
+      }
+      if (b.analista !== undefined) {
+        let setor = await db.um('SELECT id FROM setores WHERE nome = $1', [pol.setor_analistas]);
+        if (!setor && b.analista) setor = await db.um("INSERT INTO setores (nome, ordem) VALUES ($1, 14) RETURNING id", [pol.setor_analistas]);
+        if (setor && b.analista) await db.q('INSERT INTO setor_membros (setor_id, usuario_id, lider) VALUES ($1, $2, FALSE) ON CONFLICT DO NOTHING', [setor.id, u.id]);
+        else if (setor) await db.q('DELETE FROM setor_membros WHERE setor_id = $1 AND usuario_id = $2', [setor.id, u.id]);
+      }
+      if (b.diretoria !== undefined) {
+        const atuais = (await regras.regras()).get('credito.diretoria').pessoas.filter((x) => x !== u.id);
+        await regras.salvar('credito.diretoria', { niveis: [], setores: [], pessoas: b.diretoria ? [...atuais, u.id] : atuais }, req.usuario);
+      }
+    } catch (e) { if (e.code === '23505') return erro(res, 409, `Já existe outro executivo com o nome ${u.nome}.`); throw e; }
+    await seg.auditar(req, 'credito_papeis', null, { usuario: u.id, nome: u.nome, executivo: b.executivo && !!b.executivo.ativo, analista: b.analista, diretoria: b.diretoria });
+    res.json({ ok: true });
   });
 
   r.get('/api/credito/diretoria', soAdmin, async (req, res) => {

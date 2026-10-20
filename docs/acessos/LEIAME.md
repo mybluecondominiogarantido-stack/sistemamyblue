@@ -19,7 +19,7 @@ a supervisão, das pessoas que gerenciam.
 | **Marcações**: *Supervisão da Central de Tickets* (já vem com Coordenador e Supervisor) e *Marketing — Central de Links* | cadastro da pessoa | só a administração |
 | **Ferramenta**: abre? edita ou só consulta? com qual papel? | janela da ferramenta → *Quem abre e com qual papel* | administração; coordenação/supervisão do setor dono da ferramenta |
 | **Carteira**: quem edita o quê | *Módulos e dados → Carteira: quem edita* (e *Ferramentas do setor → Carteira de condomínios: quem edita*) | administração; coordenação/supervisão liberam pessoas nas permissões do setor delas |
-| **Análise de Crédito**: executivo, analista, diretoria | *Análise de Crédito → Executivos* (executivo ligado ao usuário), setor **Análise de Crédito** (analistas), *Análise de Crédito → Quem chancela* (diretoria) | administração (o setor, também a coordenação dele) |
+| **Análise de Crédito**: executivo, analista, diretoria | *Análise de Crédito → Pessoas e papéis* (marca, entre os usuários do portal, quem é executivo, analista — entra no setor **Análise de Crédito** — e diretoria) | administração |
 | **Demonstrativos de premiação**: quem lê o de cada pessoa | a própria Gestão de Premiações, ao enviar | quem usa a Gestão de Premiações |
 
 > Atenção: mudar os setores de uma pessoa (no cadastro ou em *Equipes e tipos de demanda*) muda também a equipe de
@@ -137,10 +137,10 @@ Tela própria do portal (menu **Análise de Crédito**), não é uma ferramenta 
 
 | Quem | Como entra | Pode |
 |---|---|---|
-| **Executivo de negócios** | cadastro em *Análise de Crédito → Executivos*, ligado ao usuário dele | pedir análise, anexar documentos, responder pendências, ver o retorno das suas e pedir reanálise; não vê as anotações nem o cálculo antes do retorno |
-| **Analista** | pessoa do setor **Análise de Crédito** (diferente do setor Crédito; o nome do setor é parâmetro da política) | ver todas, assumir, lançar dados, calcular, devolver com pendência, enviar à diretoria e liberar o retorno (assinado por ele) |
-| **Diretoria** | marcada em *Análise de Crédito → Quem chancela* (permissão *Chancelar análises de crédito*) | chancelar ou não as análises com inadimplência entre 35% e 40%; ver o histórico |
-| **Administração** | perfil | tudo, inclusive executivos, quem chancela e versões da política |
+| **Executivo de negócios** | marcado em *Análise de Crédito → Pessoas e papéis* (com UF, região e boleto próprio) | pedir análise, anexar documentos, responder pendências, ver o retorno das suas e pedir reanálise; não vê as anotações nem o cálculo antes do retorno |
+| **Analista** | marcado em *Pessoas e papéis*, o que o coloca no setor **Análise de Crédito** (diferente do setor Crédito; o nome do setor é parâmetro da política) | ver todas, assumir, lançar dados, calcular, devolver com pendência, enviar à diretoria e liberar o retorno (assinado por ele) |
+| **Diretoria** | marcada em *Pessoas e papéis* (permissão *Chancelar análises de crédito*) | chancelar ou não as análises com inadimplência entre 35% e 40%; ver o histórico |
+| **Administração** | perfil | tudo, inclusive pessoas e papéis, executivos sem acesso ao portal e versões da política |
 
 Os avisos (sino e e-mail) vão para o setor Análise de Crédito quando a documentação fica completa, para o executivo
 nas pendências e no retorno, e para a diretoria quando há chancela. Detalhes da ferramenta em `docs/credito/LEIAME.md`.
