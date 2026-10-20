@@ -226,7 +226,9 @@
         '<div class="grupo">Carteira</div>' +
         '<a href="#/carteira" class="' + (rota.indexOf('#/carteira') === 0 ? 'on' : '') + '">' + IC.casa + 'Carteira de condomínios</a>' +
         (resumoCredito && resumoCredito.acesso ? '<div class="grupo">Análise de Crédito</div><a href="#/credito" class="' + (rota.indexOf('#/credito') === 0 ? 'on' : '') + '">' + IC.escudo +
-          '<span>Análise de Crédito</span><i data-contador="credito" class="contador" hidden></i></a>' : '');
+          '<span>Análise de Crédito</span><i data-contador="credito" class="contador" hidden></i></a>' : '') +
+        (resumoImp && resumoImp.acesso ? '<div class="grupo">Implantação</div><a href="#/implantacao" class="' + (rota.indexOf('#/implantacao') === 0 ? 'on' : '') + '">' + IC.casa +
+          '<span>Implantação</span><i data-contador="implantacao" class="contador" hidden></i></a>' : '');
       // Comissões: a ferramenta (só para quem tem acesso) e os demonstrativos de cada pessoa
       var modCom = modulos.find(function (m) { return m.slug === MOD_COMISSAO; });
       var pendC = resumoComissao ? resumoComissao.pendentes + (resumoComissao.planilhas || 0) : 0;
@@ -259,6 +261,7 @@
     }
     $('#nav').innerHTML = html;
     desenharContadorCredito();
+    desenharContadorImp();
     if (resumoTickets) { var bc = $('#nav [data-contador=fila]'); if (bc) { bc.textContent = resumoTickets.minha_fila; bc.hidden = !resumoTickets.minha_fila; if (resumoTickets.minha_fila_atrasados) bc.classList.add('alerta'); } }
     $$('#nav a').forEach(function (a) { a.addEventListener('click', function () { $('#casca').classList.remove('menu-aberto'); }); });
   }
@@ -295,6 +298,7 @@
     }
     if (partes[0] === 'carteira') return paginaCarteira(partes[1]);
     if (partes[0] === 'credito') return /^\d+$/.test(partes[1] || '') ? paginaAnaliseCredito(Number(partes[1])) : paginaCredito(partes[1]);
+    if (partes[0] === 'implantacao') return /^\d+$/.test(partes[1] || '') ? paginaImplantacaoDetalhe(Number(partes[1])) : paginaImplantacao(partes[1]);
     if (partes[0] === 'premiacoes') return paginaComissoes(partes[1]);
     if (partes[0] === 'links') {
       if (partes[1] === 'gestao' && editorLinks()) return paginaGestaoLinks(partes[2]);
@@ -3281,7 +3285,7 @@
     var s = String(v == null ? '' : v).trim().replace(/[R$\s%]/g, '');
     if (!s) return null;
     if (/,\d{1,2}$/.test(s) || (s.indexOf(',') >= 0 && s.indexOf('.') >= 0)) s = s.replace(/\./g, '').replace(',', '.');
-    else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, ''); // 1.900 = mil e novecentos
+    else if (/^-?\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, ''); // "1.840" (milhar, como o fmtNumCr mostra) é 1840, não 1,84
     else s = s.replace(',', '.');
     var n = Number(s);
     return isFinite(n) ? n : null;
@@ -3494,7 +3498,7 @@
     m.tipos_documento.forEach(function (t) { nomeTipo[t.tipo] = t.nome; });
     nomeTipo.retorno_pdf = 'Retorno (PDF)';
     function lnk(x) {
-      return '<span class="doc-linha"><a class="anexo" href="/api/credito/analises/' + a.id + '/documentos/' + x.id + (x.mime === 'application/pdf' ? '?ver=1' : '') + '" target="_blank" rel="noopener">' + IC.documento + '<span>' + esc(x.nome) + '</span><span class="sec">' + tamanho(x.tamanho) + '</span></a>' +
+      return '<span class="doc-linha-cr"><a class="anexo" href="/api/credito/analises/' + a.id + '/documentos/' + x.id + (x.mime === 'application/pdf' ? '?ver=1' : '') + '" target="_blank" rel="noopener">' + IC.documento + '<span>' + esc(x.nome) + '</span><span class="sec">' + tamanho(x.tamanho) + '</span></a>' +
         (podeDocs && x.tipo !== 'retorno_pdf' ? '<button type="button" class="btn icon ghost" data-tirar-doc="' + x.id + '" aria-label="Remover ' + esc(x.nome) + '">' + IC.fechar + '</button>' : '') + '</span>';
     }
     function bloco(tipo, titulo, ajuda) {
@@ -3692,7 +3696,8 @@
     var cab = '<div class="linha" style="align-items:flex-start;margin-bottom:16px"><div style="flex:1 1 420px">' +
       '<div class="linha" style="margin-bottom:6px">' + etqCr(ETAPA_CR, a.etapa) + (a.resultado && (pd.interno || a.etapa === 'enviada') ? etqCr(RES_CR, a.resultado) : '') +
       (a.origem_protocolo ? '<a class="etiqueta cinza" href="#/credito/' + a.origem_id + '">reanálise de ' + esc(a.origem_protocolo) + '</a>' : '') +
-      d.reanalises.map(function (x) { return '<a class="etiqueta cinza" href="#/credito/' + x.id + '">reanálise: ' + esc(x.protocolo || 'rascunho') + '</a>'; }).join('') + '</div>' +
+      d.reanalises.map(function (x) { return '<a class="etiqueta cinza" href="#/credito/' + x.id + '">reanálise: ' + esc(x.protocolo || 'rascunho') + '</a>'; }).join('') +
+      (d.implantacao ? '<a class="etiqueta azul" href="#/implantacao/' + d.implantacao.id + '">implantação ' + esc(d.implantacao.protocolo || 'em rascunho') + '</a>' : '') + '</div>' +
       '<h1>' + esc(a.condominio || 'Nova solicitação') + '</h1><p class="sub" style="margin:0">' + esc([a.cnpj, [a.cidade, a.uf].filter(Boolean).join('/'), a.executivo_nome ? 'Executivo: ' + a.executivo_nome : '', a.analista_nome ? 'Analista: ' + a.analista_nome : ''].filter(Boolean).join(' · ')) + '</p></div>' +
       '<dl class="info-ticket" style="min-width:260px">' + (a.protocolo ? '<dt>Protocolo</dt><dd>' + esc(a.protocolo) + '</dd>' : '') +
       (a.documentacao_completa_em ? '<dt>Documentação completa</dt><dd>' + dataHoraCr(a.documentacao_completa_em) + '</dd>' : '') +
@@ -3981,7 +3986,7 @@
     var a = j.ativa;
     var PARAMS = [['boleto_padrao', 'Boleto padrão (R$)'], ['receita_minima', 'Receita líquida mínima (R$)'], ['inad_diretoria', 'Diretoria acima de (%)'], ['inad_reprovacao', 'Reprova acima de (%)'],
       ['exposicao_maxima', 'Exposição máxima (R$)'], ['exposicao_inad_minima', '… com inadimplência acima de (%)'], ['dias_apos_vencimento', 'Dias após o vencimento (mais de)'], ['extra_aviso_pct', 'Aviso de taxa extra acima de (% da ordinária)'],
-      ['assertiva_min_taxas', 'Assertiva: taxas em aberto (mínimo)'], ['validade_dias', 'Validade da proposta (dias)'], ['sla_horas', 'Prazo ao executivo (h)'], ['sla_horas_diretoria', 'Prazo com diretoria (h)'], ['prazo_analista_corte', 'Corte do prazo do analista (hora)']];
+      ['assertiva_min_taxas', 'Assertiva: taxas em aberto (mínimo)'], ['validade_dias', 'Validade da proposta (dias)'], ['implantacao_validade_dias', 'Abre implantação até (dias da liberação)'], ['sla_horas', 'Prazo ao executivo (h)'], ['sla_horas_diretoria', 'Prazo com diretoria (h)'], ['prazo_analista_corte', 'Corte do prazo do analista (hora)']];
     var ed = p.admin;
     $('#corpoCr').innerHTML = '<div class="grade-2" style="align-items:start"><div class="painel"><div class="cab-painel"><h2>Faixas de precificação</h2><span class="ajuda" style="margin:0">teto inclusivo · boleto ' + reais(a.boleto_padrao) + (a.boleto_por_uf && a.boleto_por_uf.MA ? ' (MA ' + reais(a.boleto_por_uf.MA) + ')' : '') + '</span></div>' +
       '<div class="tabela-wrap"><table><thead><tr><th>Inadimplência até (%)</th><th>Taxa ADM (%)</th></tr></thead><tbody id="tbFaixas">' +
@@ -3996,6 +4001,698 @@
       PARAMS.forEach(function (x) { var n = numCr($('#pp_' + x[0]).value); if (n != null) parametros[x[0]] = n; });
       var faixas = $$('#tbFaixas tr').map(function (tr) { return { ate: numCr($('[data-f=ate]', tr).value), taxa_adm: numCr($('[data-f=taxa]', tr).value) }; });
       try { await api('POST', '/api/credito/politica', { versao: $('#ppVer').value, descricao: $('#ppDesc').value, parametros: parametros, faixas: faixas }); toast('Nova versão da política em uso.', 'ok'); abaPoliticaCredito(p); } catch (e) { toast(e.message, 'erro'); }
+    };
+  }
+
+  /* ======================= Implantação ======================= */
+  var metaImp = null;
+  var resumoImp = null;
+  var ETAPA_IMP = {
+    rascunho: ['Rascunho', 'cinza'], diretoria: ['Na diretoria', 'ambar'], fila: ['Na fila · aguardando designação', 'azul'], em_implantacao: ['Em implantação', 'azul'],
+    pendencia: ['Pendência com o comercial', 'ambar'], concluida: ['Concluída · aguardando a Carteira', 'verde'], na_carteira: ['Na Carteira', 'verde'], cancelada: ['Cancelada', 'cinza'],
+  };
+  var ABAS_IMP = [['minhas', 'Minhas solicitações'], ['fila', 'Fila do setor'], ['carteira', 'Aguardando Carteira'], ['diretoria', 'Diretoria'], ['todas', 'Todas'], ['liberacoes', 'Liberações de análise']];
+  var EVENTO_IMP = {
+    criada: 'criou a implantação', formulario: 'alterou o formulário', documento: 'anexou um documento', documento_removido: 'removeu um documento',
+    enviada: 'enviou ao setor Implantação', reenviada: 'reenviou depois da pendência', cancelada: 'cancelou',
+    designada: 'designou', iniciada: 'iniciou a implantação', etapas: 'atualizou as etapas', pendencia: 'devolveu com pendência',
+    concluida: 'concluiu a implantação', parceiros: 'levou o condomínio à base de Parceiros', carteira: 'confirmou a entrada na Carteira',
+    diretoria_pedida: 'pediu a aprovação da diretoria', diretoria_aprovou: 'aprovou taxa e boleto', diretoria_recusou: 'não aprovou taxa e boleto',
+  };
+  var ETAPA_SETOR_IMP = [['documentacao', 'Documentação', 'Obrigatórios conferidos; os pendentes seguem com alerta ao executivo.'], ['vouch', 'Cadastro no sistema (Vouch)', 'O ID vai direto para a Carteira.'],
+    ['onboarding', 'Onboarding', 'Reunião de boas-vindas com o síndico.'], ['boletos', 'Emissão de boletos', 'Primeira emissão pelo novo contrato.'], ['envio', 'Envio dos boletos', 'Vai para a Carteira como forma de envio.']];
+  var SIT_AN_IMP = {
+    valida: ['dentro do prazo', 'verde'], liberada: ['liberada pelo gestor', 'verde'], vencida: ['passou do prazo', 'vermelha'],
+    aguardando_gestor: ['aguardando o gestor da Análise de Crédito', 'ambar'], recusada: ['não liberada pelo gestor', 'vermelha'],
+  };
+  var UFS = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'];
+
+  async function carregarMetaImp(forcar) {
+    if (!metaImp || forcar) metaImp = await api('GET', '/api/implantacoes/meta');
+    return metaImp;
+  }
+  async function atualizarImp() {
+    try { resumoImp = await api('GET', '/api/implantacoes/resumo'); } catch (e) { return; }
+    desenharContadorImp();
+  }
+  function desenharContadorImp() {
+    var b = $('#nav [data-contador=implantacao]');
+    if (!b || !resumoImp) return;
+    var r = resumoImp;
+    var n = (r.fila || 0) + (r.minhas || 0) + (r.carteira || 0) + (r.liberacoes || 0) + (r.pendencias || 0) + (r.diretoria || 0);
+    b.textContent = n;
+    b.hidden = !n;
+    b.title = [r.fila ? r.fila + ' na fila' : '', r.minhas ? r.minhas + ' com você' : '', r.carteira ? r.carteira + ' aguardando a Carteira' : '',
+      r.liberacoes ? r.liberacoes + ' análise(s) para liberar' : '', r.pendencias ? r.pendencias + ' com pendência' : '', r.diretoria ? r.diretoria + ' para a diretoria aprovar' : ''].filter(Boolean).join(' · ');
+  }
+  function origemImp(i) {
+    if (i.origem === 'analise') return 'Análise ' + (i.analise_protocolo || '');
+    return i.origem === 'pdf' ? 'Análise anterior ao portal' + (i.analise_protocolo ? ' · ' + i.analise_protocolo : '') : 'Condomínio de entrega';
+  }
+
+  /* ---------- lista ---------- */
+  async function paginaImplantacao(aba) {
+    var m;
+    try { m = await carregarMetaImp(true); } catch (e) { $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">' + esc(e.message) + '</div></div>'; return; }
+    var p = m.perfil;
+    var setor = p.equipe || p.coordenacao;
+    var pode = { minhas: !!p.executivo || p.admin, fila: setor, carteira: p.coordenacao, diretoria: p.diretoria, todas: setor || p.diretoria, liberacoes: p.gestor_credito };
+    var abas = ABAS_IMP.filter(function (a) { return pode[a[0]]; });
+    if (!abas.length) {
+      $('#conteudo').innerHTML = '<div class="pagina"><h1>Implantação</h1><div class="vazio">Você ainda não tem acesso à Implantação. Executivos são marcados em Análise de Crédito → Pessoas e papéis; a equipe é quem está no setor Implantação.</div></div>';
+      return;
+    }
+    if (!abas.some(function (a) { return a[0] === aba; })) aba = setor ? 'fila' : p.executivo || p.admin ? 'minhas' : p.diretoria && resumoImp && resumoImp.diretoria ? 'diretoria' : abas[0][0];
+    definirBarra('<span class="setor">Implantação</span><span class="sep">/</span><span class="nome">' + esc(abas.find(function (a) { return a[0] === aba; })[1]) + '</span>');
+    var novo = (p.executivo || p.admin) && aba === 'minhas';
+    $('#conteudo').innerHTML = '<div class="pagina"><div class="linha" style="align-items:flex-end;margin-bottom:6px"><div style="flex:1 1 420px"><h1>Implantação</h1>' +
+      '<p class="sub" style="margin:0">Do contrato assinado à Carteira: o comercial pede, o setor Implantação confere e conclui, a coordenação confirma a entrada na Carteira.</p></div>' +
+      (novo ? '<button class="btn primary" id="btNovaImp">' + IC.mais + 'Nova implantação</button>' : '') + '</div>' +
+      '<nav class="abas" style="margin-top:16px">' + abas.map(function (a) { return '<a href="#/implantacao/' + a[0] + '" class="' + (a[0] === aba ? 'on' : '') + '">' + esc(a[1]) + '</a>'; }).join('') + '</nav><div id="corpoImp"></div></div>';
+    if ($('#btNovaImp')) $('#btNovaImp').onclick = novaImplantacao;
+    if (aba === 'liberacoes') return abaLiberacoesImp();
+    var tiles = '';
+    if (aba === 'fila' && resumoImp) {
+      tiles = '<div class="tiles" style="margin-bottom:16px"><div class="tile"><span class="rot-tile">Na fila, para designar</span><b>' + (resumoImp.fila || 0) + '</b></div>' +
+        '<div class="tile"><span class="rot-tile">Com você</span><b>' + (resumoImp.minhas || 0) + '</b></div>' +
+        (p.coordenacao ? '<div class="tile"><span class="rot-tile">Aguardando a Carteira</span><b>' + (resumoImp.carteira || 0) + '</b></div>' : '') + '</div>';
+    }
+    $('#corpoImp').innerHTML = tiles + '<div class="painel"><div class="cab-painel"><input class="campo" id="qImp" type="search" placeholder="Buscar por condomínio, CNPJ ou protocolo" style="max-width:360px"></div>' +
+      '<div class="tabela-wrap"><table style="min-width:960px"><thead><tr><th>Protocolo</th><th>Condomínio</th><th>Origem</th><th>Executivo</th><th>Situação</th><th>Responsável</th><th>Pendências</th></tr></thead><tbody id="tbImp"></tbody></table></div></div>';
+    var seq = 0;
+    async function carregar() {
+      var meu = ++seq;
+      var q = $('#qImp').value.trim();
+      var r;
+      try { r = await api('GET', '/api/implantacoes?vis=' + aba + (q ? '&q=' + encodeURIComponent(q) : '')); } catch (e) { toast(e.message, 'erro'); return; }
+      if (meu !== seq) return;
+      $('#tbImp').innerHTML = r.implantacoes.map(function (i) {
+        return '<tr class="clicavel" data-id="' + i.id + '"><td style="white-space:nowrap"><b>' + esc(i.protocolo || 'Rascunho') + '</b><span class="sec">' + dataHoraCr(i.enviado_em || i.criado_em) + '</span></td>' +
+          '<td><b>' + esc(i.condominio || 'Sem nome') + '</b><span class="sec">' + esc([i.uf, i.uh_total ? i.uh_total + ' unidades' : ''].filter(Boolean).join(' · ')) + '</span></td>' +
+          '<td style="white-space:nowrap">' + esc(origemImp(i)) + '</td><td>' + esc(i.executivo_nome || '—') + '</td><td>' + etqCr(ETAPA_IMP, i.etapa) + '</td>' +
+          '<td>' + esc(i.responsavel_nome || (i.etapa === 'fila' ? 'aguardando designação' : '—')) +
+          (i.etapa === 'em_implantacao' && i.prazo_inicio ? (i.iniciado_em ? '<span class="sec">iniciada</span>' : '<span class="sec">' + prazoCr(i.prazo_inicio, i.etapa).replace('Até ', 'iniciar até ').replace('Venceu ', 'prazo para iniciar venceu ') + '</span>') : '') + '</td>' +
+          '<td>' + (i.pendentes.length ? '<span class="etiqueta ambar" title="' + esc(i.pendentes.join('; ')) + '">' + i.pendentes.length + ' pendente(s)</span>' : '<span class="sec">—</span>') + '</td></tr>';
+      }).join('') || '<tr><td colspan="7"><div class="vazio" style="border:0;padding:34px">' + (aba === 'minhas' ? 'Você ainda não pediu implantações.' : 'Nada por aqui.') + '</div></td></tr>';
+      $$('#tbImp tr[data-id]').forEach(function (tr) { tr.onclick = function () { location.hash = '#/implantacao/' + tr.getAttribute('data-id'); }; });
+    }
+    var espera;
+    $('#qImp').oninput = function () { clearTimeout(espera); espera = setTimeout(carregar, 300); };
+    carregar();
+    atualizarImp();
+  }
+
+  /* ---------- nova implantação: de onde vem ---------- */
+  async function novaImplantacao() {
+    var j;
+    try { j = await api('GET', '/api/implantacoes/analises'); } catch (e) { toast(e.message, 'erro'); return; }
+    function linhaAn(a) {
+      var acao = a.disponivel ? '<input type="radio" name="anImp" value="' + a.id + '">'
+        : '<input type="radio" disabled aria-label="' + esc(a.protocolo) + ' indisponível">';
+      var extra = a.situacao === 'vencida' ? '<button type="button" class="btn ghost sm" data-liberar="' + a.id + '">Enviar ao gestor da Análise de Crédito</button>'
+        : a.situacao === 'recusada' ? '<span class="ajuda" style="margin:0">peça reanálise na Análise de Crédito</span>' : '';
+      return '<label class="opcao-radio" style="align-items:center;flex-wrap:wrap;margin:0;border-radius:0;border-width:0 0 1px">' + acao +
+        '<div style="flex:1 1 260px"><b>' + esc(a.protocolo) + ' · ' + esc(a.condominio) + '</b><span>' + esc(RES_CR[a.resultado] ? RES_CR[a.resultado][0] : '') + ' · ' + pctCr(a.taxa_adm) + ' + boleto ' + reais(a.boleto) +
+        ' · liberada em ' + dataHoraCr(a.liberada_em) + (a.disponivel && a.situacao === 'valida' ? ' · vale até ' + new Date(a.limite).toLocaleDateString('pt-BR') : '') + '</span></div>' +
+        etqCr(SIT_AN_IMP, a.situacao) + extra + '</label>';
+    }
+    var mo = modal({
+      titulo: 'Nova implantação', largo: true,
+      corpo: '<span class="rot">De onde vem este condomínio?</span><div class="grade-3" style="margin-bottom:14px">' +
+        '<label class="opcao-radio"><input type="radio" name="origImp" value="analise" checked><div><b>A partir de uma Análise de Crédito</b><span>Os dados da análise vêm preenchidos e podem ser ajustados; o que veio da análise fica ao lado para comparar.</span></div></label>' +
+        '<label class="opcao-radio"><input type="radio" name="origImp" value="pdf"><div><b>Análise feita antes do portal</b><span>Anexe o PDF do retorno da análise. O portal lê os dados e preenche o formulário.</span></div></label>' +
+        '<label class="opcao-radio"><input type="radio" name="origImp" value="entrega"><div><b>Condomínio de entrega</b><span>Construtora entregando, em enxoval: sem inadimplência e sem documentação completa. Antes, a diretoria aprova taxa e boleto.</span></div></label></div>' +
+        '<div data-orig="analise"><span class="rot">Análises liberadas para você: aprovadas ou com ressalvas, até ' + j.validade_dias + ' dias depois da liberação</span>' +
+        '<div class="painel" style="box-shadow:none;overflow:hidden">' + (j.analises.map(linhaAn).join('') || '<div class="vazio" style="border:0;padding:24px">Nenhuma análise liberada disponível. As reprovadas e as que já têm implantação não aparecem.</div>') + '</div>' +
+        '<div class="ajuda">Depois de ' + j.validade_dias + ' dias, a análise só abre implantação quando o gestor da Análise de Crédito liberar (ele é avisado no sino e por e-mail).</div></div>' +
+        '<div data-orig="pdf" hidden><label class="btn ghost" style="align-self:flex-start">' + IC.enviar + 'Escolher o PDF do retorno<input type="file" id="arqPdfImp" accept="application/pdf" hidden></label><div id="lidoPdfImp" style="margin-top:12px"></div></div>' +
+        '<div data-orig="entrega" hidden><div class="msg aviso">O condomínio de entrega começa pela proposta: preencha o condomínio, a construtora, as unidades previstas, a taxa ordinária e a taxa administrativa e o boleto propostos, e peça a aprovação da diretoria. Com a aprovação e o contrato assinado, complete o formulário e envie ao setor Implantação. Os documentos podem chegar depois.</div></div>',
+      pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mImpOk">Continuar para o formulário</button>',
+    });
+    $$('[data-liberar]', mo).forEach(function (b) {
+      b.onclick = function (ev) {
+        ev.preventDefault();
+        var m2 = modal({ titulo: 'Pedir liberação ao gestor da Análise de Crédito', corpo: '<label class="rot" for="mLibMot">Motivo (opcional)</label><textarea class="campo" id="mLibMot" rows="3" placeholder="Ex.: contrato assinado depois do prazo; nada mudou no condomínio."></textarea>',
+          pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mLibOk">Enviar ao gestor</button>' });
+        $('#mLibOk', m2).onclick = async function () {
+          try { await api('POST', '/api/implantacoes/liberacoes', { analise_id: Number(b.getAttribute('data-liberar')), motivo: $('#mLibMot', m2).value }); m2.fechar(); mo.fechar(); toast('Pedido enviado ao gestor da Análise de Crédito.', 'ok'); } catch (e) { toast(e.message, 'erro'); }
+        };
+      };
+    });
+    var origem = function () { return $('input[name=origImp]:checked', mo).value; };
+    $$('input[name=origImp]', mo).forEach(function (r) { r.onchange = function () { $$('[data-orig]', mo).forEach(function (x) { x.hidden = x.getAttribute('data-orig') !== origem(); }); }; });
+    var arquivoPdf = null, lido = null;
+    async function enviarPdf(acao, extra) {
+      var r = await fetch('/api/implantacoes/pdf?acao=' + acao, { method: 'POST', credentials: 'same-origin', body: arquivoPdf,
+        headers: Object.assign({ 'Content-Type': 'application/pdf', 'X-Nome-Arquivo': encodeURIComponent(arquivoPdf.name) }, extra || {}) });
+      var j2 = {};
+      try { j2 = await r.json(); } catch (e) { /* sem JSON */ }
+      if (!r.ok) throw new Error(j2.erro || 'Falha ao ler o PDF.');
+      return j2;
+    }
+    function htmlLido(x) {
+      var l = x.lido;
+      var linha = function (rot, val, onde) { return '<tr><td>' + esc(rot) + '</td><td><b>' + (val || '<span class="sec">não achei</span>') + '</b></td><td class="sec" style="white-space:nowrap">' + esc(onde) + '</td></tr>'; };
+      var sit = x.situacao === 'valida' ? '<div class="msg ok">Análise de ' + dataBr(l.data) + ': dentro dos ' + x.validade_dias + ' dias.</div>'
+        : x.situacao === 'liberada' ? '<div class="msg ok">Liberada pelo gestor da Análise de Crédito.</div>'
+          : x.situacao === 'aguardando_gestor' ? '<div class="msg aviso">Pedido de liberação com o gestor da Análise de Crédito.</div>'
+            : x.situacao === 'recusada' ? '<div class="msg erro">O gestor da Análise de Crédito não liberou esta análise: peça reanálise.</div>'
+              : '<div class="msg aviso" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="flex:1">Análise de ' + dataBr(l.data) + ': passou de ' + x.validade_dias + ' dias.</span><button type="button" class="btn ghost sm" id="btLibPdf">Enviar ao gestor da Análise de Crédito</button></div>';
+      return '<div class="pilha" style="gap:10px">' + sit +
+        (x.existente ? '<div class="msg erro">Esta análise já tem implantação (' + esc(x.existente) + ').</div>' : '') +
+        (x.no_portal ? '<div class="msg aviso">Esta análise está no portal: use a origem "A partir de uma Análise de Crédito".</div>' : '') +
+        (['reprovada', 'pendente'].indexOf(l.resultado) >= 0 ? '<div class="msg erro">Análise ' + esc(RES_CR[l.resultado][0].toLowerCase()) + ': não abre implantação.</div>' : '') +
+        '<div class="painel tabela-wrap" style="box-shadow:none"><table><thead><tr><th>Campo</th><th>Lido</th><th>Onde no PDF</th></tr></thead><tbody>' +
+        linha('Protocolo e data', esc(l.protocolo) + ' · ' + dataBr(l.data), 'página 1, topo') +
+        linha('Razão social · CNPJ', esc(l.razao_social) + (l.cnpj ? ' · ' + esc(l.cnpj) : ''), 'página 1') +
+        linha('Executivo solicitante', esc(l.executivo), 'página 1') +
+        linha('Status', l.resultado ? etqCr(RES_CR, l.resultado) : '', 'página 1') +
+        linha('Taxa administrativa · boleto', l.taxa_adm != null ? pctCr(l.taxa_adm) + ' · ' + reais(l.boleto) : '', 'página 1, precificação') +
+        linha('Unidades · taxa ordinária', l.uh_total ? l.uh_total + ' · ' + reais(l.taxa_ordinaria) : '', 'página 2, memória de cálculo') +
+        linha('Síndico', l.sindico_tipo ? (l.sindico_tipo === 'profissional' ? 'Profissional' : 'Condômino') + (l.sindico_isencao === 'nao' ? ', sem isenção' : l.sindico_isencao ? ', isenção ' + l.sindico_isencao : '') : '', 'observações') +
+        linha('Cidade/UF', l.uf ? esc(l.cidade + '/' + l.uf) + ' ' + etq(['conferir', 'ambar']) : '', 'texto das observações') +
+        linha('Ressalvas e próximos passos', (l.observacoes_juridicas.length + l.proximos_passos.length) ? 'vão para as observações da implantação' : '', 'páginas 1 e 4') +
+        '</tbody></table></div>' + (l.avisos.length ? '<div class="ajuda">' + esc(l.avisos.join(' ')) + '</div>' : '') +
+        '<div class="ajuda">O PDF não traz: dia do vencimento, administradora e contatos, dados do síndico, parceria e cashback; o PDF fica em Documentos como "Análise de Crédito" e serve de base para o comparativo.</div></div>';
+    }
+    $('#arqPdfImp', mo).onchange = async function () {
+      arquivoPdf = this.files[0];
+      if (!arquivoPdf) return;
+      $('#lidoPdfImp', mo).innerHTML = '<span class="ajuda">Lendo o PDF…</span>';
+      try { lido = await enviarPdf('ler'); $('#lidoPdfImp', mo).innerHTML = htmlLido(lido); } catch (e) { lido = null; $('#lidoPdfImp', mo).innerHTML = '<div class="msg erro">' + esc(e.message) + '</div>'; return; }
+      if ($('#btLibPdf', mo)) $('#btLibPdf', mo).onclick = async function () {
+        var motivo = window.prompt('Motivo do pedido ao gestor (opcional):', '') || '';
+        try { await enviarPdf('liberar', { 'X-Motivo': encodeURIComponent(motivo) }); mo.fechar(); toast('Pedido enviado ao gestor da Análise de Crédito.', 'ok'); } catch (e) { toast(e.message, 'erro'); }
+      };
+    };
+    $('#mImpOk', mo).onclick = async function () {
+      try {
+        var r;
+        if (origem() === 'entrega') r = await api('POST', '/api/implantacoes', { origem: 'entrega' });
+        else if (origem() === 'pdf') {
+          if (!arquivoPdf || !lido) { toast('Escolha o PDF do retorno da análise.', 'erro'); return; }
+          r = await enviarPdf('criar');
+        } else {
+          var sel = $('input[name=anImp]:checked', mo);
+          if (!sel) { toast('Escolha a análise.', 'erro'); return; }
+          r = await api('POST', '/api/implantacoes', { origem: 'analise', analise_id: Number(sel.value) });
+        }
+        mo.fechar(); location.hash = '#/implantacao/' + r.id;
+      } catch (e) { toast(e.message, 'erro'); }
+    };
+  }
+
+  /* ---------- liberações (gestor da Análise de Crédito) ---------- */
+  async function abaLiberacoesImp() {
+    var j;
+    try { j = await api('GET', '/api/implantacoes/liberacoes'); } catch (e) { $('#corpoImp').innerHTML = '<div class="vazio">' + esc(e.message) + '</div>'; return; }
+    $('#corpoImp').innerHTML = '<div class="painel"><div class="cab-painel"><h2>Análises além do prazo para implantar</h2><span class="ajuda" style="margin:0">o executivo pediu para abrir a implantação de uma análise liberada há mais tempo que a política permite</span></div>' +
+      '<div class="tabela-wrap"><table style="min-width:900px"><thead><tr><th>Análise</th><th>Condomínio</th><th>Pedido</th><th>Situação</th></tr></thead><tbody>' +
+      (j.liberacoes.map(function (l) {
+        var sit = l.aprovado === null ? '<button class="btn ghost sm" data-dec="' + l.id + '" data-ok="0">Não liberar</button> <button class="btn primary sm" data-dec="' + l.id + '" data-ok="1">Liberar</button>'
+          : (l.aprovado ? etq(['liberada', 'verde']) : etq(['não liberada', 'vermelha'])) + '<span class="sec">' + esc(l.decidido_por_nome || '') + ' · ' + dataHoraCr(l.decidido_em) + (l.observacao ? ' · ' + esc(l.observacao) : '') + '</span>';
+        return '<tr><td>' + (l.analise_id ? '<a href="#/credito/' + l.analise_id + '"><b>' + esc(l.protocolo) + '</b></a><span class="sec">liberada em ' + dataHoraCr(l.liberada_em) + ' · ' + pctCr(l.taxa_adm) + ' + ' + reais(l.boleto) + '</span>'
+          : '<b>' + esc(l.protocolo) + '</b><span class="sec">análise anterior ao portal (PDF) de ' + dataBr(String(l.liberada_em).slice(0, 10)) + '</span>') + '</td>' +
+          '<td><b>' + esc(l.condominio) + '</b><span class="sec">' + esc(l.executivo_nome || '') + '</span></td>' +
+          '<td>' + esc(l.pedido_por_nome || '—') + '<span class="sec">' + dataHoraCr(l.pedido_em) + (l.motivo ? ' · ' + esc(l.motivo) : '') + '</span></td><td>' + sit + '</td></tr>';
+      }).join('') || '<tr><td colspan="4"><div class="vazio" style="border:0;padding:34px">Nenhum pedido.</div></td></tr>') + '</tbody></table></div></div>';
+    $$('[data-dec]', $('#corpoImp')).forEach(function (b) {
+      b.onclick = function () {
+        var aprovar = b.getAttribute('data-ok') === '1';
+        var mo = modal({ titulo: aprovar ? 'Liberar a análise para implantação' : 'Não liberar', corpo: '<label class="rot" for="mDec">' + (aprovar ? 'Observação (opcional)' : 'Motivo') + '</label><textarea class="campo" id="mDec" rows="3"></textarea>',
+          pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn ' + (aprovar ? 'primary' : 'danger') + '" id="mDecOk">' + (aprovar ? 'Liberar' : 'Não liberar') + '</button>' });
+        $('#mDecOk', mo).onclick = async function () {
+          try { await api('POST', '/api/implantacoes/liberacoes/' + b.getAttribute('data-dec') + '/decidir', { aprovar: aprovar, observacao: $('#mDec', mo).value }); mo.fechar(); toast('Decisão registrada; o executivo foi avisado.', 'ok'); abaLiberacoesImp(); atualizarImp(); } catch (e) { toast(e.message, 'erro'); }
+        };
+      };
+    });
+  }
+
+  /* ---------- formulário ---------- */
+  var rotRefImp = 'Análise';
+  function campoImp(nome, rotulo, valor, o) {
+    o = o || {};
+    var dif = o.difs && o.difs[o.dif || nome];
+    var ajuda = [o.ref != null && o.ref !== '' ? rotRefImp + ': ' + esc(o.ref) + '.' : '', o.ajuda || ''].filter(Boolean).join(' ');
+    return '<div' + (o.span ? ' style="grid-column:span ' + o.span + '"' : '') + (o.se ? ' data-se="' + o.se + '"' : '') + '><label class="rot" for="i_' + nome + '">' + esc(rotulo) + '</label>' +
+      '<input class="campo' + (dif ? ' diferente' : '') + '" id="i_' + nome + '" value="' + esc(valor == null ? '' : valor) + '"' + (o.ph ? ' placeholder="' + esc(o.ph) + '"' : '') + (o.tipo ? ' type="' + o.tipo + '"' : '') + '>' +
+      (ajuda || dif ? '<div class="ajuda' + (dif ? ' diferente' : '') + '">' + ajuda + (dif ? (rotRefImp === 'Análise' ? ' Diferente da análise: o setor e o gestor da Análise de Crédito veem.' : ' Diferente do aprovado pela diretoria: o setor vê.') : '') + '</div>' : '') + '</div>';
+  }
+  function selImp(nome, rotulo, valor, opcoes, o) {
+    o = o || {};
+    var dif = o.difs && o.difs[o.dif || nome];
+    return '<div' + (o.se ? ' data-se="' + o.se + '"' : '') + '><label class="rot" for="i_' + nome + '">' + esc(rotulo) + '</label><select class="campo' + (dif ? ' diferente' : '') + '" id="i_' + nome + '">' +
+      opcoes.map(function (x) { return '<option value="' + esc(x[0]) + '"' + (String(x[0]) === String(valor == null ? '' : valor) ? ' selected' : '') + '>' + esc(x[1]) + '</option>'; }).join('') + '</select>' +
+      (o.ref ? '<div class="ajuda' + (dif ? ' diferente' : '') + '">' + rotRefImp + ': ' + esc(o.ref) + '.' + (dif ? ' Diferente.' : '') + '</div>' : '') + '</div>';
+  }
+  function radiosImp(nome, rotulo, valor, opcoes, o) {
+    o = o || {};
+    return '<fieldset style="grid-column:1/-1;border:0;padding:0;margin:0"' + (o.se ? ' data-se="' + o.se + '"' : '') + '><legend class="rot">' + esc(rotulo) + '</legend><div class="marcas">' +
+      opcoes.map(function (x) { return '<label class="marca"><input type="radio" name="i_' + nome + '" value="' + esc(x[0]) + '"' + (String(x[0]) === String(valor == null ? '' : valor) ? ' checked' : '') + '> ' + esc(x[1]) + '</label>'; }).join('') +
+      (o.extra || '') + '</div>' + (o.ajuda ? '<div class="ajuda">' + o.ajuda + '</div>' : '') + '</fieldset>';
+  }
+  function marcasImp(nome, rotulo, valores, opcoes, o) {
+    o = o || {};
+    return '<fieldset style="grid-column:1/-1;border:0;padding:0;margin:0"' + (o.se ? ' data-se="' + o.se + '"' : '') + '><legend class="rot">' + esc(rotulo) + '</legend><div class="marcas">' +
+      opcoes.map(function (x) { return '<label class="marca"><input type="checkbox" data-marca="' + nome + '" value="' + esc(x) + '"' + ((valores || []).indexOf(x) >= 0 ? ' checked' : '') + '> ' + esc(x) + '</label>'; }).join('') +
+      (o.extra || '') + '</div>' + (o.ajuda ? '<div class="ajuda">' + o.ajuda + '</div>' : '') + '</fieldset>';
+  }
+  function linhaContatoImp(c) {
+    c = c || {};
+    return '<div class="contatos-imp" data-contato><div><label class="rot">Nome e função</label><input class="campo" data-k="nome" value="' + esc(c.nome || '') + '" placeholder="Nome"><input class="campo" data-k="funcao" style="margin-top:6px" value="' + esc(c.funcao || '') + '" placeholder="Função (ex.: gerente predial)"></div>' +
+      '<div><label class="rot">Telefone</label><input class="campo" data-k="telefone" value="' + esc(c.telefone || '') + '"></div>' +
+      '<div style="grid-column:span 2"><label class="rot">E-mail</label><input class="campo" data-k="email" value="' + esc(c.email || '') + '"></div>' +
+      '<button type="button" class="btn icon ghost" data-tirar-contato aria-label="Remover contato">' + IC.fechar + '</button></div>';
+  }
+  function linhaParceiroImp(p, parceiros) {
+    p = p || {};
+    var campo = parceiros.length
+      ? '<select class="campo" data-parceiro><option value="">Escolha o parceiro</option>' + parceiros.map(function (x) { return '<option value="' + esc(x.id) + '"' + (x.id === p.id ? ' selected' : '') + '>' + esc(x.nome + (x.uf ? ' — ' + x.uf : '')) + '</option>'; }).join('') +
+        (p.id && !parceiros.some(function (x) { return x.id === p.id; }) ? '<option value="' + esc(p.id) + '" selected>' + esc(p.nome) + '</option>' : '') + '</select>'
+      : '<input class="campo" data-parceiro-nome value="' + esc(p.nome || '') + '" placeholder="Nome do parceiro">';
+    return '<div class="linha" data-linha-parceiro style="flex-wrap:nowrap">' + campo + '<button type="button" class="btn icon ghost" data-tirar-parceiro aria-label="Remover parceiro">' + IC.fechar + '</button></div>';
+  }
+
+  function htmlFormImp(i, m, parceiros, difs) {
+    var f = i.formulario || {}, ref = i.referencia || {};
+    var temRef = ref.taxa_adm != null;
+    rotRefImp = i.origem === 'entrega' ? 'Aprovado pela diretoria' : 'Análise';
+    var r = function (v) { return temRef ? v : null; };
+    var sim = [['sim', 'Sim'], ['nao', 'Não']];
+    var hon = [10, 12, 15, 17.5];
+    var honOutro = f.honorarios != null && hon.indexOf(Number(f.honorarios)) < 0;
+    var DESC = { nenhum: 'não possui', percentual: 'percentual', valor: 'valor por unidade' };
+    var ISE = { nao: 'não', integral: 'integral', parcial: 'parcial' };
+    var SIND = { condomino: 'condômino', profissional: 'profissional' };
+    var parcs = (f.parceiros && f.parceiros.length ? f.parceiros : [{}]);
+    var lista = parceiros.parceiros || [];
+    return '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">1</span>Condomínio</h2>' + (temRef && i.origem !== 'entrega' ? '<span class="etiqueta azul">preenchido com a análise, pode ajustar</span>' : '') + '</div><div class="corpo grade-3">' +
+      campoImp('nome', 'Nome do condomínio', f.nome, { span: 2 }) +
+      '<div><label class="rot" for="i_cnpj">CNPJ</label><input class="campo" id="i_cnpj" value="' + esc(f.cnpj || '') + '" placeholder="00.000.000/0000-00"' + (f.sem_cnpj ? ' disabled' : '') + '>' +
+      '<label class="linha" style="margin-top:8px;font-size:13px;font-weight:700;color:var(--ink-2)"><input type="checkbox" id="i_sem_cnpj"' + (f.sem_cnpj ? ' checked' : '') + '> Ainda não tem CNPJ (condomínio de entrega)</label></div>' +
+      selImp('uf', 'Estado do contrato', f.uf || '', [['', 'Escolha']].concat(UFS.map(function (u) { return [u, u]; }))) +
+      campoImp('cidade', 'Cidade', f.cidade) +
+      campoImp('uh_total', 'Número total de unidades', f.uh_total, { ref: r(ref.uh_total), difs: difs, ajuda: 'Vale o número da convenção.' }) +
+      campoImp('dia_vencimento', 'Dia do vencimento', f.dia_vencimento, { ref: r(ref.dia_vencimento), difs: difs, ph: '1 a 31' }) +
+      selImp('entrega', 'Condomínio de entrega?', f.entrega ? 'sim' : 'nao', [['nao', 'Não'], ['sim', 'Sim']]) +
+      campoImp('construtora', 'Construtora', f.construtora, { se: 'entrega:sim' }) +
+      campoImp('construtora_contato', 'Contato da construtora', f.construtora_contato, { se: 'entrega:sim', span: 2 }) + '</div></section>' +
+
+      '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">2</span>Síndico</h2></div><div class="corpo grade-3">' +
+      selImp('sindico_tipo', 'Tipo de síndico', f.sindico_tipo || '', [['', 'Escolha'], ['condomino', 'Condômino (orgânico)'], ['profissional', 'Profissional']], { ref: temRef && ref.sindico_tipo ? SIND[ref.sindico_tipo] : null }) +
+      selImp('sindico_isencao', 'Isento da taxa condominial?', f.sindico_isencao || '', [['', 'Escolha'], ['nao', 'Não'], ['integral', 'Sim, integral'], ['parcial', 'Sim, parcial']], { ref: temRef && ref.sindico_isencao ? ISE[ref.sindico_isencao] : null, difs: difs }) +
+      campoImp('sindico_isencao_pct', 'Isenção parcial (%)', fmtNumCr(f.sindico_isencao_pct), { se: 'sindico_isencao:parcial' }) +
+      campoImp('sindico_nome', 'Nome do síndico', f.sindico_nome) +
+      campoImp('sindico_cpf', 'CPF do síndico', f.sindico_cpf, { ph: '000.000.000-00' }) +
+      campoImp('sindico_email', 'E-mail do síndico ou do condomínio', f.sindico_email, { tipo: 'email' }) +
+      campoImp('sindico_telefone', 'Telefone do síndico', f.sindico_telefone, { ph: '(00) 00000-0000' }) + '</div></section>' +
+
+      '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">3</span>Condições do contrato</h2></div><div class="corpo grade-3">' +
+      campoImp('taxa_adm', 'Taxa administrativa (%)', fmtNumCr(f.taxa_adm), { ref: temRef ? pctCr(ref.taxa_adm) : null, difs: difs }) +
+      campoImp('boleto', 'Valor do boleto (R$)', fmtNumCr(f.boleto), { ref: temRef ? reais(ref.boleto) : null, difs: difs }) +
+      campoImp('taxa_ordinaria', 'Taxa ordinária (R$)', fmtNumCr(f.taxa_ordinaria), { ref: temRef && ref.taxa_ordinaria != null ? reais(ref.taxa_ordinaria) : null, difs: difs }) +
+      selImp('desconto_tipo', 'Desconto de pontualidade', f.desconto_tipo || 'nenhum', [['nenhum', 'Não possui'], ['percentual', 'Percentual (%)'], ['valor', 'Valor por unidade (R$)']], { ref: temRef && ref.desconto_tipo ? DESC[ref.desconto_tipo] + (ref.desconto_valor ? ' ' + fmtNumCr(ref.desconto_valor) : '') : null, difs: difs, dif: 'desconto' }) +
+      campoImp('desconto_valor', 'Desconto (% ou R$)', fmtNumCr(f.desconto_valor), { se: 'desconto_tipo:percentual,valor' }) +
+      campoImp('desconto_ate_dia', 'Desconto vale até o dia', f.desconto_ate_dia, { se: 'desconto_tipo:percentual,valor', ph: '1 a 31' }) +
+      campoImp('inicio_contrato', 'Data de início do contrato', f.inicio_contrato, { tipo: 'date', ajuda: 'Também conta as parcelas restantes da taxa extra.' }) +
+      radiosImp('honorarios_op', 'Honorários de cobrança extrajudicial', honOutro ? 'outro' : f.honorarios != null ? String(f.honorarios) : '', hon.map(function (h) { return [String(h), fmtNumCr(h) + '%']; }).concat([['outro', 'Outro']]),
+        { extra: '<input class="campo" id="i_honorarios_outro" data-se="honorarios_op:outro" style="width:110px" placeholder="%" value="' + esc(honOutro ? fmtNumCr(f.honorarios) : '') + '" aria-label="Outro percentual de honorários">' }) +
+      marcasImp('garantias', 'O que será garantido (marque todos)', f.garantias, m.garantias, { extra: '<input class="campo" id="i_garantia_outra" style="max-width:220px" placeholder="Outra (descreva)" value="' + esc(f.garantia_outra || '') + '" aria-label="Outra garantia">' }) +
+      '<div style="grid-column:1/-1"><div class="linha" style="margin-bottom:8px"><span class="rot" style="margin:0">Taxa extra vigente' + (temRef ? ' (preenchida com a análise, pode ajustar)' : '') + '</span><span class="espaco"></span><button type="button" class="btn ghost sm" id="btExtraImp">' + IC.mais + 'Adicionar taxa extra</button></div>' +
+      '<div class="painel tabela-wrap" style="box-shadow:none"><table style="min-width:720px"><thead><tr><th>Descrição</th><th>Valor por unidade</th><th>Início</th><th>Fim</th><th>Ata</th><th></th></tr></thead><tbody id="tbExtrasImp">' +
+      (f.taxas_extras || []).map(linhaExtraCr).join('') + '</tbody></table></div></div></div></section>' +
+
+      '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">4</span>Parceria</h2></div><div class="corpo grade-3">' +
+      radiosImp('parceria', 'Há contrato de parceria?', f.parceria || '', sim) +
+      '<div style="grid-column:span 2" data-se="parceria:sim"><span class="rot">Parceiro</span><div class="pilha" style="gap:8px" id="parceirosImp">' + parcs.map(function (p) { return linhaParceiroImp(p, lista); }).join('') + '</div>' +
+      '<button type="button" class="btn ghost sm" id="btParcImp" style="margin-top:8px">' + IC.mais + 'Dividir com outro parceiro</button>' +
+      '<div class="ajuda">' + (parceiros.aviso ? esc(parceiros.aviso) : 'Lista da base de comissão. Não está na lista? Peça o cadastro ao setor Parceiros.') + '</div></div>' +
+      '<div data-se="parceria:sim"><span class="rot">Percentual da comissão</span><div class="campo" style="background:var(--bg);color:var(--muted)">o setor Parceiros define</div></div></div></section>' +
+
+      '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">5</span>Cashback e antecipação</h2></div><div class="corpo grade-3">' +
+      radiosImp('cashback', 'Contrato com cashback?', f.cashback || '', [['nao', 'Não'], ['5', 'Sim, 5%'], ['10', 'Sim, 10%'], ['outro', 'Outro']],
+        { extra: '<input class="campo" id="i_cashback_pct" data-se="cashback:outro" style="width:110px" placeholder="%" value="' + esc(fmtNumCr(f.cashback_pct)) + '" aria-label="Percentual do cashback">' }) +
+      marcasImp('cashback_receitas', 'Sobre quais receitas incide o cashback', f.cashback_receitas, m.receitas_cashback, { se: 'cashback:5,10,outro' }) +
+      radiosImp('antecipacao', 'Foi negociada antecipação de valores?', f.antecipacao || '', sim) +
+      campoImp('antecipacao_valor', 'Valor da antecipação (R$)', fmtNumCr(f.antecipacao_valor), { se: 'antecipacao:sim' }) +
+      campoImp('antecipacao_data', 'Data da antecipação', f.antecipacao_data, { tipo: 'date', se: 'antecipacao:sim' }) +
+      campoImp('antecipacao_prazo', 'Permanente ou até quando', f.antecipacao_prazo, { se: 'antecipacao:sim', ph: 'Permanente / até mm/aaaa' }) + '</div></section>' +
+
+      '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">6</span>Administradora e contatos</h2></div><div class="corpo grade-3">' +
+      campoImp('administradora', 'Nome da administradora', f.administradora, { span: 2, ref: temRef && ref.administradora ? ref.administradora : null, ajuda: 'Com administração interna, informe quem administra (pessoa ou equipe do próprio condomínio).' }) +
+      '<div style="display:flex;align-items:center"><label class="linha" style="font-weight:700;font-size:14px;color:var(--ink-2)"><input type="checkbox" id="i_administracao_interna"' + (f.administracao_interna ? ' checked' : '') + '> Administração interna (do próprio condomínio, não terceirizada)</label></div>' +
+      campoImp('consultor_nome', 'Consultor do condomínio', f.consultor_nome) +
+      campoImp('consultor_telefone', 'Telefone', f.consultor_telefone) +
+      campoImp('consultor_email', 'E-mail', f.consultor_email, { tipo: 'email' }) +
+      '<div style="grid-column:1/-1" class="pilha"><div id="contatosImp" class="pilha" style="gap:10px">' + (f.contatos || []).map(linhaContatoImp).join('') + '</div>' +
+      '<button type="button" class="btn ghost sm" id="btContatoImp" style="align-self:flex-start">' + IC.mais + 'Adicionar contato</button></div>' +
+      '<div style="grid-column:1/-1"><label class="rot" for="i_observacoes">Outras observações para a implantação</label><textarea class="campo" id="i_observacoes" rows="3" placeholder="Ex.: o síndico prefere contato por e-mail; boleto anterior vencia no dia 5.">' + esc(f.observacoes || '') + '</textarea></div>' +
+      '</div></section>';
+  }
+
+  function valImp(nome) {
+    var rad = $('input[name=i_' + nome + ']:checked');
+    if (rad) return rad.value;
+    var el = $('#i_' + nome);
+    if (!el) return '';
+    if (el.type === 'checkbox') return el.checked ? 'sim' : 'nao';
+    return el.value.trim();
+  }
+  function ligarCondicoesImp(raiz) {
+    function aplicar() {
+      $$('[data-se]', raiz).forEach(function (el) {
+        var p = el.getAttribute('data-se').split(':');
+        el.hidden = p[1].split(',').indexOf(valImp(p[0])) < 0;
+      });
+      var cnpj = $('#i_cnpj', raiz);
+      if (cnpj && !cnpj.closest('[data-leitura]')) cnpj.disabled = $('#i_sem_cnpj', raiz).checked;
+      var cpf = $('#i_sindico_cpf', raiz);
+      if (cpf) {
+        var d = cpf.value.replace(/\D/g, '');
+        var aj = cpf.parentNode.querySelector('.ajuda') || cpf.parentNode.appendChild(document.createElement('div'));
+        aj.className = 'ajuda' + (d.length === 11 ? (cpfValidoImp(d) ? ' ok' : ' diferente') : '');
+        aj.textContent = d.length === 11 ? (cpfValidoImp(d) ? 'CPF válido.' : 'CPF inválido: confira os números.') : '';
+      }
+    }
+    raiz.addEventListener('change', aplicar);
+    raiz.addEventListener('input', function (e) { if (e.target.id === 'i_sindico_cpf') aplicar(); });
+    aplicar();
+  }
+  function cpfValidoImp(d) {
+    if (!/^\d{11}$/.test(d) || /^(\d)\1+$/.test(d)) return false;
+    function dv(n) { var s = 0; for (var k = 0; k < n; k++) s += Number(d[k]) * (n + 1 - k); var r = (s * 10) % 11; return r === 10 ? 0 : r; }
+    return dv(9) === Number(d[9]) && dv(10) === Number(d[10]);
+  }
+  function lerFormImp(parceiros) {
+    var v = valImp;
+    var marcas = function (nome) { return $$('[data-marca=' + nome + ']:checked').map(function (c) { return c.value; }); };
+    var hon = v('honorarios_op');
+    var lista = parceiros.parceiros || [];
+    return {
+      nome: v('nome'), cnpj: v('cnpj'), sem_cnpj: $('#i_sem_cnpj').checked, uf: v('uf'), cidade: v('cidade'), uh_total: numCr(v('uh_total')), dia_vencimento: numCr(v('dia_vencimento')),
+      entrega: v('entrega') === 'sim', construtora: v('construtora'), construtora_contato: v('construtora_contato'),
+      sindico_tipo: v('sindico_tipo'), sindico_isencao: v('sindico_isencao'), sindico_isencao_pct: numCr(v('sindico_isencao_pct')), sindico_nome: v('sindico_nome'),
+      sindico_cpf: v('sindico_cpf'), sindico_email: v('sindico_email'), sindico_telefone: v('sindico_telefone'),
+      taxa_adm: numCr(v('taxa_adm')), boleto: numCr(v('boleto')), taxa_ordinaria: numCr(v('taxa_ordinaria')), desconto_tipo: v('desconto_tipo'),
+      desconto_valor: numCr(v('desconto_valor')), desconto_ate_dia: numCr(v('desconto_ate_dia')), inicio_contrato: v('inicio_contrato'),
+      honorarios: hon === 'outro' ? numCr($('#i_honorarios_outro').value) : numCr(hon),
+      garantias: marcas('garantias'), garantia_outra: $('#i_garantia_outra').value.trim(),
+      taxas_extras: $$('#tbExtrasImp tr').map(function (tr) {
+        var g = function (k) { return $('[data-x=' + k + ']', tr); };
+        return { descricao: g('descricao').value.trim(), valor_por_uh: numCr(g('valor_por_uh').value), inicio: g('inicio').value, fim: g('fim').value, ata: g('ata').checked };
+      }).filter(function (x) { return x.descricao || x.valor_por_uh; }),
+      parceria: v('parceria'),
+      parceiros: $$('[data-linha-parceiro]').map(function (l) {
+        var s = $('[data-parceiro]', l);
+        if (s) { var p = lista.find(function (x) { return x.id === s.value; }); return s.value ? { id: s.value, nome: p ? p.nome : s.options[s.selectedIndex].text } : null; }
+        var n = $('[data-parceiro-nome]', l).value.trim();
+        return n ? { id: '', nome: n } : null;
+      }).filter(Boolean),
+      cashback: v('cashback'), cashback_pct: numCr($('#i_cashback_pct').value), cashback_receitas: marcas('cashback_receitas'),
+      antecipacao: v('antecipacao'), antecipacao_valor: numCr(v('antecipacao_valor')), antecipacao_data: v('antecipacao_data'), antecipacao_prazo: v('antecipacao_prazo'),
+      administradora: v('administradora'), administracao_interna: $('#i_administracao_interna').checked,
+      consultor_nome: v('consultor_nome'), consultor_telefone: v('consultor_telefone'), consultor_email: v('consultor_email'),
+      contatos: $$('[data-contato]').map(function (c) {
+        var g = function (k) { return $('[data-k=' + k + ']', c).value.trim(); };
+        return { nome: g('nome'), funcao: g('funcao'), telefone: g('telefone'), email: g('email') };
+      }).filter(function (c) { return c.nome || c.telefone || c.email; }),
+      observacoes: $('#i_observacoes').value.trim(),
+      entrega_justificativa: $('#i_entrega_justificativa') ? $('#i_entrega_justificativa').value.trim() : undefined,
+    };
+  }
+
+  /* ---------- documentos ---------- */
+  async function enviarDocImp(id, tipo, arquivo) {
+    var r = await fetch('/api/implantacoes/' + id + '/documentos', {
+      method: 'POST', credentials: 'same-origin', body: arquivo,
+      headers: { 'Content-Type': arquivo.type || 'application/octet-stream', 'X-Nome-Arquivo': encodeURIComponent(arquivo.name), 'X-Tipo': tipo },
+    });
+    if (r.status === 413) throw new Error('"' + arquivo.name + '" passa do tamanho máximo permitido.');
+    if (!r.ok) { var j = {}; try { j = await r.json(); } catch (e) { /* sem JSON */ } throw new Error(j.erro || 'Falha ao enviar ' + arquivo.name); }
+  }
+  function htmlDocsImp(d, m) {
+    var i = d.implantacao, pd = d.pode;
+    var vig = d.documentos.filter(function (x) { return !x.substituido_em; });
+    function lnk(x) {
+      return '<a class="anexo" href="/api/implantacoes/' + i.id + '/documentos/' + x.id + (x.mime === 'application/pdf' ? '?ver=1' : '') + '" target="_blank" rel="noopener">' + IC.documento + '<span>' + esc(x.nome) + '</span><span class="sec">' + tamanho(x.tamanho) + '</span></a>' +
+        (pd.tirar_documentos && x.tipo !== 'analise_credito' ? '<button type="button" class="btn icon ghost" data-tirar-doc-imp="' + x.id + '" aria-label="Remover ' + esc(x.nome) + '">' + IC.fechar + '</button>' : '');
+    }
+    function linha(t) {
+      var atual = vig.filter(function (x) { return x.tipo === t.tipo; });
+      var st = atual.length ? etq([t.tipo === 'analise_credito' ? 'vinculada' : 'entregue', 'verde']) : t.obrigatorio ? etq(['falta', 'vermelha']) : t.pendente ? etq(['pendente', 'ambar']) : etq(['opcional', 'cinza']);
+      return '<div class="doc-linha"><b style="flex:1 1 260px">' + esc(t.nome) + (t.obrigatorio ? ' <span style="color:var(--red)" aria-label="obrigatório">*</span>' : '') + '</b>' + st + atual.map(lnk).join('') +
+        (pd.documentos && t.tipo !== 'analise_credito' ? '<label class="btn ghost sm">' + IC.enviar + (atual.length ? (t.tipo === 'outro' ? 'Anexar outro' : 'Trocar') : 'Anexar') + '<input type="file" data-doc-imp="' + t.tipo + '" hidden></label>' : '') + '</div>';
+    }
+    var obrigTipos = d.documentos_obrigatorios || [];
+    var obrig = m.documentos.filter(function (t) { return obrigTipos.indexOf(t.tipo) >= 0; }).map(function (t) { return Object.assign({}, t, { obrigatorio: true }); });
+    var depois = m.documentos.filter(function (t) { return (t.pendente || (t.obrigatorio && obrigTipos.indexOf(t.tipo) < 0) || (t.tipo === 'analise_credito' && i.origem !== 'entrega')) && t.tipo !== 'outro'; })
+      .map(function (t) { return Object.assign({}, t, { obrigatorio: false, pendente: t.tipo !== 'analise_credito' }); });
+    var outro = m.documentos.filter(function (t) { return t.tipo === 'outro'; });
+    var nObrig = obrig.filter(function (t) { return vig.some(function (x) { return x.tipo === t.tipo; }); }).length;
+    return '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">7</span>Documentos</h2><span class="espaco"></span>' + (obrig.length ? '<span class="ajuda" style="margin:0">obrigatórios: ' + nObrig + ' de ' + obrig.length + '</span>' : '') + '</div>' +
+      (obrig.length ? '<div class="sub-doc" style="border-top:0">Obrigatórios para enviar</div>' + obrig.map(linha).join('') : '') +
+      '<div class="sub-doc"' + (obrig.length ? '' : ' style="border-top:0"') + '>' + (i.origem === 'entrega' ? 'Condomínio de entrega: os documentos podem chegar depois; o que ficar pendente vira alerta para o executivo' : 'Podem chegar depois: o que ficar pendente vira alerta para o executivo') + '</div>' +
+      depois.map(linha).join('') + outro.map(linha).join('') + '</section>';
+  }
+  function ligarDocsImp(i, recarregar) {
+    $$('input[data-doc-imp]').forEach(function (inp) {
+      inp.onchange = async function () {
+        if (!inp.files[0]) return;
+        try { await enviarDocImp(i.id, inp.getAttribute('data-doc-imp'), inp.files[0]); toast('Documento anexado.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+      };
+    });
+    $$('[data-tirar-doc-imp]').forEach(function (b) {
+      b.onclick = async function () {
+        if (!(await confirmar('Remover documento', 'O arquivo sai desta implantação.', 'Remover', true))) return;
+        try { await api('DELETE', '/api/implantacoes/' + i.id + '/documentos/' + b.getAttribute('data-tirar-doc-imp')); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+      };
+    });
+  }
+
+  /* ---------- condomínio de entrega: aprovação da diretoria ---------- */
+  function htmlEntregaImp(d) {
+    var i = d.implantacao, pd = d.pode, f = i.formulario || {}, ref = i.referencia || {};
+    var corpo;
+    if (ref.aprovado_em) {
+      corpo = '<div class="msg ok">Aprovado por ' + esc(ref.aprovado_por) + ' em ' + dataHoraCr(ref.aprovado_em) + ': ' + pctCr(ref.taxa_adm) + ' de taxa administrativa e boleto de ' + reais(ref.boleto) +
+        (ref.proposta && (ref.proposta.taxa_adm !== ref.taxa_adm || ref.proposta.boleto !== ref.boleto) ? ' (proposta: ' + pctCr(ref.proposta.taxa_adm) + ' + ' + reais(ref.proposta.boleto) + ')' : '') + (ref.observacao ? '. ' + esc(ref.observacao) : '') + '.</div>' +
+        (i.etapa === 'rascunho' ? '<div class="ajuda">Com o contrato assinado, complete o formulário e envie ao setor Implantação.</div>' : '');
+    } else if (pd.decidir_diretoria) {
+      corpo = '<dl class="info-ticket" style="margin-bottom:12px"><dt>Proposta do comercial</dt><dd>' + pctCr(f.taxa_adm) + ' + boleto ' + reais(f.boleto) + '</dd><dt>Unidades previstas</dt><dd>' + esc(f.uh_total || '—') + '</dd>' +
+        '<dt>Taxa ordinária prevista</dt><dd>' + (f.taxa_ordinaria ? reais(f.taxa_ordinaria) : '—') + '</dd><dt>Construtora</dt><dd>' + esc([f.construtora, f.construtora_contato].filter(Boolean).join(' · ') || '—') + '</dd>' +
+        '<dt>CNPJ</dt><dd>' + (f.sem_cnpj ? 'ainda não tem' : esc(f.cnpj || '—')) + '</dd>' + (f.entrega_justificativa ? '<dt>Justificativa</dt><dd>' + esc(f.entrega_justificativa) + '</dd>' : '') + '</dl>' +
+        '<div class="grade-3">' + campoCr('dTaxa', 'Taxa administrativa aprovada (%)', fmtNumCr(f.taxa_adm)) + campoCr('dBol', 'Boleto aprovado (R$)', fmtNumCr(f.boleto)) + campoCr('dObs', 'Observação (obrigatória para não aprovar)', '') + '</div>' +
+        '<div class="linha" style="justify-content:flex-end;margin-top:12px"><button class="btn danger sm" id="btDirNao">Não aprovar</button><button class="btn primary sm" id="btDirSim">Aprovar taxa e boleto</button></div>';
+    } else if (i.etapa === 'diretoria') {
+      corpo = '<div class="msg aviso">Com a diretoria: ' + pctCr(f.taxa_adm) + ' + boleto ' + reais(f.boleto) + ' aguardando aprovação.</div>';
+    } else {
+      corpo = (ref.recusa ? '<div class="msg erro" style="margin-bottom:10px">' + esc(ref.recusa.por) + ' não aprovou em ' + dataHoraCr(ref.recusa.em) + ': ' + esc(ref.recusa.observacao) + '</div>' : '') +
+        '<p class="ajuda" style="margin-top:0">Preencha no formulário abaixo o condomínio (o CNPJ pode ficar para depois), a construtora, as unidades, a taxa ordinária prevista e, em Condições do contrato, a taxa administrativa e o boleto propostos.</p>' +
+        '<label class="rot" for="i_entrega_justificativa">Justificativa para a diretoria (opcional)</label><textarea class="campo" id="i_entrega_justificativa" rows="2">' + esc(f.entrega_justificativa || '') + '</textarea>' +
+        (d.faltas_diretoria.length ? '<div class="ajuda">Para pedir, falta: ' + esc(d.faltas_diretoria.join(' ')) + '</div>' : '') +
+        (pd.pedir_diretoria ? '<div class="linha" style="justify-content:flex-end;margin-top:10px"><button class="btn primary sm" id="btPedirDir">Pedir aprovação da diretoria</button></div>' : '');
+    }
+    return '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Condomínio de entrega · aprovação da diretoria</h2></div><div class="corpo">' + corpo + '</div></section>';
+  }
+
+  /* ---------- setor: etapas e conferências ---------- */
+  function htmlSetorImp(d, m) {
+    var i = d.implantacao, pd = d.pode, e = i.etapas, ed = pd.etapas;
+    var dis = ed ? '' : ' disabled';
+    var c = d.conferencias;
+    var html = '';
+    if (['em_implantacao', 'pendencia', 'concluida', 'na_carteira'].indexOf(i.etapa) >= 0 && i.responsavel_id) {
+      var feito = { documentacao: e.documentacao.feito, vouch: !!e.vouch.id, onboarding: ['realizado', 'sindico_myblue'].indexOf(e.onboarding.situacao) >= 0, boletos: e.boletos.feito, envio: !!e.envio.forma };
+      var n = Object.keys(feito).filter(function (k) { return feito[k]; }).length;
+      var campo = {
+        documentacao: '<label class="marca"><input type="checkbox" id="e_doc"' + (e.documentacao.feito ? ' checked' : '') + dis + '> Conferida</label>',
+        vouch: '<label class="rot" for="e_vouch" style="margin:0">ID Vouch</label><input class="campo" id="e_vouch" style="width:140px" value="' + esc(e.vouch.id) + '"' + dis + '>',
+        onboarding: '<select class="campo" id="e_onb" style="width:auto" aria-label="Situação do onboarding"' + dis + '>' + Object.keys(m.onboarding).map(function (k) { return '<option value="' + k + '"' + (k === e.onboarding.situacao ? ' selected' : '') + '>' + esc(m.onboarding[k]) + '</option>'; }).join('') + '</select>' +
+          '<input class="campo" id="e_onb_data" style="width:180px" placeholder="data e hora, se marcado" value="' + esc(e.onboarding.data) + '" aria-label="Data do onboarding"' + dis + '>',
+        boletos: '<label class="marca"><input type="checkbox" id="e_bol"' + (e.boletos.feito ? ' checked' : '') + dis + '> Boletos emitidos</label>',
+        envio: '<div class="marcas">' + Object.keys(m.envio).map(function (k) { return '<label class="marca"><input type="radio" name="e_env" value="' + k + '"' + (k === e.envio.forma ? ' checked' : '') + dis + '> ' + esc(m.envio[k]) + '</label>'; }).join('') + '</div>',
+      };
+      html += '<section class="painel"><div class="cab-painel"><h2>Etapas da implantação</h2><span class="espaco"></span><span class="ajuda" style="margin:0">' + n + ' de 5' + (i.etapa === 'em_implantacao' ? ' · concluir libera com as 5 feitas' : '') + '</span></div>' +
+        ETAPA_SETOR_IMP.map(function (x, k) {
+          return '<div class="doc-linha"><span class="passo"' + (feito[x[0]] ? ' style="background:var(--green);color:#fff"' : '') + '>' + (feito[x[0]] ? '✓' : k + 1) + '</span><div style="flex:1 1 220px"><b>' + esc(x[1]) + '</b><span class="ajuda" style="display:block;margin:0">' + esc(x[2]) + '</span></div><div class="linha">' + campo[x[0]] + '</div></div>';
+        }).join('') +
+        (ed ? '<div class="doc-linha" style="justify-content:flex-end"><button class="btn primary sm" id="btEtapasImp">Salvar etapas</button></div>' : '') + '</section>';
+    }
+    if (c) {
+      var item = function (ok, texto) { return '<div class="doc-linha">' + (ok ? etq(['ok', 'verde']) : etq(['atenção', 'ambar'])) + '<span style="flex:1">' + texto + '</span></div>'; };
+      var cad = c.cadastro;
+      html += '<section class="painel"><div class="cab-painel"><h2>Conferências do portal</h2></div>' +
+        item(!c.diferencas.length, c.diferencas.length ? '<b>Diferente da análise:</b> ' + esc(c.diferencas.map(function (x) { return x.rotulo.replace(/ \((%|R\$)\)$/, ''); }).join(', ')) + '.' : '<b>Condições</b> iguais às da análise.') +
+        item(c.cpf_sindico, '<b>CPF do síndico</b> ' + (c.cpf_sindico ? 'válido.' : 'inválido: confira.')) +
+        (c.cnpj === null ? item(false, '<b>CNPJ</b> ainda não informado (condomínio de entrega).') : item(c.cnpj, '<b>CNPJ</b> ' + (c.cnpj ? 'válido.' : 'inválido: confira.'))) +
+        (!cad ? item(false, '<b>Cadastro de moradores</b> ainda não anexado.') : cad.erro ? item(false, '<b>Cadastro de moradores:</b> ' + esc(cad.erro)) :
+          item(cad.unidades === cad.unidades_formulario && !cad.documentos_invalidos.length, '<b>Cadastro de moradores:</b> ' + cad.unidades + ' unidade(s)' + (cad.unidades_formulario ? (cad.unidades === cad.unidades_formulario ? ', como no formulário' : ', o formulário diz ' + cad.unidades_formulario) : '') +
+            (cad.tem_documento ? (cad.documentos_invalidos.length ? '; ' + cad.documentos_invalidos.length + ' CPF/CNPJ inválido(s) (linha ' + cad.documentos_invalidos.slice(0, 8).join(', ') + (cad.documentos_invalidos.length > 8 ? '…' : '') + ')' : '; CPF/CNPJ válidos') + (cad.sem_documento ? '; ' + cad.sem_documento + ' sem CPF/CNPJ' : '') : '; sem coluna de CPF/CNPJ') + '.')) +
+        '</section>';
+    }
+    return html;
+  }
+  function lerEtapasImp() {
+    var env = $('input[name=e_env]:checked');
+    return { documentacao: { feito: $('#e_doc').checked }, vouch: { id: $('#e_vouch').value.trim() }, onboarding: { situacao: $('#e_onb').value, data: $('#e_onb_data').value.trim() },
+      boletos: { feito: $('#e_bol').checked }, envio: { forma: env ? env.value : '' } };
+  }
+
+  async function confirmarCarteiraImp(i, recarregar) {
+    var j;
+    try { j = await api('GET', '/api/implantacoes/' + i.id + '/carteira'); } catch (e) { toast(e.message, 'erro'); return; }
+    var dd = j.dados;
+    var c = function (k, rot, extra) { return campoCr('k_' + k, rot, dd[k], extra); };
+    var mo = modal({
+      titulo: 'Confirmar a entrada na Carteira', largo: true,
+      corpo: (j.duplicados.length ? '<div class="msg aviso" style="margin-bottom:12px">Já existe na Carteira: ' + esc(j.duplicados.map(function (x) { return x.nome + ' (ID ' + x.codigo + ')'; }).join('; ')) + '. Confira antes de incluir.</div>'
+        : '<div class="msg ok" style="margin-bottom:12px">Nenhum condomínio com este ID ou CNPJ na Carteira.</div>') +
+        '<div class="grade-3">' + c('codigo', 'ID Vouch', { ajuda: 'Da etapa Cadastro no sistema.' }) + c('nome', 'Nome na Carteira', { ajuda: 'Sugerido a partir da razão social.' }) + c('situacao', 'Situação') +
+        c('razao_social', 'Razão social', { span: 2 }) + c('cnpj', 'CNPJ') + c('comarca', 'UF') + c('vencimento', 'Vencimento') + c('inicio_contrato', 'Início do contrato (vigência)', { tipo: 'date' }) +
+        c('administradora', 'Administradora') + selCr('k_forma_envio', 'Forma de envio do boleto', dd.forma_envio, [['', 'Escolha'], ['E-MAIL', 'E-mail'], ['IMPRESSO', 'Impresso'], ['IMPRESSO/E-MAIL', 'Impresso/E-mail']]) + c('executivo', 'Executivo') + '</div>' +
+        '<label class="rot" for="k_observacoes" style="margin-top:12px">Observações</label><textarea class="campo" id="k_observacoes" rows="2">' + esc(dd.observacoes) + '</textarea>' +
+        '<div class="ajuda">Analista de cobrança, extrajudicial e assistente de crédito são escolhidos depois, na ficha do condomínio na Carteira.</div>',
+      pe: '<button class="btn ghost" data-fechar>Ainda não</button><button class="btn primary" id="kOk">Confirmar e incluir na Carteira</button>',
+    });
+    $('#kOk', mo).onclick = async function () {
+      var dados = {};
+      Object.keys(dd).forEach(function (k) { var el = $('#k_' + k, mo); dados[k] = el ? el.value.trim() : dd[k]; });
+      try { await api('POST', '/api/implantacoes/' + i.id + '/carteira', { dados: dados }); mo.fechar(); toast('Condomínio incluído na Carteira.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+    };
+  }
+
+  /* ---------- detalhe ---------- */
+  async function paginaImplantacaoDetalhe(id) {
+    definirBarra('<span class="setor">Implantação</span><span class="sep">/</span><span class="nome">…</span>');
+    $('#conteudo').innerHTML = carregandoHtml();
+    var d, m, parceiros = { parceiros: [] };
+    try {
+      d = await api('GET', '/api/implantacoes/' + id);
+      m = await carregarMetaImp();
+      if (d.pode.editar) parceiros = await api('GET', '/api/implantacoes/parceiros');
+    } catch (e) {
+      $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">' + esc(e.message) + '<br><a class="btn ghost" style="margin-top:14px" href="#/implantacao">Voltar</a></div></div>';
+      return;
+    }
+    var i = d.implantacao, pd = d.pode;
+    var recarregar = function () { paginaImplantacaoDetalhe(id); atualizarImp(); };
+    var acoes = '<a class="btn ghost sm" href="#/implantacao">Voltar</a>' +
+      '<a class="btn ghost sm" href="/api/implantacoes/' + i.id + '/formulario.pdf" target="_blank" rel="noopener" title="Exportar o formulário em PDF">' + IC.documento + 'PDF</a>';
+    // cancelar fica fora da barra enquanto o setor conduz (a barra tem as ações do dia a dia)
+    if (pd.cancelar && ['em_implantacao', 'concluida'].indexOf(i.etapa) < 0) acoes += '<button class="btn danger sm" id="btCancImp">Cancelar</button>';
+    if (pd.designar) acoes += '<button class="btn ' + (i.responsavel_id ? 'ghost' : 'primary') + ' sm" id="btDesigImp">' + (i.responsavel_id ? 'Redesignar' : 'Designar') + '</button>';
+    if (pd.iniciar) acoes += '<button class="btn primary sm" id="btIniImp">Iniciar implantação</button>';
+    if (pd.pendencia) acoes += '<button class="btn ghost sm" id="btPendImp">Devolver com pendência</button>';
+    if (pd.concluir) acoes += '<button class="btn primary sm" id="btConclImp"' + (d.faltas_etapas.length ? ' disabled title="' + esc(d.faltas_etapas.join(' ')) + '"' : '') + '>Concluir implantação</button>';
+    if (pd.carteira) acoes += '<button class="btn primary sm" id="btCartImp">Confirmar na Carteira</button>';
+    definirBarra('<span class="setor">Implantação</span><span class="sep">/</span><span class="nome">' + esc(i.protocolo || 'Rascunho') + '</span>', acoes);
+    var difs = {};
+    d.diferencas.forEach(function (x) { difs[x.campo] = x; });
+    var fmtDif = function (x) {
+      var f = /R\$/.test(x.rotulo) ? reais : /%/.test(x.rotulo) ? pctCr : fmtNumCr;
+      return typeof x.valor === 'number' ? f(x.valor) + ' (análise: ' + f(x.analise) + ')' : x.valor + ' (análise: ' + x.analise + ')';
+    };
+
+    var html = '<div class="pagina"><div class="linha" style="align-items:flex-start;margin-bottom:16px"><div style="flex:1 1 420px">' +
+      '<div class="linha" style="margin-bottom:6px">' + etqCr(ETAPA_IMP, i.etapa) +
+      (i.analise_id ? '<a class="etiqueta azul" href="#/credito/' + i.analise_id + '">da análise ' + esc(i.analise_protocolo || '') + '</a>' : '<span class="etiqueta cinza">' + esc(origemImp(i)) + '</span>') +
+      (i.executivo_nome ? '<span class="etiqueta cinza">' + esc(i.executivo_nome + (i.executivo_uf ? ' · ' + i.executivo_uf : '')) + '</span>' : '') + '</div>' +
+      '<h1>' + esc(i.condominio || 'Nova implantação') + '</h1><p class="sub" style="margin:0">' + esc([i.cnpj, i.uf, i.responsavel_nome ? 'Responsável: ' + i.responsavel_nome : ''].filter(Boolean).join(' · ')) + '</p></div>' +
+      '<dl class="info-ticket" style="min-width:260px">' + (i.protocolo ? '<dt>Protocolo</dt><dd>' + esc(i.protocolo) + '</dd>' : '') +
+      (i.enviado_em ? '<dt>Enviada ao setor</dt><dd>' + dataHoraCr(i.enviado_em) + '</dd>' : '') + '<dt>Pedida por</dt><dd>' + esc(i.solicitante_nome || '—') + '</dd>' +
+      (i.responsavel_nome ? '<dt>Conduz</dt><dd>' + esc(i.responsavel_nome) + '</dd>' : '') +
+      (i.prazo_inicio && i.etapa === 'em_implantacao' ? '<dt>' + (i.iniciado_em ? 'Iniciada em' : 'Iniciar até (8h úteis)') + '</dt><dd>' + (i.iniciado_em ? dataHoraCr(i.iniciado_em) : prazoCr(i.prazo_inicio, i.etapa)) + '</dd>' : '') +
+      (i.concluido_em ? '<dt>Concluída em</dt><dd>' + dataHoraCr(i.concluido_em) + '</dd>' : '') + '</dl></div>';
+    if (i.origem === 'entrega') html += htmlEntregaImp(d);
+    if (d.diferencas.length) html += '<div class="msg aviso" style="margin-bottom:16px"><b>' + (i.origem === 'entrega' ? 'Diferente do aprovado pela diretoria' : 'Diferente da análise') + ':</b> ' + d.diferencas.map(function (x) { return esc(x.rotulo.replace(/ \((%|R\$)\)$/, '')) + ' ' + esc(fmtDif(x)); }).join('; ') + '.</div>';
+    if (pd.editar && d.faltas.length) html += '<div class="msg aviso" style="margin-bottom:16px"><b>Para enviar, falta:</b><ul style="margin:6px 0 0;padding-left:18px">' + d.faltas.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>';
+    if (!pd.editar && ['rascunho', 'diretoria'].indexOf(i.etapa) < 0 && d.pendencias.length) html += '<div class="msg aviso" style="margin-bottom:16px"><b>Pendente:</b> ' + esc(d.pendencias.join('; ')) + '. O executivo recebe um lembrete por e-mail a cada dia útil até chegar.</div>';
+    var ultimaPend = d.eventos.filter(function (e) { return e.tipo === 'pendencia'; }).pop();
+    if (i.etapa === 'pendencia' && ultimaPend) html += '<div class="msg aviso" style="margin-bottom:16px;white-space:pre-wrap">' + esc(ultimaPend.detalhe.mensagem || '') + '</div>';
+    var setorHtml = pd.interno ? htmlSetorImp(d, m) : '';
+    var formHtml = '<div id="formImp" class="pilha" style="gap:18px"' + (pd.editar ? '' : ' data-leitura') + '>' + htmlFormImp(i, m, parceiros, difs) + '</div>';
+    // para o setor, o formulário fica recolhido depois das etapas
+    if (setorHtml && !pd.editar) formHtml = '<details class="painel"><summary class="cab-painel" style="cursor:pointer"><h2 style="display:inline">Formulário do comercial</h2></summary><div class="corpo">' + formHtml + '</div></details>';
+    html += '<div class="pilha" style="gap:18px">' + setorHtml + formHtml + htmlDocsImp(d, m) +
+      (pd.editar ? '<div class="linha" style="justify-content:flex-end"><span class="ajuda" style="flex:1 1 320px;margin:0">Ao enviar, o portal confere o que falta. Se estiver tudo certo, gera o protocolo e avisa a coordenação e a equipe de implantação.</span>' +
+        '<button class="btn ghost" id="btSalvarImp">Salvar rascunho</button><button class="btn primary" id="btEnviarImp">' + (i.etapa === 'pendencia' ? 'Reenviar ao setor Implantação' : 'Enviar ao setor Implantação') + '</button></div>' : '') + '</div>';
+    html += '<section class="painel" style="margin-top:16px"><div class="cab-painel"><h2>Histórico</h2></div><div class="corpo pilha" style="gap:8px;font-size:13px;font-weight:600;color:var(--ink-2)">' +
+      d.eventos.map(function (e) {
+        var x = e.detalhe || {};
+        var extra = e.tipo === 'documento' || e.tipo === 'documento_removido' ? ': ' + esc(x.nome) : e.tipo === 'enviada' ? ' (' + esc(x.protocolo) + ')' : e.tipo === 'criada' && x.analise ? ' a partir da análise ' + esc(x.analise)
+          : e.tipo === 'designada' ? ' para ' + esc(x.para) : e.tipo === 'pendencia' ? ': ' + esc((x.itens || []).join('; ')) : e.tipo === 'carteira' ? ' (ID ' + esc(x.codigo) + ')'
+            : e.tipo === 'parceiros' ? (x.criado ? ': ' + esc(x.criado) : x.ja_existia ? ': já existia ' + esc(x.ja_existia) : ': parceiro sem cadastro') : '';
+        return '<div><b style="color:var(--ink)">' + dataHoraCr(e.criado_em) + '</b> · ' + esc(e.usuario_nome || 'Sistema') + ' ' + (EVENTO_IMP[e.tipo] || esc(e.tipo)) + extra + '</div>';
+      }).join('') + '</div></section></div>';
+    $('#conteudo').innerHTML = html;
+    var raiz = $('#formImp');
+    ligarCondicoesImp(raiz);
+    ligarDocsImp(i, recarregar);
+    if ($('#btCancImp')) $('#btCancImp').onclick = async function () {
+      if (!(await confirmar('Cancelar implantação', 'A implantação fica no histórico como cancelada' + (i.analise_id ? ' e a análise volta a ficar disponível' : '') + '.', 'Cancelar implantação', true))) return;
+      try { await api('POST', '/api/implantacoes/' + i.id + '/cancelar', {}); location.hash = '#/implantacao'; } catch (e) { toast(e.message, 'erro'); }
+    };
+    if ($('#btDesigImp')) $('#btDesigImp').onclick = function () {
+      if (!m.equipe.length) { toast('Ninguém no setor Implantação ainda: inclua a equipe no cadastro das pessoas.', 'erro'); return; }
+      var mo = modal({ titulo: i.responsavel_id ? 'Redesignar a implantação' : 'Designar a implantação', corpo: selCr('mDesig', 'Quem conduz', i.responsavel_id || m.equipe[0].id, m.equipe.map(function (x) { return [x.id, x.nome]; })) +
+        '<div class="ajuda">A pessoa é avisada no sino e por e-mail e tem ' + m.horas_para_iniciar + 'h úteis para iniciar.</div>',
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mDesigOk">Designar</button>' });
+      $('#mDesigOk', mo).onclick = async function () {
+        try { await api('POST', '/api/implantacoes/' + i.id + '/designar', { usuario_id: Number($('#mDesig', mo).value) }); mo.fechar(); toast('Designada.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+      };
+    };
+    if ($('#btIniImp')) $('#btIniImp').onclick = async function () { try { await api('POST', '/api/implantacoes/' + i.id + '/iniciar', {}); toast('Implantação iniciada.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
+    if ($('#btEtapasImp')) $('#btEtapasImp').onclick = async function () {
+      try { var r = await api('PATCH', '/api/implantacoes/' + i.id + '/etapas', { etapas: lerEtapasImp() }); toast(r.faltas.length ? 'Etapas salvas. Falta: ' + r.faltas.length + '.' : 'Etapas salvas: pronta para concluir.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+    };
+    if ($('#btPendImp')) $('#btPendImp').onclick = function () {
+      var mo = modal({ titulo: 'Devolver ao comercial com pendência', corpo: '<label class="rot" for="mPendImp">O que falta — um item por linha</label><textarea class="campo" id="mPendImp" rows="6"></textarea><div class="ajuda">O executivo recebe a lista no portal e por e-mail. Quando reenviar, volta para você.</div>',
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mPendImpOk">Devolver</button>' });
+      $('#mPendImpOk', mo).onclick = async function () {
+        try { await api('POST', '/api/implantacoes/' + i.id + '/pendencia', { itens: $('#mPendImp', mo).value.split(/\n/) }); mo.fechar(); toast('Devolvida ao comercial.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+      };
+    };
+    if ($('#btConclImp')) $('#btConclImp').onclick = async function () {
+      var parc = (i.formulario.parceria === 'sim' && (i.formulario.parceiros || []).length) ? ' Como há parceria, o setor Parceiros é avisado e o condomínio entra na Prestação de Contas ligado ao parceiro (comissão a definir).' : '';
+      if (!(await confirmar('Concluir a implantação', 'A coordenação é avisada para confirmar a entrada na Carteira.' + parc, 'Concluir'))) return;
+      try { await api('POST', '/api/implantacoes/' + i.id + '/concluir', {}); toast('Implantação concluída.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+    };
+    if ($('#btCartImp')) $('#btCartImp').onclick = function () { confirmarCarteiraImp(i, recarregar); };
+    if ($('#btPedirDir')) $('#btPedirDir').onclick = async function () {
+      try {
+        await api('PATCH', '/api/implantacoes/' + i.id, { formulario: lerFormImp(parceiros) });
+        await api('POST', '/api/implantacoes/' + i.id + '/diretoria', {});
+        toast('Enviado à diretoria.', 'ok'); recarregar();
+      } catch (e) { toast(e.message, 'erro'); recarregar(); }
+    };
+    var decidir = async function (aprovar) {
+      try { await api('POST', '/api/implantacoes/' + i.id + '/aprovacao', { aprovar: aprovar, taxa_adm: numCr($('#dTaxa').value), boleto: numCr($('#dBol').value), observacao: $('#dObs').value }); toast(aprovar ? 'Aprovado; o executivo foi avisado.' : 'Não aprovado; o executivo foi avisado.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+    };
+    if ($('#btDirSim')) $('#btDirSim').onclick = function () { decidir(true); };
+    if ($('#btDirNao')) $('#btDirNao').onclick = function () { decidir(false); };
+    if (!pd.editar) {
+      $$('input, select, textarea, button', raiz).forEach(function (el) { el.disabled = true; });
+      $$('[data-tirar], [data-tirar-parceiro], [data-tirar-contato], #btExtraImp, #btParcImp, #btContatoImp', raiz).forEach(function (el) { el.hidden = true; });
+      return;
+    }
+    var ligarTirar = function () {
+      $$('#tbExtrasImp [data-tirar]').forEach(function (b) { b.onclick = function () { b.closest('tr').remove(); }; });
+      $$('[data-tirar-parceiro]').forEach(function (b) { b.onclick = function () { if ($$('[data-linha-parceiro]').length > 1) b.closest('[data-linha-parceiro]').remove(); else $$('select, input', b.closest('[data-linha-parceiro]')).forEach(function (x) { x.value = ''; }); }; });
+      $$('[data-tirar-contato]').forEach(function (b) { b.onclick = function () { b.closest('[data-contato]').remove(); }; });
+    };
+    ligarTirar();
+    $('#btExtraImp').onclick = function () { $('#tbExtrasImp').insertAdjacentHTML('beforeend', linhaExtraCr()); ligarTirar(); };
+    $('#btParcImp').onclick = function () { $('#parceirosImp').insertAdjacentHTML('beforeend', linhaParceiroImp({}, parceiros.parceiros || [])); ligarTirar(); };
+    $('#btContatoImp').onclick = function () { $('#contatosImp').insertAdjacentHTML('beforeend', linhaContatoImp()); ligarTirar(); };
+    var salvar = async function () { await api('PATCH', '/api/implantacoes/' + i.id, { formulario: lerFormImp(parceiros) }); };
+    $('#btSalvarImp').onclick = async function () { try { await salvar(); toast('Rascunho salvo.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
+    $('#btEnviarImp').onclick = async function () {
+      try {
+        await salvar();
+        var r = await api('POST', '/api/implantacoes/' + i.id + '/enviar', {});
+        toast('Enviada: protocolo ' + r.protocolo + (r.pendencias.length ? '. Pendente: ' + r.pendencias.join('; ') : '') + '.', 'ok');
+        recarregar();
+      } catch (e) { toast(e.message, 'erro'); recarregar(); }
     };
   }
 
@@ -4014,13 +4711,14 @@
     }
     try { await carregarMeta(); } catch (e) { /* a central carrega depois */ }
     try { resumoCredito = await api('GET', '/api/credito/resumo'); } catch (e) { /* aparece no próximo ciclo */ }
+    try { resumoImp = await api('GET', '/api/implantacoes/resumo'); } catch (e) { /* aparece no próximo ciclo */ }
     montarCasca();
     carregarTutoriais();
     atualizarResumo();
     atualizarComissao();
     buscarAvisos();
     $('#btSino').onclick = abrirAvisos;
-    setInterval(function () { atualizarResumo(); atualizarComissao(); atualizarCredito(); buscarAvisos(); }, 30 * 1000);
+    setInterval(function () { atualizarResumo(); atualizarComissao(); atualizarCredito(); atualizarImp(); buscarAvisos(); }, 30 * 1000);
     window.addEventListener('hashchange', rotear);
     rotear();
   }

@@ -61,6 +61,8 @@ const POLITICA_PADRAO = Object.freeze({
   // comparativo Sem × Com MyBlue, validade e SLA
   custo_boleto_mercado: 2.50,
   validade_dias: 30,
+  // Implantação: análise liberada há até N dias abre implantação; depois, só com a liberação do gestor da Análise de Crédito
+  implantacao_validade_dias: 90,
   // prazo ao executivo: 24h (48h com diretoria) a partir da documentação completa, pulando fim de semana e feriado
   // (sexta 10h → segunda 10h). Prazo do analista: chegou até a hora de corte → fim do expediente do dia; depois → próximo dia útil.
   sla_horas: 24,
@@ -84,7 +86,7 @@ function validarPolitica(p) {
   ['boleto_padrao', 'receita_minima', 'inad_diretoria', 'inad_reprovacao', 'exposicao_maxima', 'exposicao_inad_minima',
     'meses_base', 'meses_coleta', 'dias_apos_vencimento', 'relatorio_validade_meses', 'extra_aviso_pct', 'assertiva_min_taxas',
     'concentracao_unidade_pct', 'concentracao_top3_pct', 'multa_maxima_pct', 'desconto_impreterivel_acima', 'custo_boleto_mercado',
-    'validade_dias', 'sla_horas', 'sla_horas_diretoria', 'prazo_analista_corte'].forEach(num);
+    'validade_dias', 'implantacao_validade_dias', 'sla_horas', 'sla_horas_diretoria', 'prazo_analista_corte'].forEach(num);
   if (!Array.isArray(p.faixas) || !p.faixas.length) erros.push('faixas: ao menos uma');
   else {
     p.faixas.forEach((f, i) => {

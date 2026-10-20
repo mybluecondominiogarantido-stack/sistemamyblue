@@ -23,6 +23,7 @@ const { rotasTutoriais } = require('./rotas/tutoriais');
 const { rotasComissao } = require('./rotas/comissao');
 const { rotasCdn } = require('./rotas/cdn');
 const { rotasCredito } = require('./rotas/credito');
+const { rotasImplantacoes, criarRotinasImplantacao } = require('./rotas/implantacoes');
 
 function carregarEnv(arquivo) {
   if (!fs.existsSync(arquivo)) return;
@@ -90,7 +91,9 @@ async function criarApp(cfg) {
   const regras = criarRegras(db);
   // Controle de Emissão de Boletos: o cadastro acompanha a carteira de condomínios
   const boletosCarteira = criarBoletosCarteira({ db, documentos, espera: cfg.esperaCarteiraMs ?? 3000 });
-  const ctx = { db, seg, modulos, registros, documentos, avisos, expediente, acessos, regras, boletosCarteira, cfg };
+  // Implantação: lembretes (fila sem designação, prazo para iniciar, documentos pendentes); o intervalo é ligado em iniciar()
+  const rotinasImplantacao = criarRotinasImplantacao({ db, seg, avisos, expediente });
+  const ctx = { db, seg, modulos, registros, documentos, avisos, expediente, acessos, regras, boletosCarteira, rotinasImplantacao, cfg };
 
   const app = express();
   app.disable('x-powered-by');
@@ -121,6 +124,7 @@ async function criarApp(cfg) {
   app.use(rotasComissao(ctx));
   app.use(rotasCdn(ctx));
   app.use(rotasCredito(ctx));
+  app.use(rotasImplantacoes(ctx));
 
   const publico = path.join(__dirname, '..', 'public');
   app.get('/login', (req, res) => res.sendFile(path.join(publico, 'login.html')));
@@ -156,9 +160,9 @@ function avisos(cfg) {
 
 async function iniciar(cfg = lerConfig()) {
   avisos(cfg);
-  let app, db;
+  let app, db, ctx;
   try {
-    ({ app, db } = await criarApp(cfg));
+    ({ app, db, ctx } = await criarApp(cfg));
   } catch (e) {
     console.error('\n[ERRO] Não foi possível abrir o banco de dados:', e.message);
     if (cfg.databaseUrl) console.error('Confira a variável DATABASE_URL (endereço, usuário e senha do Postgres).\n');
@@ -169,7 +173,11 @@ async function iniciar(cfg = lerConfig()) {
   servidor.listen(cfg.porta, () => {
     if (!cfg.silencioso) console.log(`Portal MyBlue rodando em http://localhost:${servidor.address().port}`);
   });
-  const fechar = () => servidor.close(async () => { await db.fechar(); process.exit(0); });
+  // rotinas da Implantação a cada 10 minutos (cada lembrete sai uma vez por dia útil)
+  const rodar = () => ctx.rotinasImplantacao.executar().catch((e) => console.error('[implantação] rotina:', e.message));
+  const rotinas = setInterval(rodar, 10 * 60 * 1000);
+  rotinas.unref();
+  const fechar = () => { clearInterval(rotinas); servidor.close(async () => { await db.fechar(); process.exit(0); }); };
   process.once('SIGTERM', fechar);
   process.once('SIGINT', fechar);
   return servidor;
