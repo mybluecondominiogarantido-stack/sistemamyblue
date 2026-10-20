@@ -12,11 +12,44 @@ faixa e status são código determinístico e testado. Nada vai ao executivo sem
 | Motor de regras | `server/credito/motor.js` | pronto, testes em `test/credito-motor.test.js` |
 | Política no banco, protocolo | `server/credito/banco.js` + tabelas em `server/db.js` | pronto, testes em `test/credito-banco.test.js` |
 | Prazos em horário útil | `server/expediente.js` (`fimDoDiaUtil`, `somarDiasUteis`) | pronto |
-| Extração dos PDFs pela IA, leitores por tipo de relatório | — | próxima etapa (precisa da chave da API e das amostras); até lá o analista cola a planilha do relatório |
+| Leitura dos PDFs pela IA (relatório e convenção) | `server/credito/extracao.js` | pronta; liga com `ANTHROPIC_API_KEY` (testes em `test/credito-extracao.test.js`); falta calibrar com amostras de cada sistema |
 | API do fluxo (executivo, analista, diretoria, administração) | `server/rotas/credito.js` + `server/credito/colar.js` | pronto, testes em `test/credito-rotas.test.js` |
 | Telas no portal (menu Análise de Crédito) | `public/app.js` | pronto |
 | Tutoriais em vídeo | catálogo em `server/tutoriais.js`, roteiros em `docs/tutoriais/fonte/roteiros.js` | `credito-solicitar` e `credito-analisar` |
 | Retorno em PDF, resumo executivo e e-mail | `server/credito/retorno.js` + `server/credito/retorno/gerador_retorno.py` | pronto (PDF), testes em `test/credito-retorno.test.js` |
+
+## Leitura dos PDFs pela IA
+
+Quando o executivo envia, o portal manda o relatório e a convenção (PDF) para a API Claude em segundo plano. Volta, em
+formato fixo: do relatório, as unidades e os lançamentos por competência (principal separado de multa, juros, acordo…),
+a data de emissão, se há competência e nomes; da convenção, o registro, as unidades, a multa, o foro e cláusulas, cada
+um com a página e um trecho. Isso entra nos dados do analista como sugestão: os lançamentos aparecem na área da
+planilha, onde ele confere e corrige, e só então calcula. O analista pode pedir **Ler de novo com IA**.
+
+A IA só lê: quem calcula é o motor de regras. Sem `ANTHROPIC_API_KEY`, a leitura fica desligada e o analista cola a
+planilha. Configuração: `CREDITO_IA_MODELO` (padrão `claude-opus-5-5`) e `CREDITO_IA_ESFORCO` (`low`, `medium`,
+`high`; padrão `medium`). Se o modelo recusar o documento por segurança, a API tenta de novo no modelo recomendado
+(`fallbacks`). Os dados do relatório (nomes, CPF) vão para a Anthropic: revisar os termos antes de ligar.
+
+## Skills do Claude (leitura sem a API)
+
+Para ler os documentos pelo Claude do plano da empresa (claude.ai / Cowork), sem a API: `skills/leitura-inadimplencia-myblue`
+devolve os lançamentos no formato da área **Lançamentos** do portal (colar e clicar em *Ler planilha*), com as
+conferências da política e os candidatos à Assertiva; `skills/leitura-convencao-myblue` devolve os campos da seção
+**Convenção** (com página e trecho) e os textos para **Textos do retorno** (observações jurídicas, próximos passos e
+ressalvas). Para instalar: claude.ai → Configurações → Capacidades → Skills → enviar o `.skill` (ou a pasta em zip).
+
+No portal, o analista cola a resposta inteira do Claude em **Colar resultado da skill** (no topo dos dados do analista)
+e clica em *Preencher os campos*: `server/credito/skill.js` separa os lançamentos, a data de emissão, se o relatório é
+por competência e traz nomes, os campos da convenção (com página e trecho), as observações jurídicas, os próximos passos
+e as ressalvas. Nada é gravado sem o analista conferir e clicar em *Salvar e calcular*. Os avisos da skill (taxa
+reajustada, acordos, Assertiva) aparecem na tela para conferir. Testes em `test/credito-skill.test.js`.
+
+## Correção do formulário pelo analista
+
+Depois do envio o executivo não muda mais o formulário. O analista que assumiu a análise corrige em **Formulário do
+executivo** (ex.: taxa ordinária digitada errada) e clica em *Salvar correção do formulário* (ou *Salvar e calcular*,
+que também salva). O histórico registra cada campo corrigido, de → para.
 
 ## Retorno em PDF
 

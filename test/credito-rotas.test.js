@@ -8,6 +8,21 @@ const { criarApp, lerConfig } = require('../server/index');
 
 let servidor, base, ctx;
 const emails = [];
+// leitor de PDF de mentira (no lugar da API Claude), ligado só no teste da leitura
+let iaLigada = false;
+const lidos = [];
+const extratorCredito = {
+  get ativo() { return iaLigada; },
+  async ler(tipo, pdf) {
+    lidos.push(tipo);
+    if (tipo === 'convencao') return { dados: { registro: 'RI', cartorio: '1º Registro de Imóveis', matricula: '12.345', uh: 24, foro: 'Fortaleza', multa_pct: 2, clausula_restritiva: '', regras_taxa_extra: '', observacoes: [],
+      fontes: { registro: { pagina: 38, trecho: 'registrada no Livro 3' }, uh: { pagina: 3, trecho: '24 unidades' }, foro: { pagina: 40, trecho: 'Comarca de Fortaleza' }, multa: { pagina: 17, trecho: 'multa de 2%' } } }, uso: { entrada: 1, saida: 1 } };
+    const meses = mesesBase().map((c) => c.split('/').reverse().join('-'));
+    return { dados: { sistema: 'Superlógica', data_emissao: hojeIso(), fonte_emissao: { pagina: 1, trecho: 'Emitido em' }, tem_competencia: true, tem_nomes: true, periodo_inicio: null, legivel: true, observacoes: [],
+      unidades: [{ unidade: 'A-101', titular: 'Titular Fictício 1', documento: '111.111.111-11', tipo_pessoa: 'PF', flag: '', espolio: false, pagina: 2,
+        lancamentos: meses.flatMap((c) => [{ competencia: c, vencimento: c + '-10', tipo: 'ordinaria', valor: 2800 }, { competencia: c, vencimento: null, tipo: 'multa', valor: 56 }]) }] }, uso: { entrada: 1, saida: 1 } };
+  },
+};
 let temGerador = true;
 try { execFileSync(process.env.PYTHON || 'python3', ['-c', 'import reportlab'], { stdio: 'ignore' }); } catch { temGerador = false; }
 
@@ -71,7 +86,7 @@ function planilha(valor) {
 
 before(async () => {
   const cfg = lerConfig({ dataDir: ':memoria:', databaseUrl: '', adminEmail: 'admin@teste.com', adminSenha: 'Admin1234', silencioso: true, porta: 0,
-    portalUrl: 'https://portal.teste', enviarEmail: async (msg) => { emails.push(msg); } });
+    portalUrl: 'https://portal.teste', enviarEmail: async (msg) => { emails.push(msg); }, extratorCredito });
   const r = await criarApp(cfg);
   ctx = r.ctx;
   await ctx.db.q('UPDATE usuarios SET trocar_senha = FALSE');
@@ -274,4 +289,105 @@ test('pessoas e papéis: a administração marca executivo, analista e diretoria
   p = (await outro('GET', '/api/credito/meta')).json.perfil;
   assert.deepEqual([p.executivo, p.analista, p.diretoria], [null, false, false]);
   assert.ok((await admin('GET', '/api/credito/pessoas')).json.pessoas.find((x) => x.id === ids['diretor@teste.com']).diretoria);
+});
+
+test('leitura dos PDFs pela IA: o envio lê relatório e convenção e o analista encontra os dados para conferir', async () => {
+  iaLigada = true;
+  try {
+    assert.equal((await analista('GET', '/api/credito/meta')).json.ia, true);
+    const r = await exec('POST', '/api/credito/analises', { formulario: FORM });
+    const id = r.json.id;
+    await anexar(exec, id, 'relatorio');
+    await anexar(exec, id, 'convencao');
+    assert.equal((await exec('POST', `/api/credito/analises/${id}/enviar`, {})).status, 200);
+    let det;
+    for (let i = 0; i < 40; i++) {
+      det = (await analista('GET', `/api/credito/analises/${id}`)).json;
+      if (det.documentos.filter((d) => !d.substituido_em).every((d) => d.leitura === 'ok')) break;
+      await new Promise((ok) => setTimeout(ok, 50));
+    }
+    assert.deepEqual(det.documentos.map((d) => d.leitura), ['ok', 'ok']);
+    const da = det.analise.dados_analista;
+    assert.equal(da.relatorio.unidades.length, 1);
+    assert.equal(da.relatorio.unidades[0].lancamentos.length, 6);
+    assert.equal(da.relatorio.origem.ia, true);
+    assert.equal(da.convencao.registro, 'RI');
+    assert.equal(da.convencao.origem.fontes.registro.pagina, 38);
+    assert.ok(det.eventos.some((e) => e.tipo === 'leitura' && e.detalhe.tipo === 'relatorio' && e.detalhe.lancamentos === 6));
+    // o executivo não vê o que a IA leu
+    const doExec = (await exec('GET', `/api/credito/analises/${id}`)).json;
+    assert.equal(doExec.documentos[0].leitura, undefined);
+    // o analista calcula direto com o que foi lido (2.800 / 58.420 = 4,79%)
+    await analista('POST', `/api/credito/analises/${id}/assumir`, {});
+    const calc = await analista('POST', `/api/credito/analises/${id}/calcular`, {});
+    assert.equal(calc.status, 200, calc.texto);
+    assert.equal(calc.json.resultado.precificacao.taxa_adm, 2);
+    // ler de novo, só o relatório
+    const antes = lidos.length;
+    assert.equal((await analista('POST', `/api/credito/analises/${id}/ler`, { tipo: 'relatorio' })).status, 202);
+    for (let i = 0; i < 40 && lidos.length === antes; i++) await new Promise((ok) => setTimeout(ok, 50));
+    assert.deepEqual(lidos.slice(antes), ['relatorio']);
+  } finally { iaLigada = false; }
+  assert.equal((await analista('GET', '/api/credito/meta')).json.ia, false);
+});
+
+test('sem a chave da API, ler o PDF avisa o que falta configurar', async () => {
+  const r = await exec('POST', '/api/credito/analises', { formulario: FORM });
+  await anexar(exec, r.json.id, 'relatorio');
+  await anexar(exec, r.json.id, 'convencao');
+  await exec('POST', `/api/credito/analises/${r.json.id}/enviar`, {});
+  await analista('POST', `/api/credito/analises/${r.json.id}/assumir`, {});
+  const ler = await analista('POST', `/api/credito/analises/${r.json.id}/ler`, {});
+  assert.equal(ler.status, 503);
+  assert.match(ler.json.erro, /ANTHROPIC_API_KEY/);
+});
+
+test('o analista corrige o formulário do executivo e o histórico guarda o que mudou', async () => {
+  const r = await exec('POST', '/api/credito/analises', { formulario: FORM });
+  const id = r.json.id;
+  await anexar(exec, id, 'relatorio');
+  await anexar(exec, id, 'convencao');
+  await exec('POST', `/api/credito/analises/${id}/enviar`, {});
+  const corrigido = { ...FORM, taxa_ordinaria: 1900, sindico: { tipo: 'profissional', isencao: 'nao' } };
+  assert.equal((await analista('PATCH', `/api/credito/analises/${id}`, { formulario: corrigido })).status, 403); // antes de assumir
+  await analista('POST', `/api/credito/analises/${id}/assumir`, {});
+  assert.equal((await exec('PATCH', `/api/credito/analises/${id}`, { formulario: corrigido })).status, 403); // o executivo não muda depois de enviar
+  assert.equal((await analista('PATCH', `/api/credito/analises/${id}`, { formulario: corrigido })).status, 200);
+  const det = (await analista('GET', `/api/credito/analises/${id}`)).json;
+  assert.equal(det.analise.formulario.taxa_ordinaria, 1900);
+  const ev = det.eventos.find((e) => e.tipo === 'formulario_corrigido');
+  assert.deepEqual(ev.detalhe.mudancas, [
+    { campo: 'Taxa ordinária', de: '1840', para: '1900' },
+    { campo: 'Tipo de síndico', de: 'condomino', para: 'profissional' },
+    { campo: 'Isenção do síndico', de: 'integral', para: 'nao' },
+  ]);
+  // o cálculo usa o formulário corrigido: 24 UH sem isenção × (1.900 + 700)
+  const dados = { convencao: { registro: 'RI', uh: 24 }, relatorio: { data_emissao: hojeIso(), unidades: (await analista('POST', `/api/credito/analises/${id}/relatorio-colado`, { texto: planilha('2.800,00') })).json.unidades } };
+  await analista('PATCH', `/api/credito/analises/${id}`, { dados_analista: dados });
+  const calc = await analista('POST', `/api/credito/analises/${id}/calcular`, {});
+  assert.equal(calc.json.resultado.valores.receita_bruta, 62400);
+});
+
+test('caixa "Colar resultado da skill": separa lançamentos, emissão, convenção, textos e ressalvas', async () => {
+  const r = await exec('POST', '/api/credito/analises', { formulario: FORM });
+  const id = r.json.id;
+  await anexar(exec, id, 'relatorio');
+  await anexar(exec, id, 'convencao');
+  await exec('POST', `/api/credito/analises/${id}/enviar`, {});
+  const resposta = ['### 1. Resumo do relatório', '- Data de emissão: 16/10/2026 (página 1)', '- Detalhado por competência: sim · Traz o nome dos devedores: sim', '',
+    '### 2. Lançamentos para colar no portal', '```', planilha('2.800,00'), '```', '', '| Campo no portal | Valor | Página | Trecho |', '|---|---|---|---|',
+    '| Registro | Registro de Imóveis | 38 | "registrada no Livro 3" |', '| Nº de unidades na convenção | 24 | 3 | "24 unidades" |', '| Multa por atraso (%) | 2 | 17 | |',
+    '', '**Observações jurídicas**', '- Convenção registrada no Registro de Imóveis.', '', '**Próximos passos**', '1. Assinar o contrato.', '', '**Ressalvas**', 'Nenhuma'].join('\n');
+  assert.equal((await analista('POST', `/api/credito/analises/${id}/resultado-skill`, { texto: resposta })).status, 403); // antes de assumir
+  await analista('POST', `/api/credito/analises/${id}/assumir`, {});
+  const lido = await analista('POST', `/api/credito/analises/${id}/resultado-skill`, { texto: resposta });
+  assert.equal(lido.status, 200, lido.texto);
+  assert.equal(lido.json.lancamentos.linhas, 6);
+  assert.equal(lido.json.relatorio.data_emissao, '2026-10-16');
+  assert.equal(lido.json.convencao.registro, 'RI');
+  assert.equal(lido.json.convencao.uh, 24);
+  assert.deepEqual(lido.json.convencao.origem.fontes.registro, { pagina: 38, trecho: 'registrada no Livro 3' });
+  assert.deepEqual(lido.json.textos, { observacoes_juridicas: ['Convenção registrada no Registro de Imóveis.'], proximos_passos: ['Assinar o contrato.'] });
+  assert.deepEqual(lido.json.ressalvas, []);
+  assert.equal((await analista('POST', `/api/credito/analises/${id}/resultado-skill`, { texto: 'oi' })).status, 400);
 });

@@ -126,7 +126,7 @@ function montarDados(r, ctx) {
     data_analise: dataBR(r.hoje),
     razao_social: esc(f.razao_social || ''),
     cnpj: esc(f.cnpj || ''),
-    executivo: esc(f.executivo?.nome || ''),
+    executivo: esc(ctx.executivo || f.executivo?.nome || ''),
     status: r.status.rotulo,
     taxa_adm: p ? fmtPct(p.taxa_adm) : '—',
     boleto_myb: p ? fmtBRL(p.boleto) : '—',

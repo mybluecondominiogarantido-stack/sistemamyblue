@@ -37,6 +37,8 @@ test('DADOS do gerador saem do resultado do motor', () => {
   const { r, ctx } = caso();
   const d = R.montarDados(r, ctx);
   assert.equal(d.status, 'APROVADA');
+  assert.equal(d.executivo, 'Executiva Exemplo');
+  assert.equal(R.montarDados(r, { ...ctx, formulario: { ...formulario, executivo: undefined }, executivo: 'Executivo do Cadastro' }).executivo, 'Executivo do Cadastro');
   assert.equal(d.taxa_adm, '3,00%');
   assert.equal(d.boleto_myb, 'R$ 2,00');
   assert.equal(d.razao_social, 'Condomínio Residencial Exemplo &amp; Cia'); // texto escapado para o Paragraph do ReportLab

@@ -30,6 +30,7 @@ function valorDe(v) {
   let s = String(v || '').replace(/[R$\s]/g, '');
   if (!s) return null;
   if (/,\d{1,2}$/.test(s)) s = s.replace(/\./g, '').replace(',', '.');
+  else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, ''); // 1.900 = mil e novecentos
   else s = s.replace(/,/g, '');
   const n = Number(s);
   return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;

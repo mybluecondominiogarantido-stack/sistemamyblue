@@ -19,6 +19,8 @@ const { politicaAtiva, proximoProtocolo, gravarPolitica } = require('../credito/
 const { validarPolitica } = require('../credito/politica');
 const retorno = require('../credito/retorno');
 const { lerRelatorioColado } = require('../credito/colar');
+const { lerRespostaSkill } = require('../credito/skill');
+const { criarExtrator, paraDadosAnalista } = require('../credito/extracao');
 const { cnpjValido } = require('../implantacao');
 
 const ETAPAS = ['rascunho', 'pendencia', 'fila', 'em_analise', 'diretoria', 'validada', 'enviada', 'cancelada'];
@@ -36,6 +38,41 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
   r.use('/api/credito', seg.exigirLogin);
   const erro = (res, status, msg, extra) => res.status(status).json({ erro: msg, ...(extra || {}) });
   const link = (id) => `#/credito/${id}`;
+  // leitura dos PDFs pela IA (desligada sem ANTHROPIC_API_KEY; os testes passam um leitor de mentira)
+  const extrator = cfg.extratorCredito || criarExtrator(process.env);
+  const lendo = new Set();
+
+  /* lê o relatório e a convenção vigentes e põe o que leu nos dados do analista (como sugestão para conferir).
+     sobrescrever: o analista pediu de novo (troca o que estiver lançado); sem isso, só preenche o que está vazio. */
+  async function lerDocumentos(analiseId, { sobrescrever = false, tipos = ['relatorio', 'convencao'], usuarioId = null } = {}) {
+    if (!extrator.ativo || lendo.has(analiseId)) return;
+    lendo.add(analiseId);
+    try {
+      for (const tipo of tipos) {
+        const doc = await db.um("SELECT id, conteudo, extracao FROM analise_documentos WHERE analise_id = $1 AND tipo = $2 AND substituido_em IS NULL AND mime = 'application/pdf' ORDER BY id DESC LIMIT 1", [analiseId, tipo]);
+        if (!doc || (!sobrescrever && doc.extracao && doc.extracao.status === 'ok')) continue;
+        await db.q('UPDATE analise_documentos SET extracao = $2::jsonb WHERE id = $1', [doc.id, JSON.stringify({ status: 'lendo', inicio: new Date().toISOString() })]);
+        try {
+          const { dados, uso } = await extrator.ler(tipo, doc.conteudo);
+          await db.q('UPDATE analise_documentos SET extracao = $2::jsonb, extraido_em = now() WHERE id = $1', [doc.id, JSON.stringify({ status: 'ok', dados, uso })]);
+          const a = await db.um('SELECT dados_analista FROM analises WHERE id = $1', [analiseId]);
+          const d = a.dados_analista || {};
+          const vazio = tipo === 'relatorio' ? !((d.relatorio && d.relatorio.unidades) || []).length : !(d.convencao && d.convencao.registro);
+          if (sobrescrever || vazio) {
+            d[tipo] = paraDadosAnalista(tipo, dados, doc.id);
+            await db.q('UPDATE analises SET dados_analista = $2::jsonb, atualizado_em = now() WHERE id = $1', [analiseId, JSON.stringify(d)]);
+          }
+          await db.tx((t) => evento(t, analiseId, usuarioId, 'leitura', { tipo, aplicada: sobrescrever || vazio, unidades: tipo === 'relatorio' ? (dados.unidades || []).length : undefined,
+            lancamentos: tipo === 'relatorio' ? (dados.unidades || []).reduce((n, u) => n + (u.lancamentos || []).length, 0) : undefined, uso }));
+        } catch (e) {
+          await db.q('UPDATE analise_documentos SET extracao = $2::jsonb WHERE id = $1', [doc.id, JSON.stringify({ status: 'erro', erro: e.message })]);
+          await db.tx((t) => evento(t, analiseId, usuarioId, 'leitura_erro', { tipo, erro: e.message }));
+        }
+      }
+    } catch (e) {
+      console.error('[credito] leitura dos PDFs:', e.message);
+    } finally { lendo.delete(analiseId); }
+  }
 
   /* ---------- quem é a pessoa na ferramenta ---------- */
   async function perfil(u) {
@@ -163,9 +200,31 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
     return res;
   }
 
-  function ctxRetorno(a, nomeAnalista) {
+  async function ctxRetorno(a, nomeAnalista) {
     const d = a.dados_analista || {};
-    return { formulario: a.formulario || {}, protocolo: a.protocolo, analista: nomeAnalista, emissao: d.relatorio && d.relatorio.data_emissao, ajustesTexto: d.textos || {} };
+    const ex = a.executivo_id ? await db.um('SELECT nome, uf FROM executivos WHERE id = $1', [a.executivo_id]) : null;
+    return { formulario: a.formulario || {}, protocolo: a.protocolo, analista: nomeAnalista, executivo: ex ? ex.nome : '', emissao: d.relatorio && d.relatorio.data_emissao, ajustesTexto: d.textos || {} };
+  }
+
+  /* campos do formulário que o analista corrigiu: [{ campo, de, para }] */
+  const ROTULOS_FORM = {
+    razao_social: 'Razão social', cnpj: 'CNPJ', uf: 'UF', cidade: 'Cidade', administradora: 'Administradora', sistema_gestao: 'Sistema de gestão',
+    garantidora_atual: 'Garantidora atual', vigencia_atual: 'Vigência do contrato atual', tipo_contratacao: 'Tipo de contratação', uh_total: 'Unidades (UH)',
+    taxa_ordinaria: 'Taxa ordinária', dia_vencimento: 'Dia do vencimento', 'desconto_pontualidade.tipo': 'Desconto de pontualidade', 'desconto_pontualidade.valor': 'Valor do desconto',
+    'agua_gas.total_mensal': 'Água + gás (total)', 'agua_gas.por_unidade': 'Água + gás (por unidade)', 'agua_gas.compoe_boleto': 'Água + gás no boleto',
+    custo_boleto_atual: 'Custo atual do boleto', taxas_extras: 'Taxas extras', 'sindico.tipo': 'Tipo de síndico', 'sindico.isencao': 'Isenção do síndico',
+    'sindico.percentual': 'Isenção parcial do síndico (%)', outros_isentos: 'Subsíndico/conselheiros isentos', uh_isentas_informadas: 'Total de unidades isentas', sem_convencao: 'Convenção depois',
+  };
+  function mudancasFormulario(antes, depois) {
+    const valor = (o, k) => k.split('.').reduce((x, p) => (x == null ? undefined : x[p]), o);
+    const vazio = (v) => v === undefined || v === null || v === '' || v === false || (Array.isArray(v) && !v.length);
+    // o JSONB do banco reordena as chaves: compara com as chaves em ordem
+    const estavel = (v) => JSON.stringify(v, (k, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort(([p], [q]) => (p < q ? -1 : 1))) : x));
+    const mostra = (v) => (vazio(v) ? '—' : Array.isArray(v) ? v.map((x) => [x.descricao || x.cargo, x.valor_por_uh ?? (x.percentual != null ? `${x.percentual}%` : '')].filter((y) => y !== '' && y != null).join(' ')).join('; ') : String(v));
+    return Object.keys(ROTULOS_FORM).filter((k) => {
+      const x = valor(antes, k), y = valor(depois, k);
+      return !(vazio(x) && vazio(y)) && estavel(x) !== estavel(y);
+    }).map((k) => ({ campo: ROTULOS_FORM[k], de: mostra(valor(antes, k)), para: mostra(valor(depois, k)) }));
   }
 
   /* ===================== perfil e contadores ===================== */
@@ -176,6 +235,7 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
       perfil: { admin: p.admin, analista: p.analista, diretoria: p.diretoria, executivo: p.executivo },
       executivos, politica: { versao: p.politica.versao, setor_analistas: p.politica.setor_analistas, sla_horas: p.politica.sla_horas, sla_horas_diretoria: p.politica.sla_horas_diretoria, corte: p.politica.prazo_analista_corte },
       tipos_documento: TIPOS_DOC.map((t) => ({ tipo: t, nome: NOME_DOC[t] })),
+      ia: extrator.ativo,
     });
   });
 
@@ -249,7 +309,8 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
       ul.nome AS liberada_nome, o.protocolo AS origem_protocolo FROM analises a LEFT JOIN executivos e ON e.id = a.executivo_id LEFT JOIN usuarios us ON us.id = a.solicitante_id
       LEFT JOIN usuarios ua ON ua.id = a.analista_id LEFT JOIN usuarios uc ON uc.id = a.chancela_por LEFT JOIN usuarios ul ON ul.id = a.liberada_por
       LEFT JOIN analises o ON o.id = a.origem_id WHERE a.id = $1`, [a.id]);
-    const documentos = (await db.q(`SELECT d.id, d.tipo, d.nome, d.mime, d.tamanho, d.enviado_em, d.substituido_em, u.nome AS enviado_por_nome
+    const documentos = (await db.q(`SELECT d.id, d.tipo, d.nome, d.mime, d.tamanho, d.enviado_em, d.substituido_em, u.nome AS enviado_por_nome,
+      d.extracao->>'status' AS leitura, d.extracao->>'erro' AS leitura_erro, d.extraido_em
       FROM analise_documentos d LEFT JOIN usuarios u ON u.id = d.enviado_por WHERE d.analise_id = $1 ORDER BY d.id`, [a.id])).rows
       .filter((d) => pd.interno || d.tipo !== 'retorno_pdf' || a.etapa === 'enviada');
     const eventos = (await db.q(`SELECT ev.id, ev.tipo, ev.detalhe, ev.criado_em, u.nome AS usuario_nome FROM analise_eventos ev LEFT JOIN usuarios u ON u.id = ev.usuario_id
@@ -260,6 +321,7 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
     if (!pd.interno) {
       // o executivo vê a situação, as pendências e, depois de enviado, o resultado; não vê as anotações do analista
       delete out.dados_analista;
+      documentos.forEach((x) => { delete x.leitura; delete x.leitura_erro; });
       if (a.etapa !== 'enviada') { delete out.resultado_motor; out.resultado = null; out.inad_media = out.taxa_adm = out.boleto = out.exposicao = out.receita_liquida = null; }
       else if (out.resultado_motor) out.resultado_motor = { status: out.resultado_motor.status, precificacao: out.resultado_motor.precificacao, escopo: { uh_escopo: out.resultado_motor.escopo.uh_escopo } };
     }
@@ -276,15 +338,17 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
     const sets = [];
     const args = [a.id];
     const s = (col, val, tipo = '') => { args.push(val); sets.push(`${col} = $${args.length}${tipo}`); };
+    // o analista que assumiu corrige o formulário do executivo (ex.: taxa errada); a trilha guarda o que mudou
+    const correcao = b.formulario !== undefined && !pd.editar && pd.analisar;
     if (b.formulario !== undefined) {
-      if (!pd.editar) return erro(res, 403, 'O formulário só muda enquanto a solicitação está em rascunho ou com pendência.');
+      if (!pd.editar && !pd.analisar) return erro(res, 403, 'O formulário só muda enquanto a solicitação está em rascunho ou com pendência, ou pelo analista que assumiu a análise.');
       const f = b.formulario && typeof b.formulario === 'object' ? b.formulario : {};
       s('formulario', JSON.stringify(f), '::jsonb');
       s('condominio', texto(f.razao_social, 200)); s('cnpj', texto(f.cnpj, 20)); s('uf', texto(f.uf, 2).toUpperCase()); s('cidade', texto(f.cidade, 100));
       s('tipo_contratacao', ['nova', 'portabilidade'].includes(f.tipo_contratacao) ? f.tipo_contratacao : null);
     }
     if (b.executivo_id !== undefined) {
-      if (!pd.editar || !p.analista) return erro(res, 403, 'Só o setor Análise de Crédito troca o executivo.');
+      if ((!pd.editar && !pd.analisar) || !p.analista) return erro(res, 403, 'Só o setor Análise de Crédito troca o executivo.');
       const ex = await db.um('SELECT id FROM executivos WHERE id = $1 AND ativo', [Number(b.executivo_id) || 0]);
       if (!ex) return erro(res, 400, 'Executivo não encontrado.');
       s('executivo_id', ex.id);
@@ -304,7 +368,10 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
         && JSON.stringify(aj) !== JSON.stringify(((a.dados_analista || {}).ajustes || {})[k])) : [];
       // ajustes ficam na trilha com quem, quando e por quê (no retorno, a nota não diz quem ajustou)
       for (const [campo, aj] of novos) await evento(t, a.id, req.usuario.id, 'ajuste', { campo, valor: aj.valor, justificativa: aj.justificativa });
-      if (b.formulario !== undefined) await evento(t, a.id, req.usuario.id, 'formulario', {});
+      if (correcao) {
+        const mudancas = mudancasFormulario(a.formulario || {}, b.formulario || {});
+        if (mudancas.length) await evento(t, a.id, req.usuario.id, 'formulario_corrigido', { mudancas });
+      } else if (b.formulario !== undefined) await evento(t, a.id, req.usuario.id, 'formulario', {});
     });
     res.json({ ok: true });
   });
@@ -316,6 +383,16 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
     if (!c.pd.analisar) return erro(res, 403, 'Só o analista que assumiu a análise lança os dados.');
     const lido = lerRelatorioColado(req.body && req.body.texto);
     if (!lido.linhas) return erro(res, 400, lido.erros[0] || 'Nenhuma linha reconhecida.', { erros: lido.erros });
+    res.json(lido);
+  });
+
+  /* resposta das skills do Claude colada inteira → o que vai para cada campo (nada é gravado aqui) */
+  r.post('/api/credito/analises/:id/resultado-skill', json, async (req, res) => {
+    const c = await carregar(req, res);
+    if (!c) return;
+    if (!c.pd.analisar) return erro(res, 403, 'Só o analista que assumiu a análise lança os dados.');
+    const lido = lerRespostaSkill(req.body && req.body.texto);
+    if (!lido.achados.length) return erro(res, 400, 'Não reconheci a resposta da skill. Cole a resposta inteira do Claude, de preferência pelo botão Copiar.');
     res.json(lido);
   });
 
@@ -401,6 +478,20 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
       texto: `${req.usuario.nome} enviou ${a.condominio} para análise de crédito. Prazo de resposta ao executivo: ${pz.executivo.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' })}.`,
     });
     res.json({ protocolo, etapa, prazo_analista: pz.analista, prazo_executivo: pz.executivo });
+    // a IA lê os PDFs em segundo plano: o analista encontra os dados já lançados para conferir
+    setImmediate(() => { lerDocumentos(a.id).catch(() => {}); });
+  });
+
+  /* o analista pede a leitura de novo (troca o que estiver lançado pelo que a IA ler) */
+  r.post('/api/credito/analises/:id/ler', json, async (req, res) => {
+    const c = await carregar(req, res);
+    if (!c) return;
+    if (!c.pd.analisar) return erro(res, 403, 'Só o analista que assumiu a análise pede a leitura.');
+    if (!extrator.ativo) return erro(res, 503, 'A leitura automática dos PDFs não está ligada: falta configurar ANTHROPIC_API_KEY no servidor.');
+    const tipos = ['relatorio', 'convencao'].includes(req.body && req.body.tipo) ? [req.body.tipo] : ['relatorio', 'convencao'];
+    if (lendo.has(c.a.id)) return res.status(202).json({ lendo: true });
+    setImmediate(() => { lerDocumentos(c.a.id, { sobrescrever: true, tipos, usuarioId: req.usuario.id }).catch(() => {}); });
+    res.status(202).json({ lendo: true });
   });
 
   /* ===================== analista ===================== */
@@ -435,7 +526,7 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
     const a = await db.um('SELECT * FROM analises WHERE id = $1', [c.a.id]);
     if (!a.resultado_motor) return erro(res, 400, 'Calcule a análise antes de ver o retorno.');
     const nome = c.pd.analisar ? req.usuario.nome : (await db.um('SELECT nome FROM usuarios WHERE id = $1', [a.analista_id]) || {}).nome;
-    const { pdf } = await retorno.gerarPdf(retorno.montarDados(a.resultado_motor, ctxRetorno(a, nome)));
+    const { pdf } = await retorno.gerarPdf(retorno.montarDados(a.resultado_motor, await ctxRetorno(a, nome)));
     res.set('Content-Type', 'application/pdf');
     res.set('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(retorno.nomeArquivo(a.condominio, a.protocolo || 'previa'))}`);
     res.set('Cache-Control', 'private, no-store');
@@ -507,7 +598,7 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
     if (resultado.status.codigo === 'pendente') return erro(res, 400, 'A análise está pendente: devolva ao executivo com a lista do que falta.');
     if (resultado.diretoria && !a.chancela_em) return erro(res, 400, 'Inadimplência acima de 35%: envie à diretoria antes de liberar.');
     const atual = await db.um('SELECT * FROM analises WHERE id = $1', [a.id]);
-    const ctx = ctxRetorno(atual, req.usuario.nome);
+    const ctx = await ctxRetorno(atual, req.usuario.nome);
     const { pdf, condensado } = await retorno.gerarPdf(retorno.montarDados(resultado, ctx));
     const email = retorno.emailEntrega(resultado, ctx);
     const resumo = retorno.resumoExecutivo(resultado, ctx);
