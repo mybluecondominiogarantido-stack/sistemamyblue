@@ -516,6 +516,85 @@ CREATE TABLE IF NOT EXISTS analise_eventos (
   criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_analise_eventos ON analise_eventos(analise_id, criado_em);
+
+-- ===== Implantação (server/rotas/implantacoes.js) =====
+-- do contrato assinado à Carteira: o comercial pede, o setor Implantação conduz, a coordenação confirma na Carteira.
+-- origem: análise do portal, PDF de análise feita antes do portal, ou condomínio de entrega (diretoria aprova taxa e boleto)
+CREATE TABLE IF NOT EXISTS implantacao_protocolos (
+  dia DATE PRIMARY KEY,
+  ultimo INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS implantacoes (
+  id SERIAL PRIMARY KEY,
+  protocolo TEXT UNIQUE,
+  etapa TEXT NOT NULL DEFAULT 'rascunho' CHECK (etapa IN ('rascunho','diretoria','fila','em_implantacao','pendencia','concluida','na_carteira','cancelada')),
+  origem TEXT NOT NULL CHECK (origem IN ('analise','pdf','entrega')),
+  analise_id INTEGER REFERENCES analises(id) ON DELETE SET NULL,
+  analise_protocolo TEXT,
+  condominio TEXT NOT NULL DEFAULT '',
+  cnpj TEXT NOT NULL DEFAULT '',
+  uf TEXT NOT NULL DEFAULT '',
+  executivo_id INTEGER REFERENCES executivos(id) ON DELETE SET NULL,
+  solicitante_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  responsavel_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  designado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  designado_em TIMESTAMPTZ,
+  prazo_inicio TIMESTAMPTZ,
+  iniciado_em TIMESTAMPTZ,
+  formulario JSONB NOT NULL DEFAULT '{}'::jsonb,
+  referencia JSONB NOT NULL DEFAULT '{}'::jsonb,
+  etapas JSONB NOT NULL DEFAULT '{}'::jsonb,
+  enviado_em TIMESTAMPTZ,
+  concluido_em TIMESTAMPTZ,
+  condominio_id INTEGER REFERENCES condominios(id) ON DELETE SET NULL,
+  aviso_docs_em DATE,
+  lembrete_fila_em TIMESTAMPTZ,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_implantacoes_etapa ON implantacoes(etapa);
+CREATE INDEX IF NOT EXISTS idx_implantacoes_analise ON implantacoes(analise_id);
+CREATE INDEX IF NOT EXISTS idx_implantacoes_executivo ON implantacoes(executivo_id);
+
+CREATE TABLE IF NOT EXISTS implantacao_documentos (
+  id SERIAL PRIMARY KEY,
+  implantacao_id INTEGER NOT NULL REFERENCES implantacoes(id) ON DELETE CASCADE,
+  tipo TEXT NOT NULL,
+  nome TEXT NOT NULL,
+  mime TEXT NOT NULL DEFAULT 'application/octet-stream',
+  tamanho INTEGER NOT NULL DEFAULT 0,
+  sha256 TEXT,
+  conteudo BYTEA,
+  enviado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  enviado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  substituido_em TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_implantacao_docs ON implantacao_documentos(implantacao_id, tipo);
+
+CREATE TABLE IF NOT EXISTS implantacao_eventos (
+  id SERIAL PRIMARY KEY,
+  implantacao_id INTEGER NOT NULL REFERENCES implantacoes(id) ON DELETE CASCADE,
+  usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  tipo TEXT NOT NULL,
+  detalhe JSONB NOT NULL DEFAULT '{}'::jsonb,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_implantacao_eventos ON implantacao_eventos(implantacao_id, criado_em);
+
+-- análise liberada há mais dias que a política permite: o gestor da Análise de Crédito libera (ou não) para implantar
+CREATE TABLE IF NOT EXISTS implantacao_liberacoes (
+  id SERIAL PRIMARY KEY,
+  analise_id INTEGER NOT NULL REFERENCES analises(id) ON DELETE CASCADE,
+  pedido_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  pedido_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  motivo TEXT NOT NULL DEFAULT '',
+  decidido_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  decidido_em TIMESTAMPTZ,
+  aprovado BOOLEAN,
+  observacao TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_implantacao_liberacoes ON implantacao_liberacoes(analise_id);
 `;
 
 /* Supabase publica o schema "public" pela API dele (PostgREST). Com RLS ligado e sem
@@ -524,7 +603,8 @@ const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 
   'setor_membros', 'ticket_categorias', 'tickets', 'ticket_eventos', 'ticket_anexos', 'notificacoes', 'condominios',
   'links_pagina', 'links', 'links_campanhas', 'tutoriais', 'comissao_relatorios', 'comissao_leitores', 'comissao_planilhas', 'cdn_cache', 'regras_acesso',
   'parametros_politica', 'faixas_precificacao', 'executivos', 'analise_protocolos', 'analises', 'analise_documentos', 'analise_unidades',
-  'analise_lancamentos', 'analise_exclusoes', 'analise_alertas', 'analise_eventos'];
+  'analise_lancamentos', 'analise_exclusoes', 'analise_alertas', 'analise_eventos',
+  'implantacao_protocolos', 'implantacoes', 'implantacao_documentos', 'implantacao_eventos', 'implantacao_liberacoes'];
 const RLS = TABELAS.map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`).join(';\n');
 
 /* Ajustes em bancos já existentes (rodam a cada início e não fazem nada se já estiverem aplicados). */

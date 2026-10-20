@@ -255,6 +255,7 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
     const eventos = (await db.q(`SELECT ev.id, ev.tipo, ev.detalhe, ev.criado_em, u.nome AS usuario_nome FROM analise_eventos ev LEFT JOIN usuarios u ON u.id = ev.usuario_id
       WHERE ev.analise_id = $1 ORDER BY ev.id`, [a.id])).rows;
     const reanalises = (await db.q('SELECT id, protocolo, etapa FROM analises WHERE origem_id = $1 ORDER BY id', [a.id])).rows;
+    const implantacao = await db.um("SELECT id, protocolo, etapa FROM implantacoes WHERE analise_id = $1 AND etapa <> 'cancelada' ORDER BY id DESC LIMIT 1", [a.id]);
     const out = { ...a, ...info };
     if (!pd.interno) {
       // o executivo vê a situação, as pendências e, depois de enviado, o resultado; não vê as anotações do analista
@@ -263,7 +264,7 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
       else if (out.resultado_motor) out.resultado_motor = { status: out.resultado_motor.status, precificacao: out.resultado_motor.precificacao, escopo: { uh_escopo: out.resultado_motor.escopo.uh_escopo } };
     }
     await db.q("UPDATE notificacoes SET lida = TRUE WHERE usuario_id = $1 AND link = $2 AND NOT lida", [req.usuario.id, link(a.id)]);
-    res.json({ analise: out, documentos, eventos: pd.interno ? eventos : eventos.filter((e) => !['motor', 'dados', 'previa'].includes(e.tipo)), reanalises, pode: pd, faltas: pd.enviar ? await faltas(a) : [] });
+    res.json({ analise: out, documentos, eventos: pd.interno ? eventos : eventos.filter((e) => !['motor', 'dados', 'previa'].includes(e.tipo)), reanalises, implantacao, pode: pd, faltas: pd.enviar ? await faltas(a) : [] });
   });
 
   /* ===================== formulário (executivo) e dados do analista ===================== */
