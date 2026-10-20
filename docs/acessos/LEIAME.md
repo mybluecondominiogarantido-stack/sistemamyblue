@@ -20,6 +20,7 @@ a supervisão, das pessoas que gerenciam.
 | **Ferramenta**: abre? edita ou só consulta? com qual papel? | janela da ferramenta → *Quem abre e com qual papel* | administração; coordenação/supervisão do setor dono da ferramenta |
 | **Carteira**: quem edita o quê | *Módulos e dados → Carteira: quem edita* (e *Ferramentas do setor → Carteira de condomínios: quem edita*) | administração; coordenação/supervisão liberam pessoas nas permissões do setor delas |
 | **Análise de Crédito**: executivo, analista, diretoria | *Análise de Crédito → Pessoas e papéis* (marca, entre os usuários do portal, quem é executivo, analista — entra no setor **Análise de Crédito** — e diretoria) | administração |
+| **Implantação**: comercial, equipe, coordenação, gestor da Análise de Crédito | comercial = executivo da Análise de Crédito; equipe = setor **Implantação**; coordenação = líder, coordenação ou supervisão do setor Implantação; gestor = líder, coordenação ou supervisão do setor Análise de Crédito (cadastro da pessoa e *Equipes e tipos de demanda*) | administração; coordenação/supervisão nos setores delas |
 | **Demonstrativos de premiação**: quem lê o de cada pessoa | a própria Gestão de Premiações, ao enviar | quem usa a Gestão de Premiações |
 
 > Atenção: mudar os setores de uma pessoa (no cadastro ou em *Equipes e tipos de demanda*) muda também a equipe de
@@ -144,6 +145,21 @@ Tela própria do portal (menu **Análise de Crédito**), não é uma ferramenta 
 
 Os avisos (sino e e-mail) vão para o setor Análise de Crédito quando a documentação fica completa, para o executivo
 nas pendências e no retorno, e para a diretoria quando há chancela. Detalhes da ferramenta em `docs/credito/LEIAME.md`.
+
+## Implantação
+
+Tela própria do portal (menu **Implantação**), não é uma ferramenta em HTML. Quem faz o quê:
+
+| Quem | Como entra | Pode |
+|---|---|---|
+| **Comercial** (executivo de negócios) | o mesmo cadastro de executivo da Análise de Crédito | abrir a implantação a partir das suas análises liberadas, preencher o formulário, anexar documentos (inclusive os pendentes, depois do envio) e pedir ao gestor da Análise de Crédito a liberação de análise além do prazo |
+| **Equipe de implantação** | estar no setor **Implantação** | ver a fila e todas as implantações, anexar documentos; quem foi designado inicia, marca as 5 etapas, devolve com pendência e conclui |
+| **Coordenação** | líder do setor Implantação, ou perfil Coordenador/Supervisor no setor | o da equipe, mais designar quem conduz, conduzir qualquer implantação, cancelar e confirmar a entrada na Carteira |
+| **Gestor da Análise de Crédito** | líder do setor Análise de Crédito, ou perfil Coordenador/Supervisor no setor | liberar (ou não) análises além do prazo da política (`implantacao_validade_dias`, padrão 90) |
+| **Diretoria** | permissão *Chancelar análises de crédito* | aprovar (ou não) taxa e boleto do condomínio de entrega; ver todas |
+| **Administração** | perfil | tudo |
+
+Detalhes em `docs/implantacao/LEIAME.md`.
 
 ## Contrato para o HTML das ferramentas
 

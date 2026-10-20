@@ -386,3 +386,19 @@ details.painel>summary::-webkit-details-marker{display:none}
 details.painel>summary::before{content:"▸";color:var(--muted);margin-right:6px}
 details.painel[open]>summary::before{content:"▾"}
 #tbPes .campo:disabled{background:var(--surface-2);opacity:.55}
+
+/* ---------- Implantação ---------- */
+.marcas{display:flex;flex-wrap:wrap;gap:8px}
+.marca{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border-2);border-radius:999px;padding:7px 12px;font-size:13.5px;font-weight:700;color:var(--ink-2);background:var(--surface);cursor:pointer}
+.marca:has(input:checked){border-color:var(--teal);background:var(--teal-bg);color:var(--teal-d)}
+.marca:has(input:disabled){cursor:default;opacity:.75}
+.campo.diferente{border-color:var(--amber);box-shadow:0 0 0 3px rgba(217,138,27,.15)}
+.ajuda.diferente{color:#8a5a10}
+.ajuda.ok{color:var(--green)}
+.doc-linha{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:12px 18px;border-top:1px solid var(--border)}
+.doc-linha:first-child{border-top:0}
+.sub-doc{padding:9px 18px;background:var(--surface-2);border-top:1px solid var(--border);font-size:11.5px;font-weight:800;letter-spacing:.5px;color:var(--muted);text-transform:uppercase}
+.contatos-imp{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) auto;gap:10px;align-items:end;padding:12px;border:1px dashed var(--border-2);border-radius:12px;background:var(--surface-2)}
+@media (max-width:800px){.contatos-imp{grid-template-columns:1fr 1fr}}
+#formImp[data-leitura] .campo:disabled{background:var(--bg);color:var(--ink-2)}
+legend.rot,#formImp span.rot,.modal span.rot{display:block;font-size:12px;font-weight:800;color:var(--ink-2);margin:0 0 6px;letter-spacing:.2px}

@@ -4,9 +4,10 @@ WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3000
 
-# Retorno de Análise de Crédito (PDF): gerador em Python com ReportLab; DejaVu tem os símbolos ✓ e ✗ do status
+# Retorno de Análise de Crédito (PDF): gerador em Python com ReportLab; DejaVu tem os símbolos ✓ e ✗ do status.
+# Implantação: pdftotext (poppler-utils) lê o PDF das análises feitas antes do portal
 RUN apt-get update \
- && apt-get install -y --no-install-recommends python3 python3-reportlab fonts-dejavu-core \
+ && apt-get install -y --no-install-recommends python3 python3-reportlab fonts-dejavu-core poppler-utils \
  && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
