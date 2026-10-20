@@ -57,11 +57,26 @@ Análise de Crédito.
   Carteira. Os responsáveis (cobrança, extrajudicial, crédito) são escolhidos depois, na ficha do condomínio. O Controle
   de Emissão de Boletos acompanha, como em qualquer condomínio novo da Carteira.
 
+## Outras origens
+
+- **Condomínio de entrega** (construtora entregando, em enxoval): o comercial preenche o condomínio, a construtora, as
+  unidades e a taxa ordinária previstas e a taxa administrativa e o boleto propostos, e pede a **aprovação da
+  diretoria** (quem chancela análises de crédito; sino e e-mail). A diretoria aprova (podendo mudar os valores) ou não
+  (com motivo). Aprovado, os valores viram a referência do comparativo; com o contrato assinado, o comercial completa o
+  formulário e envia. Pode seguir **sem CNPJ** ("Ainda não tem CNPJ") e sem os documentos de enxoval: CNPJ e os quatro
+  documentos obrigatórios viram pendências, com o alerta diário ao executivo.
+- **Análise feita antes do portal:** o comercial anexa o PDF do Retorno de Análise de Crédito (o modelo de 4 páginas
+  do mesmo gerador). O portal lê (`server/implantacoes/pdf.js`, com o `pdftotext` do pacote `poppler-utils`, no
+  Dockerfile): protocolo e data, razão social, CNPJ, executivo, status, taxa administrativa, boleto, unidades e taxa
+  ordinária (memória de cálculo), síndico e cidade/UF (do texto, para conferir), observações jurídicas e próximos
+  passos (vão para as observações da implantação). O prazo de 90 dias conta da data do PDF; depois, a liberação do
+  gestor da Análise de Crédito é pedida pelo próprio PDF. Reprovada ou pendente não abre; o mesmo protocolo não abre
+  duas implantações; análise que está no portal usa a origem do portal. O PDF entra nos documentos como "Análise de
+  Crédito".
+
 ## Próximas etapas
 
-1. Outras origens: condomínio de entrega (diretoria aprova taxa e boleto; "ainda não tem CNPJ") e PDF de análise feita
-   antes do portal (leitura do retorno de 4 páginas).
-2. Formulário em PDF e tutoriais em vídeo.
+- Formulário em PDF e tutoriais em vídeo.
 
 ## Dados
 

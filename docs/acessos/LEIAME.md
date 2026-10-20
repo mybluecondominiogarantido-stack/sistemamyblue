@@ -156,7 +156,7 @@ Tela própria do portal (menu **Implantação**), não é uma ferramenta em HTML
 | **Equipe de implantação** | estar no setor **Implantação** | ver a fila e todas as implantações, anexar documentos; quem foi designado inicia, marca as 5 etapas, devolve com pendência e conclui |
 | **Coordenação** | líder do setor Implantação, ou perfil Coordenador/Supervisor no setor | o da equipe, mais designar quem conduz, conduzir qualquer implantação, cancelar e confirmar a entrada na Carteira |
 | **Gestor da Análise de Crédito** | líder do setor Análise de Crédito, ou perfil Coordenador/Supervisor no setor | liberar (ou não) análises além do prazo da política (`implantacao_validade_dias`, padrão 90) |
-| **Diretoria** | permissão *Chancelar análises de crédito* | ver todas |
+| **Diretoria** | permissão *Chancelar análises de crédito* | aprovar (ou não) taxa e boleto do condomínio de entrega; ver todas |
 | **Administração** | perfil | tudo |
 
 Detalhes em `docs/implantacao/LEIAME.md`.

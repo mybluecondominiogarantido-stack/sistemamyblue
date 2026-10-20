@@ -3852,12 +3852,13 @@
     rascunho: ['Rascunho', 'cinza'], diretoria: ['Na diretoria', 'ambar'], fila: ['Na fila · aguardando designação', 'azul'], em_implantacao: ['Em implantação', 'azul'],
     pendencia: ['Pendência com o comercial', 'ambar'], concluida: ['Concluída · aguardando a Carteira', 'verde'], na_carteira: ['Na Carteira', 'verde'], cancelada: ['Cancelada', 'cinza'],
   };
-  var ABAS_IMP = [['minhas', 'Minhas solicitações'], ['fila', 'Fila do setor'], ['carteira', 'Aguardando Carteira'], ['todas', 'Todas'], ['liberacoes', 'Liberações de análise']];
+  var ABAS_IMP = [['minhas', 'Minhas solicitações'], ['fila', 'Fila do setor'], ['carteira', 'Aguardando Carteira'], ['diretoria', 'Diretoria'], ['todas', 'Todas'], ['liberacoes', 'Liberações de análise']];
   var EVENTO_IMP = {
     criada: 'criou a implantação', formulario: 'alterou o formulário', documento: 'anexou um documento', documento_removido: 'removeu um documento',
     enviada: 'enviou ao setor Implantação', reenviada: 'reenviou depois da pendência', cancelada: 'cancelou',
     designada: 'designou', iniciada: 'iniciou a implantação', etapas: 'atualizou as etapas', pendencia: 'devolveu com pendência',
     concluida: 'concluiu a implantação', parceiros: 'levou o condomínio à base de Parceiros', carteira: 'confirmou a entrada na Carteira',
+    diretoria_pedida: 'pediu a aprovação da diretoria', diretoria_aprovou: 'aprovou taxa e boleto', diretoria_recusou: 'não aprovou taxa e boleto',
   };
   var ETAPA_SETOR_IMP = [['documentacao', 'Documentação', 'Obrigatórios conferidos; os pendentes seguem com alerta ao executivo.'], ['vouch', 'Cadastro no sistema (Vouch)', 'O ID vai direto para a Carteira.'],
     ['onboarding', 'Onboarding', 'Reunião de boas-vindas com o síndico.'], ['boletos', 'Emissão de boletos', 'Primeira emissão pelo novo contrato.'], ['envio', 'Envio dos boletos', 'Vai para a Carteira como forma de envio.']];
@@ -3879,11 +3880,11 @@
     var b = $('#nav [data-contador=implantacao]');
     if (!b || !resumoImp) return;
     var r = resumoImp;
-    var n = (r.fila || 0) + (r.minhas || 0) + (r.carteira || 0) + (r.liberacoes || 0) + (r.pendencias || 0);
+    var n = (r.fila || 0) + (r.minhas || 0) + (r.carteira || 0) + (r.liberacoes || 0) + (r.pendencias || 0) + (r.diretoria || 0);
     b.textContent = n;
     b.hidden = !n;
     b.title = [r.fila ? r.fila + ' na fila' : '', r.minhas ? r.minhas + ' com você' : '', r.carteira ? r.carteira + ' aguardando a Carteira' : '',
-      r.liberacoes ? r.liberacoes + ' análise(s) para liberar' : '', r.pendencias ? r.pendencias + ' com pendência' : ''].filter(Boolean).join(' · ');
+      r.liberacoes ? r.liberacoes + ' análise(s) para liberar' : '', r.pendencias ? r.pendencias + ' com pendência' : '', r.diretoria ? r.diretoria + ' para a diretoria aprovar' : ''].filter(Boolean).join(' · ');
   }
   function origemImp(i) {
     if (i.origem === 'analise') return 'Análise ' + (i.analise_protocolo || '');
@@ -3896,13 +3897,13 @@
     try { m = await carregarMetaImp(true); } catch (e) { $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">' + esc(e.message) + '</div></div>'; return; }
     var p = m.perfil;
     var setor = p.equipe || p.coordenacao;
-    var pode = { minhas: !!p.executivo || p.admin, fila: setor, carteira: p.coordenacao, todas: setor || p.diretoria, liberacoes: p.gestor_credito };
+    var pode = { minhas: !!p.executivo || p.admin, fila: setor, carteira: p.coordenacao, diretoria: p.diretoria, todas: setor || p.diretoria, liberacoes: p.gestor_credito };
     var abas = ABAS_IMP.filter(function (a) { return pode[a[0]]; });
     if (!abas.length) {
       $('#conteudo').innerHTML = '<div class="pagina"><h1>Implantação</h1><div class="vazio">Você ainda não tem acesso à Implantação. Executivos são marcados em Análise de Crédito → Pessoas e papéis; a equipe é quem está no setor Implantação.</div></div>';
       return;
     }
-    if (!abas.some(function (a) { return a[0] === aba; })) aba = setor ? 'fila' : p.executivo || p.admin ? 'minhas' : abas[0][0];
+    if (!abas.some(function (a) { return a[0] === aba; })) aba = setor ? 'fila' : p.executivo || p.admin ? 'minhas' : p.diretoria && resumoImp && resumoImp.diretoria ? 'diretoria' : abas[0][0];
     definirBarra('<span class="setor">Implantação</span><span class="sep">/</span><span class="nome">' + esc(abas.find(function (a) { return a[0] === aba; })[1]) + '</span>');
     var novo = (p.executivo || p.admin) && aba === 'minhas';
     $('#conteudo').innerHTML = '<div class="pagina"><div class="linha" style="align-items:flex-end;margin-bottom:6px"><div style="flex:1 1 420px"><h1>Implantação</h1>' +
@@ -3960,11 +3961,13 @@
       titulo: 'Nova implantação', largo: true,
       corpo: '<span class="rot">De onde vem este condomínio?</span><div class="grade-3" style="margin-bottom:14px">' +
         '<label class="opcao-radio"><input type="radio" name="origImp" value="analise" checked><div><b>A partir de uma Análise de Crédito</b><span>Os dados da análise vêm preenchidos e podem ser ajustados; o que veio da análise fica ao lado para comparar.</span></div></label>' +
-        '<label class="opcao-radio" style="opacity:.6"><input type="radio" name="origImp" value="pdf" disabled><div><b>Análise feita antes do portal</b><span>Anexar o PDF do retorno. Chega na próxima etapa.</span></div></label>' +
-        '<label class="opcao-radio" style="opacity:.6"><input type="radio" name="origImp" value="entrega" disabled><div><b>Condomínio de entrega</b><span>A diretoria aprova taxa e boleto. Chega na próxima etapa.</span></div></label></div>' +
-        '<span class="rot">Análises liberadas para você: aprovadas ou com ressalvas, até ' + j.validade_dias + ' dias depois da liberação</span>' +
+        '<label class="opcao-radio"><input type="radio" name="origImp" value="pdf"><div><b>Análise feita antes do portal</b><span>Anexe o PDF do retorno da análise. O portal lê os dados e preenche o formulário.</span></div></label>' +
+        '<label class="opcao-radio"><input type="radio" name="origImp" value="entrega"><div><b>Condomínio de entrega</b><span>Construtora entregando, em enxoval: sem inadimplência e sem documentação completa. Antes, a diretoria aprova taxa e boleto.</span></div></label></div>' +
+        '<div data-orig="analise"><span class="rot">Análises liberadas para você: aprovadas ou com ressalvas, até ' + j.validade_dias + ' dias depois da liberação</span>' +
         '<div class="painel" style="box-shadow:none;overflow:hidden">' + (j.analises.map(linhaAn).join('') || '<div class="vazio" style="border:0;padding:24px">Nenhuma análise liberada disponível. As reprovadas e as que já têm implantação não aparecem.</div>') + '</div>' +
-        '<div class="ajuda">Depois de ' + j.validade_dias + ' dias, a análise só abre implantação quando o gestor da Análise de Crédito liberar (ele é avisado no sino e por e-mail).</div>',
+        '<div class="ajuda">Depois de ' + j.validade_dias + ' dias, a análise só abre implantação quando o gestor da Análise de Crédito liberar (ele é avisado no sino e por e-mail).</div></div>' +
+        '<div data-orig="pdf" hidden><label class="btn ghost" style="align-self:flex-start">' + IC.enviar + 'Escolher o PDF do retorno<input type="file" id="arqPdfImp" accept="application/pdf" hidden></label><div id="lidoPdfImp" style="margin-top:12px"></div></div>' +
+        '<div data-orig="entrega" hidden><div class="msg aviso">O condomínio de entrega começa pela proposta: preencha o condomínio, a construtora, as unidades previstas, a taxa ordinária e a taxa administrativa e o boleto propostos, e peça a aprovação da diretoria. Com a aprovação e o contrato assinado, complete o formulário e envie ao setor Implantação. Os documentos podem chegar depois.</div></div>',
       pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mImpOk">Continuar para o formulário</button>',
     });
     $$('[data-liberar]', mo).forEach(function (b) {
@@ -3977,10 +3980,66 @@
         };
       };
     });
+    var origem = function () { return $('input[name=origImp]:checked', mo).value; };
+    $$('input[name=origImp]', mo).forEach(function (r) { r.onchange = function () { $$('[data-orig]', mo).forEach(function (x) { x.hidden = x.getAttribute('data-orig') !== origem(); }); }; });
+    var arquivoPdf = null, lido = null;
+    async function enviarPdf(acao, extra) {
+      var r = await fetch('/api/implantacoes/pdf?acao=' + acao, { method: 'POST', credentials: 'same-origin', body: arquivoPdf,
+        headers: Object.assign({ 'Content-Type': 'application/pdf', 'X-Nome-Arquivo': encodeURIComponent(arquivoPdf.name) }, extra || {}) });
+      var j2 = {};
+      try { j2 = await r.json(); } catch (e) { /* sem JSON */ }
+      if (!r.ok) throw new Error(j2.erro || 'Falha ao ler o PDF.');
+      return j2;
+    }
+    function htmlLido(x) {
+      var l = x.lido;
+      var linha = function (rot, val, onde) { return '<tr><td>' + esc(rot) + '</td><td><b>' + (val || '<span class="sec">não achei</span>') + '</b></td><td class="sec" style="white-space:nowrap">' + esc(onde) + '</td></tr>'; };
+      var sit = x.situacao === 'valida' ? '<div class="msg ok">Análise de ' + dataBr(l.data) + ': dentro dos ' + x.validade_dias + ' dias.</div>'
+        : x.situacao === 'liberada' ? '<div class="msg ok">Liberada pelo gestor da Análise de Crédito.</div>'
+          : x.situacao === 'aguardando_gestor' ? '<div class="msg aviso">Pedido de liberação com o gestor da Análise de Crédito.</div>'
+            : x.situacao === 'recusada' ? '<div class="msg erro">O gestor da Análise de Crédito não liberou esta análise: peça reanálise.</div>'
+              : '<div class="msg aviso" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="flex:1">Análise de ' + dataBr(l.data) + ': passou de ' + x.validade_dias + ' dias.</span><button type="button" class="btn ghost sm" id="btLibPdf">Enviar ao gestor da Análise de Crédito</button></div>';
+      return '<div class="pilha" style="gap:10px">' + sit +
+        (x.existente ? '<div class="msg erro">Esta análise já tem implantação (' + esc(x.existente) + ').</div>' : '') +
+        (x.no_portal ? '<div class="msg aviso">Esta análise está no portal: use a origem "A partir de uma Análise de Crédito".</div>' : '') +
+        (['reprovada', 'pendente'].indexOf(l.resultado) >= 0 ? '<div class="msg erro">Análise ' + esc(RES_CR[l.resultado][0].toLowerCase()) + ': não abre implantação.</div>' : '') +
+        '<div class="painel tabela-wrap" style="box-shadow:none"><table><thead><tr><th>Campo</th><th>Lido</th><th>Onde no PDF</th></tr></thead><tbody>' +
+        linha('Protocolo e data', esc(l.protocolo) + ' · ' + dataBr(l.data), 'página 1, topo') +
+        linha('Razão social · CNPJ', esc(l.razao_social) + (l.cnpj ? ' · ' + esc(l.cnpj) : ''), 'página 1') +
+        linha('Executivo solicitante', esc(l.executivo), 'página 1') +
+        linha('Status', l.resultado ? etqCr(RES_CR, l.resultado) : '', 'página 1') +
+        linha('Taxa administrativa · boleto', l.taxa_adm != null ? pctCr(l.taxa_adm) + ' · ' + reais(l.boleto) : '', 'página 1, precificação') +
+        linha('Unidades · taxa ordinária', l.uh_total ? l.uh_total + ' · ' + reais(l.taxa_ordinaria) : '', 'página 2, memória de cálculo') +
+        linha('Síndico', l.sindico_tipo ? (l.sindico_tipo === 'profissional' ? 'Profissional' : 'Condômino') + (l.sindico_isencao === 'nao' ? ', sem isenção' : l.sindico_isencao ? ', isenção ' + l.sindico_isencao : '') : '', 'observações') +
+        linha('Cidade/UF', l.uf ? esc(l.cidade + '/' + l.uf) + ' ' + etq(['conferir', 'ambar']) : '', 'texto das observações') +
+        linha('Ressalvas e próximos passos', (l.observacoes_juridicas.length + l.proximos_passos.length) ? 'vão para as observações da implantação' : '', 'páginas 1 e 4') +
+        '</tbody></table></div>' + (l.avisos.length ? '<div class="ajuda">' + esc(l.avisos.join(' ')) + '</div>' : '') +
+        '<div class="ajuda">O PDF não traz: dia do vencimento, administradora e contatos, dados do síndico, parceria e cashback; o PDF fica em Documentos como "Análise de Crédito" e serve de base para o comparativo.</div></div>';
+    }
+    $('#arqPdfImp', mo).onchange = async function () {
+      arquivoPdf = this.files[0];
+      if (!arquivoPdf) return;
+      $('#lidoPdfImp', mo).innerHTML = '<span class="ajuda">Lendo o PDF…</span>';
+      try { lido = await enviarPdf('ler'); $('#lidoPdfImp', mo).innerHTML = htmlLido(lido); } catch (e) { lido = null; $('#lidoPdfImp', mo).innerHTML = '<div class="msg erro">' + esc(e.message) + '</div>'; return; }
+      if ($('#btLibPdf', mo)) $('#btLibPdf', mo).onclick = async function () {
+        var motivo = window.prompt('Motivo do pedido ao gestor (opcional):', '') || '';
+        try { await enviarPdf('liberar', { 'X-Motivo': encodeURIComponent(motivo) }); mo.fechar(); toast('Pedido enviado ao gestor da Análise de Crédito.', 'ok'); } catch (e) { toast(e.message, 'erro'); }
+      };
+    };
     $('#mImpOk', mo).onclick = async function () {
-      var sel = $('input[name=anImp]:checked', mo);
-      if (!sel) { toast('Escolha a análise.', 'erro'); return; }
-      try { var r = await api('POST', '/api/implantacoes', { origem: 'analise', analise_id: Number(sel.value) }); mo.fechar(); location.hash = '#/implantacao/' + r.id; } catch (e) { toast(e.message, 'erro'); }
+      try {
+        var r;
+        if (origem() === 'entrega') r = await api('POST', '/api/implantacoes', { origem: 'entrega' });
+        else if (origem() === 'pdf') {
+          if (!arquivoPdf || !lido) { toast('Escolha o PDF do retorno da análise.', 'erro'); return; }
+          r = await enviarPdf('criar');
+        } else {
+          var sel = $('input[name=anImp]:checked', mo);
+          if (!sel) { toast('Escolha a análise.', 'erro'); return; }
+          r = await api('POST', '/api/implantacoes', { origem: 'analise', analise_id: Number(sel.value) });
+        }
+        mo.fechar(); location.hash = '#/implantacao/' + r.id;
+      } catch (e) { toast(e.message, 'erro'); }
     };
   }
 
@@ -3993,7 +4052,8 @@
       (j.liberacoes.map(function (l) {
         var sit = l.aprovado === null ? '<button class="btn ghost sm" data-dec="' + l.id + '" data-ok="0">Não liberar</button> <button class="btn primary sm" data-dec="' + l.id + '" data-ok="1">Liberar</button>'
           : (l.aprovado ? etq(['liberada', 'verde']) : etq(['não liberada', 'vermelha'])) + '<span class="sec">' + esc(l.decidido_por_nome || '') + ' · ' + dataHoraCr(l.decidido_em) + (l.observacao ? ' · ' + esc(l.observacao) : '') + '</span>';
-        return '<tr><td><a href="#/credito/' + l.analise_id + '"><b>' + esc(l.protocolo) + '</b></a><span class="sec">liberada em ' + dataHoraCr(l.liberada_em) + ' · ' + pctCr(l.taxa_adm) + ' + ' + reais(l.boleto) + '</span></td>' +
+        return '<tr><td>' + (l.analise_id ? '<a href="#/credito/' + l.analise_id + '"><b>' + esc(l.protocolo) + '</b></a><span class="sec">liberada em ' + dataHoraCr(l.liberada_em) + ' · ' + pctCr(l.taxa_adm) + ' + ' + reais(l.boleto) + '</span>'
+          : '<b>' + esc(l.protocolo) + '</b><span class="sec">análise anterior ao portal (PDF) de ' + dataBr(String(l.liberada_em).slice(0, 10)) + '</span>') + '</td>' +
           '<td><b>' + esc(l.condominio) + '</b><span class="sec">' + esc(l.executivo_nome || '') + '</span></td>' +
           '<td>' + esc(l.pedido_por_nome || '—') + '<span class="sec">' + dataHoraCr(l.pedido_em) + (l.motivo ? ' · ' + esc(l.motivo) : '') + '</span></td><td>' + sit + '</td></tr>';
       }).join('') || '<tr><td colspan="4"><div class="vazio" style="border:0;padding:34px">Nenhum pedido.</div></td></tr>') + '</tbody></table></div></div>';
@@ -4010,20 +4070,21 @@
   }
 
   /* ---------- formulário ---------- */
+  var rotRefImp = 'Análise';
   function campoImp(nome, rotulo, valor, o) {
     o = o || {};
     var dif = o.difs && o.difs[o.dif || nome];
-    var ajuda = [o.ref != null && o.ref !== '' ? 'Análise: ' + esc(o.ref) + '.' : '', o.ajuda || ''].filter(Boolean).join(' ');
+    var ajuda = [o.ref != null && o.ref !== '' ? rotRefImp + ': ' + esc(o.ref) + '.' : '', o.ajuda || ''].filter(Boolean).join(' ');
     return '<div' + (o.span ? ' style="grid-column:span ' + o.span + '"' : '') + (o.se ? ' data-se="' + o.se + '"' : '') + '><label class="rot" for="i_' + nome + '">' + esc(rotulo) + '</label>' +
       '<input class="campo' + (dif ? ' diferente' : '') + '" id="i_' + nome + '" value="' + esc(valor == null ? '' : valor) + '"' + (o.ph ? ' placeholder="' + esc(o.ph) + '"' : '') + (o.tipo ? ' type="' + o.tipo + '"' : '') + '>' +
-      (ajuda || dif ? '<div class="ajuda' + (dif ? ' diferente' : '') + '">' + ajuda + (dif ? ' Diferente da análise: o setor e o gestor da Análise de Crédito veem.' : '') + '</div>' : '') + '</div>';
+      (ajuda || dif ? '<div class="ajuda' + (dif ? ' diferente' : '') + '">' + ajuda + (dif ? (rotRefImp === 'Análise' ? ' Diferente da análise: o setor e o gestor da Análise de Crédito veem.' : ' Diferente do aprovado pela diretoria: o setor vê.') : '') + '</div>' : '') + '</div>';
   }
   function selImp(nome, rotulo, valor, opcoes, o) {
     o = o || {};
     var dif = o.difs && o.difs[o.dif || nome];
     return '<div' + (o.se ? ' data-se="' + o.se + '"' : '') + '><label class="rot" for="i_' + nome + '">' + esc(rotulo) + '</label><select class="campo' + (dif ? ' diferente' : '') + '" id="i_' + nome + '">' +
       opcoes.map(function (x) { return '<option value="' + esc(x[0]) + '"' + (String(x[0]) === String(valor == null ? '' : valor) ? ' selected' : '') + '>' + esc(x[1]) + '</option>'; }).join('') + '</select>' +
-      (o.ref ? '<div class="ajuda' + (dif ? ' diferente' : '') + '">Análise: ' + esc(o.ref) + '.' + (dif ? ' Diferente da análise.' : '') + '</div>' : '') + '</div>';
+      (o.ref ? '<div class="ajuda' + (dif ? ' diferente' : '') + '">' + rotRefImp + ': ' + esc(o.ref) + '.' + (dif ? ' Diferente.' : '') + '</div>' : '') + '</div>';
   }
   function radiosImp(nome, rotulo, valor, opcoes, o) {
     o = o || {};
@@ -4056,6 +4117,7 @@
   function htmlFormImp(i, m, parceiros, difs) {
     var f = i.formulario || {}, ref = i.referencia || {};
     var temRef = ref.taxa_adm != null;
+    rotRefImp = i.origem === 'entrega' ? 'Aprovado pela diretoria' : 'Análise';
     var r = function (v) { return temRef ? v : null; };
     var sim = [['sim', 'Sim'], ['nao', 'Não']];
     var hon = [10, 12, 15, 17.5];
@@ -4065,7 +4127,7 @@
     var SIND = { condomino: 'condômino', profissional: 'profissional' };
     var parcs = (f.parceiros && f.parceiros.length ? f.parceiros : [{}]);
     var lista = parceiros.parceiros || [];
-    return '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">1</span>Condomínio</h2>' + (temRef ? '<span class="etiqueta azul">preenchido com a análise, pode ajustar</span>' : '') + '</div><div class="corpo grade-3">' +
+    return '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">1</span>Condomínio</h2>' + (temRef && i.origem !== 'entrega' ? '<span class="etiqueta azul">preenchido com a análise, pode ajustar</span>' : '') + '</div><div class="corpo grade-3">' +
       campoImp('nome', 'Nome do condomínio', f.nome, { span: 2 }) +
       '<div><label class="rot" for="i_cnpj">CNPJ</label><input class="campo" id="i_cnpj" value="' + esc(f.cnpj || '') + '" placeholder="00.000.000/0000-00"' + (f.sem_cnpj ? ' disabled' : '') + '>' +
       '<label class="linha" style="margin-top:8px;font-size:13px;font-weight:700;color:var(--ink-2)"><input type="checkbox" id="i_sem_cnpj"' + (f.sem_cnpj ? ' checked' : '') + '> Ainda não tem CNPJ (condomínio de entrega)</label></div>' +
@@ -4090,7 +4152,7 @@
       campoImp('taxa_adm', 'Taxa administrativa (%)', fmtNumCr(f.taxa_adm), { ref: temRef ? pctCr(ref.taxa_adm) : null, difs: difs }) +
       campoImp('boleto', 'Valor do boleto (R$)', fmtNumCr(f.boleto), { ref: temRef ? reais(ref.boleto) : null, difs: difs }) +
       campoImp('taxa_ordinaria', 'Taxa ordinária (R$)', fmtNumCr(f.taxa_ordinaria), { ref: temRef && ref.taxa_ordinaria != null ? reais(ref.taxa_ordinaria) : null, difs: difs }) +
-      selImp('desconto_tipo', 'Desconto de pontualidade', f.desconto_tipo || 'nenhum', [['nenhum', 'Não possui'], ['percentual', 'Percentual (%)'], ['valor', 'Valor por unidade (R$)']], { ref: temRef ? DESC[ref.desconto_tipo] + (ref.desconto_valor ? ' ' + fmtNumCr(ref.desconto_valor) : '') : null, difs: difs, dif: 'desconto' }) +
+      selImp('desconto_tipo', 'Desconto de pontualidade', f.desconto_tipo || 'nenhum', [['nenhum', 'Não possui'], ['percentual', 'Percentual (%)'], ['valor', 'Valor por unidade (R$)']], { ref: temRef && ref.desconto_tipo ? DESC[ref.desconto_tipo] + (ref.desconto_valor ? ' ' + fmtNumCr(ref.desconto_valor) : '') : null, difs: difs, dif: 'desconto' }) +
       campoImp('desconto_valor', 'Desconto (% ou R$)', fmtNumCr(f.desconto_valor), { se: 'desconto_tipo:percentual,valor' }) +
       campoImp('desconto_ate_dia', 'Desconto vale até o dia', f.desconto_ate_dia, { se: 'desconto_tipo:percentual,valor', ph: '1 a 31' }) +
       campoImp('inicio_contrato', 'Data de início do contrato', f.inicio_contrato, { tipo: 'date', ajuda: 'Também conta as parcelas restantes da taxa extra.' }) +
@@ -4196,6 +4258,7 @@
         return { nome: g('nome'), funcao: g('funcao'), telefone: g('telefone'), email: g('email') };
       }).filter(function (c) { return c.nome || c.telefone || c.email; }),
       observacoes: $('#i_observacoes').value.trim(),
+      entrega_justificativa: $('#i_entrega_justificativa') ? $('#i_entrega_justificativa').value.trim() : undefined,
     };
   }
 
@@ -4221,13 +4284,16 @@
       return '<div class="doc-linha"><b style="flex:1 1 260px">' + esc(t.nome) + (t.obrigatorio ? ' <span style="color:var(--red)" aria-label="obrigatório">*</span>' : '') + '</b>' + st + atual.map(lnk).join('') +
         (pd.documentos && t.tipo !== 'analise_credito' ? '<label class="btn ghost sm">' + IC.enviar + (atual.length ? (t.tipo === 'outro' ? 'Anexar outro' : 'Trocar') : 'Anexar') + '<input type="file" data-doc-imp="' + t.tipo + '" hidden></label>' : '') + '</div>';
     }
-    var obrig = m.documentos.filter(function (t) { return t.obrigatorio; });
-    var depois = m.documentos.filter(function (t) { return t.pendente || (t.tipo === 'analise_credito' && i.origem !== 'entrega'); });
+    var obrigTipos = d.documentos_obrigatorios || [];
+    var obrig = m.documentos.filter(function (t) { return obrigTipos.indexOf(t.tipo) >= 0; }).map(function (t) { return Object.assign({}, t, { obrigatorio: true }); });
+    var depois = m.documentos.filter(function (t) { return (t.pendente || (t.obrigatorio && obrigTipos.indexOf(t.tipo) < 0) || (t.tipo === 'analise_credito' && i.origem !== 'entrega')) && t.tipo !== 'outro'; })
+      .map(function (t) { return Object.assign({}, t, { obrigatorio: false, pendente: t.tipo !== 'analise_credito' }); });
     var outro = m.documentos.filter(function (t) { return t.tipo === 'outro'; });
     var nObrig = obrig.filter(function (t) { return vig.some(function (x) { return x.tipo === t.tipo; }); }).length;
-    return '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">7</span>Documentos</h2><span class="espaco"></span><span class="ajuda" style="margin:0">obrigatórios: ' + nObrig + ' de ' + obrig.length + '</span></div>' +
-      '<div class="sub-doc" style="border-top:0">Obrigatórios para enviar</div>' + obrig.map(linha).join('') +
-      '<div class="sub-doc">Podem chegar depois: o que ficar pendente vira alerta para o executivo</div>' + depois.map(linha).join('') + outro.map(linha).join('') + '</section>';
+    return '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">7</span>Documentos</h2><span class="espaco"></span>' + (obrig.length ? '<span class="ajuda" style="margin:0">obrigatórios: ' + nObrig + ' de ' + obrig.length + '</span>' : '') + '</div>' +
+      (obrig.length ? '<div class="sub-doc" style="border-top:0">Obrigatórios para enviar</div>' + obrig.map(linha).join('') : '') +
+      '<div class="sub-doc"' + (obrig.length ? '' : ' style="border-top:0"') + '>' + (i.origem === 'entrega' ? 'Condomínio de entrega: os documentos podem chegar depois; o que ficar pendente vira alerta para o executivo' : 'Podem chegar depois: o que ficar pendente vira alerta para o executivo') + '</div>' +
+      depois.map(linha).join('') + outro.map(linha).join('') + '</section>';
   }
   function ligarDocsImp(i, recarregar) {
     $$('input[data-doc-imp]').forEach(function (inp) {
@@ -4242,6 +4308,32 @@
         try { await api('DELETE', '/api/implantacoes/' + i.id + '/documentos/' + b.getAttribute('data-tirar-doc-imp')); recarregar(); } catch (e) { toast(e.message, 'erro'); }
       };
     });
+  }
+
+  /* ---------- condomínio de entrega: aprovação da diretoria ---------- */
+  function htmlEntregaImp(d) {
+    var i = d.implantacao, pd = d.pode, f = i.formulario || {}, ref = i.referencia || {};
+    var corpo;
+    if (ref.aprovado_em) {
+      corpo = '<div class="msg ok">Aprovado por ' + esc(ref.aprovado_por) + ' em ' + dataHoraCr(ref.aprovado_em) + ': ' + pctCr(ref.taxa_adm) + ' de taxa administrativa e boleto de ' + reais(ref.boleto) +
+        (ref.proposta && (ref.proposta.taxa_adm !== ref.taxa_adm || ref.proposta.boleto !== ref.boleto) ? ' (proposta: ' + pctCr(ref.proposta.taxa_adm) + ' + ' + reais(ref.proposta.boleto) + ')' : '') + (ref.observacao ? '. ' + esc(ref.observacao) : '') + '.</div>' +
+        (i.etapa === 'rascunho' ? '<div class="ajuda">Com o contrato assinado, complete o formulário e envie ao setor Implantação.</div>' : '');
+    } else if (pd.decidir_diretoria) {
+      corpo = '<dl class="info-ticket" style="margin-bottom:12px"><dt>Proposta do comercial</dt><dd>' + pctCr(f.taxa_adm) + ' + boleto ' + reais(f.boleto) + '</dd><dt>Unidades previstas</dt><dd>' + esc(f.uh_total || '—') + '</dd>' +
+        '<dt>Taxa ordinária prevista</dt><dd>' + (f.taxa_ordinaria ? reais(f.taxa_ordinaria) : '—') + '</dd><dt>Construtora</dt><dd>' + esc([f.construtora, f.construtora_contato].filter(Boolean).join(' · ') || '—') + '</dd>' +
+        '<dt>CNPJ</dt><dd>' + (f.sem_cnpj ? 'ainda não tem' : esc(f.cnpj || '—')) + '</dd>' + (f.entrega_justificativa ? '<dt>Justificativa</dt><dd>' + esc(f.entrega_justificativa) + '</dd>' : '') + '</dl>' +
+        '<div class="grade-3">' + campoCr('dTaxa', 'Taxa administrativa aprovada (%)', fmtNumCr(f.taxa_adm)) + campoCr('dBol', 'Boleto aprovado (R$)', fmtNumCr(f.boleto)) + campoCr('dObs', 'Observação (obrigatória para não aprovar)', '') + '</div>' +
+        '<div class="linha" style="justify-content:flex-end;margin-top:12px"><button class="btn danger sm" id="btDirNao">Não aprovar</button><button class="btn primary sm" id="btDirSim">Aprovar taxa e boleto</button></div>';
+    } else if (i.etapa === 'diretoria') {
+      corpo = '<div class="msg aviso">Com a diretoria: ' + pctCr(f.taxa_adm) + ' + boleto ' + reais(f.boleto) + ' aguardando aprovação.</div>';
+    } else {
+      corpo = (ref.recusa ? '<div class="msg erro" style="margin-bottom:10px">' + esc(ref.recusa.por) + ' não aprovou em ' + dataHoraCr(ref.recusa.em) + ': ' + esc(ref.recusa.observacao) + '</div>' : '') +
+        '<p class="ajuda" style="margin-top:0">Preencha no formulário abaixo o condomínio (o CNPJ pode ficar para depois), a construtora, as unidades, a taxa ordinária prevista e, em Condições do contrato, a taxa administrativa e o boleto propostos.</p>' +
+        '<label class="rot" for="i_entrega_justificativa">Justificativa para a diretoria (opcional)</label><textarea class="campo" id="i_entrega_justificativa" rows="2">' + esc(f.entrega_justificativa || '') + '</textarea>' +
+        (d.faltas_diretoria.length ? '<div class="ajuda">Para pedir, falta: ' + esc(d.faltas_diretoria.join(' ')) + '</div>' : '') +
+        (pd.pedir_diretoria ? '<div class="linha" style="justify-content:flex-end;margin-top:10px"><button class="btn primary sm" id="btPedirDir">Pedir aprovação da diretoria</button></div>' : '');
+    }
+    return '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Condomínio de entrega · aprovação da diretoria</h2></div><div class="corpo">' + corpo + '</div></section>';
   }
 
   /* ---------- setor: etapas e conferências ---------- */
@@ -4350,9 +4442,10 @@
       (i.responsavel_nome ? '<dt>Conduz</dt><dd>' + esc(i.responsavel_nome) + '</dd>' : '') +
       (i.prazo_inicio && i.etapa === 'em_implantacao' ? '<dt>' + (i.iniciado_em ? 'Iniciada em' : 'Iniciar até (8h úteis)') + '</dt><dd>' + (i.iniciado_em ? dataHoraCr(i.iniciado_em) : prazoCr(i.prazo_inicio, i.etapa)) + '</dd>' : '') +
       (i.concluido_em ? '<dt>Concluída em</dt><dd>' + dataHoraCr(i.concluido_em) + '</dd>' : '') + '</dl></div>';
-    if (d.diferencas.length) html += '<div class="msg aviso" style="margin-bottom:16px"><b>Diferente da análise:</b> ' + d.diferencas.map(function (x) { return esc(x.rotulo.replace(/ \((%|R\$)\)$/, '')) + ' ' + esc(fmtDif(x)); }).join('; ') + '.</div>';
+    if (i.origem === 'entrega') html += htmlEntregaImp(d);
+    if (d.diferencas.length) html += '<div class="msg aviso" style="margin-bottom:16px"><b>' + (i.origem === 'entrega' ? 'Diferente do aprovado pela diretoria' : 'Diferente da análise') + ':</b> ' + d.diferencas.map(function (x) { return esc(x.rotulo.replace(/ \((%|R\$)\)$/, '')) + ' ' + esc(fmtDif(x)); }).join('; ') + '.</div>';
     if (pd.editar && d.faltas.length) html += '<div class="msg aviso" style="margin-bottom:16px"><b>Para enviar, falta:</b><ul style="margin:6px 0 0;padding-left:18px">' + d.faltas.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>';
-    if (!pd.editar && i.etapa !== 'rascunho' && d.pendencias.length) html += '<div class="msg aviso" style="margin-bottom:16px"><b>Pendente:</b> ' + esc(d.pendencias.join('; ')) + '. O executivo recebe um lembrete por e-mail a cada dia útil até chegar.</div>';
+    if (!pd.editar && ['rascunho', 'diretoria'].indexOf(i.etapa) < 0 && d.pendencias.length) html += '<div class="msg aviso" style="margin-bottom:16px"><b>Pendente:</b> ' + esc(d.pendencias.join('; ')) + '. O executivo recebe um lembrete por e-mail a cada dia útil até chegar.</div>';
     var ultimaPend = d.eventos.filter(function (e) { return e.tipo === 'pendencia'; }).pop();
     if (i.etapa === 'pendencia' && ultimaPend) html += '<div class="msg aviso" style="margin-bottom:16px;white-space:pre-wrap">' + esc(ultimaPend.detalhe.mensagem || '') + '</div>';
     var setorHtml = pd.interno ? htmlSetorImp(d, m) : '';
@@ -4404,6 +4497,18 @@
       try { await api('POST', '/api/implantacoes/' + i.id + '/concluir', {}); toast('Implantação concluída.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
     };
     if ($('#btCartImp')) $('#btCartImp').onclick = function () { confirmarCarteiraImp(i, recarregar); };
+    if ($('#btPedirDir')) $('#btPedirDir').onclick = async function () {
+      try {
+        await api('PATCH', '/api/implantacoes/' + i.id, { formulario: lerFormImp(parceiros) });
+        await api('POST', '/api/implantacoes/' + i.id + '/diretoria', {});
+        toast('Enviado à diretoria.', 'ok'); recarregar();
+      } catch (e) { toast(e.message, 'erro'); recarregar(); }
+    };
+    var decidir = async function (aprovar) {
+      try { await api('POST', '/api/implantacoes/' + i.id + '/aprovacao', { aprovar: aprovar, taxa_adm: numCr($('#dTaxa').value), boleto: numCr($('#dBol').value), observacao: $('#dObs').value }); toast(aprovar ? 'Aprovado; o executivo foi avisado.' : 'Não aprovado; o executivo foi avisado.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+    };
+    if ($('#btDirSim')) $('#btDirSim').onclick = function () { decidir(true); };
+    if ($('#btDirNao')) $('#btDirNao').onclick = function () { decidir(false); };
     if (!pd.editar) {
       $$('input, select, textarea, button', raiz).forEach(function (el) { el.disabled = true; });
       $$('[data-tirar], [data-tirar-parceiro], [data-tirar-contato], #btExtraImp, #btParcImp, #btContatoImp', raiz).forEach(function (el) { el.hidden = true; });

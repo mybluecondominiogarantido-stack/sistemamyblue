@@ -339,3 +339,98 @@ test('Carteira: a coordenação confere os dados (ID Vouch e envio vêm das etap
   await equipe('POST', `/api/implantacoes/${idI2}/iniciar`, {});
   assert.equal((await equipe('PATCH', `/api/implantacoes/${idI2}/etapas`, { etapas: { vouch: { id: '90001' } } })).status, 409);
 });
+
+/* ===================== parte 3: condomínio de entrega e análise anterior ao portal ===================== */
+let diretor;
+test('condomínio de entrega: a diretoria aprova taxa e boleto; sem CNPJ e documentos chegam depois', async () => {
+  diretor = await pessoa('Diretor Fictício', 'diretor@teste.com');
+  assert.equal((await admin('PUT', '/api/credito/diretoria', { pessoas: [ids['diretor@teste.com']] })).status, 200);
+  const { id } = (await exec('POST', '/api/implantacoes', { origem: 'entrega' })).json;
+  let d = (await exec('GET', `/api/implantacoes/${id}`)).json;
+  assert.equal(d.implantacao.origem, 'entrega');
+  assert.ok(d.pode.pedir_diretoria);
+  assert.deepEqual(d.documentos_obrigatorios, []);
+  assert.ok(d.faltas[0].startsWith('Pedir a aprovação da diretoria'));
+  let r = await exec('POST', `/api/implantacoes/${id}/diretoria`, {});
+  assert.equal(r.status, 400);
+  assert.ok(r.json.faltas.some((f) => /construtora/.test(f)));
+  const ENTREGA = { ...FORM, nome: 'Condomínio Modelo Fictício', cnpj: '', sem_cnpj: true, entrega: true, construtora: 'Construtora Exemplo', construtora_contato: 'contato@exemplo.com',
+    uh_total: 120, taxa_ordinaria: 650, taxa_adm: 3.5, boleto: 2 };
+  assert.equal((await exec('PATCH', `/api/implantacoes/${id}`, { formulario: ENTREGA })).status, 200);
+  assert.equal((await exec('POST', `/api/implantacoes/${id}/diretoria`, {})).status, 200);
+  assert.match((await avisosDe('diretor@teste.com')).pop().titulo, /^Aprovar taxa e boleto · condomínio de entrega/);
+  assert.equal((await exec('PATCH', `/api/implantacoes/${id}`, { formulario: ENTREGA })).status, 403); // com a diretoria não muda
+  assert.equal((await diretor('GET', '/api/implantacoes?vis=diretoria')).json.implantacoes[0].id, id);
+  assert.equal((await diretor('GET', '/api/implantacoes/resumo')).json.diretoria, 1);
+  assert.equal((await exec('POST', `/api/implantacoes/${id}/aprovacao`, { aprovar: true, taxa_adm: 3, boleto: 2 })).status, 403);
+  assert.equal((await diretor('POST', `/api/implantacoes/${id}/aprovacao`, { aprovar: false })).status, 400);
+  r = await diretor('POST', `/api/implantacoes/${id}/aprovacao`, { aprovar: true, taxa_adm: 3.25, boleto: 2 });
+  assert.equal(r.status, 200, r.texto);
+  assert.match((await avisosDe('exec@teste.com')).pop().titulo, /^Taxa e boleto aprovados/);
+  d = (await exec('GET', `/api/implantacoes/${id}`)).json;
+  assert.equal(d.implantacao.etapa, 'rascunho');
+  assert.equal(d.implantacao.formulario.taxa_adm, 3.25);
+  assert.deepEqual(d.diferencas, []);
+  // sem CNPJ e sem os documentos de enxoval: envia, e tudo vira pendência
+  const env = await exec('POST', `/api/implantacoes/${id}/enviar`, {});
+  assert.equal(env.status, 200, env.texto);
+  assert.equal(env.json.pendencias[0], 'CNPJ do condomínio');
+  assert.ok(env.json.pendencias.includes('Convenção do condomínio'));
+  assert.match((await avisosDe('coord@teste.com')).find((x) => /Condomínio Modelo Fictício/.test(x.titulo)).texto, /condomínio de entrega/);
+});
+
+const temLeitor = (() => { try { require('child_process').execFileSync('pdftotext', ['-v'], { stdio: 'ignore' }); require('child_process').execFileSync('python3', ['-c', 'import reportlab'], { stdio: 'ignore' }); return true; } catch { return false; } })();
+async function retornoFicticio(protocolo) {
+  const R = require('../server/credito/retorno');
+  const { analisar } = require('../server/credito/motor');
+  const lanc = (c, valor) => ({ competencia: c, vencimento: `${c}-10`, tipo: 'ordinaria', valor });
+  const formulario = { razao_social: 'Residencial Fictício Antigo', cnpj: '11.444.777/0001-61', uf: 'PB', cidade: 'Cidade Exemplo', tipo_contratacao: 'nova',
+    executivo: { nome: 'Executiva Fictícia', uf: 'PB' }, uh_total: 30, taxa_ordinaria: 500, dia_vencimento: 5, desconto_pontualidade: { tipo: 'nenhum' }, sindico: { tipo: 'profissional', isencao: 'nao' } };
+  const hoje = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+  const meses = [3, 2, 1].map((k) => { const d = new Date(); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - k); return d.toISOString().slice(0, 7); });
+  const r = analisar({ formulario, convencao: { presente: true, registro: 'RI', uh: 30 }, relatorio: { presente: true, data_emissao: hoje, tem_competencia: true, tem_nomes: true,
+    unidades: [{ unidade: '101', titular: 'Titular Fictício', lancamentos: meses.map((c) => lanc(c, 500)) }] } }, undefined, { hoje });
+  return (await R.gerarPdf(R.montarDados(r, { formulario, protocolo, analista: 'Analista Fictício', emissao: hoje }))).pdf;
+}
+
+test('análise anterior ao portal: o portal lê o PDF do retorno, confere e abre a implantação', { skip: !temLeitor && 'pdftotext ou reportlab não instalados' }, async () => {
+  const pdf = await retornoFicticio('AC-2026-0915');
+  const enviar = (c, acao, extra = {}) => c('POST', `/api/implantacoes/pdf?acao=${acao}`, pdf, { headers: { 'content-type': 'application/pdf', 'x-nome-arquivo': 'retorno.pdf', ...extra } });
+  assert.equal((await outro('POST', '/api/implantacoes/pdf?acao=ler', pdf)).status, 403);
+  assert.equal((await exec('POST', '/api/implantacoes/pdf?acao=ler', Buffer.from('não é pdf'))).status, 400);
+  const lido = (await enviar(exec, 'ler')).json;
+  assert.equal(lido.situacao, 'valida');
+  assert.deepEqual([lido.lido.protocolo, lido.lido.razao_social, lido.lido.cnpj, lido.lido.resultado, lido.lido.uh_total, lido.lido.taxa_ordinaria],
+    ['AC-2026-0915', 'Residencial Fictício Antigo', '11.444.777/0001-61', 'aprovada', 30, 500]);
+  assert.ok(lido.lido.taxa_adm > 0 && lido.lido.boleto === 2);
+  const r = await enviar(exec, 'criar');
+  assert.equal(r.status, 201, r.texto);
+  const d = (await exec('GET', `/api/implantacoes/${r.json.id}`)).json;
+  assert.equal(d.implantacao.origem, 'pdf');
+  assert.equal(d.implantacao.analise_protocolo, 'AC-2026-0915');
+  assert.equal(d.implantacao.formulario.taxa_ordinaria, 500);
+  assert.equal(d.implantacao.referencia.taxa_adm, lido.lido.taxa_adm);
+  assert.deepEqual(d.documentos.map((x) => x.tipo), ['analise_credito']);
+  assert.match(d.implantacao.formulario.observacoes, /Próximos passos da análise/);
+  assert.equal((await enviar(exec, 'criar')).status, 409); // o mesmo PDF não abre duas
+});
+
+test('análise anterior ao portal com mais de 90 dias: liberação do gestor pelo próprio PDF', { skip: !temLeitor && 'pdftotext ou reportlab não instalados' }, async () => {
+  const pdf = await retornoFicticio('AC-2025-0101');
+  // a data do retorno é a de hoje; para simular uma análise antiga, o pedido vai com a data de 100 dias atrás
+  const leitor = require('../server/implantacoes/pdf');
+  const original = leitor.lerRetorno;
+  const antiga = new Date(Date.now() - 100 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+  leitor.lerRetorno = (t) => ({ ...original(t), data: antiga });
+  try {
+    const enviar = (acao, extra = {}) => exec('POST', `/api/implantacoes/pdf?acao=${acao}`, pdf, { headers: { 'content-type': 'application/pdf', ...extra } });
+    assert.equal((await enviar('ler')).json.situacao, 'vencida');
+    assert.equal((await enviar('criar')).status, 409);
+    assert.equal((await enviar('liberar', { 'x-motivo': encodeURIComponent('Contrato assinado depois') })).status, 201);
+    assert.equal((await enviar('ler')).json.situacao, 'aguardando_gestor');
+    const lib = (await gestorCr('GET', '/api/implantacoes/liberacoes')).json.liberacoes.find((x) => x.protocolo === 'AC-2025-0101');
+    assert.equal(lib.do_pdf, true);
+    assert.equal((await gestorCr('POST', `/api/implantacoes/liberacoes/${lib.id}/decidir`, { aprovar: true })).status, 200);
+    assert.equal((await enviar('criar')).status, 201);
+  } finally { leitor.lerRetorno = original; }
+});

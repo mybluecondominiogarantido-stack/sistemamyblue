@@ -584,9 +584,13 @@ CREATE TABLE IF NOT EXISTS implantacao_eventos (
 CREATE INDEX IF NOT EXISTS idx_implantacao_eventos ON implantacao_eventos(implantacao_id, criado_em);
 
 -- análise liberada há mais dias que a política permite: o gestor da Análise de Crédito libera (ou não) para implantar
+-- (análise do portal: analise_id. PDF de análise anterior ao portal: protocolo, condomínio e data lidos do PDF)
 CREATE TABLE IF NOT EXISTS implantacao_liberacoes (
   id SERIAL PRIMARY KEY,
-  analise_id INTEGER NOT NULL REFERENCES analises(id) ON DELETE CASCADE,
+  analise_id INTEGER REFERENCES analises(id) ON DELETE CASCADE,
+  protocolo TEXT,
+  condominio TEXT,
+  data_analise DATE,
   pedido_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
   pedido_em TIMESTAMPTZ NOT NULL DEFAULT now(),
   motivo TEXT NOT NULL DEFAULT '',

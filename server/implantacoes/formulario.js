@@ -72,8 +72,11 @@ function daAnalise(a) {
   };
 }
 
+/* condomínio de entrega (em enxoval): os documentos obrigatórios ainda não existem, então podem chegar depois */
+const docsObrigatorios = (origem) => (origem === 'entrega' ? [] : Object.keys(DOCUMENTOS).filter((t) => DOCUMENTOS[t].obrigatorio));
+
 /* o que falta para enviar ao setor (bloqueia o envio) */
-function faltas(f, { docs = new Set(), origem, executivoId } = {}) {
+function faltas(f, { docs = new Set(), origem, executivoId, referencia = {} } = {}) {
   const l = [];
   const exige = (cond, msg) => { if (!cond) l.push(msg); };
   exige(texto(f.nome), 'Informar o nome do condomínio.');
@@ -110,13 +113,29 @@ function faltas(f, { docs = new Set(), origem, executivoId } = {}) {
   exige(texto(f.consultor_nome), 'Informar o consultor do condomínio.');
   exige(digitos(f.consultor_telefone).length >= 10 || emailOk(f.consultor_email), 'Informar o telefone ou o e-mail do consultor.');
   exige(executivoId, 'Escolher o executivo de negócios.');
-  for (const [tipo, d] of Object.entries(DOCUMENTOS)) if (d.obrigatorio && !docs.has(tipo)) l.push(`Anexar: ${d.nome}.`);
+  if (origem === 'entrega' && !(referencia && referencia.aprovado_em)) l.unshift('Pedir a aprovação da diretoria (taxa administrativa e boleto).');
+  for (const tipo of docsObrigatorios(origem)) if (!docs.has(tipo)) l.push(`Anexar: ${DOCUMENTOS[tipo].nome}.`);
+  return l;
+}
+
+/* condomínio de entrega: o mínimo para a diretoria aprovar taxa e boleto */
+function faltasEntrega(f) {
+  const l = [];
+  if (!texto(f.nome)) l.push('Informar o nome do condomínio.');
+  if (!f.sem_cnpj && !cnpjOk(f.cnpj)) l.push('Informar um CNPJ válido, ou marcar "Ainda não tem CNPJ".');
+  if (!/^[A-Z]{2}$/.test(texto(f.uf))) l.push('Informar o estado do contrato.');
+  if (!(num(f.uh_total) > 0)) l.push('Informar o número de unidades.');
+  if (!(num(f.taxa_ordinaria) > 0)) l.push('Informar a taxa ordinária prevista.');
+  if (!texto(f.construtora)) l.push('Informar a construtora.');
+  if (!(num(f.taxa_adm) > 0)) l.push('Informar a taxa administrativa proposta.');
+  if (!(num(f.boleto) > 0)) l.push('Informar o valor do boleto proposto.');
   return l;
 }
 
 /* o que pode chegar depois do envio: vira alerta ao executivo até chegar */
-function pendencias(f, docs = new Set()) {
-  const l = Object.entries(DOCUMENTOS).filter(([tipo, d]) => d.pendente && !docs.has(tipo)).map(([, d]) => d.nome);
+function pendencias(f, docs = new Set(), origem = '') {
+  const tipos = Object.keys(DOCUMENTOS).filter((t) => DOCUMENTOS[t].pendente || (origem === 'entrega' && DOCUMENTOS[t].obrigatorio));
+  const l = tipos.filter((t) => !docs.has(t)).map((t) => DOCUMENTOS[t].nome);
   if (f.sem_cnpj) l.unshift('CNPJ do condomínio');
   return l;
 }
@@ -195,5 +214,19 @@ function conferirCadastro(linhas) {
   return { unidades: unidades.size, tem_documento: colDoc >= 0, documentos_invalidos: invalidos, sem_documento: semDocumento };
 }
 
-module.exports = { DOCUMENTOS, GARANTIAS, RECEITAS_CASHBACK, ONBOARDING, ENVIO, ENVIO_CARTEIRA, cpfValido, cnpjOk, daAnalise, faltas, pendencias, diferencas,
+/* formulário e referência a partir do PDF de uma análise feita antes do portal (server/implantacoes/pdf.js) */
+function doPdf(r) {
+  const comum = {
+    uh_total: r.uh_total, taxa_ordinaria: r.taxa_ordinaria, desconto_tipo: r.desconto_tipo || 'nenhum', desconto_valor: null,
+    sindico_tipo: r.sindico_tipo || '', sindico_isencao: r.sindico_isencao || '', taxa_adm: r.taxa_adm, boleto: r.boleto,
+  };
+  const notas = [r.observacoes ? `Observações da análise ${r.protocolo}: ${r.observacoes}` : '', ...(r.observacoes_juridicas || []).map((x) => `• ${x}`),
+    (r.proximos_passos || []).length ? `Próximos passos da análise: ${r.proximos_passos.map((x, k) => `${k + 1}. ${x}`).join(' ')}` : ''].filter(Boolean);
+  return {
+    formulario: { ...comum, nome: texto(r.razao_social), cnpj: texto(r.cnpj), uf: texto(r.uf), cidade: texto(r.cidade), entrega: false, taxas_extras: [], observacoes: notas.join('\n').slice(0, 4000) },
+    referencia: { ...comum, desconto_tipo: r.desconto_tipo || null, sindico_isencao: r.sindico_isencao || null, dia_vencimento: null, protocolo: r.protocolo, resultado: r.resultado, data: r.data },
+  };
+}
+
+module.exports = { DOCUMENTOS, GARANTIAS, RECEITAS_CASHBACK, ONBOARDING, ENVIO, ENVIO_CARTEIRA, cpfValido, cnpjOk, daAnalise, doPdf, faltas, faltasEntrega, pendencias, diferencas, docsObrigatorios,
   normalizarEtapas, faltasEtapas, conferirCadastro };
