@@ -14,6 +14,8 @@
  *   admin       só a administração
  *   credito     quem usa a Análise de Crédito (executivos cadastrados, analistas e diretoria)
  *   credito_analise  analistas (setor da política) e diretoria da Análise de Crédito
+ *   implantacao      quem usa a Implantação (executivos cadastrados, setor Implantação e diretoria)
+ *   implantacao_setor  o setor Implantação
  *   { modulo }  quem abre aquela ferramenta
  * O administrador vê todos.
  */
@@ -24,6 +26,7 @@ const ROTULO_PUBLICO = {
   todos: 'Para todos', equipe: 'Para quem atende tickets', lider: 'Para líderes de setor', gestor: 'Para coordenadores e supervisores',
   supervisao: 'Para a supervisão de tickets', links: 'Para quem edita a Central de Links', admin: 'Para a administração',
   credito: 'Para executivos de negócios e a Análise de Crédito', credito_analise: 'Para analistas de crédito e a diretoria',
+  implantacao: 'Para executivos de negócios e o setor Implantação', implantacao_setor: 'Para o setor Implantação',
 };
 
 const TUTORIAIS = [
@@ -71,6 +74,10 @@ const TUTORIAIS = [
     descricao: 'Preencher a solicitação, anexar a convenção e o relatório, enviar, responder pendências, abrir o retorno e pedir reanálise.' },
   { slug: 'credito-analisar', grupo: 'Ferramentas', publico: 'credito_analise', titulo: 'Análise de Crédito — analisar e liberar',
     descricao: 'Assumir da fila, lançar o relatório, conferir a convenção, calcular, ver a prévia, levar à diretoria e liberar o retorno.' },
+  { slug: 'implantacao-solicitar', grupo: 'Ferramentas', publico: 'implantacao', titulo: 'Implantação — pedir e acompanhar',
+    descricao: 'Abrir a implantação a partir da análise (ou de um PDF antigo, ou de um condomínio de entrega), preencher o formulário, anexar os documentos, enviar e acompanhar.' },
+  { slug: 'implantacao-conduzir', grupo: 'Ferramentas', publico: 'implantacao_setor', titulo: 'Implantação — designar, conduzir e levar à Carteira',
+    descricao: 'Designar quem conduz, as 5 etapas, as conferências, devolver com pendência, concluir e confirmar a entrada na Carteira.' },
   { slug: 'gestao-usuarios', grupo: 'Gestão do setor', publico: 'gestor', titulo: 'Usuários do setor',
     descricao: 'Criar o acesso de alguém do setor, liberar ferramentas e redefinir a senha.' },
   { slug: 'gestao-ferramentas', grupo: 'Gestão do setor', publico: 'gestor', titulo: 'Ferramentas do setor',
@@ -101,6 +108,7 @@ async function visibilidade(db, seg, u) {
   const dir = await db.um("SELECT regra->'pessoas' AS p FROM regras_acesso WHERE chave = 'credito.diretoria'");
   const diretoria = !!(dir && Array.isArray(dir.p) && dir.p.includes(u.id));
   const executivo = !!(await db.um('SELECT 1 FROM executivos WHERE usuario_id = $1 AND ativo', [u.id]));
+  const setorImplantacao = !!(await db.um("SELECT 1 FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id WHERE sm.usuario_id = $1 AND s.nome = 'Implantação'", [u.id]));
   const regra = {
     todos: true,
     equipe: membro.length > 0 || sup,
@@ -110,6 +118,8 @@ async function visibilidade(db, seg, u) {
     links: !!u.editor_links,
     credito: analista || diretoria || executivo,
     credito_analise: analista || diretoria,
+    implantacao: executivo || setorImplantacao || diretoria,
+    implantacao_setor: setorImplantacao,
     admin: false,
   };
   return (t) => (typeof t.publico === 'string' ? !!regra[t.publico] : mods.has(t.publico.modulo));

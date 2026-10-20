@@ -3284,6 +3284,7 @@
     var s = String(v == null ? '' : v).trim().replace(/[R$\s%]/g, '');
     if (!s) return null;
     if (/,\d{1,2}$/.test(s) || (s.indexOf(',') >= 0 && s.indexOf('.') >= 0)) s = s.replace(/\./g, '').replace(',', '.');
+    else if (/^-?\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, ''); // "1.840" (milhar, como o fmtNumCr mostra) é 1840, não 1,84
     else s = s.replace(',', '.');
     var n = Number(s);
     return isFinite(n) ? n : null;
@@ -4417,8 +4418,10 @@
     }
     var i = d.implantacao, pd = d.pode;
     var recarregar = function () { paginaImplantacaoDetalhe(id); atualizarImp(); };
-    var acoes = '<a class="btn ghost sm" href="#/implantacao">Voltar</a>';
-    if (pd.cancelar) acoes += '<button class="btn danger sm" id="btCancImp">Cancelar implantação</button>';
+    var acoes = '<a class="btn ghost sm" href="#/implantacao">Voltar</a>' +
+      '<a class="btn ghost sm" href="/api/implantacoes/' + i.id + '/formulario.pdf" target="_blank" rel="noopener" title="Exportar o formulário em PDF">' + IC.documento + 'PDF</a>';
+    // cancelar fica fora da barra enquanto o setor conduz (a barra tem as ações do dia a dia)
+    if (pd.cancelar && ['em_implantacao', 'concluida'].indexOf(i.etapa) < 0) acoes += '<button class="btn danger sm" id="btCancImp">Cancelar</button>';
     if (pd.designar) acoes += '<button class="btn ' + (i.responsavel_id ? 'ghost' : 'primary') + ' sm" id="btDesigImp">' + (i.responsavel_id ? 'Redesignar' : 'Designar') + '</button>';
     if (pd.iniciar) acoes += '<button class="btn primary sm" id="btIniImp">Iniciar implantação</button>';
     if (pd.pendencia) acoes += '<button class="btn ghost sm" id="btPendImp">Devolver com pendência</button>';

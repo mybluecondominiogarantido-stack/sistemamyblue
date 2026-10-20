@@ -20,6 +20,7 @@ function cliente() {
     const r = await fetch(base + url, { method: metodo, headers, body, redirect: 'manual' });
     const sc = r.headers.get('set-cookie');
     if (sc) cookie = sc.split(';')[0].endsWith('=') ? '' : sc.split(';')[0];
+    if (opts.bruto) return { status: r.status, headers: r.headers, buffer: Buffer.from(await r.arrayBuffer()) };
     const texto = await r.text();
     let json = null;
     try { json = JSON.parse(texto); } catch { /* não é JSON */ }
@@ -433,4 +434,15 @@ test('análise anterior ao portal com mais de 90 dias: liberação do gestor pel
     assert.equal((await gestorCr('POST', `/api/implantacoes/liberacoes/${lib.id}/decidir`, { aprovar: true })).status, 200);
     assert.equal((await enviar('criar')).status, 201);
   } finally { leitor.lerRetorno = original; }
+});
+
+test('formulário em PDF: quem vê a implantação exporta, com as seções, a parceria e o andamento do setor', { skip: !temLeitor && 'pdftotext ou reportlab não instalados' }, async () => {
+  assert.equal((await outro('GET', `/api/implantacoes/${idI}/formulario.pdf`, undefined, { bruto: true })).status, 404);
+  const r = await exec('GET', `/api/implantacoes/${idI}/formulario.pdf`, undefined, { bruto: true });
+  assert.equal(r.status, 200);
+  assert.equal(r.headers.get('content-type'), 'application/pdf');
+  assert.equal(r.buffer.subarray(0, 5).toString('latin1'), '%PDF-');
+  const texto = require('child_process').execFileSync('pdftotext', ['-', '-'], { input: r.buffer }).toString();
+  for (const trecho of [/IMP-\d{4}-\d{2}-\d{2}-01/, /Condomínio Residencial Fictício/, /Diferente da análise/, /3,50% \(análise: 3,00%\)/, /Alfa Administradora/, /definido pelo setor Parceiros/,
+    /ANDAMENTO NO SETOR/, /ID 90001/, /Contato Fictício/]) assert.match(texto, trecho);
 });

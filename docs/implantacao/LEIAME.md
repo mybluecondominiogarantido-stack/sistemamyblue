@@ -74,9 +74,19 @@ Análise de Crédito.
   duas implantações; análise que está no portal usa a origem do portal. O PDF entra nos documentos como "Análise de
   Crédito".
 
-## Próximas etapas
+## Formulário em PDF
 
-- Formulário em PDF e tutoriais em vídeo.
+Botão **PDF** na implantação (quem a vê pode exportar): `GET /api/implantacoes/:id/formulario.pdf`. O conteúdo é
+montado em `server/implantacoes/formulario-pdf.js` e desenhado por `server/implantacoes/formulario_pdf.py` (ReportLab,
+no visual do Retorno de Análise de Crédito): cabeçalho com o protocolo, faixa do condomínio, diferenças em relação à
+análise, os 7 blocos, documentos (entregues e pendentes) e o andamento no setor.
+
+## Tutoriais
+
+No catálogo (`server/tutoriais.js`): `implantacao-solicitar` (executivos, setor Implantação e diretoria) e
+`implantacao-conduzir` (setor Implantação). Roteiros em `docs/tutoriais/fonte/roteiros.js`; no cenário de gravação, a
+coordenadora e o analista de implantação fictícios. Os vídeos são gravados com `docs/tutoriais/fonte/gravar-tutoriais.js`
+e enviados em Administração → Tutoriais.
 
 ## Dados
 

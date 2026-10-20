@@ -24,6 +24,7 @@ const { normalizar: normalizarCarteira, semAcento } = require('../carteira');
 const { apelido } = require('../implantacao');
 const F = require('../implantacoes/formulario');
 const leitorPdf = require('../implantacoes/pdf');
+const formularioPdf = require('../implantacoes/formulario-pdf');
 
 const SETOR = 'Implantação';
 const ETAPAS = ['rascunho', 'diretoria', 'fila', 'em_implantacao', 'pendencia', 'concluida', 'na_carteira', 'cancelada'];
@@ -392,6 +393,27 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
       pendencias: F.pendencias(i.formulario, docs, i.origem),
       diferencas: F.diferencas(i.formulario, i.referencia),
     });
+  });
+
+  /* formulário em PDF (quem vê a implantação pode exportar) */
+  r.get('/api/implantacoes/:id/formulario.pdf', async (req, res) => {
+    const c = await carregar(req, res);
+    if (!c) return;
+    const { i } = c;
+    const info = await db.um(`SELECT e.nome AS executivo_nome, ur.nome AS responsavel_nome FROM implantacoes i LEFT JOIN executivos e ON e.id = i.executivo_id
+      LEFT JOIN usuarios ur ON ur.id = i.responsavel_id WHERE i.id = $1`, [i.id]);
+    const documentos = (await db.q('SELECT tipo, nome, enviado_em, substituido_em FROM implantacao_documentos WHERE implantacao_id = $1 ORDER BY id', [i.id])).rows;
+    const origemTexto = i.origem === 'analise' ? `Análise de Crédito ${i.analise_protocolo || ''}` : i.origem === 'pdf' ? `análise anterior ao portal ${i.analise_protocolo || ''}` : 'condomínio de entrega';
+    let pdf;
+    try {
+      pdf = await formularioPdf.gerarPdf(formularioPdf.montarDados(i, { executivo: info.executivo_nome, responsavel: info.responsavel_nome, documentos,
+        diferencas: F.diferencas(i.formulario, i.referencia), usuario: req.usuario.nome, origemTexto }));
+    } catch (e) { return erro(res, 500, e.message); }
+    const nome = `Formulario_Implantacao_${String(i.condominio || 'condominio').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '')}_${i.protocolo || 'rascunho'}.pdf`;
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(nome)}`);
+    res.set('Cache-Control', 'private, no-store');
+    res.send(pdf);
   });
 
   /* ===================== formulário ===================== */
