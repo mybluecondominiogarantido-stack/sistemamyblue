@@ -3271,7 +3271,7 @@
     criada: 'criou a solicitação', formulario: 'alterou o formulário', documento: 'anexou um documento', documento_removido: 'removeu um documento',
     enviada: 'enviou para análise', reenviada: 'reenviou depois da pendência', assumida: 'assumiu a análise', motor: 'calculou a análise', ajuste: 'ajustou um valor',
     pendencia: 'devolveu com pendência', diretoria: 'enviou à diretoria', chancelada: 'chancelou', chancela_recusada: 'não chancelou', liberada: 'liberou o retorno',
-    reanalise_pedida: 'pediu reanálise', cancelada: 'cancelou',
+    reanalise_pedida: 'pediu reanálise', cancelada: 'cancelou', leitura: 'leu o PDF com IA', leitura_erro: 'não conseguiu ler o PDF com IA',
   };
 
   function etqCr(mapa, k) { return k && mapa[k] ? etq(mapa[k]) : ''; }
@@ -3448,6 +3448,35 @@
     };
   }
 
+  function htmlFaltasCr(lista) {
+    return lista.length ? '<div class="msg aviso"><b>Para enviar, falta:</b><ul style="margin:6px 0 0;padding-left:18px">' + lista.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>'
+      : '<div class="msg ok">Tudo preenchido. Pode enviar para análise.</div>';
+  }
+  function cnpjValidoCr(v) {
+    var d = String(v || '').replace(/\D/g, '');
+    if (d.length < 11 || d.length > 14) return false;
+    d = ('00000000000000' + d).slice(-14);
+    if (/^(\d)\1+$/.test(d)) return false;
+    var dig = function (base) { var soma = 0; for (var i = 0; i < base.length; i++) soma += Number(base[base.length - 1 - i]) * ((i % 8) + 2); var r = soma % 11; return r < 2 ? 0 : 11 - r; };
+    return dig(d.slice(0, 12)) === Number(d[12]) && dig(d.slice(0, 13)) === Number(d[13]);
+  }
+  /* o mesmo que o servidor confere no envio, para a lista ir mudando enquanto a pessoa preenche */
+  function faltasCr(f, temExec, docs) {
+    var l = [];
+    if (!f.razao_social) l.push('Informar a razão social do condomínio.');
+    if (!cnpjValidoCr(f.cnpj)) l.push('Informar um CNPJ válido.');
+    if (!f.uf) l.push('Informar a UF do condomínio.');
+    if (['nova', 'portabilidade'].indexOf(f.tipo_contratacao) < 0) l.push('Escolher o tipo de contratação.');
+    if (!(f.uh_total > 0)) l.push('Informar a quantidade de unidades.');
+    if (!(f.taxa_ordinaria > 0)) l.push('Informar o valor da taxa ordinária.');
+    if (!(f.dia_vencimento >= 1 && f.dia_vencimento <= 31)) l.push('Informar o dia do vencimento (1 a 31).');
+    if (['profissional', 'condomino'].indexOf(f.sindico.tipo) < 0) l.push('Informar o tipo de síndico.');
+    if (!temExec) l.push('Escolher o executivo de negócios.');
+    if (!docs.relatorio) l.push('Anexar o relatório de contas a receber / inadimplência detalhado por competência.');
+    if (!docs.convencao && !f.sem_convencao) l.push('Anexar a convenção do condomínio (ou marcar que ela será entregue antes do contrato).');
+    return l;
+  }
+
   /* ---------- documentos ---------- */
   async function enviarDocCredito(id, tipo, arquivo) {
     var r = await fetch('/api/credito/analises/' + id + '/documentos', {
@@ -3463,8 +3492,8 @@
     m.tipos_documento.forEach(function (t) { nomeTipo[t.tipo] = t.nome; });
     nomeTipo.retorno_pdf = 'Retorno (PDF)';
     function lnk(x) {
-      return '<a class="anexo" href="/api/credito/analises/' + a.id + '/documentos/' + x.id + (x.mime === 'application/pdf' ? '?ver=1' : '') + '" target="_blank" rel="noopener">' + IC.documento + '<span>' + esc(x.nome) + '</span><span class="sec">' + tamanho(x.tamanho) + '</span></a>' +
-        (podeDocs && x.tipo !== 'retorno_pdf' ? '<button type="button" class="btn icon ghost" data-tirar-doc="' + x.id + '" aria-label="Remover ' + esc(x.nome) + '">' + IC.fechar + '</button>' : '');
+      return '<span class="doc-linha"><a class="anexo" href="/api/credito/analises/' + a.id + '/documentos/' + x.id + (x.mime === 'application/pdf' ? '?ver=1' : '') + '" target="_blank" rel="noopener">' + IC.documento + '<span>' + esc(x.nome) + '</span><span class="sec">' + tamanho(x.tamanho) + '</span></a>' +
+        (podeDocs && x.tipo !== 'retorno_pdf' ? '<button type="button" class="btn icon ghost" data-tirar-doc="' + x.id + '" aria-label="Remover ' + esc(x.nome) + '">' + IC.fechar + '</button>' : '') + '</span>';
     }
     function bloco(tipo, titulo, ajuda) {
       var atual = vig.filter(function (x) { return x.tipo === tipo; });
@@ -3484,22 +3513,23 @@
       (comSemConv ? '<label class="linha" style="font-weight:700;font-size:13px;color:var(--ink-2)"><input type="checkbox" id="fSemConv"' + (semConv ? ' checked' : '') + '> A convenção será entregue antes da assinatura do contrato (a análise sai com ressalva)</label>' : '') +
       '</div></section>';
   }
-  function ligarDocsCredito(a, recarregar) {
+  function ligarDocsCredito(a, recarregar, antes) {
+    antes = antes || function () { return Promise.resolve(); };
     $$('input[data-doc]').forEach(function (inp) {
       inp.onchange = async function () {
         if (!inp.files[0]) return;
-        try { await enviarDocCredito(a.id, inp.getAttribute('data-doc'), inp.files[0]); toast('Documento anexado.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+        try { await antes(); await enviarDocCredito(a.id, inp.getAttribute('data-doc'), inp.files[0]); toast('Documento anexado.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
       };
     });
     if ($('#arqOutro')) $('#arqOutro').onchange = async function () {
       var f = $('#arqOutro').files[0];
       if (!f) return;
-      try { await enviarDocCredito(a.id, $('#tipoOutro').value, f); toast('Documento anexado.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+      try { await antes(); await enviarDocCredito(a.id, $('#tipoOutro').value, f); toast('Documento anexado.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
     };
     $$('[data-tirar-doc]').forEach(function (b) {
       b.onclick = async function () {
         if (!(await confirmar('Remover documento', 'O arquivo sai desta solicitação.', 'Remover', true))) return;
-        try { await api('DELETE', '/api/credito/analises/' + a.id + '/documentos/' + b.getAttribute('data-tirar-doc')); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+        try { await antes(); await api('DELETE', '/api/credito/analises/' + a.id + '/documentos/' + b.getAttribute('data-tirar-doc')); recarregar(); } catch (e) { toast(e.message, 'erro'); }
       };
     });
   }
@@ -3546,7 +3576,29 @@
       var p = l.split(/\s+[—–-]\s+|;/); var o = {}; campos.forEach(function (c, i) { o[c] = (p[i] || '').trim(); }); return o;
     });
   }
-  function htmlDadosAnalista(d, editavel) {
+  /* lançamentos lançados → linhas da planilha (o analista vê e corrige o que a IA leu) */
+  function planilhaDeUnidadesCr(unidades) {
+    var rotTipo = { ordinaria: 'Taxa ordinária', extra: 'Taxa extra', agua_gas: 'Água/gás', acordo: 'Acordo', multa: 'Multa', juros: 'Juros', correcao: 'Correção', honorarios: 'Honorários', fundo_reserva: 'Fundo de reserva', outro: 'Outro' };
+    var l = [];
+    (unidades || []).forEach(function (u) {
+      (u.lancamentos || []).forEach(function (x) {
+        var c = String(x.competencia || '').split('-');
+        l.push([u.unidade, u.titular || '', u.documento || '', c.length === 2 ? c[1] + '/' + c[0] : x.competencia, rotTipo[x.tipo] || x.tipo, fmtNumCr(x.valor), x.vencimento ? dataBr(x.vencimento) : ''].join(';'));
+      });
+    });
+    return l.join('\n');
+  }
+  function leituraCr(doc, ia, tipo) {
+    if (!doc) return '<span class="ajuda" style="margin:0">Sem ' + (tipo === 'relatorio' ? 'relatório' : 'convenção') + ' em PDF anexado.</span>';
+    var st = doc.leitura === 'lendo' ? '<span class="etiqueta azul">lendo o PDF…</span>' : doc.leitura === 'ok' ? '<span class="etiqueta verde">lido pela IA em ' + dataHoraCr(doc.extraido_em) + ' · confira</span>'
+      : doc.leitura === 'erro' ? '<span class="etiqueta vermelha" title="' + esc(doc.leitura_erro) + '">não deu para ler</span>' : '';
+    var bt = ia ? '<button type="button" class="btn ghost sm" data-ler="' + tipo + '"' + (doc.leitura === 'lendo' ? ' disabled' : '') + '>' + (doc.leitura === 'ok' ? 'Ler de novo com IA' : 'Ler PDF com IA') + '</button>'
+      : '<span class="ajuda" style="margin:0">Leitura por IA desligada (falta ANTHROPIC_API_KEY no servidor).</span>';
+    return st + bt + (doc.leitura === 'erro' ? '<div class="msg erro" style="width:100%;margin-top:8px">' + esc(doc.leitura_erro) + '</div>' : '');
+  }
+  function fonteCr(f) { return f && (f.pagina || f.trecho) ? '<div class="ajuda" style="margin-top:4px">' + (f.pagina ? 'p. ' + f.pagina : '') + (f.trecho ? ' · “' + esc(f.trecho) + '”' : '') + '</div>' : ''; }
+  function htmlDadosAnalista(d, editavel, docs, ia) {
+    docs = docs || {};
     var rel = d.relatorio || {};
     var conv = d.convencao || {};
     var aj = d.ajustes || {};
@@ -3554,15 +3606,23 @@
     var dis = editavel ? '' : ' disabled';
     return '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Relatório de inadimplência</h2><span class="espaco"></span><span class="etiqueta ' + ((rel.unidades || []).length || rel.sem_inadimplencia ? 'verde' : 'ambar') + '">' +
       ((rel.unidades || []).length ? (rel.unidades || []).length + ' unidades lançadas' : rel.sem_inadimplencia ? 'sem inadimplência' : 'falta lançar') + '</span></div><div class="corpo pilha">' +
+      (editavel ? '<div class="linha">' + leituraCr(docs.relatorio, ia, 'relatorio') + '</div>' : '') +
+      (rel.origem && rel.origem.ia ? '<div class="msg ' + (rel.origem.legivel === false || (rel.origem.observacoes || []).length ? 'aviso' : 'ok') + '">Lido pela IA' + (rel.sistema ? ' · relatório ' + esc(rel.sistema) : '') + ': ' + (rel.unidades || []).length + ' unidades, ' +
+        (rel.unidades || []).reduce(function (n, u) { return n + (u.lancamentos || []).length; }, 0) + ' lançamentos' + (rel.origem.fonte_emissao && rel.origem.fonte_emissao.pagina ? '; emissão na p. ' + rel.origem.fonte_emissao.pagina : '') + '. Confira com o PDF antes de calcular.' +
+        ((rel.origem.observacoes || []).length ? '<ul style="margin:6px 0 0;padding-left:18px">' + rel.origem.observacoes.map(function (o) { return '<li>' + esc(o) + '</li>'; }).join('') + '</ul>' : '') + '</div>' : '') +
       '<div class="grade-4">' + campoCr('dEmis', 'Data de emissão do relatório', rel.data_emissao || '', { tipo: 'date', dis: !editavel }) + campoCr('dIni', 'Primeira competência do relatório', rel.periodo_inicio || '', { tipo: 'month', dis: !editavel }) +
       '<label class="linha" style="font-weight:700;font-size:13px;align-self:end"><input type="checkbox" id="dComp"' + (rel.tem_competencia !== false ? ' checked' : '') + dis + '> detalhado por competência</label>' +
       '<label class="linha" style="font-weight:700;font-size:13px;align-self:end"><input type="checkbox" id="dNomes"' + (rel.tem_nomes !== false ? ' checked' : '') + dis + '> traz o nome dos devedores</label></div>' +
-      (editavel ? '<div><label class="rot" for="dCola">Colar a planilha (unidade ; titular ; CPF/CNPJ ; competência ; tipo ; valor ; vencimento)</label><textarea class="campo" id="dCola" rows="5" placeholder="A-101;Fulano;111.111.111-11;04/2026;Taxa ordinária;1.840,00"></textarea>' +
+      (editavel ? '<div><label class="rot" for="dCola">Lançamentos (unidade ; titular ; CPF/CNPJ ; competência ; tipo ; valor ; vencimento) — cole a planilha ou corrija o que a IA leu e clique em Ler planilha</label><textarea class="campo" id="dCola" rows="' + ((rel.unidades || []).length ? 10 : 5) + '" placeholder="A-101;Fulano;111.111.111-11;04/2026;Taxa ordinária;1.840,00" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px">' + esc(planilhaDeUnidadesCr(rel.unidades)) + '</textarea>' +
         '<div class="linha" style="margin-top:8px"><button type="button" class="btn ghost sm" id="btColar">Ler planilha</button><label class="linha" style="font-weight:700;font-size:13px"><input type="checkbox" id="dSemInad"' + (rel.sem_inadimplencia ? ' checked' : '') + '> não há inadimplência no período</label><span class="ajuda" id="dColaInfo" style="margin:0"></span></div></div>' : '') +
       '</div></section>' +
-      '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Convenção</h2></div><div class="corpo grade-4">' +
-      selCr('dReg', 'Registro', conv.registro || '', [['', 'Escolha'], ['RI', 'Registro de Imóveis (inclui Livro 3)'], ['cartorio', 'Cartório (sem especificar)'], ['RTD', 'Só Títulos e Documentos (RTD)'], ['nenhum', 'Sem registro']], !editavel) +
-      campoCr('dCuh', 'Nº de unidades na convenção', conv.uh || '', { dis: !editavel }) + campoCr('dMulta', 'Multa por atraso (%)', fmtNumCr(conv.multa_pct), { dis: !editavel }) + campoCr('dForo', 'Foro', conv.foro || '', { dis: !editavel }) +
+      '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Convenção</h2>' + (editavel ? '<span class="espaco"></span><div class="linha">' + leituraCr(docs.convencao, ia, 'convencao') + '</div>' : '') + '</div><div class="corpo grade-4">' +
+      (function () {
+        var fo = (conv.origem && conv.origem.fontes) || {};
+        var com = function (html, f) { return html.replace(/<\/div>$/, fonteCr(f) + '</div>'); };
+        return com(selCr('dReg', 'Registro', conv.registro || '', [['', 'Escolha'], ['RI', 'Registro de Imóveis (inclui Livro 3)'], ['cartorio', 'Cartório (sem especificar)'], ['RTD', 'Só Títulos e Documentos (RTD)'], ['nenhum', 'Sem registro']], !editavel), fo.registro) +
+          com(campoCr('dCuh', 'Nº de unidades na convenção', conv.uh || '', { dis: !editavel }), fo.uh) + com(campoCr('dMulta', 'Multa por atraso (%)', fmtNumCr(conv.multa_pct), { dis: !editavel }), fo.multa) + com(campoCr('dForo', 'Foro', conv.foro || '', { dis: !editavel }), fo.foro);
+      })() +
       campoCr('dCart', 'Cartório e matrícula', conv.cartorio || '', { dis: !editavel, span: 2 }) + campoCr('dClaus', 'Cláusula que limita garantidora (se houver)', conv.clausula_restritiva || '', { dis: !editavel, span: 2 }) + '</div></section>' +
       '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Espólios, retomadas e condições</h2></div><div class="corpo grade-3">' +
       '<div><label class="rot" for="dEsp">Espólios confirmados (Assertiva) — um por linha: unidade — nome</label><textarea class="campo" id="dEsp" rows="3"' + dis + '>' + esc(linhasCr(d.espolios, ['unidade', 'nome'])) + '</textarea></div>' +
@@ -3591,7 +3651,7 @@
     var textos = { observacoes_status: v('tObs') || undefined, observacoes_juridicas: linhas('tJur').length ? linhas('tJur') : undefined, proximos_passos: linhas('tPas').length ? linhas('tPas') : undefined };
     return Object.assign({}, d, {
       relatorio: rel,
-      convencao: { registro: v('dReg'), uh: numCr(v('dCuh')), multa_pct: numCr(v('dMulta')), foro: v('dForo'), cartorio: v('dCart'), clausula_restritiva: v('dClaus') },
+      convencao: { registro: v('dReg'), uh: numCr(v('dCuh')), multa_pct: numCr(v('dMulta')), foro: v('dForo'), cartorio: v('dCart'), clausula_restritiva: v('dClaus'), origem: (d.convencao || {}).origem },
       espolios: lerLinhasCr(v('dEsp'), ['unidade', 'nome']), retomadas: lerLinhasCr(v('dRet'), ['unidade', 'banco']), abandonos: lerLinhasCr(v('dAban'), ['unidade', 'motivo']),
       ressalvas: lerLinhasCr(v('dRess'), ['texto', 'justificativa']), condicao_estrutural: v('dEstr'), ajustes: ajustes, textos: textos,
     });
@@ -3621,6 +3681,8 @@
     definirBarra('<span class="setor">Análise de Crédito</span><span class="sep">/</span><span class="nome">' + esc(a.protocolo || 'Rascunho') + '</span>', acoes);
 
     var ultimaPend = d.eventos.filter(function (e) { return e.tipo === 'pendencia'; }).pop();
+    var docsVig = {};
+    d.documentos.forEach(function (x) { if (!x.substituido_em && x.mime === 'application/pdf' && ['relatorio', 'convencao'].indexOf(x.tipo) >= 0) docsVig[x.tipo] = x; });
     var retornoPdf = d.documentos.filter(function (x) { return x.tipo === 'retorno_pdf' && !x.substituido_em; })[0];
     var cab = '<div class="linha" style="align-items:flex-start;margin-bottom:16px"><div style="flex:1 1 420px">' +
       '<div class="linha" style="margin-bottom:6px">' + etqCr(ETAPA_CR, a.etapa) + (a.resultado && (pd.interno || a.etapa === 'enviada') ? etqCr(RES_CR, a.resultado) : '') +
@@ -3643,13 +3705,13 @@
         (a.validade_ate ? '<div class="ajuda">Proposta válida até ' + dataBr(String(a.validade_ate).slice(0, 10)) + '. Depois disso, ou se o condomínio mudar desconto, taxa extra ou inadimplência, peça reanálise.</div>' : '') + '</div>';
     }
     if (pd.editar) {
-      html += (d.faltas.length ? '<div class="msg aviso" style="margin-bottom:16px"><b>Para enviar, falta:</b><ul style="margin:6px 0 0;padding-left:18px">' + d.faltas.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>' : '') +
+      html += '<div id="faltasCr" style="margin-bottom:16px">' + htmlFaltasCr(d.faltas) + '</div>' +
         '<div class="pilha" style="gap:18px">' + htmlFormCredito(f, a, m, false) + htmlDocsCredito(d.documentos, a, pd.documentos, m, f.sem_convencao, true) +
-        '<div class="linha" style="justify-content:flex-end"><span class="ajuda" style="flex:1 1 320px;margin:0">Ao enviar, o portal confere o que falta. Se estiver tudo certo, gera o protocolo e o prazo começa a contar.</span>' +
+        '<div class="linha" style="justify-content:flex-end"><span class="ajuda" style="flex:1 1 320px;margin:0">Ao enviar, o portal confere o que falta. Se estiver tudo certo, gera o protocolo e o prazo começa a contar. <span id="salvoCr"></span></span>' +
         (pd.cancelar ? '<button class="btn danger" id="btCancCr">Cancelar solicitação</button>' : '') + '<button class="btn ghost" id="btSalvarCr">Salvar rascunho</button><button class="btn primary" id="btEnviarCr">' + (a.etapa === 'pendencia' ? 'Reenviar para análise' : 'Enviar para análise') + '</button></div></div>';
     } else if (pd.interno && a.etapa !== 'rascunho') {
       html += htmlResultadoCredito(a.resultado_motor) +
-        (pd.analisar ? htmlDadosAnalista(a.dados_analista || {}, true) + '<div class="linha" style="justify-content:flex-end;margin-bottom:18px"><button class="btn ghost" id="btSalvarDadosCr">Salvar dados</button><button class="btn primary" id="btCalcCr">Salvar e calcular</button></div>'
+        (pd.analisar ? htmlDadosAnalista(a.dados_analista || {}, true, docsVig, m.ia) + '<div class="linha" style="justify-content:flex-end;margin-bottom:18px"><button class="btn ghost" id="btSalvarDadosCr">Salvar dados</button><button class="btn primary" id="btCalcCr">Salvar e calcular</button></div>'
           : a.dados_analista ? htmlDadosAnalista(a.dados_analista, false) : '') +
         '<details class="painel" style="margin-bottom:16px"><summary class="cab-painel" style="cursor:pointer"><h2 style="display:inline">Formulário do executivo</h2></summary><div class="corpo pilha" style="gap:18px">' + htmlFormCredito(f, a, m, true) + '</div></details>' +
         htmlDocsCredito(d.documentos, a, pd.documentos, m, f.sem_convencao);
@@ -3660,23 +3722,42 @@
       d.eventos.map(function (e) {
         var x = e.detalhe || {};
         var extra = e.tipo === 'documento' || e.tipo === 'documento_removido' ? ': ' + esc(x.nome) : e.tipo === 'ajuste' ? ': ' + esc(x.campo) + ' → ' + esc(Array.isArray(x.valor) ? x.valor.join(', ') : x.valor) + ' (' + esc(x.justificativa) + ')'
+          : e.tipo === 'leitura' ? ': ' + (x.tipo === 'relatorio' ? 'relatório, ' + x.unidades + ' unidades e ' + x.lancamentos + ' lançamentos' : 'convenção') + (x.aplicada ? '' : ' (não trocou o que já estava lançado)')
+          : e.tipo === 'leitura_erro' ? ': ' + (x.tipo === 'relatorio' ? 'relatório' : 'convenção') + ' — ' + esc(x.erro)
           : e.tipo === 'motor' ? ': ' + esc(x.status) + (x.inad_media != null ? ', ' + pctCr(x.inad_media) : '') : e.tipo === 'enviada' ? ' (' + esc(x.protocolo) + ')' : (e.tipo === 'chancela_recusada' || e.tipo === 'chancelada') && x.observacao ? ': ' + esc(x.observacao) : '';
-        return '<div><b style="color:var(--ink)">' + dataHoraCr(e.criado_em) + '</b> · ' + esc(e.usuario_nome || 'Sistema') + ' ' + (EVENTO_CR[e.tipo] || esc(e.tipo)) + extra + '</div>';
+        return '<div><b style="color:var(--ink)">' + dataHoraCr(e.criado_em) + '</b> · ' + esc(e.usuario_nome || (e.tipo.indexOf('leitura') === 0 ? 'O portal' : 'Sistema')) + ' ' + (EVENTO_CR[e.tipo] || esc(e.tipo)) + extra + '</div>';
       }).join('') + '</div></section></div>';
     $('#conteudo').innerHTML = html;
-    ligarDocsCredito(a, recarregar);
+    if (!pd.editar) ligarDocsCredito(a, recarregar);
 
     if (pd.editar) {
       $('#btExtra').onclick = function () { $('#tbExtras').insertAdjacentHTML('beforeend', linhaExtraCr()); ligarTirar(); };
-      var ligarTirar = function () { $$('#tbExtras [data-tirar]').forEach(function (b) { b.onclick = function () { b.closest('tr').remove(); }; }); };
+      var ligarTirar = function () { $$('#tbExtras [data-tirar]').forEach(function (b) { b.onclick = function () { b.closest('tr').remove(); $('#conteudo .pagina').dispatchEvent(new Event('change')); }; }); };
       ligarTirar();
       var salvar = async function () {
         var corpo = { formulario: lerFormCredito() };
         if ($('#fExec')) corpo.executivo_id = Number($('#fExec').value);
         await api('PATCH', '/api/credito/analises/' + a.id, corpo);
       };
-      $('#btSalvarCr').onclick = async function () { try { await salvar(); toast('Rascunho salvo.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
+      ligarDocsCredito(a, recarregar, function () { clearTimeout(espera); return salvar(); });
+      // a lista do que falta muda enquanto a pessoa preenche; o rascunho se salva sozinho
+      var vig = d.documentos.filter(function (x) { return !x.substituido_em; });
+      var docs = { relatorio: vig.some(function (x) { return x.tipo === 'relatorio'; }), convencao: vig.some(function (x) { return x.tipo === 'convencao'; }) };
+      var espera;
+      var atualizarFaltas = function () { $('#faltasCr').innerHTML = htmlFaltasCr(faltasCr(lerFormCredito(), $('#fExec') ? !!$('#fExec').value : !!a.executivo_id, docs)); };
+      var aoMudar = function (ev) {
+        if (ev.target.closest && ev.target.closest('[data-doc],#arqOutro,#tipoOutro')) return;
+        atualizarFaltas();
+        clearTimeout(espera);
+        espera = setTimeout(async function () {
+          try { await salvar(); $('#salvoCr').textContent = 'Rascunho salvo às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + '.'; } catch (e) { $('#salvoCr').textContent = 'Não foi possível salvar o rascunho: ' + e.message; }
+        }, 1500);
+      };
+      $('#conteudo .pagina').addEventListener('input', aoMudar);
+      $('#conteudo .pagina').addEventListener('change', aoMudar);
+      $('#btSalvarCr').onclick = async function () { clearTimeout(espera); try { await salvar(); toast('Rascunho salvo.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
       $('#btEnviarCr').onclick = async function () {
+        clearTimeout(espera);
         try {
           await salvar();
           var r = await api('POST', '/api/credito/analises/' + a.id + '/enviar', {});
@@ -3691,8 +3772,28 @@
     }
     if ($('#btAssumirCr')) $('#btAssumirCr').onclick = async function () { try { await api('POST', '/api/credito/analises/' + a.id + '/assumir', {}); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
     if (pd.analisar) {
+      $$('[data-ler]').forEach(function (b) {
+        b.onclick = async function () {
+          var tipo = b.getAttribute('data-ler');
+          var lancado = tipo === 'relatorio' ? (((a.dados_analista || {}).relatorio || {}).unidades || []).length : ((a.dados_analista || {}).convencao || {}).registro;
+          if (lancado && !(await confirmar('Ler de novo com IA', 'O que estiver lançado ' + (tipo === 'relatorio' ? 'no relatório' : 'na convenção') + ' será trocado pelo que a IA ler agora.', 'Ler de novo'))) return;
+          try { await api('POST', '/api/credito/analises/' + a.id + '/ler', { tipo: tipo }); toast('Lendo o PDF. Os dados aparecem aqui em instantes.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+        };
+      });
+      // enquanto a IA lê, a tela se atualiza sozinha
+      if (Object.keys(docsVig).some(function (k) { return docsVig[k].leitura === 'lendo'; })) {
+        setTimeout(function () { if (location.hash === '#/credito/' + a.id && !$('.fundo-modal')) paginaAnaliseCredito(a.id); }, 5000);
+      }
       var unidadesLidas = null;
-      var salvarDados = async function () { await api('PATCH', '/api/credito/analises/' + a.id, { dados_analista: lerDadosAnalista(a.dados_analista || {}, unidadesLidas) }); };
+      var colaOriginal = $('#dCola') ? $('#dCola').value : '';
+      var salvarDados = async function () {
+        // planilha mexida e não lida: lê antes de salvar, para a correção não se perder
+        if ($('#dCola') && unidadesLidas === null && $('#dCola').value.trim() && $('#dCola').value !== colaOriginal) {
+          var r = await api('POST', '/api/credito/analises/' + a.id + '/relatorio-colado', { texto: $('#dCola').value });
+          unidadesLidas = r.unidades;
+        }
+        await api('PATCH', '/api/credito/analises/' + a.id, { dados_analista: lerDadosAnalista(a.dados_analista || {}, unidadesLidas) });
+      };
       $('#btColar').onclick = async function () {
         try {
           var r = await api('POST', '/api/credito/analises/' + a.id + '/relatorio-colado', { texto: $('#dCola').value });

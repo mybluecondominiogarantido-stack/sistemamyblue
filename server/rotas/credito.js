@@ -19,6 +19,7 @@ const { politicaAtiva, proximoProtocolo, gravarPolitica } = require('../credito/
 const { validarPolitica } = require('../credito/politica');
 const retorno = require('../credito/retorno');
 const { lerRelatorioColado } = require('../credito/colar');
+const { criarExtrator, paraDadosAnalista } = require('../credito/extracao');
 const { cnpjValido } = require('../implantacao');
 
 const ETAPAS = ['rascunho', 'pendencia', 'fila', 'em_analise', 'diretoria', 'validada', 'enviada', 'cancelada'];
@@ -36,6 +37,41 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
   r.use('/api/credito', seg.exigirLogin);
   const erro = (res, status, msg, extra) => res.status(status).json({ erro: msg, ...(extra || {}) });
   const link = (id) => `#/credito/${id}`;
+  // leitura dos PDFs pela IA (desligada sem ANTHROPIC_API_KEY; os testes passam um leitor de mentira)
+  const extrator = cfg.extratorCredito || criarExtrator(process.env);
+  const lendo = new Set();
+
+  /* lê o relatório e a convenção vigentes e põe o que leu nos dados do analista (como sugestão para conferir).
+     sobrescrever: o analista pediu de novo (troca o que estiver lançado); sem isso, só preenche o que está vazio. */
+  async function lerDocumentos(analiseId, { sobrescrever = false, tipos = ['relatorio', 'convencao'], usuarioId = null } = {}) {
+    if (!extrator.ativo || lendo.has(analiseId)) return;
+    lendo.add(analiseId);
+    try {
+      for (const tipo of tipos) {
+        const doc = await db.um("SELECT id, conteudo, extracao FROM analise_documentos WHERE analise_id = $1 AND tipo = $2 AND substituido_em IS NULL AND mime = 'application/pdf' ORDER BY id DESC LIMIT 1", [analiseId, tipo]);
+        if (!doc || (!sobrescrever && doc.extracao && doc.extracao.status === 'ok')) continue;
+        await db.q('UPDATE analise_documentos SET extracao = $2::jsonb WHERE id = $1', [doc.id, JSON.stringify({ status: 'lendo', inicio: new Date().toISOString() })]);
+        try {
+          const { dados, uso } = await extrator.ler(tipo, doc.conteudo);
+          await db.q('UPDATE analise_documentos SET extracao = $2::jsonb, extraido_em = now() WHERE id = $1', [doc.id, JSON.stringify({ status: 'ok', dados, uso })]);
+          const a = await db.um('SELECT dados_analista FROM analises WHERE id = $1', [analiseId]);
+          const d = a.dados_analista || {};
+          const vazio = tipo === 'relatorio' ? !((d.relatorio && d.relatorio.unidades) || []).length : !(d.convencao && d.convencao.registro);
+          if (sobrescrever || vazio) {
+            d[tipo] = paraDadosAnalista(tipo, dados, doc.id);
+            await db.q('UPDATE analises SET dados_analista = $2::jsonb, atualizado_em = now() WHERE id = $1', [analiseId, JSON.stringify(d)]);
+          }
+          await db.tx((t) => evento(t, analiseId, usuarioId, 'leitura', { tipo, aplicada: sobrescrever || vazio, unidades: tipo === 'relatorio' ? (dados.unidades || []).length : undefined,
+            lancamentos: tipo === 'relatorio' ? (dados.unidades || []).reduce((n, u) => n + (u.lancamentos || []).length, 0) : undefined, uso }));
+        } catch (e) {
+          await db.q('UPDATE analise_documentos SET extracao = $2::jsonb WHERE id = $1', [doc.id, JSON.stringify({ status: 'erro', erro: e.message })]);
+          await db.tx((t) => evento(t, analiseId, usuarioId, 'leitura_erro', { tipo, erro: e.message }));
+        }
+      }
+    } catch (e) {
+      console.error('[credito] leitura dos PDFs:', e.message);
+    } finally { lendo.delete(analiseId); }
+  }
 
   /* ---------- quem é a pessoa na ferramenta ---------- */
   async function perfil(u) {
@@ -176,6 +212,7 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
       perfil: { admin: p.admin, analista: p.analista, diretoria: p.diretoria, executivo: p.executivo },
       executivos, politica: { versao: p.politica.versao, setor_analistas: p.politica.setor_analistas, sla_horas: p.politica.sla_horas, sla_horas_diretoria: p.politica.sla_horas_diretoria, corte: p.politica.prazo_analista_corte },
       tipos_documento: TIPOS_DOC.map((t) => ({ tipo: t, nome: NOME_DOC[t] })),
+      ia: extrator.ativo,
     });
   });
 
@@ -249,7 +286,8 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
       ul.nome AS liberada_nome, o.protocolo AS origem_protocolo FROM analises a LEFT JOIN executivos e ON e.id = a.executivo_id LEFT JOIN usuarios us ON us.id = a.solicitante_id
       LEFT JOIN usuarios ua ON ua.id = a.analista_id LEFT JOIN usuarios uc ON uc.id = a.chancela_por LEFT JOIN usuarios ul ON ul.id = a.liberada_por
       LEFT JOIN analises o ON o.id = a.origem_id WHERE a.id = $1`, [a.id]);
-    const documentos = (await db.q(`SELECT d.id, d.tipo, d.nome, d.mime, d.tamanho, d.enviado_em, d.substituido_em, u.nome AS enviado_por_nome
+    const documentos = (await db.q(`SELECT d.id, d.tipo, d.nome, d.mime, d.tamanho, d.enviado_em, d.substituido_em, u.nome AS enviado_por_nome,
+      d.extracao->>'status' AS leitura, d.extracao->>'erro' AS leitura_erro, d.extraido_em
       FROM analise_documentos d LEFT JOIN usuarios u ON u.id = d.enviado_por WHERE d.analise_id = $1 ORDER BY d.id`, [a.id])).rows
       .filter((d) => pd.interno || d.tipo !== 'retorno_pdf' || a.etapa === 'enviada');
     const eventos = (await db.q(`SELECT ev.id, ev.tipo, ev.detalhe, ev.criado_em, u.nome AS usuario_nome FROM analise_eventos ev LEFT JOIN usuarios u ON u.id = ev.usuario_id
@@ -259,6 +297,7 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
     if (!pd.interno) {
       // o executivo vê a situação, as pendências e, depois de enviado, o resultado; não vê as anotações do analista
       delete out.dados_analista;
+      documentos.forEach((x) => { delete x.leitura; delete x.leitura_erro; });
       if (a.etapa !== 'enviada') { delete out.resultado_motor; out.resultado = null; out.inad_media = out.taxa_adm = out.boleto = out.exposicao = out.receita_liquida = null; }
       else if (out.resultado_motor) out.resultado_motor = { status: out.resultado_motor.status, precificacao: out.resultado_motor.precificacao, escopo: { uh_escopo: out.resultado_motor.escopo.uh_escopo } };
     }
@@ -400,6 +439,20 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
       texto: `${req.usuario.nome} enviou ${a.condominio} para análise de crédito. Prazo de resposta ao executivo: ${pz.executivo.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' })}.`,
     });
     res.json({ protocolo, etapa, prazo_analista: pz.analista, prazo_executivo: pz.executivo });
+    // a IA lê os PDFs em segundo plano: o analista encontra os dados já lançados para conferir
+    setImmediate(() => { lerDocumentos(a.id).catch(() => {}); });
+  });
+
+  /* o analista pede a leitura de novo (troca o que estiver lançado pelo que a IA ler) */
+  r.post('/api/credito/analises/:id/ler', json, async (req, res) => {
+    const c = await carregar(req, res);
+    if (!c) return;
+    if (!c.pd.analisar) return erro(res, 403, 'Só o analista que assumiu a análise pede a leitura.');
+    if (!extrator.ativo) return erro(res, 503, 'A leitura automática dos PDFs não está ligada: falta configurar ANTHROPIC_API_KEY no servidor.');
+    const tipos = ['relatorio', 'convencao'].includes(req.body && req.body.tipo) ? [req.body.tipo] : ['relatorio', 'convencao'];
+    if (lendo.has(c.a.id)) return res.status(202).json({ lendo: true });
+    setImmediate(() => { lerDocumentos(c.a.id, { sobrescrever: true, tipos, usuarioId: req.usuario.id }).catch(() => {}); });
+    res.status(202).json({ lendo: true });
   });
 
   /* ===================== analista ===================== */

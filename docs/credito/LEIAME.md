@@ -12,11 +12,24 @@ faixa e status são código determinístico e testado. Nada vai ao executivo sem
 | Motor de regras | `server/credito/motor.js` | pronto, testes em `test/credito-motor.test.js` |
 | Política no banco, protocolo | `server/credito/banco.js` + tabelas em `server/db.js` | pronto, testes em `test/credito-banco.test.js` |
 | Prazos em horário útil | `server/expediente.js` (`fimDoDiaUtil`, `somarDiasUteis`) | pronto |
-| Extração dos PDFs pela IA, leitores por tipo de relatório | — | próxima etapa (precisa da chave da API e das amostras); até lá o analista cola a planilha do relatório |
+| Leitura dos PDFs pela IA (relatório e convenção) | `server/credito/extracao.js` | pronta; liga com `ANTHROPIC_API_KEY` (testes em `test/credito-extracao.test.js`); falta calibrar com amostras de cada sistema |
 | API do fluxo (executivo, analista, diretoria, administração) | `server/rotas/credito.js` + `server/credito/colar.js` | pronto, testes em `test/credito-rotas.test.js` |
 | Telas no portal (menu Análise de Crédito) | `public/app.js` | pronto |
 | Tutoriais em vídeo | catálogo em `server/tutoriais.js`, roteiros em `docs/tutoriais/fonte/roteiros.js` | `credito-solicitar` e `credito-analisar` |
 | Retorno em PDF, resumo executivo e e-mail | `server/credito/retorno.js` + `server/credito/retorno/gerador_retorno.py` | pronto (PDF), testes em `test/credito-retorno.test.js` |
+
+## Leitura dos PDFs pela IA
+
+Quando o executivo envia, o portal manda o relatório e a convenção (PDF) para a API Claude em segundo plano. Volta, em
+formato fixo: do relatório, as unidades e os lançamentos por competência (principal separado de multa, juros, acordo…),
+a data de emissão, se há competência e nomes; da convenção, o registro, as unidades, a multa, o foro e cláusulas, cada
+um com a página e um trecho. Isso entra nos dados do analista como sugestão: os lançamentos aparecem na área da
+planilha, onde ele confere e corrige, e só então calcula. O analista pode pedir **Ler de novo com IA**.
+
+A IA só lê: quem calcula é o motor de regras. Sem `ANTHROPIC_API_KEY`, a leitura fica desligada e o analista cola a
+planilha. Configuração: `CREDITO_IA_MODELO` (padrão `claude-opus-5-5`) e `CREDITO_IA_ESFORCO` (`low`, `medium`,
+`high`; padrão `medium`). Se o modelo recusar o documento por segurança, a API tenta de novo no modelo recomendado
+(`fallbacks`). Os dados do relatório (nomes, CPF) vão para a Anthropic: revisar os termos antes de ligar.
 
 ## Retorno em PDF
 
