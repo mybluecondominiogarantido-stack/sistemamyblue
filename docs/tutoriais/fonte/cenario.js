@@ -92,6 +92,8 @@ async function montarCenario(base, { ferramentas = {} } = {}) {
     // Implantação: coordenadora (líder do setor) e analista de implantação
     ['Nina Prado', 'nina@myblue.com.br', { setores: [S('Implantação')] }],
     ['Otto Reis', 'otto@myblue.com.br', { setores: [S('Implantação')] }],
+    // Solicitação de Contrato: advogada interna (marcada em Quem elabora)
+    ['Lara Mendes', 'lara@myblue.com.br', { setores: [S('Jurídico')] }],
   ];
   const id = {};
   for (const [nome, email, extra] of pessoas) id[email] = (await a('POST', '/api/admin/usuarios', { nome, email, senha: 'Senha1234', ...extra })).id;
@@ -100,6 +102,7 @@ async function montarCenario(base, { ferramentas = {} } = {}) {
   await a('PUT', `/api/admin/equipes/${S('Crédito')}/membros`, { membros: [{ usuario_id: id['caio@myblue.com.br'], lider: true }, { usuario_id: id['bruna@myblue.com.br'] }, { usuario_id: id['davi@myblue.com.br'] }] });
   await a('POST', '/api/credito/executivos', { nome: 'Vera Campos', uf: 'CE', regiao: 'Ceará', usuario_id: id['vera@myblue.com.br'] });
   await a('PUT', `/api/admin/equipes/${S('Implantação')}/membros`, { membros: [{ usuario_id: id['nina@myblue.com.br'], lider: true }, { usuario_id: id['otto@myblue.com.br'] }] });
+  await a('PUT', '/api/contratos/equipe', { pessoas: [id['lara@myblue.com.br']] });
   const cat = {};
   for (const [setor, nome, prazo_horas, prioridade] of [
     ['Cobrança', '2ª via de boleto', 4, 'alta'], ['Cobrança', 'Proposta de acordo', 18, 'media'], ['Cobrança', 'Negativação / baixa', 9, 'alta'],

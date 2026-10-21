@@ -28,6 +28,7 @@ const DOCUMENTOS = {
   conta_bancaria: { nome: 'Conta bancária', pendente: true },
   comprovante_endereco: { nome: 'Comprovante de endereço do síndico', pendente: true },
   modelo_boleto: { nome: 'Modelo do boleto anterior', pendente: true },
+  contrato: { nome: 'Contrato assinado' },
   outro: { nome: 'Outro documento' },
 };
 const GARANTIAS = ['Taxa ordinária', 'Taxa extraordinária', 'Água', 'Gás', 'Fundo de reserva', 'Fundo de obras'];

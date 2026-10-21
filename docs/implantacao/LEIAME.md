@@ -57,6 +57,14 @@ Análise de Crédito.
   Carteira. Os responsáveis (cobrança, extrajudicial, crédito) são escolhidos depois, na ficha do condomínio. O Controle
   de Emissão de Boletos acompanha, como em qualquer condomínio novo da Carteira.
 
+## Contrato
+
+A implantação aberta de uma análise que tem **Solicitação de Contrato** (`docs/contratos/LEIAME.md`) vem com os dados
+do contrato: as condições fechadas pela advogada valem sobre o pedido do comercial. O contrato assinado e os documentos
+do síndico entram nos documentos (tipo "Contrato assinado" e os tipos equivalentes daqui). A tela mostra o quadro
+**Condições fechadas no contrato** (foro, fidelização, cláusulas negociadas); se o contrato fechar depois, a
+implantação é ligada a ele na conclusão. Sem contrato assinado no portal, a implantação continua abrindo, com um aviso.
+
 ## Outras origens
 
 - **Condomínio de entrega** (construtora entregando, em enxoval): o comercial preenche o condomínio, a construtora, as

@@ -37,8 +37,8 @@ const PERMISSOES = [
     descricao: 'Análises com inadimplência acima de 35% só vão ao executivo depois da chancela (CEO e Diretor Comercial).',
     padrao: { niveis: [], setores: [] } },
   { chave: 'contratos.elaborar', grupo: 'Solicitação de Contrato', rotulo: 'Elaborar as minutas de contrato (Jurídico)',
-    descricao: 'Recebe as solicitações de contrato do comercial, assume, redige a minuta em até 72h úteis e responde aos ajustes.',
-    padrao: { niveis: ['coordenador', 'supervisor', 'usuario'], setores: ['Jurídico'] } },
+    descricao: 'Recebe as solicitações de contrato do comercial, assume, redige a minuta em até 72h úteis, responde aos ajustes e registra as condições fechadas.',
+    padrao: { niveis: [], setores: [] } },
 ];
 const porChave = new Map(PERMISSOES.map((p) => [p.chave, p]));
 

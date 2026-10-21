@@ -16,6 +16,8 @@
  *   credito_analise  analistas (setor da política) e diretoria da Análise de Crédito
  *   implantacao      quem usa a Implantação (executivos cadastrados, setor Implantação e diretoria)
  *   implantacao_setor  o setor Implantação
+ *   contrato    quem usa a Solicitação de Contrato (executivos cadastrados, quem elabora e diretoria)
+ *   contrato_juridico  quem elabora os contratos (Solicitação de Contrato → Quem elabora)
  *   { modulo }  quem abre aquela ferramenta
  * O administrador vê todos.
  */
@@ -27,6 +29,7 @@ const ROTULO_PUBLICO = {
   supervisao: 'Para a supervisão de tickets', links: 'Para quem edita a Central de Links', admin: 'Para a administração',
   credito: 'Para executivos de negócios e a Análise de Crédito', credito_analise: 'Para analistas de crédito e a diretoria',
   implantacao: 'Para executivos de negócios e o setor Implantação', implantacao_setor: 'Para o setor Implantação',
+  contrato: 'Para executivos de negócios e o Jurídico', contrato_juridico: 'Para quem elabora os contratos (Jurídico)',
 };
 
 const TUTORIAIS = [
@@ -78,6 +81,10 @@ const TUTORIAIS = [
     descricao: 'Abrir a implantação a partir da análise (ou de um PDF antigo, ou de um condomínio de entrega), preencher o formulário, anexar os documentos, enviar e acompanhar.' },
   { slug: 'implantacao-conduzir', grupo: 'Ferramentas', publico: 'implantacao_setor', titulo: 'Implantação — designar, conduzir e levar à Carteira',
     descricao: 'Designar quem conduz, as 5 etapas, as conferências, devolver com pendência, concluir e confirmar a entrada na Carteira.' },
+  { slug: 'contrato-solicitar', grupo: 'Ferramentas', publico: 'contrato', titulo: 'Solicitação de Contrato — pedir e acompanhar',
+    descricao: 'Pedir o contrato a partir da análise, preencher as condições e os pedidos do síndico, enviar ao Jurídico, pedir ajuste na minuta e anexar o contrato assinado.' },
+  { slug: 'contrato-elaborar', grupo: 'Ferramentas', publico: 'contrato_juridico', titulo: 'Solicitação de Contrato — elaborar e registrar as condições fechadas',
+    descricao: 'Assumir da fila, ver os pedidos com a resposta padrão, anexar e enviar a minuta, responder ao ajuste e registrar as condições fechadas que vão para a Implantação.' },
   { slug: 'gestao-usuarios', grupo: 'Gestão do setor', publico: 'gestor', titulo: 'Usuários do setor',
     descricao: 'Criar o acesso de alguém do setor, liberar ferramentas e redefinir a senha.' },
   { slug: 'gestao-ferramentas', grupo: 'Gestão do setor', publico: 'gestor', titulo: 'Ferramentas do setor',
@@ -109,6 +116,9 @@ async function visibilidade(db, seg, u) {
   const diretoria = !!(dir && Array.isArray(dir.p) && dir.p.includes(u.id));
   const executivo = !!(await db.um('SELECT 1 FROM executivos WHERE usuario_id = $1 AND ativo', [u.id]));
   const setorImplantacao = !!(await db.um("SELECT 1 FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id WHERE sm.usuario_id = $1 AND s.nome = 'Implantação'", [u.id]));
+  // Solicitação de Contrato: quem elabora (pessoas marcadas na regra "Elaborar as minutas de contrato")
+  const elab = await db.um("SELECT regra->'pessoas' AS p FROM regras_acesso WHERE chave = 'contratos.elaborar'");
+  const elaborador = !!(elab && Array.isArray(elab.p) && elab.p.includes(u.id));
   const regra = {
     todos: true,
     equipe: membro.length > 0 || sup,
@@ -120,6 +130,8 @@ async function visibilidade(db, seg, u) {
     credito_analise: analista || diretoria,
     implantacao: executivo || setorImplantacao || diretoria,
     implantacao_setor: setorImplantacao,
+    contrato: executivo || elaborador || diretoria,
+    contrato_juridico: elaborador,
     admin: false,
   };
   return (t) => (typeof t.publico === 'string' ? !!regra[t.publico] : mods.has(t.publico.modulo));
