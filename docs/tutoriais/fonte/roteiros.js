@@ -835,12 +835,14 @@ module.exports = [
 
       const C = '3 · Condições fechadas';
       await t.ir(`#/contratos/${cen.ctAssinado}`, 1800);
-      await t.legenda('Com o contrato assinado anexado, você registra as <b>condições fechadas</b>. Elas vêm do pedido: corrija o que mudou na negociação.', { etapa: C, ms: 600 });
+      await t.legenda('Com o contrato assinado anexado, você registra as <b>condições fechadas</b>. Elas vêm do pedido: corrija o que mudou na negociação.', { etapa: C, ms: 1200 });
+      await t.mostrar('#fechadoCt', 2400);
       await t.digitar('#c_f_taxa_adm', '2,9', { atraso: 80 });
-      await t.legenda('Para cada cláusula que o síndico pediu, diga como ficou e, se quiser, a redação.', { etapa: C, ms: 400 });
-      for (const sel of await t.p.$$('[data-clausula] [data-k=resultado]')) await sel.selectOption('aceito');
-      await t.pausa(1400);
-      await t.legenda('<b>Concluir: enviar à Implantação</b>. O executivo é avisado, e a implantação abre com essas condições, o contrato e os documentos.', { etapa: C, ms: 400 });
+      await t.legenda('Foro e prazo de contestação já vêm com o que o síndico pediu. Para cada cláusula pedida, diga como ficou e, se quiser, a redação.', { etapa: C, ms: 800 });
+      for (const sel of await t.p.$$('[data-clausula] [data-k=resultado]')) { await sel.scrollIntoViewIfNeeded(); await sel.selectOption('aceito'); await t.pausa(900); }
+      await t.legenda('<b>Salvar</b> guarda sem concluir e mostra o que ainda falta.', { etapa: C, ms: 300 });
+      await t.clicar('#btFechSalvar', { depois: 2600 });
+      await t.legenda('<b>Concluir: enviar à Implantação</b>. O executivo é avisado, e a implantação abre com essas condições, o contrato e os documentos.', { etapa: C, ms: 600 });
       await t.clicar('#btFechConcluir', { depois: 1000 });
       await t.clicar('#mOk', { depois: 2600 });
       await t.legenda('No <b>Controle</b> ficam todas as solicitações: prazos, ajustes, primeira minuta e assinatura.', { etapa: C, ms: 400 });
