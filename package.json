@@ -10,7 +10,8 @@
     "test": "node --test test/*.test.js",
     "importar-html": "node scripts/importar-html.js",
     "criar-admin": "node scripts/criar-admin.js",
-    "restaurar-backup": "node scripts/restaurar-backup.js"
+    "restaurar-backup": "node scripts/restaurar-backup.js",
+    "fazer-backup": "node scripts/fazer-backup.js"
   },
   "engines": {
     "node": ">=20"

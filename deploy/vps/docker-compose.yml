@@ -1,0 +1,42 @@
+# Portal MyBlue na VPS (Contabo): o portal + o Caddy na frente, com HTTPS automático (Let's Encrypt).
+# Passo a passo em deploy/vps/LEIAME.md. Rode a partir desta pasta:  docker compose up -d --build
+name: myblue
+
+services:
+  portal:
+    build: ../..
+    restart: unless-stopped
+    user: node
+    env_file: ../../.env
+    environment:
+      PORT: 3000
+      DATA_DIR: /app/data
+      COOKIE_SECURE: "true"
+      TRUST_PROXY: "1"
+    # sem "ports": o portal só é alcançado pelo Caddy (rede interna do Docker)
+    expose:
+      - "3000"
+    volumes:
+      - dados:/app/data
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    depends_on:
+      - portal
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMINIO: ${DOMINIO:-portal.myblue.com.br}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_dados:/data
+      - caddy_config:/config
+
+volumes:
+  dados:
+  # certificados HTTPS: sem este volume, o Caddy pede certificado novo a cada reinício
+  caddy_dados:
+  caddy_config:

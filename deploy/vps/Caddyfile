@@ -1,0 +1,10 @@
+# HTTPS do portal: o Caddy emite e renova o certificado sozinho.
+# O DNS de {$DOMINIO} precisa apontar para o IP da VPS antes de subir (senão o Let's Encrypt recusa).
+{$DOMINIO} {
+	encode zstd gzip
+	reverse_proxy portal:3000
+	log {
+		output stdout
+		format console
+	}
+}

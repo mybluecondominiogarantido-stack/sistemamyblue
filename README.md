@@ -241,7 +241,16 @@ No menu **Tutoriais**, vídeos curtos com o portal sendo usado de verdade (dados
 
 ## Colocar no ar
 
-### No Railway
+### Na VPS (Contabo) — portal.myblue.com.br
+
+O portal está em uma VPS da Contabo, com Docker e o Caddy na frente (HTTPS automático), e o banco no Supabase. Passo a
+passo completo, da contratação à troca do Railway: [`deploy/vps/LEIAME.md`](deploy/vps/LEIAME.md).
+
+- **Preparar** a VPS nova: `deploy/vps/preparar-servidor.sh` (Docker, firewall, SSH só por chave, backup diário).
+- **Publicar** uma versão: `deploy/vps/atualizar.sh` publica o `main` só se os testes do GitHub passaram e volta sozinho
+  para a versão anterior se o portal não subir.
+
+### No Railway (antes da VPS)
 
 O repositório já vem pronto para o Railway (`railway.json` + `Dockerfile`). O banco é um **Postgres**: pode ser o Supabase ou o Postgres do próprio Railway. Tudo fica no banco, inclusive os HTMLs enviados, então **não é preciso volume**.
 
@@ -309,6 +318,8 @@ Rode `npm ci --omit=dev` e `npm start` com um gerenciador de processos (pm2, sys
   (a lista vem do próprio banco, então tabela nova entra sozinha), inclusive HTMLs e versões, anexos dos tickets, fotos,
   fundos da Central de Links, vídeos tutoriais, regras de acesso e demonstrativos. Ficam fora só as sessões abertas e a cópia
   das bibliotecas das CDNs. O arquivo é uma fotografia do banco num instante e sai aos pedaços, sem pesar no servidor.
+- **Backup agendado:** `npm run fazer-backup -- pasta [--manter 14]` grava o mesmo arquivo direto numa pasta e apaga os
+  mais antigos. Na VPS ele roda todo dia às 03:15 (veja [`deploy/vps/LEIAME.md`](deploy/vps/LEIAME.md#4-backup-diário)).
 - **Hashes de senha não vão para o backup.** O arquivo tem dados de negócio e pessoais: guarde em local com acesso restrito.
 - **Restaurar** (num banco novo ou, com cuidado, no mesmo):
   ```bash
@@ -381,9 +392,10 @@ server/
   tutoriais.js      catálogo dos vídeos tutoriais e quem vê cada um
   rotas/            auth, admin, ferramentas (entrega, armazenamento, protocolo Apps Script), tickets, links (Central de Links) e tutoriais
 public/             portal (login, início, menu, administração)
-scripts/            importar-html e criar-admin
+scripts/            importar-html, criar-admin, fazer-backup e restaurar-backup
+deploy/vps/         VPS (Contabo): docker-compose com Caddy (HTTPS), preparar o servidor e publicar versões
 test/               testes automatizados (npm test)
 ```
 
 Testes: `npm test` (usam HTMLs sintéticos e o Postgres embutido). Para testar num Postgres de verdade: `TEST_DATABASE_URL=postgres://… npm test` (o banco indicado é apagado).
-O GitHub roda os testes sozinho a cada push e pull request (aba *Actions*, `.github/workflows/testes.yml`): só publique no Railway o que estiver verde.
+O GitHub roda os testes sozinho a cada push e pull request (aba *Actions*, `.github/workflows/testes.yml`): só vai para o ar o que estiver verde (na VPS, o `atualizar.sh` confere sozinho).
