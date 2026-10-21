@@ -600,6 +600,78 @@ CREATE TABLE IF NOT EXISTS implantacao_liberacoes (
   observacao TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_implantacao_liberacoes ON implantacao_liberacoes(analise_id);
+
+-- ===== Solicitação de Contrato (server/rotas/contratos.js) =====
+-- o comercial pede a minuta a partir da análise liberada, quem elabora (Jurídico) redige em até 72h úteis, o comercial
+-- leva ao síndico, pede ajustes e anexa o contrato assinado, a advogada registra as condições fechadas e elas seguem para a Implantação.
+-- origem: análise do portal, PDF de análise feita antes do portal, ou condomínio de entrega (a diretoria aprova taxa e boleto)
+CREATE TABLE IF NOT EXISTS contrato_protocolos (
+  dia DATE PRIMARY KEY,
+  ultimo INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS contratos (
+  id SERIAL PRIMARY KEY,
+  protocolo TEXT UNIQUE,
+  etapa TEXT NOT NULL DEFAULT 'rascunho' CHECK (etapa IN ('rascunho','fila','em_elaboracao','pendencia','minuta_enviada','conferencia','assinado','cancelada')),
+  origem TEXT NOT NULL CHECK (origem IN ('analise','pdf','entrega')),
+  analise_id INTEGER REFERENCES analises(id) ON DELETE SET NULL,
+  analise_protocolo TEXT,
+  condominio TEXT NOT NULL DEFAULT '',
+  cnpj TEXT NOT NULL DEFAULT '',
+  uf TEXT NOT NULL DEFAULT '',
+  executivo_id INTEGER REFERENCES executivos(id) ON DELETE SET NULL,
+  solicitante_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  responsavel_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  assumido_em TIMESTAMPTZ,
+  formulario JSONB NOT NULL DEFAULT '{}'::jsonb,
+  referencia JSONB NOT NULL DEFAULT '{}'::jsonb,
+  -- itens que dependem da diretoria e a decisão: { itens, aprovado, observacao, por, decidido_em }
+  diretoria JSONB NOT NULL DEFAULT '{}'::jsonb,
+  enviado_em TIMESTAMPTZ,
+  prazo TIMESTAMPTZ,
+  aviso_prazo_em TIMESTAMPTZ,
+  minuta_enviada_em TIMESTAMPTZ,
+  ajustes INTEGER NOT NULL DEFAULT 0,
+  ultimo_ajuste_em TIMESTAMPTZ,
+  assinado_em TIMESTAMPTZ,
+  -- condições fechadas no contrato assinado, registradas pela advogada (vão para a Implantação)
+  fechado JSONB NOT NULL DEFAULT '{}'::jsonb,
+  fechado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  fechado_em TIMESTAMPTZ,
+  concluido_em TIMESTAMPTZ,
+  aviso_docs_em DATE,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_contratos_etapa ON contratos(etapa);
+CREATE INDEX IF NOT EXISTS idx_contratos_analise ON contratos(analise_id);
+CREATE INDEX IF NOT EXISTS idx_contratos_executivo ON contratos(executivo_id);
+
+CREATE TABLE IF NOT EXISTS contrato_documentos (
+  id SERIAL PRIMARY KEY,
+  contrato_id INTEGER NOT NULL REFERENCES contratos(id) ON DELETE CASCADE,
+  tipo TEXT NOT NULL,
+  nome TEXT NOT NULL,
+  mime TEXT NOT NULL DEFAULT 'application/octet-stream',
+  tamanho INTEGER NOT NULL DEFAULT 0,
+  sha256 TEXT,
+  conteudo BYTEA,
+  enviado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  enviado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  substituido_em TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_contrato_docs ON contrato_documentos(contrato_id, tipo);
+
+CREATE TABLE IF NOT EXISTS contrato_eventos (
+  id SERIAL PRIMARY KEY,
+  contrato_id INTEGER NOT NULL REFERENCES contratos(id) ON DELETE CASCADE,
+  usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  tipo TEXT NOT NULL,
+  detalhe JSONB NOT NULL DEFAULT '{}'::jsonb,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_contrato_eventos ON contrato_eventos(contrato_id, criado_em);
 `;
 
 /* Supabase publica o schema "public" pela API dele (PostgREST). Com RLS ligado e sem
@@ -609,7 +681,8 @@ const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 
   'links_pagina', 'links', 'links_campanhas', 'tutoriais', 'comissao_relatorios', 'comissao_leitores', 'comissao_planilhas', 'cdn_cache', 'regras_acesso',
   'parametros_politica', 'faixas_precificacao', 'executivos', 'analise_protocolos', 'analises', 'analise_documentos', 'analise_unidades',
   'analise_lancamentos', 'analise_exclusoes', 'analise_alertas', 'analise_eventos',
-  'implantacao_protocolos', 'implantacoes', 'implantacao_documentos', 'implantacao_eventos', 'implantacao_liberacoes'];
+  'implantacao_protocolos', 'implantacoes', 'implantacao_documentos', 'implantacao_eventos', 'implantacao_liberacoes',
+  'contrato_protocolos', 'contratos', 'contrato_documentos', 'contrato_eventos'];
 const RLS = TABELAS.map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`).join(';\n');
 
 /* Ajustes em bancos já existentes (rodam a cada início e não fazem nada se já estiverem aplicados). */
@@ -655,7 +728,9 @@ ALTER TABLE modulos ADD COLUMN IF NOT EXISTS pendente BOOLEAN NOT NULL DEFAULT F
 ALTER TABLE modulos ADD COLUMN IF NOT EXISTS criado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL;
 -- HTML novo enviado pela coordenação numa ferramenta não isolada: fica guardado, aguardando a aprovação da administração
 ALTER TABLE modulo_versoes ADD COLUMN IF NOT EXISTS aprovada BOOLEAN NOT NULL DEFAULT TRUE;
-ALTER TABLE modulos ADD COLUMN IF NOT EXISTS versao_pendente_id INTEGER
+ALTER TABLE modulos ADD COLUMN IF NOT EXISTS versao_pendente_id INTEGER;
+-- implantação aberta de uma análise que já tem contrato: os dados e o contrato assinado vêm de lá
+ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS contrato_id INTEGER REFERENCES contratos(id) ON DELETE SET NULL
 `;
 
 /* Funções e gatilhos do banco (cada item é um comando inteiro: o corpo das funções tem ";").

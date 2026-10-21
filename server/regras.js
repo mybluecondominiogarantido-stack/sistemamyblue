@@ -36,6 +36,9 @@ const PERMISSOES = [
   { chave: 'credito.diretoria', grupo: 'Análise de Crédito', rotulo: 'Chancelar análises de crédito (diretoria)',
     descricao: 'Análises com inadimplência acima de 35% só vão ao executivo depois da chancela (CEO e Diretor Comercial).',
     padrao: { niveis: [], setores: [] } },
+  { chave: 'contratos.elaborar', grupo: 'Solicitação de Contrato', rotulo: 'Elaborar as minutas de contrato (Jurídico)',
+    descricao: 'Recebe as solicitações de contrato do comercial, assume, redige a minuta em até 72h úteis e responde aos ajustes.',
+    padrao: { niveis: ['coordenador', 'supervisor', 'usuario'], setores: ['Jurídico'] } },
 ];
 const porChave = new Map(PERMISSOES.map((p) => [p.chave, p]));
 
@@ -96,6 +99,14 @@ function criarRegras(db) {
     return saida;
   }
 
+  /* ids de quem tem a permissão hoje (pessoas ativas, sem a administração) */
+  async function pessoasCom(chave) {
+    const r = (await regras()).get(chave);
+    const { rows } = await db.q(`SELECT u.id, u.papel, COALESCE(array_agg(sm.setor_id) FILTER (WHERE sm.setor_id IS NOT NULL), '{}') AS setores
+      FROM usuarios u LEFT JOIN setor_membros sm ON sm.usuario_id = u.id WHERE u.ativo AND u.papel <> 'admin' GROUP BY u.id ORDER BY u.nome`);
+    return rows.filter((u) => motivo(u, r, u.setores, () => '')).map((u) => u.id);
+  }
+
   async function salvar(chave, regra, autor) {
     const ativos = new Set((await db.q('SELECT id FROM usuarios WHERE ativo')).rows.map((x) => x.id));
     const setores = new Set((await db.q('SELECT id FROM setores')).rows.map((x) => x.id));
@@ -121,7 +132,7 @@ function criarRegras(db) {
     return new Set(PERMISSOES.filter((p) => r.get(p.chave).setores.some((x) => meus.includes(x))).map((p) => p.chave));
   }
 
-  return { PERMISSOES, NIVEIS, porChave, regras, permissoesDe, pode, quemPode, salvar, voltarAoPadrao, gerenciaveis };
+  return { PERMISSOES, NIVEIS, porChave, regras, permissoesDe, pode, quemPode, pessoasCom, salvar, voltarAoPadrao, gerenciaveis };
 }
 
 module.exports = { criarRegras, PERMISSOES, NIVEIS };
