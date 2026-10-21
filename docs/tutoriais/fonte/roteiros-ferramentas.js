@@ -543,13 +543,17 @@ module.exports = [
       await t.mostrar(f.locator('#drop'), 2600);
       await t.digitar(f.locator('#condo'), 'Cond. Jardim Azul', { atraso: 32 });
       await t.digitar(f.locator('#cnpj'), '12.345.678/0001-90', { atraso: 28 });
+      await t.legenda('O <b>síndico(a)</b> sai abaixo da assinatura. Em branco, o recibo vai com espaço para o nome.', { etapa: N, ms: 300 });
+      await t.digitar(f.locator('#sindico'), 'Patrícia Lopes', { atraso: 32 });
       await t.legenda('Informe o <b>Total Rateio (VOP)</b>: a faixa e o valor a pagar são preenchidos sozinhos.', { etapa: N, ms: 300 });
       await t.digitar(f.locator('#rateio'), '38.500,00', { atraso: 40 });
       await t.clicar(f.locator('#eventoNome'), { depois: 1400 });
       await t.mostrar(f.locator('#valor'), 2200);
       await t.digitar(f.locator('#eventoNome'), 'Festa da Primavera', { atraso: 30 });
-      await t.digitar(f.locator('#cidade'), 'Fortaleza', { atraso: 34 });
+      await t.digitar(f.locator('#cidade'), 'Fortaleza/CE', { atraso: 34 });
       await t.preencherCampo(f.locator('#data'), hoje());
+      await t.legenda('A prévia mostra o recibo como vai sair: valor por extenso, texto do patrocínio e a contrapartida de divulgação da marca.', { etapa: N, ms: 300 });
+      await t.mostrar(f.locator('#receipt'), 2600);
       await t.legenda('<b>Salvar e baixar PDF</b> guarda o recibo e baixa o PDF para enviar ao síndico. <b>Copiar e-mail</b> monta o texto do e-mail.', { etapa: N, ms: 300 });
       await t.clicar(f.locator('#btnSalvar'), { depois: 2200 });
 
