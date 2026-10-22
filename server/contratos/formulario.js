@@ -24,22 +24,27 @@
 const I = require('../implantacoes/formulario');
 const C = require('./clausulas');
 
+/* os documentos do síndico (atas, cadastros, RG…) são pedidos só na Implantação. Os "antigo" ficam para os arquivos que já
+   tinham sido anexados: aparecem se existirem, mas não são mais pedidos nem aceitos. */
 const DOCUMENTOS = {
   analise_credito: { nome: 'Análise de Crédito' },
-  convencao: { nome: 'Convenção do condomínio', operacional: true },
-  regimento: { nome: 'Regimento interno', operacional: true },
-  ata_eleicao: { nome: 'Ata de eleição do síndico', operacional: true },
-  atas_taxas: { nome: 'Atas que estipularam as taxas (ordinárias e extras)', operacional: true },
-  cadastro_proprietarios: { nome: 'Cadastro dos proprietários (nome, CPF, unidade e endereço)', operacional: true },
-  cadastro_locatarios: { nome: 'Cadastro dos locatários (nome, CPF e unidade)', operacional: true },
-  documento_sindico: { nome: 'RG e CPF do síndico', operacional: true },
-  comprovante_endereco: { nome: 'Comprovante de endereço do síndico', operacional: true },
+  convencao: { nome: 'Convenção do condomínio', assinatura: true },
   ata_ago: { nome: 'Ata da assembleia que autorizou a contratação (sem CNPJ)' },
   minuta: { nome: 'Minuta do contrato', juridico: true },
   contrato_assinado: { nome: 'Contrato assinado' },
-  procuracao: { nome: 'Procuração assinada' },
   outro: { nome: 'Outro documento' },
+  regimento: { nome: 'Regimento interno', antigo: true },
+  ata_eleicao: { nome: 'Ata de eleição do síndico', antigo: true },
+  atas_taxas: { nome: 'Atas que estipularam as taxas (ordinárias e extras)', antigo: true },
+  cadastro_proprietarios: { nome: 'Cadastro dos proprietários', antigo: true },
+  cadastro_locatarios: { nome: 'Cadastro dos locatários', antigo: true },
+  documento_sindico: { nome: 'RG e CPF do síndico', antigo: true },
+  comprovante_endereco: { nome: 'Comprovante de endereço do síndico', antigo: true },
+  procuracao: { nome: 'Procuração assinada', antigo: true },
 };
+/* sem a convenção o contrato não é assinado: a solicitação avisa, e a advogada é avisada antes de mandar assinar */
+const AVISO_CONVENCAO = 'Sem a convenção do condomínio: o contrato não pode ser assinado sem ela. Anexe a convenção em Documentos (ou peça ao síndico) antes da assinatura.';
+const AVISO_CONVENCAO_JURIDICO = 'A convenção do condomínio não foi enviada: peça ao executivo antes de mandar assinar.';
 const GARANTIAS = ['Taxa ordinária', 'Taxa extraordinária', 'Água', 'Gás', 'Fundo de reserva', 'Fundo de obras', 'Locação de ambientes a condôminos'];
 const RECEITAS_CASHBACK = I.RECEITAS_CASHBACK;
 const LIMITE_EXTRA = 40; // % da ordinária coberto pela taxa administrativa normal (Cláusula 1ª, §2º)
@@ -131,8 +136,9 @@ function itensDiretoria(f, origem) {
 }
 
 /* avisos do Manual do Contrato: o que o comercial confirma com o síndico (e o Jurídico vê) */
-function avisos(f, { origem, diasAnalise, validadeProposta } = {}) {
+function avisos(f, { origem, diasAnalise, validadeProposta, semConvencao } = {}) {
   const l = [];
+  if (semConvencao) l.push({ nivel: 'atencao', texto: AVISO_CONVENCAO });
   const g = f.garantias || [];
   const p = pctExtra(f);
   if (g.includes('Fundo de obras')) l.push({ nivel: 'atencao', texto: 'Fundo de obras não consta no contrato-modelo: confirme com o Jurídico antes de prometer ao síndico.' });
@@ -149,7 +155,6 @@ function avisos(f, { origem, diasAnalise, validadeProposta } = {}) {
   if (temCashback(f)) l.push({ nivel: 'info', texto: 'Cashback e desconto de pontualidade mudam o texto que vai para assinatura: confira se foram mesmo negociados.' });
   l.push({ nivel: 'info', texto: comFidelizacao(f) ? `Cláusula 12ª na versão com fidelização${UF_FIDELIZACAO.includes(texto(f.uf).toUpperCase()) ? ' (contratos da Paraíba)' : ' (pedida na solicitação)'}: rescindir no período mínimo devolve à MyBlue o que ela adiantou.`
     : 'Cláusula 12ª na versão sem fidelização: rescisão com aviso de 90 dias no período mínimo e 60 dias depois.' });
-  l.push({ nivel: 'info', texto: 'Procuração: o síndico assina junto com o contrato; na troca de síndico, atualizar em até 15 dias.' });
   if (origem === 'entrega') l.push({ nivel: 'atencao', texto: 'Condomínio de entrega, sem análise de crédito: a diretoria aprova a taxa administrativa e o boleto antes da minuta.' });
   if (diasAnalise != null && validadeProposta && diasAnalise > validadeProposta) {
     l.push({ nivel: 'atencao', texto: `A proposta da análise vale ${validadeProposta} dias e a análise foi liberada há ${diasAnalise}: confira se as condições continuam valendo.` });
@@ -157,8 +162,6 @@ function avisos(f, { origem, diasAnalise, validadeProposta } = {}) {
   return l;
 }
 
-/* documentos que o comercial busca com o síndico: não travam o contrato, mas travam a operação depois */
-const pendencias = (docs = new Set()) => Object.keys(DOCUMENTOS).filter((t) => DOCUMENTOS[t].operacional && !docs.has(t)).map((t) => DOCUMENTOS[t].nome);
 
 /* o que mudou em relação à análise (taxa, boleto, vencimento, desconto) */
 const diferencas = (f, ref) => I.diferencas(f, ref);
@@ -361,11 +364,11 @@ function montarPdf(c, { executivo, responsavel, documentos = [], usuario, origem
   const cores = [];
   for (const [tipo, doc] of Object.entries(DOCUMENTOS)) {
     const atuais = vig.filter((x) => x.tipo === tipo);
-    if (!atuais.length && !doc.operacional) continue;
-    cores.push([linhas.length, 1, atuais.length ? '#2B7A55' : '#9A5B05']);
-    linhas.push([doc.nome, atuais.length ? 'entregue' : 'pendente', atuais.map((x) => `${x.nome} · ${quando(x.enviado_em)}`).join('; ') || 'trava a operação depois']);
+    if (!atuais.length && !doc.assinatura) continue;
+    cores.push([linhas.length, 1, atuais.length ? '#2B7A55' : '#B3261E']);
+    linhas.push([doc.nome, atuais.length ? (tipo === 'analise_credito' ? 'vinculada' : 'entregue') : 'falta', atuais.map((x) => `${x.nome} · ${quando(x.enviado_em)}`).join('; ') || 'necessária para assinar']);
   }
-  secoes.push({ numero: 6, titulo: 'Documentos', tabela: { titulo: 'Os documentos do síndico não travam o contrato, mas travam a cobrança, os boletos e o repasse depois', cab: ['Documento', 'Situação', 'Arquivo · enviado em'], larguras: [0.42, 0.13, 0.45], linhas, cores } });
+  secoes.push({ numero: 6, titulo: 'Documentos', tabela: { titulo: 'Os documentos do síndico são pedidos na Implantação', cab: ['Documento', 'Situação', 'Arquivo · enviado em'], larguras: [0.42, 0.13, 0.45], linhas, cores } });
   if (c.responsavel_id || c.minuta_enviada_em) {
     secoes.push({ titulo: 'Andamento no Jurídico', campos: [['Responsável', responsavel], ['Assumida em', quando(c.assumido_em)], ['Prazo (72h úteis)', quando(c.prazo)],
       ['Minuta enviada em', quando(c.minuta_enviada_em)], ['Ajustes pedidos', String(c.ajustes || 0)], ['Assinado em', quando(c.assinado_em)], ['Condições registradas em', quando(c.fechado_em)]] });
@@ -387,4 +390,4 @@ function montarPdf(c, { executivo, responsavel, documentos = [], usuario, origem
 }
 
 module.exports = { DOCUMENTOS, GARANTIAS, RECEITAS_CASHBACK, LIMITE_EXTRA, DOC_IMPLANTACAO, RESULTADO, CAPITAIS, FORO_PADRAO, daAnalise, doPdf, faltas, faltasCampos, itensDiretoria, avisos,
-  pendencias, diferencas, fechadoInicial, normalizarFechado, faltasFechado, diferencasFechado, mudancasFechado, implantacaoDiferente, paraImplantacao, comFidelizacao, montarPdf, cpfValido: I.cpfValido, cnpjOk: I.cnpjOk };
+  AVISO_CONVENCAO, AVISO_CONVENCAO_JURIDICO, diferencas, fechadoInicial, normalizarFechado, faltasFechado, diferencasFechado, mudancasFechado, implantacaoDiferente, paraImplantacao, comFidelizacao, montarPdf, cpfValido: I.cpfValido, cnpjOk: I.cnpjOk };

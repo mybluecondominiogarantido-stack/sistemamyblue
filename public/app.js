@@ -4831,7 +4831,7 @@
   }
   function linhaCt(c) {
     return '<tr class="clicavel" data-id="' + c.id + '"><td style="white-space:nowrap"><b>' + esc(c.protocolo || 'Rascunho') + '</b><span class="sec">' + dataHoraCr(c.enviado_em || c.criado_em) + '</span></td>' +
-      '<td><b>' + esc(c.condominio || 'Sem nome') + '</b><span class="sec">' + esc([c.uf, c.pendentes.length ? c.pendentes.length + ' documento(s) pendente(s)' : ''].filter(Boolean).join(' · ')) + '</span></td>' +
+      '<td><b>' + esc(c.condominio || 'Sem nome') + '</b>' + (c.sem_convencao && ['cancelada', 'assinado'].indexOf(c.etapa) < 0 ? ' ' + etq(['sem convenção', 'vermelha']) : '') + '<span class="sec">' + esc(c.uf || '') + '</span></td>' +
       '<td style="white-space:nowrap">' + esc(origemCt(c)) + '</td><td>' + esc(c.executivo_nome || '—') + '</td><td>' + etqCr(ETAPA_CT, c.etapa) +
       (c.diretoria === 'aguardando' ? ' ' + etq(['diretoria', 'ambar']) : '') + (c.ajustes ? '<span class="sec">' + c.ajustes + ' ajuste(s)</span>' : '') + '</td>' +
       '<td>' + comQuemCt(c) + '</td><td style="white-space:nowrap">' + prazoCt(c) + '</td></tr>';
@@ -5165,25 +5165,25 @@
       o = o || {};
       var t = porTipo[tipo];
       var atual = vig.filter(function (x) { return x.tipo === tipo; });
-      var st = atual.length ? etq([tipo === 'analise_credito' ? 'vinculada' : 'entregue', 'verde']) : o.obrigatorio ? etq(['falta', 'vermelha']) : t.operacional ? etq(['pendente', 'ambar'])
-        : ['minuta', 'contrato_assinado', 'procuracao'].indexOf(tipo) >= 0 ? etq(['a anexar', 'cinza']) : etq(['opcional', 'cinza']);
-      var podeAnexar = o.pode !== undefined ? o.pode : pd.documentos;
-      return '<div class="doc-linha"><b style="flex:1 1 260px">' + esc(t.nome) + (o.obrigatorio ? ' <span style="color:var(--red)" aria-label="obrigatório">*</span>' : '') + '</b>' + st + atual.map(lnk).join('') +
+      var st = atual.length ? etq([tipo === 'analise_credito' ? 'vinculada' : 'entregue', 'verde']) : o.obrigatorio ? etq(['falta', 'vermelha'])
+        : t.assinatura ? etq(['falta: necessária para assinar', 'vermelha']) : ['minuta', 'contrato_assinado'].indexOf(tipo) >= 0 ? etq(['a anexar', 'cinza']) : etq(['opcional', 'cinza']);
+      var podeAnexar = t.antigo ? false : o.pode !== undefined ? o.pode : pd.documentos;
+      return '<div class="doc-linha' + (t.assinatura && !atual.length ? ' invalido' : '') + '"><b style="flex:1 1 260px">' + esc(t.nome) + (o.obrigatorio ? ' <span style="color:var(--red)" aria-label="obrigatório">*</span>' : '') + '</b>' + st + atual.map(lnk).join('') +
         (podeAnexar && tipo !== 'analise_credito' ? '<label class="btn ghost sm">' + IC.enviar + (atual.length ? (tipo === 'outro' ? 'Anexar outro' : 'Trocar') : 'Anexar') + '<input type="file" data-doc-ct="' + tipo + '" hidden></label>' : '') + '</div>';
     }
-    var operacionais = m.documentos.filter(function (t) { return t.operacional; }).map(function (t) { return t.tipo; });
-    var nPend = operacionais.filter(function (t) { return !vig.some(function (x) { return x.tipo === t; }); }).length;
     var html = '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">6</span>Documentos</h2><span class="espaco"></span><span class="ajuda" style="margin:0">' +
-      (nPend ? nPend + ' documento(s) do síndico pendente(s)' : 'documentos do síndico completos') + '</span></div>';
+      'os documentos do síndico (atas, cadastros, RG…) são pedidos na Implantação</span></div>';
     var daAnalise = vig.some(function (x) { return x.tipo === 'analise_credito'; });
-    if (daAnalise) html += '<div class="sub-doc" style="border-top:0">Vieram da análise</div>' + linha('analise_credito');
-    html += '<div class="sub-doc"' + (daAnalise ? '' : ' style="border-top:0"') + '>Do síndico · não travam o contrato, mas travam a cobrança, os boletos e o repasse depois</div>' + operacionais.map(function (t) { return linha(t); }).join('');
+    html += '<div class="sub-doc" style="border-top:0">' + (daAnalise ? 'Da análise e para assinar' : 'Para assinar') + '</div>' + (daAnalise ? linha('analise_credito') : '') + linha('convencao');
     if (f.sem_cnpj) html += linha('ata_ago', { obrigatorio: true });
     var depoisDaMinuta = ['minuta_enviada', 'para_assinar', 'em_assinatura', 'conferencia', 'assinado'].indexOf(c.etapa) >= 0;
     var podeAssinado = pd.documentos && ['para_assinar', 'em_assinatura', 'conferencia'].indexOf(c.etapa) >= 0;
     var juridico = depoisDaMinuta || vig.some(function (x) { return x.tipo === 'minuta'; }) || pd.minuta;
     if (juridico) html += '<div class="sub-doc">Contrato</div>' + linha('minuta', { pode: pd.minuta }) +
-      (depoisDaMinuta && c.etapa !== 'minuta_enviada' ? linha('contrato_assinado', { pode: podeAssinado }) + linha('procuracao', { pode: podeAssinado }) : '');
+      (depoisDaMinuta && c.etapa !== 'minuta_enviada' ? linha('contrato_assinado', { pode: podeAssinado }) : '');
+    // anexados antes de os documentos do síndico irem para a Implantação: continuam visíveis (e seguem para ela)
+    var antigos = m.documentos.filter(function (t) { return t.antigo && vig.some(function (x) { return x.tipo === t.tipo; }); });
+    if (antigos.length) html += '<div class="sub-doc">Anexados antes (agora pedidos na Implantação)</div>' + antigos.map(function (t) { return linha(t.tipo); }).join('');
     var antigas = d.documentos.filter(function (x) { return x.tipo === 'minuta' && x.substituido_em; });
     if (antigas.length) html += '<div class="doc-linha"><span class="ajuda" style="margin:0;flex:1 1 200px">Versões anteriores da minuta</span>' + antigas.map(function (x) {
       return '<a class="anexo" href="/api/contratos/' + c.id + '/documentos/' + x.id + '" target="_blank" rel="noopener">' + IC.historico + '<span>' + esc(x.nome) + '</span><span class="sec">' + dataHoraCr(x.enviado_em) + '</span></a>';
@@ -5275,7 +5275,8 @@
 
   /* ---------- assinatura: o Jurídico manda assinar e anexa a via assinada ---------- */
   function marcarEmAssinaturaCt(c, depois) {
-    var mo = modal({ titulo: 'Enviado para assinatura · ' + (c.condominio || ''), corpo: '<label class="rot" for="mPlatCt">Como foi para assinatura</label>' +
+    var mo = modal({ titulo: 'Enviado para assinatura · ' + (c.condominio || ''), corpo: (c.sem_convencao ? '<div class="msg erro" style="margin-bottom:12px">A convenção do condomínio não foi enviada: peça ao executivo antes de mandar assinar.</div>' : '') +
+      '<label class="rot" for="mPlatCt">Como foi para assinatura</label>' +
       '<input class="campo" id="mPlatCt" list="lPlatCt" placeholder="Ex.: Clicksign"><datalist id="lPlatCt">' + PLATAFORMAS_CT.map(function (x) { return '<option value="' + esc(x) + '">'; }).join('') + '</datalist>' +
       '<label class="rot" for="mObsAssCt" style="margin-top:12px">Observação (opcional)</label><textarea class="campo" id="mObsAssCt" rows="2" placeholder="Ex.: enviado ao síndico e às testemunhas."></textarea>' +
       '<div class="ajuda">O executivo é avisado no sino. Quando voltar assinado, clique em <b>Assinado</b>.</div>',
@@ -5289,18 +5290,17 @@
     var c = d.contrato;
     var tem = function (t) { return d.documentos.some(function (x) { return x.tipo === t && !x.substituido_em; }); };
     var arq = function (id, rot, ja) { return '<div style="margin-bottom:12px"><label class="rot" for="' + id + '">' + rot + '</label>' + (ja ? '<div class="msg ok" style="margin-bottom:6px">Já anexado. Escolha outro arquivo só para trocar.</div>' : '') + '<input class="campo" type="file" id="' + id + '"></div>'; };
-    var mo = modal({ titulo: 'Contrato assinado · ' + (c.condominio || ''), corpo: arq('mArqAssCt', 'Contrato assinado', tem('contrato_assinado')) + arq('mArqProcCt', 'Procuração assinada', tem('procuracao')) +
-      '<label class="linha" style="font-size:13.5px;font-weight:700;color:var(--ink-2)"><input type="checkbox" id="mProcCt"> A procuração está no mesmo arquivo do contrato</label>' +
+    var mo = modal({ titulo: 'Contrato assinado · ' + (c.condominio || ''), corpo: (d.sem_convencao ? '<div class="msg erro" style="margin-bottom:12px">A convenção do condomínio não foi enviada: confira antes de seguir.</div>' : '') +
+      arq('mArqAssCt', 'Contrato assinado', tem('contrato_assinado')) +
       '<div class="ajuda">Em seguida, registre as condições fechadas: elas vêm do que foi pedido e seguem para a Implantação quando você concluir.</div>',
       pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mAssCtOk">Marcar como assinado</button>' });
     $('#mAssCtOk', mo).onclick = async function () {
       var b = this;
       b.disabled = true;
       try {
-        var a1 = $('#mArqAssCt', mo).files[0], a2 = $('#mArqProcCt', mo).files[0];
+        var a1 = $('#mArqAssCt', mo).files[0];
         if (a1) await enviarDocCt(c.id, 'contrato_assinado', a1);
-        if (a2) await enviarDocCt(c.id, 'procuracao', a2);
-        await api('POST', '/api/contratos/' + c.id + '/assinado', { procuracao_no_contrato: $('#mProcCt', mo).checked });
+        await api('POST', '/api/contratos/' + c.id + '/assinado', {});
         mo.fechar(); toast('Contrato assinado: registre as condições fechadas.', 'ok');
         if (location.hash === '#/contratos/' + c.id) depois(); else location.hash = '#/contratos/' + c.id;
       } catch (e) { b.disabled = false; toast(e.message, 'erro'); }
@@ -5314,7 +5314,8 @@
       return '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>' + titulo + '</h2><span class="etiqueta ' + ETAPA_CT[etapa][1] + '">' + lista.length + '</span><span class="ajuda" style="margin:0">' + ajuda + '</span></div>' +
         (lista.length ? '<div class="tabela-wrap"><table style="min-width:820px"><thead><tr><th>Protocolo</th><th>Condomínio</th><th>Executivo</th><th>Desde</th><th>Com quem</th><th></th></tr></thead><tbody>' +
           lista.map(function (c) {
-            return '<tr class="clicavel" data-id="' + c.id + '"><td style="white-space:nowrap"><b>' + esc(c.protocolo) + '</b></td><td><b>' + esc(c.condominio) + '</b><span class="sec">' + esc(c.uf || '') + (c.ajustes ? ' · ' + c.ajustes + ' ajuste(s)' : '') + '</span></td>' +
+            return '<tr class="clicavel" data-id="' + c.id + '"><td style="white-space:nowrap"><b>' + esc(c.protocolo) + '</b></td><td><b>' + esc(c.condominio) + '</b>' + (c.sem_convencao ? ' ' + etq(['sem convenção: peça antes de assinar', 'vermelha']) : '') +
+              '<span class="sec">' + esc(c.uf || '') + (c.ajustes ? ' · ' + c.ajustes + ' ajuste(s)' : '') + '</span></td>' +
               '<td>' + esc(c.executivo_nome || '—') + '</td><td style="white-space:nowrap">' + dataHoraCr(c[desde]) + '</td><td>' + comQuemCt(c) + '</td>' +
               '<td style="text-align:right"><button class="btn primary sm" data-acao-ass="' + etapa + '" data-c="' + c.id + '">' + botao + '</button></td></tr>';
           }).join('') + '</tbody></table></div>' : '<div class="corpo"><span class="sec">Nenhum.</span></div>') + '</section>';
@@ -5519,9 +5520,10 @@
       pedirTexto('Pedir ajuste na minuta', 'O que o síndico pediu para mudar', 'Ex.: trocar o foro para Natal/RN; prazo de 30 dias para contestar.', 'Pedir ajuste', 'ajuste', 'texto', 'Ajuste pedido ao Jurídico.', 'Volta para quem redigiu, com mais 72h úteis. Mudança em cláusula do manual? Confira a resposta padrão em Pedidos do síndico.');
     };
     if ($('#btPedirAssCt')) $('#btPedirAssCt').onclick = function () {
-      pedirTexto('Síndico aprovou: pedir assinatura', 'Observação para o Jurídico (opcional)', 'Ex.: o síndico assina pela Clicksign; e-mail dele: sindico@exemplo.com.', 'Pedir assinatura', 'pedir-assinatura', 'observacao', 'Pedido de assinatura enviado ao Jurídico.', 'O Jurídico manda para assinatura e anexa a via assinada. Você é avisado em cada passo.');
+      pedirTexto('Síndico aprovou: pedir assinatura', 'Observação para o Jurídico (opcional)', 'Ex.: o síndico assina pela Clicksign; e-mail dele: sindico@exemplo.com.', 'Pedir assinatura', 'pedir-assinatura', 'observacao', 'Pedido de assinatura enviado ao Jurídico.',
+        (d.sem_convencao ? '<b style="color:var(--red)">Falta a convenção do condomínio: sem ela o contrato não é assinado. Anexe em Documentos.</b> ' : '') + 'O Jurídico manda para assinatura e anexa a via assinada. Você é avisado em cada passo.');
     };
-    if ($('#btEmAssCt')) $('#btEmAssCt').onclick = function () { marcarEmAssinaturaCt(c, recarregar); };
+    if ($('#btEmAssCt')) $('#btEmAssCt').onclick = function () { marcarEmAssinaturaCt(Object.assign({}, c, { sem_convencao: d.sem_convencao }), recarregar); };
     if ($('#btAssinadoCt')) $('#btAssinadoCt').onclick = function () { marcarAssinadoCt(d, recarregar); };
     var decidir = function (aprovar) { post('diretoria', { aprovar: aprovar, observacao: $('#dObsCt').value }, aprovar ? 'Aprovado; o Jurídico e o executivo foram avisados.' : 'Não aprovado; o Jurídico e o executivo foram avisados.'); };
     if ($('#btDirSimCt')) $('#btDirSimCt').onclick = function () { decidir(true); };
@@ -5577,7 +5579,7 @@
       try {
         await salvar();
         var r = await api('POST', '/api/contratos/' + c.id + '/enviar', {});
-        toast('Enviada: protocolo ' + r.protocolo + '. Minuta até ' + dataHoraCr(r.prazo) + (r.diretoria.length ? '. A diretoria foi avisada.' : '.'), 'ok');
+        toast('Enviada: protocolo ' + r.protocolo + '. Minuta até ' + dataHoraCr(r.prazo) + (r.diretoria.length ? '. A diretoria foi avisada.' : '.') + (r.sem_convencao ? ' Falta a convenção: sem ela o contrato não é assinado.' : ''), 'ok');
         recarregar();
       } catch (e) { toast(e.message, 'erro'); recarregar(); }
     };

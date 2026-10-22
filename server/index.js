@@ -94,8 +94,8 @@ async function criarApp(cfg) {
   const boletosCarteira = criarBoletosCarteira({ db, documentos, espera: cfg.esperaCarteiraMs ?? 3000 });
   // Implantação: lembretes (fila sem designação, prazo para iniciar, documentos pendentes); o intervalo é ligado em iniciar()
   const rotinasImplantacao = criarRotinasImplantacao({ db, seg, avisos, expediente });
-  // Solicitação de Contrato: prazo da minuta vencido e documentos do síndico pendentes
-  const rotinasContratos = criarRotinasContratos({ db, avisos, expediente, regras });
+  // Solicitação de Contrato: prazo da minuta vencido
+  const rotinasContratos = criarRotinasContratos({ db, avisos, regras });
   const ctx = { db, seg, modulos, registros, documentos, avisos, expediente, acessos, regras, boletosCarteira, rotinasImplantacao, rotinasContratos, cfg };
 
   const app = express();

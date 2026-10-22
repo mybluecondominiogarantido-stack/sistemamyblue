@@ -115,7 +115,7 @@ test('a partir da análise: formulário preenchido, convenção e retorno vêm j
   assert.equal(d.contrato.etapa, 'rascunho');
   assert.deepEqual([d.contrato.formulario.nome, d.contrato.formulario.taxa_adm, d.contrato.formulario.taxa_extra, d.contrato.formulario.desconto_tipo], ['Condomínio Residencial Fictício', 3.5, 700, 'percentual']);
   assert.deepEqual(d.documentos.map((x) => x.tipo).sort(), ['analise_credito', 'convencao']);
-  assert.ok(d.pendencias.includes('Regimento interno'));
+  assert.equal(d.sem_convencao, false); // a convenção veio da análise
   assert.ok(!(await exec('GET', '/api/contratos/analises')).json.analises.some((x) => x.id === aid));
   assert.equal((await exec('POST', '/api/contratos', { origem: 'analise', analise_id: aid })).status, 404);
   assert.equal((await exec('GET', `/api/credito/analises/${aid}`)).json.contrato.id, idC);
@@ -137,7 +137,7 @@ test('enviar: confere o que falta, gera o protocolo, prazo de 72h úteis e avisa
   const p = await exec('PATCH', `/api/contratos/${idC}`, { formulario: FORM });
   assert.equal(p.status, 200, p.texto);
   assert.equal(p.json.itens_diretoria.length, 1);
-  assert.equal((await anexar(exec, idC, 'ata_eleicao')).status, 201);
+  assert.equal((await anexar(exec, idC, 'ata_eleicao')).status, 400); // os documentos do síndico são pedidos na Implantação
   assert.equal((await anexar(exec, idC, 'minuta')).status, 403); // a minuta é do Jurídico
   assert.equal((await anexar(exec, idC, 'qualquer')).status, 400);
   env = await exec('POST', `/api/contratos/${idC}/enviar`, {});
@@ -149,7 +149,7 @@ test('enviar: confere o que falta, gera o protocolo, prazo de 72h úteis e avisa
   for (const e of ['adv@teste.com', 'adv2@teste.com']) assert.match((await avisosDe(e)).pop().titulo, /^Nova solicitação de contrato · CT-/);
   assert.equal(emailsPara('adv@teste.com').length, 1);
   assert.match((await avisosDe('diretor@teste.com')).pop().texto, /despesas reembolsáveis/);
-  assert.match((await avisosDe('exec@teste.com')).pop().titulo, /^Documentos do síndico pendentes/);
+  assert.equal(env.json.sem_convencao, false);
   assert.equal((await exec('PATCH', `/api/contratos/${idC}`, { formulario: FORM })).status, 403);
   assert.equal((await diretor('GET', '/api/contratos/resumo')).json.diretoria, 1);
 });
@@ -203,11 +203,10 @@ test('assinatura: o executivo pede, a advogada manda assinar, anexa a via assina
   assert.equal((await exec('POST', `/api/contratos/${idC}/em-assinatura`, {})).status, 403); // é o Jurídico que manda assinar
   assert.equal((await adv('POST', `/api/contratos/${idC}/em-assinatura`, { plataforma: 'Clicksign' })).status, 200);
   assert.match((await avisosDe('exec@teste.com')).pop().titulo, /^Contrato em assinatura/);
-  assert.equal((await exec('POST', `/api/contratos/${idC}/assinado`, { procuracao_no_contrato: true })).status, 403); // o assinado é marcado pelo Jurídico
+  assert.equal((await exec('POST', `/api/contratos/${idC}/assinado`, {})).status, 403); // o assinado é marcado pelo Jurídico
   assert.equal((await adv('POST', `/api/contratos/${idC}/assinado`, {})).status, 400); // falta a via assinada
   assert.equal((await anexar(adv, idC, 'contrato_assinado', 'contrato_assinado.pdf')).status, 201);
-  assert.equal((await adv('POST', `/api/contratos/${idC}/assinado`, {})).status, 400); // falta a procuração
-  assert.equal((await adv('POST', `/api/contratos/${idC}/assinado`, { procuracao_no_contrato: true })).status, 200);
+  assert.equal((await adv('POST', `/api/contratos/${idC}/assinado`, {})).status, 200); // a procuração não é pedida
   assert.match((await avisosDe('exec@teste.com')).pop().titulo, /^Contrato assinado/);
   let d = (await adv('GET', `/api/contratos/${idC}`)).json;
   assert.equal(d.contrato.etapa, 'conferencia');
@@ -237,7 +236,7 @@ test('Implantação: abre com as condições fechadas, o contrato assinado e os 
   assert.equal(d.implantacao.contrato_id, idC);
   assert.deepEqual([d.implantacao.formulario.taxa_adm, d.implantacao.formulario.sindico_nome, d.implantacao.formulario.inicio_contrato], [3.25, 'Síndico Fictício', '2026-12-01']);
   assert.match(d.implantacao.formulario.observacoes, /Primeiro repasse adiantado/);
-  assert.deepEqual(d.documentos.map((x) => x.tipo).sort(), ['analise_credito', 'ata_eleicao', 'contrato', 'convencao']);
+  assert.deepEqual(d.documentos.map((x) => x.tipo).sort(), ['analise_credito', 'contrato', 'convencao']);
   assert.equal(d.contrato.fechado.foro, 'Natal/RN');
   assert.deepEqual(d.diferencas.map((x) => x.campo), ['taxa_adm']); // diferente da análise (3,50%)
 });
@@ -281,7 +280,6 @@ test('implantação aberta antes do contrato fechar: passa a mostrar as condiç�
   await adv('POST', `/api/contratos/${id}/minuta`, {});
   assert.equal((await exec('POST', `/api/contratos/${id}/pedir-assinatura`, {})).status, 200);
   await anexar(adv, id, 'contrato_assinado');
-  await anexar(adv, id, 'procuracao');
   assert.equal((await adv('POST', `/api/contratos/${id}/assinado`, {})).status, 200); // a via voltou sem marcar "em assinatura": também vale
   const x = (await adv('GET', `/api/contratos/${id}`)).json.contrato.fechado;
   const r = await adv('PUT', `/api/contratos/${id}/fechado`, { condicoes: x, concluir: true });
@@ -321,20 +319,38 @@ test('Dashboard Jurídico: o período (mês e ano), a situação de agora e quem
   assert.equal((await adv('GET', `/api/contratos/painel?ano=${ano - 1}`)).json.periodo.solicitados, 0);
 });
 
-test('rotinas: prazo da minuta vencido avisa uma vez; documentos do síndico pendentes, um e-mail por dia útil', async () => {
+test('sem convenção: a solicitação avisa, a advogada é avisada no pedido de assinatura e quando a convenção chega', async () => {
+  const a5 = await analiseLiberada(1, 'Residencial Fictício Sem Convenção');
+  const { id } = (await exec('POST', '/api/contratos', { origem: 'analise', analise_id: a5 })).json;
+  let d = (await exec('GET', `/api/contratos/${id}`)).json;
+  const conv = d.documentos.find((x) => x.tipo === 'convencao');
+  assert.equal((await exec('DELETE', `/api/contratos/${id}/documentos/${conv.id}`)).status, 200);
+  d = (await exec('GET', `/api/contratos/${id}`)).json;
+  assert.equal(d.sem_convencao, true);
+  assert.ok(d.avisos.some((a) => a.nivel === 'atencao' && /não pode ser assinado sem ela/.test(a.texto)));
+  await exec('PATCH', `/api/contratos/${id}`, { formulario: { ...FORM, nome: 'Residencial Fictício Sem Convenção', pedidos: [] } });
+  const env = await exec('POST', `/api/contratos/${id}/enviar`, {});
+  assert.equal(env.json.sem_convencao, true); // não impede o envio
+  assert.match((await avisosDe('adv@teste.com')).pop().texto, /convenção do condomínio não foi enviada/);
+  assert.ok((await adv('GET', '/api/contratos?vis=fila')).json.contratos.find((x) => x.id === id).sem_convencao);
+  await adv('POST', `/api/contratos/${id}/assumir`, {});
+  await anexar(adv, id, 'minuta');
+  await adv('POST', `/api/contratos/${id}/minuta`, {});
+  assert.equal((await exec('POST', `/api/contratos/${id}/pedir-assinatura`, {})).json.sem_convencao, true);
+  const aviso = (await avisosDe('adv@teste.com')).pop();
+  assert.match(aviso.titulo, /^Pronto para assinatura \(sem convenção\)/);
+  assert.match(aviso.texto, /peça ao executivo antes de mandar assinar/);
+  assert.equal((await anexar(exec, id, 'convencao')).status, 201);
+  assert.match((await avisosDe('adv@teste.com')).pop().titulo, /^Convenção chegou/);
+  assert.equal((await adv('GET', `/api/contratos/${id}`)).json.sem_convencao, false);
+  await adv('POST', `/api/contratos/${id}/cancelar`, {});
+});
+
+test('rotina: prazo da minuta vencido avisa uma vez', async () => {
   const a3 = await analiseLiberada(1, 'Residencial Fictício Aurora');
   const { id } = (await exec('POST', '/api/contratos', { origem: 'analise', analise_id: a3 })).json;
   await exec('PATCH', `/api/contratos/${id}`, { formulario: { ...FORM, nome: 'Residencial Fictício Aurora', pedidos: [] } });
   assert.equal((await exec('POST', `/api/contratos/${id}/enviar`, {})).status, 200);
-  // o lembrete dos documentos começa no próximo dia útil (no envio vai o aviso no sino)
-  const d = new Date();
-  do d.setUTCDate(d.getUTCDate() + 1); while ([0, 6].includes(d.getUTCDay()));
-  const amanha = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 13, 0));
-  const antes = emailsPara('exec@teste.com').length;
-  assert.equal((await ctx.rotinasContratos.executar(amanha)).documentos, 1);
-  await new Promise((ok) => setTimeout(ok, 20));
-  assert.match(emailsPara('exec@teste.com').slice(antes)[0].text, /Regimento interno/);
-  assert.equal((await ctx.rotinasContratos.executar(new Date(amanha.getTime() + 3600 * 1000))).documentos, 0);
   const semana = new Date(Date.now() + 7 * 24 * 3600 * 1000);
   const r = await ctx.rotinasContratos.executar(semana);
   assert.equal(r.prazos, 1);
@@ -398,7 +414,7 @@ test('solicitação em PDF, com as condições fechadas', { skip: !temGerador &&
   assert.equal(r.status, 200);
   assert.equal(r.headers.get('content-type'), 'application/pdf');
   const texto = require('child_process').execFileSync('pdftotext', ['-', '-'], { input: r.buffer }).toString();
-  for (const t of [/SOLICITAÇÃO DE CONTRATO/, /CT-\d{4}-\d{2}-\d{2}-01/, /Condomínio Residencial Fictício/, /CONDIÇÕES FECHADAS/, /Fortaleza\/CE/, /3,00%/, /Primeiro repasse adiantado/, /Regimento interno/]) {
+  for (const t of [/SOLICITAÇÃO DE CONTRATO/, /CT-\d{4}-\d{2}-\d{2}-01/, /Condomínio Residencial Fictício/, /CONDIÇÕES FECHADAS/, /Fortaleza\/CE/, /3,00%/, /Primeiro repasse adiantado/, /Convenção do condomínio/]) {
     assert.match(texto, t);
   }
 });

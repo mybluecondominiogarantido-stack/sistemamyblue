@@ -29,7 +29,7 @@ comercial) e `cancelada`. O pedido de ajuste volta a solicitação para `em_elab
 ## Quem faz o quê
 
 - **Comercial:** quem está ligado a um cadastro de executivo (Análise de Crédito → Pessoas e papéis). Pede, preenche,
-  anexa os documentos do síndico, pede ajuste na minuta e anexa o contrato assinado e a procuração.
+  anexa a convenção (quando a análise não trouxe), pede ajuste na minuta ou a assinatura.
 - **Quem elabora:** as pessoas marcadas pela administração em **Solicitação de Contrato → Quem elabora** (permissão
   `contratos.elaborar`). Enquanto ninguém for marcado, a administração recebe. Qualquer uma delas assume da fila e pode
   passar para outra; quem assumiu devolve com pendência, anexa e envia a minuta e registra as condições fechadas.
@@ -49,10 +49,12 @@ comercial) e `cancelada`. O pedido de ajuste volta a solicitação para `em_elab
 - **Obrigatórios para enviar:** os dados do formulário (CPF do síndico válido, e-mail, telefone, taxa, boleto, desconto,
   garantias, cashback, início, vencimento e as minúcias; sem nada diferente, "Nenhuma"). Sem CNPJ: a ciência dos 90 dias,
   a administradora e a ata da assembleia que autorizou a contratação.
-- **Documentos do síndico** (convenção, regimento, ata de eleição, atas das taxas, cadastro de proprietários e de
-  locatários, RG/CPF e comprovante de endereço do síndico): não travam o contrato, mas travam a operação. Ficam como
-  pendência, com o aviso no sino no envio e um e-mail por dia útil ao executivo até chegarem. A convenção e o retorno da
-  análise vêm da análise.
+- **Documentos:** o retorno e a convenção vêm da análise. Os documentos do síndico (atas, cadastros, RG…) **não** são
+  pedidos aqui: são da Implantação (os que já tinham sido anexados continuam visíveis e seguem para ela).
+- **Sem convenção:** não impede o envio, mas a solicitação avisa que o contrato não pode ser assinado sem ela, e a
+  advogada é avisada na nova solicitação, no pedido de assinatura ("Pronto para assinatura (sem convenção)"), na aba
+  Assinaturas e nas janelas de assinatura: ela pede a convenção antes de mandar assinar. Quando a convenção chega,
+  quem assumiu é avisado.
 - **Envio:** protocolo **CT-AAAA-MM-DD-NN** (sequencial por dia, Brasília). Prazo da minuta: **72h úteis = 3 dias de
   expediente** (`server/expediente.js`, pulando fim de semana e feriado), contado do envio; recomeça a cada ajuste e no
   reenvio depois de pendência. Passou do prazo, avisa (uma vez) quem assumiu, ou quem elabora se ninguém assumiu.
@@ -64,8 +66,7 @@ comercial) e `cancelada`. O pedido de ajuste volta a solicitação para `em_elab
 - **Assinatura:** com a minuta aprovada pelo síndico, o comercial clica em *Síndico aprovou: pedir assinatura*. Quem
   elabora vê na aba **Assinaturas** (pronto para assinatura, em assinatura, registrar condições), manda assinar e marca
   *Enviado para assinatura* (com a plataforma: Clicksign, D4Sign, física…). Quando a via assinada volta, marca
-  *Assinado*, anexando ali mesmo o contrato e a procuração (ou confirmando que ela está no mesmo arquivo), e registra as
-  condições fechadas. O comercial é avisado em cada passo.
+  *Assinado*, anexando ali mesmo o contrato assinado, e registra as condições fechadas (a procuração não é pedida). O comercial é avisado em cada passo.
 - **Condições fechadas:** vêm do pedido (foro na capital do estado se pedido, 30 dias de contestação se pedido, a
   decisão da diretoria) e a advogada corrige o que mudou: taxa, boleto, desconto e início, garantias, limite da taxa
   extra, cashback, início, vencimento, período mínimo, fidelização, foro, prazo de contestação e o resultado de cada
@@ -91,8 +92,8 @@ todo, datas em Brasília):
 
 - A implantação aberta de uma análise (ou do PDF) que tem solicitação de contrato traz os dados do contrato: as
   **condições fechadas valem sobre o pedido**. O contrato assinado entra nos documentos da implantação como "Contrato
-  assinado", e os documentos do síndico, nos tipos de lá (as atas das taxas como ata de previsão orçamentária, o cadastro
-  dos proprietários como cadastro de moradores; o que não tem tipo próprio entra como "outro").
+  assinado", e a convenção, se a implantação ainda não tiver (documentos do síndico anexados antes também vão, nos tipos
+  de lá).
 - A implantação mostra o quadro **Condições fechadas no contrato** (com a marca da última correção) e avisa quando o
   formulário dela está diferente do contrato (taxa, boleto, desconto, início, vencimento). Aberta antes do contrato fechar, ela é ligada ao
   contrato na conclusão, e quem conduz é avisado.
