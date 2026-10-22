@@ -645,16 +645,18 @@ module.exports = [
       await t.legenda('Voltou a via assinada: <b>Assinado</b>, anexando o contrato. Agora ela registra as <b>condições fechadas</b>.', { etapa: F, ms: 300 });
       await t.ir(`#/contratos/${j.contrato}`, 1800);
       await t.mostrar('#fechadoCt', 2600);
-      await t.legenda('As condições vêm do pedido: ela corrige o que mudou e clica em <b>Concluir: enviar à Implantação</b>.', { etapa: F, ms: 300 });
+      await t.legenda('As condições vêm do pedido: ela corrige o que mudou e clica em <b>Concluir contrato</b>. O trabalho do Jurídico termina aqui.', { etapa: F, ms: 300 });
       await t.clicar('#btFechConcluir', { depois: 1000 });
       await t.clicar('#mOk', { depois: 2400 });
-      await t.legenda('A implantação <b>abre sozinha</b>, com as condições fechadas, o contrato assinado e a convenção.', { etapa: F, ms: 300 });
-      await t.mostrar('a.etiqueta[href^="#/implantacao/"]', 2600);
-      j.implantacao = (await lara('GET', `/api/contratos/${j.contrato}`)).implantacao.id;
 
-      await capitulo(t, 7, 'Executivo', 'Completa a implantação e envia ao setor', 'vera@myblue.com.br', `#/implantacao/${j.implantacao}`);
+      await capitulo(t, 7, 'Executivo', 'Solicita a implantação', 'vera@myblue.com.br', `#/contratos/${j.contrato}`);
       const G = '7 · Implantação';
-      await t.legenda('O executivo é avisado. Na implantação, as <b>condições fechadas no contrato</b> já estão no formulário.', { etapa: G, ms: 300 });
+      await t.legenda('O executivo é avisado de que o contrato foi assinado. No contrato, ele clica em <b>Solicitar implantação</b>.', { etapa: G, ms: 300 });
+      await t.mostrar('.msg.info', 2200);
+      await t.clicar('#btAbrirImpCt', { depois: 900 });
+      await t.clicar('#mOk', { depois: 2600 });
+      j.implantacao = (await vera('GET', `/api/contratos/${j.contrato}`)).implantacao.id;
+      await t.legenda('A implantação abre com as <b>condições fechadas no contrato</b>, o contrato assinado e a convenção.', { etapa: G, ms: 300 });
       await t.mostrar('section.painel:has(h2:text("Condições fechadas no contrato"))', 3000);
       await t.legenda('Falta só o que é da implantação: honorários, parceria, antecipação e o consultor do condomínio.', { etapa: G, ms: 300 });
       await t.clicar('input[name=i_honorarios_op][value="12"]', { depois: 400 });
@@ -692,7 +694,7 @@ module.exports = [
       await t.clicar('#kOk', { depois: 2600 });
       await t.legenda('Pronto: o condomínio está na <b>Carteira</b>, com o contrato e as condições fechadas guardados na implantação.', { etapa: H8, ms: 3200 });
     },
-    resumo: ['<b>Análise de Crédito</b>: executivo pede · analista libera', '<b>Solicitação de Contrato</b>: Jurídico redige · síndico aprova · assinatura · condições fechadas', '<b>Implantação</b> abre sozinha · executivo completa · setor conclui · <b>Carteira</b>'],
+    resumo: ['<b>Análise de Crédito</b>: executivo pede · analista libera', '<b>Solicitação de Contrato</b>: Jurídico redige · síndico aprova · assinatura · condições fechadas', 'Executivo <b>solicita a implantação</b> · completa e envia · setor conclui · <b>Carteira</b>'],
   },
 
   /* ======================= Análise de Crédito ======================= */
@@ -983,7 +985,7 @@ module.exports = [
       await t.ir(`#/contratos/${cen.ctMinuta}`, 1800);
       await t.legenda('Quando a minuta chega, leve ao síndico. Pediu mudança? <b>Pedir ajuste</b>: volta para o Jurídico com mais 72h úteis.', { etapa: D, ms: 400 });
       await t.mostrar('#btAjusteCt', 2600);
-      await t.legenda('Aprovou? <b>Síndico aprovou: pedir assinatura</b>. O Jurídico manda assinar, anexa a via assinada e registra as condições fechadas, que seguem para a Implantação. Você é avisado em cada passo.', { etapa: D, ms: 400 });
+      await t.legenda('Aprovou? <b>Síndico aprovou: pedir assinatura</b>. O Jurídico manda assinar, anexa a via assinada e registra as condições fechadas. Você é avisado em cada passo e, no fim, clica em <b>Solicitar implantação</b>.', { etapa: D, ms: 400 });
       await t.mostrar('#btPedirAssCt', 3600);
       await t.legenda('Todos os seus contratos, até os assinados, ficam em <b>Acompanhamento de Contratos → Controle</b>.', { etapa: D, ms: 300 });
       await t.ir('#/acompanhamento-contratos/controle', 1800);
@@ -1000,7 +1002,7 @@ module.exports = [
       cen.ctAssinado = await contratoTut(base, 'Edifício Mirante do Sol', { ate: 'assinado' });
       cen.ctParaAssinar = await contratoTut(base, 'Condomínio Parque das Águas', { ate: 'para_assinar' });
     },
-    abertura: ['Da fila do Jurídico às condições fechadas na Implantação.', ['Assumir da fila', 'Pedidos com a resposta padrão', 'Minuta, ajustes e assinatura', 'Registrar as condições fechadas', 'Dashboard Jurídico']],
+    abertura: ['Da fila do Jurídico ao contrato assinado, com as condições fechadas.', ['Assumir da fila', 'Pedidos com a resposta padrão', 'Minuta, ajustes e assinatura', 'Registrar as condições fechadas', 'Dashboard Jurídico']],
     async gravar(t, cen) {
       const A = '1 · Fila';
       await t.legenda('Quando o comercial envia, quem elabora recebe o aviso no sino e por e-mail. A <b>Fila do Jurídico</b> mostra o prazo de cada minuta.', { etapa: A, ms: 600 });
@@ -1038,10 +1040,9 @@ module.exports = [
       for (const sel of await t.p.$$('[data-clausula] [data-k=resultado]')) { await sel.scrollIntoViewIfNeeded(); await sel.selectOption('aceito'); await t.pausa(900); }
       await t.legenda('<b>Salvar</b> guarda sem concluir e mostra o que ainda falta.', { etapa: C, ms: 300 });
       await t.clicar('#btFechSalvar', { depois: 2600 });
-      await t.legenda('<b>Concluir: enviar à Implantação</b>. A implantação abre sozinha, em rascunho, com essas condições, o contrato assinado e a convenção, e o executivo é avisado.', { etapa: C, ms: 600 });
+      await t.legenda('<b>Concluir contrato</b>: o contrato fica como assinado e o executivo é avisado para <b>solicitar a implantação</b>, que já vem com essas condições.', { etapa: C, ms: 600 });
       await t.clicar('#btFechConcluir', { depois: 1000 });
       await t.clicar('#mOk', { depois: 2600 });
-      await t.mostrar('a.etiqueta[href^="#/implantacao/"]', 2600);
       const P = '5 · Dashboard Jurídico';
       await t.legenda('O <b>Dashboard Jurídico</b>, no menu Jurídico, mostra o mês ou o ano: solicitados, alterações, assinaturas e fechados, e a situação de agora.', { etapa: P, ms: 200 });
       await t.ir('#/dashboard-juridico', 1800);

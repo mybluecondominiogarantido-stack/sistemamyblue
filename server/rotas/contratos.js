@@ -127,7 +127,7 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
       assinar: ['para_assinar', 'em_assinatura'].includes(c.etapa) && p.elaborador,
       registrar: c.etapa === 'conferencia' && p.elaborador,
       corrigir: c.etapa === 'assinado' && p.elaborador,
-      abrir_implantacao: c.etapa === 'assinado' && (dono || p.elaborador || p.admin),
+      abrir_implantacao: c.etapa === 'assinado' && (dono || p.admin),
       cancelar: aberta && ((dono && c.etapa !== 'em_elaboracao') || (p.elaborador && c.etapa !== 'rascunho') || p.admin),
     };
   }
@@ -825,7 +825,6 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
     // implantação já aberta para a mesma análise, ainda sem contrato: passa a mostrar estas condições
     const imp = concluir ? await db.um(`SELECT id, protocolo, responsavel_id FROM implantacoes WHERE etapa <> 'cancelada' AND (contrato_id = $3 OR (contrato_id IS NULL
       AND ((analise_id IS NOT NULL AND analise_id = $1) OR (analise_protocolo IS NOT NULL AND analise_protocolo = $2)))) ORDER BY id DESC LIMIT 1`, [c.analise_id, c.analise_protocolo, c.id]) : null;
-    let nova = null;
     await db.tx(async (t) => {
       if (concluir) {
         await t.q("UPDATE contratos SET fechado = $2::jsonb, fechado_por = $3, fechado_em = now(), concluido_em = now(), etapa = 'assinado', atualizado_em = now() WHERE id = $1",
@@ -833,37 +832,35 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
         if (imp) {
           await t.q('UPDATE implantacoes SET contrato_id = $2, atualizado_em = now() WHERE id = $1', [imp.id, c.id]);
           await t.q('INSERT INTO implantacao_eventos (implantacao_id, usuario_id, tipo, detalhe) VALUES ($1, $2, $3, $4::jsonb)', [imp.id, req.usuario.id, 'contrato', JSON.stringify({ protocolo: c.protocolo })]);
-        } else {
-          // sem implantação ainda: o portal abre em rascunho para o executivo, já com as condições fechadas
-          nova = await abrirDoContrato(t, { ...c, fechado, fechado_em: new Date() }, req.usuario.id);
         }
-        await evento(t, c.id, req.usuario.id, 'fechado', { diferencas: F.diferencasFechado(c.formulario || {}, fechado).map((d) => d.rotulo), implantacao: imp ? imp.protocolo || imp.id : nova, implantacao_aberta: !!nova });
+        // sem implantação: quem solicita é o executivo (Solicitar implantação, no contrato); as condições vão junto
+        await evento(t, c.id, req.usuario.id, 'fechado', { diferencas: F.diferencasFechado(c.formulario || {}, fechado).map((d) => d.rotulo), implantacao: imp ? imp.protocolo || imp.id : null });
       } else await t.q('UPDATE contratos SET fechado = $2::jsonb, atualizado_em = now() WHERE id = $1', [c.id, JSON.stringify(fechado)]);
     });
     if (!concluir) return res.json({ ok: true, faltas: F.faltasFechado(fechado) });
     await seg.auditar(req, 'contrato_fechado', null, { contrato: c.id, protocolo: c.protocolo, condominio: c.condominio });
-    await avisos.notificar(await donos(db, c), { link: imp ? link(c.id) : `#/implantacao/${nova}`, autor_id: req.usuario.id, tipo: 'contrato', email: true,
-      titulo: imp ? `Contrato concluído · ${c.protocolo} · ${c.condominio}` : `Contrato concluído: implantação aberta · ${c.condominio}`,
+    await avisos.notificar(await donos(db, c), { link: link(c.id), autor_id: req.usuario.id, tipo: 'contrato', email: true,
+      titulo: imp ? `Contrato concluído · ${c.protocolo} · ${c.condominio}` : `Contrato assinado: solicite a implantação · ${c.condominio}`,
       texto: imp ? `${req.usuario.nome} registrou as condições fechadas de ${c.condominio}. Elas já aparecem na implantação ${imp.protocolo || 'em rascunho'}.`
-        : `${req.usuario.nome} registrou as condições fechadas de ${c.condominio}. A implantação já foi aberta em rascunho, com as condições, o contrato assinado e a convenção: complete o formulário e os documentos do síndico e envie ao setor Implantação.` });
+        : `${req.usuario.nome} registrou as condições fechadas de ${c.condominio}. Abra o contrato e clique em Solicitar implantação: ela vem com as condições fechadas, o contrato assinado e a convenção.` });
     if (imp && imp.responsavel_id) {
       await avisos.notificar([imp.responsavel_id], { link: `#/implantacao/${imp.id}`, autor_id: req.usuario.id, tipo: 'implantacao', email: false,
         titulo: `Condições fechadas do contrato · ${imp.protocolo} · ${c.condominio}`, texto: `O contrato ${c.protocolo} foi concluído: as condições fechadas estão na implantação.` });
     }
-    res.json({ ok: true, implantacao: imp ? imp.id : nova, implantacao_aberta: !!nova });
+    res.json({ ok: true, implantacao: imp ? imp.id : null });
   });
 
-  /* contrato concluído antes de a implantação abrir sozinha (ou cuja implantação foi cancelada): abre agora */
+  /* o executivo solicita a implantação do contrato concluído: abre em rascunho com as condições fechadas, o contrato e a convenção */
   r.post('/api/contratos/:id/implantacao', json, async (req, res) => {
     const x = await carregar(req, res);
     if (!x) return;
     const { c, pd } = x;
-    if (!pd.abrir_implantacao) return erro(res, 403, 'A implantação abre com o contrato concluído (condições fechadas registradas).');
+    if (!pd.abrir_implantacao) return erro(res, 403, c.etapa === 'assinado' ? 'Quem solicita a implantação é o executivo do contrato.' : 'A implantação é solicitada com o contrato concluído (condições fechadas registradas).');
     const ja = await db.um(`SELECT id, protocolo FROM implantacoes WHERE etapa <> 'cancelada' AND (contrato_id = $3 OR (contrato_id IS NULL
       AND ((analise_id IS NOT NULL AND analise_id = $1) OR (analise_protocolo IS NOT NULL AND analise_protocolo = $2)))) ORDER BY id DESC LIMIT 1`, [c.analise_id, c.analise_protocolo, c.id]);
     if (ja) return erro(res, 409, `Este condomínio já tem implantação (${ja.protocolo || 'em rascunho'}).`, { implantacao: ja.id });
     const id = await db.tx((t) => abrirDoContrato(t, c, req.usuario.id));
-    await evento(db, c.id, req.usuario.id, 'implantacao_aberta', { implantacao: id });
+    await evento(db, c.id, req.usuario.id, 'implantacao_solicitada', { implantacao: id });
     res.status(201).json({ implantacao: id });
   });
 

@@ -63,8 +63,8 @@ A implantação aberta de uma análise que tem **Solicitação de Contrato** (`d
 do contrato: as condições fechadas pela advogada valem sobre o pedido do comercial. O contrato assinado e os documentos
 do síndico entram nos documentos (tipo "Contrato assinado" e os tipos equivalentes daqui). A tela mostra o quadro
 **Condições fechadas no contrato** (foro, fidelização, cláusulas negociadas); se o contrato fechar depois, a
-implantação é ligada a ele na conclusão. Sem implantação, **a conclusão do contrato abre uma sozinha**, em rascunho, com
-quem pediu o contrato (`abrirDoContrato`). Sem contrato assinado no portal, a implantação continua abrindo, com um aviso.
+implantação é ligada a ele na conclusão. Sem implantação, o executivo é avisado e clica em **Solicitar implantação** no
+contrato (`abrirDoContrato`): abre em rascunho, já com as condições fechadas. Sem contrato assinado no portal, a implantação continua abrindo, com um aviso.
 
 ## Outras origens
 

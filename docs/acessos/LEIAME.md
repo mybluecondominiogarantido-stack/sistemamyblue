@@ -168,8 +168,8 @@ Tela própria do portal (menu **Solicitação de Contrato**), não é uma ferram
 
 | Quem | Como entra | Pode |
 |---|---|---|
-| **Comercial** (executivo de negócios) | o mesmo cadastro de executivo da Análise de Crédito | pedir o contrato a partir das suas análises liberadas (ou do PDF, ou de condomínio de entrega), anexar a convenção (se a análise não trouxe), pedir ajuste na minuta ou a assinatura (síndico aprovou) e ver o controle das suas |
-| **Quem elabora** (Jurídico) | marcado pela administração em *Solicitação de Contrato → Quem elabora* (sem ninguém marcado, a administração recebe) | ver a fila, as assinaturas, o Dashboard Jurídico, todas as solicitações e o controle; assumir e passar para outra pessoa; quem assumiu devolve com pendência e envia a minuta; marcar *Enviado para assinatura* e *Assinado* (com a via assinada); registrar e corrigir as condições fechadas |
+| **Comercial** (executivo de negócios) | o mesmo cadastro de executivo da Análise de Crédito | pedir o contrato a partir das suas análises liberadas (ou do PDF, ou de condomínio de entrega), anexar a convenção (se a análise não trouxe), pedir ajuste na minuta ou a assinatura (síndico aprovou), ver o controle das suas e, com o contrato concluído, solicitar a implantação |
+| **Quem elabora** (Jurídico) | marcado pela administração em *Solicitação de Contrato → Quem elabora* (sem ninguém marcado, a administração recebe) | ver a fila, as assinaturas, o Dashboard Jurídico, todas as solicitações e o controle; assumir e passar para outra pessoa; quem assumiu devolve com pendência e envia a minuta; marcar *Enviado para assinatura* e *Assinado* (com a via assinada); registrar e corrigir as condições fechadas (não solicita a implantação: é o executivo) |
 | **Diretoria** | permissão *Chancelar análises de crédito* | decidir os itens que o Manual do Contrato reserva à diretoria antes da minuta; ver o Dashboard Jurídico e o controle |
 | **Administração** | perfil | tudo, inclusive escolher quem elabora |
 

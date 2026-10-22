@@ -4758,7 +4758,7 @@
     solicitacao: { titulo: 'Solicitação de Contrato', rota: '#/contratos', abas: [['minhas', 'Minhas solicitações'], ['fila', 'Fila do Jurídico'], ['diretoria', 'Diretoria'], ['equipe', 'Quem elabora']],
       sub: 'O comercial pede a minuta com as condições negociadas e o Jurídico assume e redige em até 72h úteis.' },
     acompanhamento: { titulo: 'Acompanhamento de Contratos', rota: '#/acompanhamento-contratos', abas: [['assinaturas', 'Assinaturas'], ['controle', 'Controle']],
-      sub: 'A minuta vai e volta até a assinatura, e a advogada registra as condições fechadas, que seguem para a Implantação.' },
+      sub: 'A minuta vai e volta até a assinatura, e a advogada registra as condições fechadas. Depois, o executivo solicita a implantação, que vem com essas condições.' },
     painel: { titulo: 'Dashboard Jurídico', rota: '#/dashboard-juridico', abas: [['painel', 'Dashboard Jurídico']],
       sub: 'Contratos solicitados, em alteração, aguardando o executivo, em assinatura e fechados, por mês e por ano.' },
   };
@@ -4768,7 +4768,7 @@
     enviada: 'enviou ao Jurídico', reenviada: 'reenviou depois da pendência', assumida: 'assumiu a solicitação', passada: 'passou a solicitação',
     pendencia: 'devolveu com pendência', minuta_enviada: 'enviou a minuta', ajuste: 'pediu ajuste na minuta', assinatura_pedida: 'informou que o síndico aprovou e pediu a assinatura',
     em_assinatura: 'mandou para assinatura', assinado: 'marcou o contrato como assinado',
-    fechado: 'registrou as condições fechadas', fechado_corrigido: 'corrigiu as condições fechadas', implantacao_aberta: 'abriu a implantação', cancelada: 'cancelou', diretoria_aprovou: 'aprovou (diretoria)', diretoria_recusou: 'não aprovou (diretoria)',
+    fechado: 'registrou as condições fechadas', fechado_corrigido: 'corrigiu as condições fechadas', implantacao_solicitada: 'solicitou a implantação', cancelada: 'cancelou', diretoria_aprovou: 'aprovou (diretoria)', diretoria_recusou: 'não aprovou (diretoria)',
   };
   var DESC_CT = { nenhum: 'Não possui', percentual: 'Percentual', valor: 'Valor por unidade' };
 
@@ -5276,7 +5276,7 @@
           '<div class="ajuda">O histórico guarda o que mudou (de → para). O executivo e a Implantação são avisados.</div>' +
           '<div class="linha" style="justify-content:flex-end;margin-top:10px"><button class="btn ghost sm" id="btCorrCancelar">Cancelar</button><button class="btn primary sm" id="btCorrSalvar">Salvar correção</button></div></div>'
         : edita ? '<div class="doc-linha" style="justify-content:flex-end">' + (d.faltas_fechado.length ? '<span class="ajuda" style="flex:1 1 300px;margin:0">Para concluir, falta: ' + esc(d.faltas_fechado.join(' ')) + '</span>' : '') +
-        '<button class="btn ghost sm" id="btFechSalvar">Salvar</button><button class="btn primary sm" id="btFechConcluir">Concluir: enviar à Implantação</button></div>' : '') + '</section>';
+        '<button class="btn ghost sm" id="btFechSalvar">Salvar</button><button class="btn primary sm" id="btFechConcluir">Concluir contrato</button></div>' : '') + '</section>';
   }
   function lerFechadoCt(raiz) {
     var v = function (k) { return valCt(k, raiz); };
@@ -5324,7 +5324,7 @@
     var arq = function (id, rot, ja) { return '<div style="margin-bottom:12px"><label class="rot" for="' + id + '">' + rot + '</label>' + (ja ? '<div class="msg ok" style="margin-bottom:6px">Já anexado. Escolha outro arquivo só para trocar.</div>' : '') + '<input class="campo" type="file" id="' + id + '"></div>'; };
     var mo = modal({ titulo: 'Contrato assinado · ' + (c.condominio || ''), corpo: (d.sem_convencao ? '<div class="msg erro" style="margin-bottom:12px">A convenção do condomínio não foi enviada: confira antes de seguir.</div>' : '') +
       arq('mArqAssCt', 'Contrato assinado', tem('contrato_assinado')) +
-      '<div class="ajuda">Em seguida, registre as condições fechadas: elas vêm do que foi pedido e seguem para a Implantação quando você concluir.</div>',
+      '<div class="ajuda">Em seguida, registre as condições fechadas: elas vêm do que foi pedido. Ao concluir, o executivo é avisado para solicitar a implantação, que vem com essas condições.</div>',
       pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mAssCtOk">Marcar como assinado</button>' });
     $('#mAssCtOk', mo).onclick = async function () {
       var b = this;
@@ -5354,7 +5354,7 @@
     };
     $('#corpoCt').innerHTML = grupo('para_assinar', 'Pronto para assinatura', 'o executivo informou que o síndico aprovou a minuta', 'assinatura_pedida_em', 'Enviado para assinatura') +
       grupo('em_assinatura', 'Em assinatura', 'aguardando a via assinada voltar', 'em_assinatura_em', 'Assinado') +
-      grupo('conferencia', 'Assinado · registrar as condições fechadas', 'confira a via assinada e conclua: as condições seguem para a Implantação', 'assinado_em', 'Registrar condições');
+      grupo('conferencia', 'Assinado · registrar as condições fechadas', 'confira a via assinada e conclua: o executivo é avisado para solicitar a implantação', 'assinado_em', 'Registrar condições');
     $$('#corpoCt tr[data-id]').forEach(function (tr) { tr.onclick = function (ev) { if (ev.target.closest('button')) return; location.hash = '#/contratos/' + tr.getAttribute('data-id'); }; });
     $$('[data-acao-ass]').forEach(function (b) {
       b.onclick = async function () {
@@ -5508,7 +5508,7 @@
     if (pd.pedir_assinatura) acoes += '<button class="btn primary sm" id="btPedirAssCt">Síndico aprovou: pedir assinatura</button>';
     if (pd.enviar_assinatura) acoes += '<button class="btn primary sm" id="btEmAssCt">Enviado para assinatura</button>';
     if (pd.assinar) acoes += '<button class="btn ' + (pd.enviar_assinatura ? 'ghost' : 'primary') + ' sm" id="btAssinadoCt">Assinado</button>';
-    if (pd.abrir_implantacao && !d.implantacao) acoes += '<button class="btn primary sm" id="btAbrirImpCt">' + IC.casa + 'Abrir implantação</button>';
+    if (pd.abrir_implantacao && !d.implantacao) acoes += '<button class="btn primary sm" id="btAbrirImpCt">' + IC.casa + 'Solicitar implantação</button>';
     definirBarra('<span class="setor">Jurídico</span><span class="sep">/</span><span class="nome">' + esc(c.protocolo || 'Rascunho') + '</span>', acoes);
     var difs = {};
     d.diferencas.forEach(function (x) { difs[x.campo] = x; });
@@ -5527,7 +5527,8 @@
       (['fila', 'em_elaboracao'].indexOf(c.etapa) >= 0 && c.prazo ? '<dt>Minuta até (72h úteis)</dt><dd>' + prazoCt(c) + '</dd>' : '') +
       (c.ajustes ? '<dt>Ajustes pedidos</dt><dd>' + c.ajustes + '</dd>' : '') +
       (c.minuta_enviada_em ? '<dt>Última minuta</dt><dd>' + dataHoraCr(c.minuta_enviada_em) + '</dd>' : '') +
-      (c.assinado_em ? '<dt>Assinado (anexado)</dt><dd>' + dataHoraCr(c.assinado_em) + '</dd>' : '') + '</dl></div>';
+      (c.assinado_em ? '<dt>Assinado (anexado)</dt><dd>' + dataHoraCr(c.assinado_em) + '</dd>' : '') + '</dl></div>' +
+      (pd.abrir_implantacao && !d.implantacao ? '<div class="msg info" style="margin-bottom:16px"><b>Contrato assinado e condições registradas pelo Jurídico.</b> Agora é com você: clique em <b>Solicitar implantação</b>. Ela já vem com as condições fechadas, o contrato assinado e a convenção.</div>' : '');
 
     var dir = c.diretoria || {};
     var itensDir = d.itens_diretoria || [];
@@ -5611,10 +5612,10 @@
     if ($('#btEmAssCt')) $('#btEmAssCt').onclick = function () { marcarEmAssinaturaCt(Object.assign({}, c, { sem_convencao: d.sem_convencao }), recarregar); };
     if ($('#btAssinadoCt')) $('#btAssinadoCt').onclick = function () { marcarAssinadoCt(d, recarregar); };
     if ($('#btAbrirImpCt')) $('#btAbrirImpCt').onclick = async function () {
-      if (!(await confirmar('Abrir a implantação', 'A implantação abre em rascunho com as condições fechadas, o contrato assinado e a convenção.', 'Abrir'))) return;
+      if (!(await confirmar('Solicitar a implantação', 'A implantação abre em rascunho com as condições fechadas, o contrato assinado e a convenção. Complete o que falta e envie ao setor Implantação.', 'Solicitar'))) return;
       try {
         var r = await api('POST', '/api/contratos/' + c.id + '/implantacao', {});
-        toast('Implantação aberta com as condições fechadas.', 'ok');
+        toast('Implantação aberta com as condições fechadas: complete e envie ao setor Implantação.', 'ok');
         location.hash = '#/implantacao/' + r.implantacao;
       } catch (e) { toast(e.message, 'erro'); }
     };
@@ -5639,13 +5640,13 @@
       var salvarFech = async function (concluir) {
         try {
           var r = await api('PUT', '/api/contratos/' + c.id + '/fechado', { condicoes: lerFechadoCt(fech), concluir: concluir });
-          toast(concluir ? (r.implantacao_aberta ? 'Contrato concluído: a implantação foi aberta com as condições fechadas.' : 'Condições registradas: seguem para a implantação do condomínio.') : r.faltas.length ? 'Salvo. Para concluir, falta: ' + r.faltas.length + '.' : 'Salvo: pronto para concluir.', 'ok');
+          toast(concluir ? (r.implantacao ? 'Contrato concluído: as condições já aparecem na implantação do condomínio.' : 'Contrato concluído. O executivo foi avisado para solicitar a implantação.') : r.faltas.length ? 'Salvo. Para concluir, falta: ' + r.faltas.length + '.' : 'Salvo: pronto para concluir.', 'ok');
           recarregar();
         } catch (e) { toast(e.message, 'erro'); }
       };
       if ($('#btFechSalvar')) $('#btFechSalvar').onclick = function () { salvarFech(false); };
       if ($('#btFechConcluir')) $('#btFechConcluir').onclick = async function () {
-        if (!(await confirmar('Concluir o contrato', 'As condições fechadas seguem para a Implantação e o executivo é avisado.', 'Concluir'))) return;
+        if (!(await confirmar('Concluir o contrato', 'O contrato fica como assinado e o executivo é avisado para solicitar a implantação, que vem com estas condições.', 'Concluir'))) return;
         salvarFech(true);
       };
     }

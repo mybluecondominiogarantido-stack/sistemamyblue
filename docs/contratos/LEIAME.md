@@ -78,8 +78,8 @@ comercial) e `cancelada`. O pedido de ajuste volta a solicitação para `em_elab
 - **Condições fechadas:** vêm do pedido (foro na capital do estado se pedido, 30 dias de contestação se pedido, a
   decisão da diretoria) e a advogada corrige o que mudou: taxa, boleto, desconto e início, garantias, limite da taxa
   extra, cashback, início, vencimento, período mínimo, fidelização, foro, prazo de contestação e o resultado de cada
-  cláusula pedida (aceito, em parte ou recusado, com a redação). Concluir leva a `assinado`, **abre a implantação** (veja
-  abaixo) e avisa o executivo.
+  cláusula pedida (aceito, em parte ou recusado, com a redação). Concluir leva a `assinado` e avisa o executivo para
+  **solicitar a implantação** (veja abaixo). O Jurídico não abre a implantação.
 - **Contratos encerrados:** ficam em Acompanhamento de Contratos → **Controle** (filtro "Assinado" ou busca). As condições ficam travadas; quem
   elabora usa **Corrigir condições**, com o motivo obrigatório. O histórico guarda o que mudou (de → para), e o
   executivo e a Implantação (quem conduz, ou a coordenação) são avisados.
@@ -102,11 +102,13 @@ todo, datas em Brasília):
 
 ## Implantação
 
-- **Concluir as condições fechadas abre a implantação sozinha**, em rascunho, ligada ao contrato (`abrirDoContrato` em
-  `server/rotas/implantacoes.js`): o formulário vem da análise (ou do PDF do retorno, ou da entrega, já com a aprovação
-  da diretoria) com as condições fechadas por cima, e entram o contrato assinado, a convenção e o retorno da análise.
-  Se o condomínio já tinha implantação, ela só é ligada ao contrato. Contrato concluído sem implantação (concluído antes
-  disso, ou com a implantação cancelada): botão **Abrir implantação** no contrato (`POST /api/contratos/:id/implantacao`).
+- **Quem solicita a implantação é o executivo.** Concluído o contrato, ele é avisado e clica em **Solicitar implantação**
+  no próprio contrato (`POST /api/contratos/:id/implantacao`, só o executivo do contrato ou a administração). A
+  implantação abre em rascunho, ligada ao contrato (`abrirDoContrato` em `server/rotas/implantacoes.js`): o formulário
+  vem da análise (ou do PDF do retorno, ou da entrega, já com a aprovação da diretoria) com as condições fechadas por
+  cima, e entram o contrato assinado, a convenção e o retorno da análise. Ele completa e envia ao setor Implantação.
+  Também pode abrir pela própria Implantação (Nova implantação → a análise), que traz o contrato do mesmo jeito. Se o
+  condomínio já tinha implantação quando o contrato foi concluído, ela só é ligada ao contrato.
 - A implantação aberta de uma análise (ou do PDF) que tem solicitação de contrato traz os dados do contrato: as
   **condições fechadas valem sobre o pedido**. O contrato assinado entra nos documentos da implantação como "Contrato
   assinado", e a convenção, se a implantação ainda não tiver (documentos do síndico anexados antes também vão, nos tipos
@@ -126,7 +128,8 @@ ficam em `server/contratos/clausulas.js`. Mudou o manual? Atualize esse arquivo 
 
 No catálogo (`server/tutoriais.js`): `contrato-solicitar` (executivos, quem elabora e diretoria) e `contrato-elaborar`
 (quem elabora). E `jornada-credito-implantacao`: um condomínio fictício da análise de crédito até a Carteira, passando
-pelo contrato, com cada pessoa fazendo a sua parte (executivo, analista, advogada e o setor Implantação). Roteiros em
+pelo contrato, com cada pessoa fazendo a sua parte (executivo, analista, advogada, o executivo solicitando a implantação
+e o setor Implantação). Roteiros em
 `docs/tutoriais/fonte/roteiros.js`; no cenário de gravação, a advogada fictícia Lara Mendes.
 
 ## Dados
