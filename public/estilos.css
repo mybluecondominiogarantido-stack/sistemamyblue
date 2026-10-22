@@ -437,7 +437,11 @@ fieldset.invalido legend,label.invalido{color:var(--red) !important}
 .grafico-ct .eixo-ct.forte{fill:var(--ink)}
 .grafico-ct .faixa-ct{fill:transparent}
 .grafico-ct .mes-ct:hover .faixa-ct,.grafico-ct .mes-ct.ativo .faixa-ct{fill:var(--surface-2)}
-.b1-ct{fill:#1793ad;background:#1793ad}
-.b2-ct{fill:#c26a1f;background:#c26a1f}
+/* comparativo do Dashboard Jurídico: 4 séries, paleta categórica validada (daltonismo e contraste; a tabela acompanha) */
+.b1-ct{fill:#2a78d6;background:#2a78d6}
+.b2-ct{fill:#eb6834;background:#eb6834}
+.b3-ct{fill:#1baf7a;background:#1baf7a}
+.b4-ct{fill:#eda100;background:#eda100}
+tr.sel-ct td{background:var(--surface-2)}
 .legenda-ct{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:var(--ink-2)}
 .legenda-ct i{width:12px;height:12px;border-radius:3px;display:inline-block}

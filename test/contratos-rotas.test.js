@@ -318,6 +318,9 @@ test('Dashboard Jurídico: o período (mês e ano), a situação de agora e quem
   assert.ok(r.periodo.ajustes >= 1);
   assert.equal(r.meses.length, 12);
   assert.equal(r.meses[mes - 1].fechados, 2);
+  // o comparativo do mês: solicitados, aguardando assinatura (pedidos), em assinatura (enviados) e assinados
+  const m = r.meses[mes - 1];
+  assert.deepEqual([m.solicitados, m.aguardando_assinatura, m.em_assinatura, m.assinados], [r.periodo.solicitados, 2, 1, 2]);
   assert.equal(r.tempos.ajustes_por_contrato, 0.5);
   assert.ok(r.por_executivo.some((x) => x.nome === 'Executiva Fictícia' && x.fechados === 2));
   const ano2 = (await diretor('GET', `/api/contratos/painel?ano=${ano}`)).json;

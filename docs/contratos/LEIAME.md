@@ -94,7 +94,10 @@ todo, datas em Brasília):
 - **Agora:** na fila, em elaboração (primeira minuta), em alteração (ajuste pedido), pendência com o comercial,
   aguardando o executivo (pedir assinatura ou ajuste), pronto para assinatura, em assinatura, registrar condições e os
   que passaram do prazo.
-- Solicitados e fechados mês a mês no ano (com a tabela), os tempos médios (até a primeira minuta, do pedido ao
+- **Comparativo mês a mês** do ano (gráfico de barras com a tabela e a diferença para o mês anterior): solicitados,
+  aguardando assinatura (assinatura pedida pelo executivo no mês), em assinatura (enviados para assinatura no mês) e
+  assinados (via assinada anexada no mês). Clicar num mês filtra o período.
+- Os tempos médios (até a primeira minuta, do pedido ao
   fechamento, alterações por contrato) e as contas por executivo e por responsável no Jurídico.
 
 ## Implantação
@@ -122,7 +125,9 @@ ficam em `server/contratos/clausulas.js`. Mudou o manual? Atualize esse arquivo 
 ## Tutoriais
 
 No catálogo (`server/tutoriais.js`): `contrato-solicitar` (executivos, quem elabora e diretoria) e `contrato-elaborar`
-(quem elabora). Roteiros em `docs/tutoriais/fonte/roteiros.js`; no cenário de gravação, a advogada fictícia Lara Mendes.
+(quem elabora). E `jornada-credito-implantacao`: um condomínio fictício da análise de crédito até a Carteira, passando
+pelo contrato, com cada pessoa fazendo a sua parte (executivo, analista, advogada e o setor Implantação). Roteiros em
+`docs/tutoriais/fonte/roteiros.js`; no cenário de gravação, a advogada fictícia Lara Mendes.
 
 ## Dados
 

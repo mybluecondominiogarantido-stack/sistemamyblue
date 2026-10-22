@@ -239,7 +239,7 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
     const mes = Math.min(12, Math.max(0, Number(req.query.mes) || 0));
     const chave = (d) => (d ? diaBrasilia(new Date(d)).slice(0, 7) : '');
     const noPeriodo = (d) => { const k = chave(d); return !!k && Number(k.slice(0, 4)) === ano && (!mes || Number(k.slice(5, 7)) === mes); };
-    const contratos = (await db.q(`SELECT c.id, c.etapa, c.ajustes, c.prazo, c.enviado_em, c.fechado_em, c.assinatura_pedida_em, c.em_assinatura_em,
+    const contratos = (await db.q(`SELECT c.id, c.etapa, c.ajustes, c.prazo, c.enviado_em, c.fechado_em, c.assinatura_pedida_em, c.em_assinatura_em, c.assinado_em,
         e.nome AS executivo, ur.nome AS responsavel FROM contratos c LEFT JOIN executivos e ON e.id = c.executivo_id LEFT JOIN usuarios ur ON ur.id = c.responsavel_id
       WHERE c.etapa <> 'rascunho' AND c.enviado_em IS NOT NULL`)).rows;
     const eventos = (await db.q(`SELECT ev.contrato_id, ev.tipo, ev.detalhe, ev.criado_em FROM contrato_eventos ev
@@ -286,7 +286,11 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
       },
       meses: Array.from({ length: 12 }, (_, k) => {
         const m = `${ano}-${String(k + 1).padStart(2, '0')}`;
-        return { mes: k + 1, solicitados: conta(contratos, (c) => chave(c.enviado_em) === m), fechados: conta(contratos, (c) => c.etapa === 'assinado' && chave(c.fechado_em) === m) };
+        // o comparativo mês a mês: o que aconteceu em cada mês (pedido, pedido de assinatura, enviado para assinatura, assinado)
+        return { mes: k + 1, solicitados: conta(contratos, (c) => chave(c.enviado_em) === m),
+          aguardando_assinatura: conta(contratos, (c) => chave(c.assinatura_pedida_em) === m), em_assinatura: conta(contratos, (c) => chave(c.em_assinatura_em) === m),
+          assinados: conta(contratos, (c) => c.etapa !== 'cancelada' && chave(c.assinado_em) === m),
+          fechados: conta(contratos, (c) => c.etapa === 'assinado' && chave(c.fechado_em) === m) };
       }),
       tempos: {
         primeira_minuta_dias: media(contratos.filter((c) => primeira.has(c.id) && noPeriodo(primeira.get(c.id))).map((c) => dias(c.enviado_em, primeira.get(c.id)))),
