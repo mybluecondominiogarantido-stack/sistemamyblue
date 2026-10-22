@@ -127,9 +127,10 @@ ficam em `server/contratos/clausulas.js`. Mudou o manual? Atualize esse arquivo 
 ## Tutoriais
 
 No catálogo (`server/tutoriais.js`): `contrato-solicitar` (executivos, quem elabora e diretoria) e `contrato-elaborar`
-(quem elabora). E `jornada-credito-implantacao`: um condomínio fictício da análise de crédito até a Carteira, passando
-pelo contrato, com cada pessoa fazendo a sua parte (executivo, analista, advogada, o executivo solicitando a implantação
-e o setor Implantação). Roteiros em
+(quem elabora). E a jornada de um condomínio fictício da análise de crédito até a Carteira, em dois vídeos:
+`jornada-credito-implantacao` (pelo executivo: só a tela dele, com cartões "Enquanto isso" para o que os outros fazem) e
+`jornada-credito-implantacao-equipe` (por quem executa: analista de crédito, advogada, coordenação e assistente da
+Implantação). Os passos que cada vídeo não mostra são feitos pela API em `passosJor`. Roteiros em
 `docs/tutoriais/fonte/roteiros.js`; no cenário de gravação, a advogada fictícia Lara Mendes.
 
 ## Dados
