@@ -4446,7 +4446,7 @@
     }
     function linha(t) {
       var atual = vig.filter(function (x) { return x.tipo === t.tipo; });
-      var st = atual.length ? etq([t.tipo === 'analise_credito' ? 'vinculada' : 'entregue', 'verde']) : t.obrigatorio ? etq(['falta', 'vermelha']) : t.pendente ? etq(['pendente', 'ambar']) : etq(['opcional', 'cinza']);
+      var st = atual.length ? etq([t.tipo === 'analise_credito' ? 'vinculada' : 'entregue', 'verde']) : t.obrigatorio ? etq(['falta', 'vermelha']) : t.setor ? etq(['com a Implantação', 'azul']) : t.pendente ? etq(['pendente', 'ambar']) : etq(['opcional', 'cinza']);
       return '<div class="doc-linha"><b style="flex:1 1 260px">' + esc(t.nome) + (t.obrigatorio ? ' <span style="color:var(--red)" aria-label="obrigatório">*</span>' : '') + '</b>' + st + atual.map(lnk).join('') +
         (pd.documentos && t.tipo !== 'analise_credito' ? '<label class="btn ghost sm">' + IC.enviar + (atual.length ? (t.tipo === 'outro' ? 'Anexar outro' : 'Trocar') : 'Anexar') + '<input type="file" data-doc-imp="' + t.tipo + '" hidden></label>' : '') + '</div>';
     }
@@ -4455,11 +4455,13 @@
     var depois = m.documentos.filter(function (t) { return (t.pendente || (t.obrigatorio && obrigTipos.indexOf(t.tipo) < 0) || (t.tipo === 'analise_credito' && i.origem !== 'entrega') || t.tipo === 'contrato') && t.tipo !== 'outro'; })
       .map(function (t) { return Object.assign({}, t, { obrigatorio: false, pendente: ['analise_credito', 'contrato'].indexOf(t.tipo) < 0 }); });
     var outro = m.documentos.filter(function (t) { return t.tipo === 'outro'; });
+    var doSetor = m.documentos.filter(function (t) { return t.setor; });
     var nObrig = obrig.filter(function (t) { return vig.some(function (x) { return x.tipo === t.tipo; }); }).length;
     return '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">7</span>Documentos</h2><span class="espaco"></span>' + (obrig.length ? '<span class="ajuda" style="margin:0">obrigatórios: ' + nObrig + ' de ' + obrig.length + '</span>' : '') + '</div>' +
       (obrig.length ? '<div class="sub-doc" style="border-top:0">Obrigatórios para enviar</div>' + obrig.map(linha).join('') : '') +
       '<div class="sub-doc"' + (obrig.length ? '' : ' style="border-top:0"') + '>' + (i.origem === 'entrega' ? 'Condomínio de entrega: os documentos podem chegar depois; o que ficar pendente vira alerta para o executivo' : 'Podem chegar depois: o que ficar pendente vira alerta para o executivo') + '</div>' +
-      depois.map(linha).join('') + outro.map(linha).join('') + '</section>';
+      depois.map(linha).join('') +
+      (doSetor.length ? '<div class="sub-doc">A equipe de Implantação providencia e anexa</div>' + doSetor.map(linha).join('') : '') + outro.map(linha).join('') + '</section>';
   }
   function ligarDocsImp(i, recarregar) {
     $$('input[data-doc-imp]').forEach(function (inp) {
@@ -4784,17 +4786,17 @@
             d.docs.map(function (x) { return '<td class="centro">' + marcaAcomp(!!x.em, x.nome + (x.em ? ': recebido' : ': pendente')) + (x.em ? '<span class="sec">' + dataBr(x.em).slice(0, 5) + '</span>' : '') + '</td>'; }).join('') +
             '<td style="min-width:230px">' + statusDocAcomp(d) + (d.manual ? '<span class="sec" title="' + esc(d.manual.motivo) + '">"' + esc(d.manual.motivo.length > 60 ? d.manual.motivo.slice(0, 60) + '…' : d.manual.motivo) + '" · ' + esc(d.manual.por_nome || '') + '</span>' : '') +
             (l.cobranca_doc_em ? '<span class="sec">cobrado em ' + dataHoraCr(l.cobranca_doc_em) + '</span>' : '') +
-            '<span class="acoes-acomp">' + (j.pode.cobrar && d.falta.length && !d.manual ? '<button class="link-acomp" data-cobrar="' + l.id + '">Cobrar</button>' : '') +
+            '<span class="acoes-acomp">' + (j.pode.cobrar && d.falta_executivo.length && !d.manual ? '<button class="link-acomp" data-cobrar="' + l.id + '">Cobrar</button>' : '') +
             (j.pode.marcar && (d.status !== 'batida' || d.manual) ? '<button class="link-acomp" data-marcar="' + l.id + '">Marcar à mão</button>' : '') + '</span></td></tr>';
         }).join('') || '<tr><td colspan="' + (3 + p.docs_meta.length) + '"><div class="vazio" style="border:0;padding:30px">Nada por aqui.</div></td></tr>') + '</tbody></table></div>' +
-        '<p class="ajuda" style="margin:0;padding:8px 16px 14px">"Cobrar" envia ao executivo, no portal e por e-mail, a lista do que falta; faltando ' + 3 + ' dias para o limite, o portal lembra sozinho. "Marcar à mão" é da coordenação e substitui o cálculo naquele condomínio, com motivo.</p></section>';
+        '<p class="ajuda" style="margin:0;padding:8px 16px 14px">A procuração é providenciada pela equipe de Implantação. "Cobrar" envia ao executivo, no portal e por e-mail, o que é dele; faltando ' + 3 + ' dias para o limite, o portal lembra sozinho. "Marcar à mão" é da coordenação e substitui o cálculo naquele condomínio, com motivo.</p></section>';
       $('#dcSit', raiz).onchange = function () { f.docSit = this.value; desenhar(); };
       $('#dcAn', raiz).onchange = function () { f.analista = this.value; desenhar(); };
       $$('[data-cobrar]', raiz).forEach(function (b) {
         b.onclick = async function () {
           var l = j.linhas.find(function (x) { return String(x.id) === b.getAttribute('data-cobrar'); });
           var d = l.documentacao;
-          if (!await confirmar('Cobrar documentos · ' + l.condominio, 'O executivo' + (l.executivo_nome ? ' (' + esc(l.executivo_nome) + ')' : '') + ' recebe no portal e por e-mail a lista do que falta: ' + esc(d.falta.join(', ')) + '. O prazo é ' + dataBr(d.limite) + '.', 'Enviar cobrança')) return;
+          if (!await confirmar('Cobrar documentos · ' + l.condominio, 'O executivo' + (l.executivo_nome ? ' (' + esc(l.executivo_nome) + ')' : '') + ' recebe no portal e por e-mail a lista do que falta: ' + esc(d.falta_executivo.join(', ')) + '. O prazo é ' + dataBr(d.limite) + '.', 'Enviar cobrança')) return;
           try { await api('POST', '/api/implantacoes/' + l.id + '/cobrar-documentos', {}); toast('Cobrança enviada ao executivo.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
         };
       });

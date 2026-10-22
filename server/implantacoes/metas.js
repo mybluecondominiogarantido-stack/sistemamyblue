@@ -126,7 +126,9 @@ function statusDocumentacao(i, enviado, datas, p, hoje) {
   if (manual) status = manual.resultado === 'bateu' ? 'batida' : 'nao_batida';
   else if (completou) status = completou <= limite ? 'batida' : 'nao_batida';
   else status = hoje > limite ? 'nao_batida' : 'pendente';
-  return { limite, docs, falta: falta.map((d) => d.nome), completou, status, manual, faltam: diasEntre(hoje, limite) };
+  // o executivo só responde pelo que não é da equipe de Implantação (a procuração é dela)
+  const doExecutivo = falta.filter((d) => !(F.DOCUMENTOS[d.tipo] || {}).setor).map((d) => d.nome);
+  return { limite, docs, falta: falta.map((d) => d.nome), falta_executivo: doExecutivo, completou, status, manual, faltam: diasEntre(hoje, limite) };
 }
 
 /*

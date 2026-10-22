@@ -176,7 +176,7 @@ test('enviar: confere o que falta, gera o protocolo e avisa a coordenação, a e
   assert.equal(env.status, 200, env.texto);
   assert.match(env.json.protocolo, /^IMP-\d{4}-\d{2}-\d{2}-01$/);
   assert.equal(env.json.etapa, 'fila');
-  assert.deepEqual(env.json.pendencias, ['Conta bancária', 'Comprovante de endereço do síndico', 'Modelo do boleto anterior', 'Procuração']);
+  assert.deepEqual(env.json.pendencias, ['Conta bancária', 'Comprovante de endereço do síndico', 'Modelo do boleto anterior']);
   assert.match((await avisosDe('coord@teste.com')).pop().titulo, /^Nova implantação · IMP-/);
   assert.match((await avisosDe('equipe@teste.com')).pop().titulo, /^Chegou uma nova implantação/);
   assert.equal(emailsPara('coord@teste.com').length, 1);
@@ -194,7 +194,7 @@ test('enviar: confere o que falta, gera o protocolo e avisa a coordenação, a e
 
 test('listas: o executivo vê as suas; a fila é do setor; a coordenação conta o que chegou', async () => {
   const minhas = (await exec('GET', '/api/implantacoes?vis=minhas')).json.implantacoes;
-  assert.ok(minhas.some((x) => x.id === idI && x.pendentes.length === 4));
+  assert.ok(minhas.some((x) => x.id === idI && x.pendentes.length === 3));
   const fila = (await equipe('GET', '/api/implantacoes?vis=fila')).json.implantacoes;
   assert.deepEqual(fila.map((x) => x.id), [idI]);
   assert.equal((await coord('GET', '/api/implantacoes/resumo')).json.fila, 1);
@@ -466,21 +466,31 @@ test('acompanhamento: o setor, a coordenação e a diretoria veem; o executivo n
   assert.ok(!(await exec('GET', '/api/implantacoes/resumo')).json.acompanhamento);
 });
 
-test('documentos da meta: lembrete 3 dias antes do limite e cobrança, só ao executivo', async () => {
+test('documentos da meta: a procuração é da equipe; o que é do executivo tem lembrete 3 dias antes e cobrança, só a ele', async () => {
   const { lembretesDocumentacao } = require('../server/rotas/implantacoes-acompanhamento');
   const M = require('../server/implantacoes/metas');
-  const l = (await equipe('GET', '/api/implantacoes/acompanhamento')).json.linhas.find((x) => x.id === idI);
-  const antes = (await avisosDe('exec@teste.com')).length;
+  let l = (await equipe('GET', '/api/implantacoes/acompanhamento')).json.linhas.find((x) => x.id === idI);
+  assert.deepEqual([l.documentacao.falta, l.documentacao.falta_executivo], [['Procuração'], []]);
+  // só falta a procuração: nada a cobrar do executivo, nem lembrete
+  assert.equal((await equipe('POST', `/api/implantacoes/${idI}/cobrar-documentos`, {})).status, 409);
+  await lembretesDocumentacao(ctx.db, ctx.avisos, M.somarDias(l.documentacao.limite, -2));
+  assert.ok(!(await avisosDe('exec@teste.com')).some((x) => x.texto.includes(l.protocolo) && /^Faltam poucos dias/.test(x.titulo)));
+  // a meta passa a contar também o comprovante de endereço do síndico, que é do executivo
+  const valores = { ...M.PADRAO, docs_meta: [...M.PADRAO.docs_meta, 'comprovante_endereco'] };
+  assert.equal((await coord('POST', '/api/implantacoes/acompanhamento/parametros', { valores, vale_desde: '2000-01-01' })).status, 201);
+  l = (await equipe('GET', '/api/implantacoes/acompanhamento')).json.linhas.find((x) => x.id === idI);
+  assert.deepEqual(l.documentacao.falta_executivo, ['Comprovante de endereço do síndico']);
+  await ctx.db.q('UPDATE implantacoes SET lembrete_doc_em = NULL WHERE id = $1', [idI]);
   assert.equal(await lembretesDocumentacao(ctx.db, ctx.avisos, M.somarDias(l.documentacao.limite, -4)), 0);
   assert.ok(await lembretesDocumentacao(ctx.db, ctx.avisos, M.somarDias(l.documentacao.limite, -2)) >= 1);
   assert.equal(await lembretesDocumentacao(ctx.db, ctx.avisos, M.somarDias(l.documentacao.limite, -1)), 0); // uma vez só
-  const lembrete = (await avisosDe('exec@teste.com')).slice(antes);
-  assert.ok(lembrete.some((x) => /^Faltam poucos dias · Documentos pendentes para implantação – /.test(x.titulo) && /Procuração/.test(x.texto)));
+  const lembrete = (await avisosDe('exec@teste.com')).find((x) => x.texto.includes(l.protocolo) && /^Faltam poucos dias · Documentos pendentes para implantação – /.test(x.titulo));
+  assert.ok(lembrete && /Comprovante de endereço/.test(lembrete.texto) && !/Procuração/.test(lembrete.texto));
   assert.equal((await exec('POST', `/api/implantacoes/${idI}/cobrar-documentos`, {})).status, 403);
   const quantos = (await avisosDe('equipe@teste.com')).length;
   const r = await equipe('POST', `/api/implantacoes/${idI}/cobrar-documentos`, {});
   assert.equal(r.status, 200, r.texto);
-  assert.deepEqual(r.json.faltam, ['Procuração']);
+  assert.deepEqual(r.json.faltam, ['Comprovante de endereço do síndico']);
   assert.match((await avisosDe('exec@teste.com')).pop().titulo, /^Documentos pendentes para implantação – /);
   assert.equal((await avisosDe('equipe@teste.com')).length, quantos); // ninguém além do executivo
 });

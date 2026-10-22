@@ -28,7 +28,7 @@ const DOCUMENTOS = {
   conta_bancaria: { nome: 'Conta bancária', pendente: true },
   comprovante_endereco: { nome: 'Comprovante de endereço do síndico', pendente: true },
   modelo_boleto: { nome: 'Modelo do boleto anterior', pendente: true },
-  procuracao: { nome: 'Procuração', pendente: true },
+  procuracao: { nome: 'Procuração', setor: true }, // a equipe de Implantação providencia: não é cobrada do executivo
   contrato: { nome: 'Contrato assinado' },
   outro: { nome: 'Outro documento' },
 };

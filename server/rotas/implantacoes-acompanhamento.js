@@ -45,7 +45,7 @@ async function cobrarDocumentos(db, avisos, l, { autorId = null, lembrete = fals
   const recebidos = d.docs.filter((x) => x.em).map((x) => x.nome);
   await avisos.notificar([para], { link: `#/implantacao/${l.id}`, autor_id: autorId, tipo: 'implantacao', email: true,
     titulo: `${lembrete ? 'Faltam poucos dias · ' : ''}Documentos pendentes para implantação – ${l.condominio}`,
-    texto: `Para concluir a implantação de ${l.condominio} (${l.protocolo}), ainda precisamos de: ${d.falta.join('; ')}.` +
+    texto: `Para concluir a implantação de ${l.condominio} (${l.protocolo}), ainda precisamos de: ${d.falta_executivo.join('; ')}.` +
       `${recebidos.length ? ` Já recebemos: ${recebidos.join('; ')}.` : ''} O prazo é ${limite}. Envie pelo portal, na implantação, em Documentos.` });
   return true;
 }
@@ -117,12 +117,13 @@ function rotasAcompanhamento(r, { db, seg, avisos, perfil, erro, evento, json })
     const [l] = await carregarLinhas(db, { id: req.params.id });
     if (!l) return erro(res, 404, 'Implantação não encontrada (ou ainda não enviada ao setor).');
     if (!l.documentacao.falta.length || l.documentacao.manual) return erro(res, 409, 'Não há documento da meta para cobrar.');
+    if (!l.documentacao.falta_executivo.length) return erro(res, 409, 'O que falta fica com a equipe de Implantação (procuração), não com o executivo.');
     if (!await cobrarDocumentos(db, avisos, l, { autorId: req.usuario.id })) return erro(res, 409, 'O executivo não tem usuário no portal.');
     await db.tx(async (t) => {
       await t.q('UPDATE implantacoes SET cobranca_doc_em = now() WHERE id = $1', [l.id]);
-      await evento(t, l.id, req.usuario.id, 'cobranca_documentos', { faltam: l.documentacao.falta });
+      await evento(t, l.id, req.usuario.id, 'cobranca_documentos', { faltam: l.documentacao.falta_executivo });
     });
-    res.json({ ok: true, faltam: l.documentacao.falta });
+    res.json({ ok: true, faltam: l.documentacao.falta_executivo });
   });
 }
 
@@ -131,7 +132,7 @@ async function lembretesDocumentacao(db, avisos, hoje = M.diaSP(Date.now())) {
   let n = 0;
   for (const l of await carregarLinhas(db, { hoje })) {
     const d = l.documentacao;
-    if (!l.na_meta || d.status !== 'pendente' || d.faltam > DIAS_LEMBRETE_DOC || l._bruto.lembrete_doc_em) continue;
+    if (!l.na_meta || d.status !== 'pendente' || !d.falta_executivo.length || d.faltam > DIAS_LEMBRETE_DOC || l._bruto.lembrete_doc_em) continue;
     if (await cobrarDocumentos(db, avisos, l, { lembrete: true })) n++;
     await db.q('UPDATE implantacoes SET lembrete_doc_em = now() WHERE id = $1', [l.id]);
   }

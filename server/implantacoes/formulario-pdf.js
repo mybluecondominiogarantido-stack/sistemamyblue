@@ -68,7 +68,7 @@ function montarDados(i, { executivo, responsavel, documentos = [], diferencas = 
     if (tipo === 'analise_credito' && i.origem === 'entrega') continue;
     const sit = atuais.length ? (tipo === 'analise_credito' ? 'vinculada' : 'entregue') : obrig.includes(tipo) ? 'falta' : 'pendente';
     cores.push([linhas.length, 1, atuais.length ? '#2B7A55' : '#9A5B05']);
-    linhas.push([`${d.nome}${obrig.includes(tipo) ? ' *' : ''}`, sit, atuais.map((x) => `${x.nome} · ${quando(x.enviado_em)}`).join('; ') || (sit === 'pendente' ? 'alerta ao executivo' : '')]);
+    linhas.push([`${d.nome}${obrig.includes(tipo) ? ' *' : ''}`, sit, atuais.map((x) => `${x.nome} · ${quando(x.enviado_em)}`).join('; ') || (sit === 'pendente' ? (d.setor ? 'a cargo da equipe de Implantação' : 'alerta ao executivo') : '')]);
   }
   secoes.push({ numero: 7, titulo: 'Documentos', tabela: { titulo: obrig.length ? '* obrigatório para enviar' : 'Condomínio de entrega: os documentos podem chegar depois', cab: ['Documento', 'Situação', 'Arquivo · enviado em'], larguras: [0.4, 0.15, 0.45], linhas, cores } });
   if (i.responsavel_id || ['concluida', 'na_carteira'].includes(i.etapa)) {
