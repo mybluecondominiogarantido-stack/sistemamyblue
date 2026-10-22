@@ -3,8 +3,16 @@
 Da negociação fechada com o síndico ao contrato assinado. Substitui o formulário "Solicitação de Contrato MyBlue" do
 Microsoft Forms e o e-mail com o PDF. O comercial pede a minuta a partir de uma análise de crédito liberada, quem
 elabora os contratos (Jurídico) redige em até 72h úteis, a minuta vai e volta com os ajustes até a assinatura, e a
-advogada registra as **condições fechadas**, que seguem para a Implantação. Tela própria do portal (menu
-**Solicitação de Contrato**), com os mesmos padrões da Análise de Crédito e da Implantação.
+advogada registra as **condições fechadas**, que seguem para a Implantação. Telas próprias do portal, com os mesmos
+padrões da Análise de Crédito e da Implantação, no grupo **Jurídico** do menu:
+
+| Menu | Endereço | Abas |
+|---|---|---|
+| **Solicitação de Contrato** | `#/contratos` | Minhas solicitações, Fila do Jurídico (assumir), Diretoria, Quem elabora |
+| **Acompanhamento de Contratos** | `#/acompanhamento-contratos` | Assinaturas (quem elabora), Controle (todos os contratos, até os encerrados) |
+| **Dashboard Jurídico** | `#/dashboard-juridico` | — (quem elabora e a diretoria) |
+
+Os endereços antigos (`#/contratos/assinaturas`, `#/contratos/controle`, `#/contratos/painel`) levam à tela nova.
 
 ## Onde está cada parte
 
@@ -70,14 +78,15 @@ comercial) e `cancelada`. O pedido de ajuste volta a solicitação para `em_elab
 - **Condições fechadas:** vêm do pedido (foro na capital do estado se pedido, 30 dias de contestação se pedido, a
   decisão da diretoria) e a advogada corrige o que mudou: taxa, boleto, desconto e início, garantias, limite da taxa
   extra, cashback, início, vencimento, período mínimo, fidelização, foro, prazo de contestação e o resultado de cada
-  cláusula pedida (aceito, em parte ou recusado, com a redação). Concluir leva a `assinado` e avisa o executivo.
-- **Contratos encerrados:** ficam na aba **Controle** (filtro "Assinado" ou busca). As condições ficam travadas; quem
+  cláusula pedida (aceito, em parte ou recusado, com a redação). Concluir leva a `assinado`, **abre a implantação** (veja
+  abaixo) e avisa o executivo.
+- **Contratos encerrados:** ficam em Acompanhamento de Contratos → **Controle** (filtro "Assinado" ou busca). As condições ficam travadas; quem
   elabora usa **Corrigir condições**, com o motivo obrigatório. O histórico guarda o que mudou (de → para), e o
   executivo e a Implantação (quem conduz, ou a coordenação) são avisados.
 
 ## Dashboard Jurídico
 
-Aba da Solicitação de Contrato para quem elabora e a diretoria (`GET /api/contratos/painel?ano=&mes=`; mês 0 = ano
+Item próprio do menu Jurídico, para quem elabora e a diretoria (`GET /api/contratos/painel?ano=&mes=`; mês 0 = ano
 todo, datas em Brasília):
 
 - **No período:** solicitados, minutas enviadas (e % no prazo de 72h úteis), alterações pedidas, pedidos de assinatura,
@@ -90,6 +99,11 @@ todo, datas em Brasília):
 
 ## Implantação
 
+- **Concluir as condições fechadas abre a implantação sozinha**, em rascunho, ligada ao contrato (`abrirDoContrato` em
+  `server/rotas/implantacoes.js`): o formulário vem da análise (ou do PDF do retorno, ou da entrega, já com a aprovação
+  da diretoria) com as condições fechadas por cima, e entram o contrato assinado, a convenção e o retorno da análise.
+  Se o condomínio já tinha implantação, ela só é ligada ao contrato. Contrato concluído sem implantação (concluído antes
+  disso, ou com a implantação cancelada): botão **Abrir implantação** no contrato (`POST /api/contratos/:id/implantacao`).
 - A implantação aberta de uma análise (ou do PDF) que tem solicitação de contrato traz os dados do contrato: as
   **condições fechadas valem sobre o pedido**. O contrato assinado entra nos documentos da implantação como "Contrato
   assinado", e a convenção, se a implantação ainda não tiver (documentos do síndico anexados antes também vão, nos tipos

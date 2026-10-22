@@ -227,8 +227,11 @@
         '<a href="#/carteira" class="' + (rota.indexOf('#/carteira') === 0 ? 'on' : '') + '">' + IC.casa + 'Carteira de condomínios</a>' +
         (resumoCredito && resumoCredito.acesso ? '<div class="grupo">Análise de Crédito</div><a href="#/credito" class="' + (rota.indexOf('#/credito') === 0 ? 'on' : '') + '">' + IC.escudo +
           '<span>Análise de Crédito</span><i data-contador="credito" class="contador" hidden></i></a>' : '') +
-        (resumoCt && resumoCt.acesso ? '<div class="grupo">Contratos</div><a href="#/contratos" class="' + (rota.indexOf('#/contratos') === 0 ? 'on' : '') + '">' + IC.documento +
-          '<span>Solicitação de Contrato</span><i data-contador="contratos" class="contador" hidden></i></a>' : '') +
+        (resumoCt && resumoCt.acesso ? '<div class="grupo">Jurídico</div><a href="#/contratos" class="' + (rota.indexOf('#/contratos') === 0 ? 'on' : '') + '">' + IC.documento +
+          '<span>Solicitação de Contrato</span><i data-contador="contratos" class="contador" hidden></i></a>' +
+          '<a href="#/acompanhamento-contratos" class="' + (rota.indexOf('#/acompanhamento-contratos') === 0 ? 'on' : '') + '">' + IC.historico +
+          '<span>Acompanhamento de Contratos</span><i data-contador="contratos-acomp" class="contador" hidden></i></a>' +
+          (resumoCt.painel ? '<a href="#/dashboard-juridico" class="' + (rota.indexOf('#/dashboard-juridico') === 0 ? 'on' : '') + '">' + IC.grafico + '<span>Dashboard Jurídico</span></a>' : '') : '') +
         (resumoImp && resumoImp.acesso ? '<div class="grupo">Implantação</div><a href="#/implantacao" class="' + (rota.indexOf('#/implantacao') === 0 ? 'on' : '') + '">' + IC.casa +
           '<span>Implantação</span><i data-contador="implantacao" class="contador" hidden></i></a>' : '');
       // Comissões: a ferramenta (só para quem tem acesso) e os demonstrativos de cada pessoa
@@ -302,7 +305,15 @@
     if (partes[0] === 'carteira') return paginaCarteira(partes[1]);
     if (partes[0] === 'credito') return /^\d+$/.test(partes[1] || '') ? paginaAnaliseCredito(Number(partes[1])) : paginaCredito(partes[1]);
     if (partes[0] === 'implantacao') return /^\d+$/.test(partes[1] || '') ? paginaImplantacaoDetalhe(Number(partes[1])) : paginaImplantacao(partes[1]);
-    if (partes[0] === 'contratos') return /^\d+$/.test(partes[1] || '') ? paginaContratoDetalhe(Number(partes[1])) : paginaContratos(partes[1]);
+    if (partes[0] === 'contratos') {
+      if (/^\d+$/.test(partes[1] || '')) return paginaContratoDetalhe(Number(partes[1]));
+      // endereços antigos (abas que mudaram de lugar)
+      if (partes[1] === 'painel') { location.replace('#/dashboard-juridico'); return; }
+      if (partes[1] === 'assinaturas' || partes[1] === 'controle') { location.replace('#/acompanhamento-contratos/' + partes[1]); return; }
+      return paginaContratos('solicitacao', partes[1]);
+    }
+    if (partes[0] === 'acompanhamento-contratos') return paginaContratos('acompanhamento', partes[1]);
+    if (partes[0] === 'dashboard-juridico') return paginaContratos('painel');
     if (partes[0] === 'premiacoes') return paginaComissoes(partes[1]);
     if (partes[0] === 'links') {
       if (partes[1] === 'gestao' && editorLinks()) return paginaGestaoLinks(partes[2]);
@@ -4742,14 +4753,22 @@
     minuta_enviada: ['Minuta com o comercial', 'azul'], para_assinar: ['Pronto para assinatura', 'ambar'], em_assinatura: ['Em assinatura', 'azul'],
     conferencia: ['Assinado · registrar condições', 'ambar'], assinado: ['Assinado', 'verde'], cancelada: ['Cancelada', 'cinza'],
   };
-  var ABAS_CT = [['minhas', 'Minhas solicitações'], ['fila', 'Fila do Jurídico'], ['assinaturas', 'Assinaturas'], ['painel', 'Dashboard Jurídico'], ['controle', 'Controle'], ['diretoria', 'Diretoria'], ['equipe', 'Quem elabora']];
+  // as três telas do Jurídico no menu: pedir e assumir, acompanhar até a assinatura, e os números
+  var SECOES_CT = {
+    solicitacao: { titulo: 'Solicitação de Contrato', rota: '#/contratos', abas: [['minhas', 'Minhas solicitações'], ['fila', 'Fila do Jurídico'], ['diretoria', 'Diretoria'], ['equipe', 'Quem elabora']],
+      sub: 'O comercial pede a minuta com as condições negociadas e o Jurídico assume e redige em até 72h úteis.' },
+    acompanhamento: { titulo: 'Acompanhamento de Contratos', rota: '#/acompanhamento-contratos', abas: [['assinaturas', 'Assinaturas'], ['controle', 'Controle']],
+      sub: 'A minuta vai e volta até a assinatura, e a advogada registra as condições fechadas, que seguem para a Implantação.' },
+    painel: { titulo: 'Dashboard Jurídico', rota: '#/dashboard-juridico', abas: [['painel', 'Dashboard Jurídico']],
+      sub: 'Contratos solicitados, em alteração, aguardando o executivo, em assinatura e fechados, por mês e por ano.' },
+  };
   var PLATAFORMAS_CT = ['Clicksign', 'D4Sign', 'DocuSign', 'Gov.br', 'Assinatura física'];
   var EVENTO_CT = {
     criada: 'criou a solicitação', formulario: 'alterou o formulário', documento: 'anexou um documento', documento_removido: 'removeu um documento',
     enviada: 'enviou ao Jurídico', reenviada: 'reenviou depois da pendência', assumida: 'assumiu a solicitação', passada: 'passou a solicitação',
     pendencia: 'devolveu com pendência', minuta_enviada: 'enviou a minuta', ajuste: 'pediu ajuste na minuta', assinatura_pedida: 'informou que o síndico aprovou e pediu a assinatura',
     em_assinatura: 'mandou para assinatura', assinado: 'marcou o contrato como assinado',
-    fechado: 'registrou as condições fechadas', fechado_corrigido: 'corrigiu as condições fechadas', cancelada: 'cancelou', diretoria_aprovou: 'aprovou (diretoria)', diretoria_recusou: 'não aprovou (diretoria)',
+    fechado: 'registrou as condições fechadas', fechado_corrigido: 'corrigiu as condições fechadas', implantacao_aberta: 'abriu a implantação', cancelada: 'cancelou', diretoria_aprovou: 'aprovou (diretoria)', diretoria_recusou: 'não aprovou (diretoria)',
   };
   var DESC_CT = { nenhum: 'Não possui', percentual: 'Percentual', valor: 'Valor por unidade' };
 
@@ -4765,11 +4784,17 @@
     var b = $('#nav [data-contador=contratos]');
     if (!b || !resumoCt) return;
     var r = resumoCt;
-    var n = (r.fila || 0) + (r.minhas || 0) + (r.para_assinar || 0) + (r.conferencia || 0) + (r.diretoria || 0) + (r.retorno || 0);
+    var n = (r.fila || 0) + (r.minhas || 0) + (r.diretoria || 0) + (r.retorno || 0);
     b.textContent = n;
     b.hidden = !n;
-    b.title = [r.fila ? r.fila + ' na fila' : '', r.minhas ? r.minhas + ' com você' : '', r.para_assinar ? r.para_assinar + ' pronto(s) para assinatura' : '', r.conferencia ? r.conferencia + ' aguardando as condições fechadas' : '',
+    b.title = [r.fila ? r.fila + ' na fila' : '', r.minhas ? r.minhas + ' com você' : '',
       r.diretoria ? r.diretoria + ' para a diretoria decidir' : '', r.retorno ? r.retorno + ' com você (minuta ou pendência)' : ''].filter(Boolean).join(' · ');
+    var a = $('#nav [data-contador=contratos-acomp]');
+    if (!a) return;
+    var na = (r.para_assinar || 0) + (r.conferencia || 0);
+    a.textContent = na;
+    a.hidden = !na;
+    a.title = [r.para_assinar ? r.para_assinar + ' pronto(s) para assinatura' : '', r.conferencia ? r.conferencia + ' aguardando as condições fechadas' : ''].filter(Boolean).join(' · ');
   }
   function origemCt(c) {
     if (c.origem === 'analise') return 'Análise ' + (c.analise_protocolo || '');
@@ -4782,24 +4807,31 @@
   }
 
   /* ---------- lista e abas ---------- */
-  async function paginaContratos(aba) {
+  async function paginaContratos(secao, aba) {
     var m;
     try { m = await carregarMetaCt(true); } catch (e) { $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">' + esc(e.message) + '</div></div>'; return; }
     var p = m.perfil;
+    var sc = SECOES_CT[secao];
     var pode = { minhas: !!p.executivo || p.admin, fila: p.elaborador, assinaturas: p.elaborador, painel: p.elaborador || p.diretoria, controle: !!p.executivo || p.elaborador || p.diretoria,
       diretoria: p.diretoria, equipe: p.gerencia_equipe };
-    var abas = ABAS_CT.filter(function (a) { return pode[a[0]]; });
+    var abas = sc.abas.filter(function (a) { return pode[a[0]]; });
     if (!abas.length || (abas.length === 1 && abas[0][0] === 'equipe' && !p.admin)) {
-      $('#conteudo').innerHTML = '<div class="pagina"><h1>Solicitação de Contrato</h1><div class="vazio">Você ainda não tem acesso. Executivos são marcados em Análise de Crédito → Pessoas e papéis; quem elabora os contratos é marcado pela administração em Solicitação de Contrato → Quem elabora.</div></div>';
+      $('#conteudo').innerHTML = '<div class="pagina"><h1>' + esc(sc.titulo) + '</h1><div class="vazio">' + (secao === 'painel' ? 'O Dashboard Jurídico é de quem elabora os contratos e da diretoria.' :
+        'Você ainda não tem acesso. Executivos são marcados em Análise de Crédito → Pessoas e papéis; quem elabora os contratos é marcado pela administração em Solicitação de Contrato → Quem elabora.') + '</div></div>';
       return;
     }
-    if (!abas.some(function (a) { return a[0] === aba; })) aba = p.elaborador ? 'fila' : p.executivo || p.admin ? 'minhas' : p.diretoria && resumoCt && resumoCt.diretoria ? 'diretoria' : abas[0][0];
-    definirBarra('<span class="setor">Solicitação de Contrato</span><span class="sep">/</span><span class="nome">' + esc(abas.find(function (a) { return a[0] === aba; })[1]) + '</span>');
+    if (!abas.some(function (a) { return a[0] === aba; })) {
+      aba = secao === 'acompanhamento' ? (p.elaborador ? 'assinaturas' : 'controle') :
+        p.elaborador ? 'fila' : p.executivo || p.admin ? 'minhas' : p.diretoria && resumoCt && resumoCt.diretoria ? 'diretoria' : abas[0][0];
+      if (!abas.some(function (a) { return a[0] === aba; })) aba = abas[0][0];
+    }
+    definirBarra('<span class="setor">Jurídico</span><span class="sep">/</span><span class="nome">' + esc(sc.titulo) + (abas.length > 1 ? ' · ' + esc(abas.find(function (a) { return a[0] === aba; })[1]) : '') + '</span>');
     var novo = (p.executivo || p.admin) && aba === 'minhas';
-    $('#conteudo').innerHTML = '<div class="pagina"><div class="linha" style="align-items:flex-end;margin-bottom:6px"><div style="flex:1 1 420px"><h1>Solicitação de Contrato</h1>' +
-      '<p class="sub" style="margin:0">O comercial pede a minuta com as condições negociadas, o Jurídico redige em até 72h úteis, a minuta vai e volta até a assinatura e a advogada registra as condições fechadas, que seguem para a Implantação.</p></div>' +
+    $('#conteudo').innerHTML = '<div class="pagina"><div class="linha" style="align-items:flex-end;margin-bottom:6px"><div style="flex:1 1 420px"><h1>' + esc(sc.titulo) + '</h1>' +
+      '<p class="sub" style="margin:0">' + esc(sc.sub) + '</p></div>' +
       (novo ? '<button class="btn primary" id="btNovoCt">' + IC.mais + 'Nova solicitação</button>' : '') + '</div>' +
-      '<nav class="abas" style="margin-top:16px">' + abas.map(function (a) { return '<a href="#/contratos/' + a[0] + '" class="' + (a[0] === aba ? 'on' : '') + '">' + esc(a[1]) + '</a>'; }).join('') + '</nav><div id="corpoCt"></div></div>';
+      (abas.length > 1 ? '<nav class="abas" style="margin-top:16px">' + abas.map(function (a) { return '<a href="' + sc.rota + '/' + a[0] + '" class="' + (a[0] === aba ? 'on' : '') + '">' + esc(a[1]) + '</a>'; }).join('') + '</nav>' : '') +
+      '<div id="corpoCt"' + (abas.length > 1 ? '' : ' style="margin-top:16px"') + '></div></div>';
     if ($('#btNovoCt')) $('#btNovoCt').onclick = novoContrato;
     atualizarCt();
     if (aba === 'equipe') return abaEquipeCt();
@@ -5424,7 +5456,8 @@
     if (pd.pedir_assinatura) acoes += '<button class="btn primary sm" id="btPedirAssCt">Síndico aprovou: pedir assinatura</button>';
     if (pd.enviar_assinatura) acoes += '<button class="btn primary sm" id="btEmAssCt">Enviado para assinatura</button>';
     if (pd.assinar) acoes += '<button class="btn ' + (pd.enviar_assinatura ? 'ghost' : 'primary') + ' sm" id="btAssinadoCt">Assinado</button>';
-    definirBarra('<span class="setor">Solicitação de Contrato</span><span class="sep">/</span><span class="nome">' + esc(c.protocolo || 'Rascunho') + '</span>', acoes);
+    if (pd.abrir_implantacao && !d.implantacao) acoes += '<button class="btn primary sm" id="btAbrirImpCt">' + IC.casa + 'Abrir implantação</button>';
+    definirBarra('<span class="setor">Jurídico</span><span class="sep">/</span><span class="nome">' + esc(c.protocolo || 'Rascunho') + '</span>', acoes);
     var difs = {};
     d.diferencas.forEach(function (x) { difs[x.campo] = x; });
     var fmtDif = function (x) {
@@ -5525,6 +5558,14 @@
     };
     if ($('#btEmAssCt')) $('#btEmAssCt').onclick = function () { marcarEmAssinaturaCt(Object.assign({}, c, { sem_convencao: d.sem_convencao }), recarregar); };
     if ($('#btAssinadoCt')) $('#btAssinadoCt').onclick = function () { marcarAssinadoCt(d, recarregar); };
+    if ($('#btAbrirImpCt')) $('#btAbrirImpCt').onclick = async function () {
+      if (!(await confirmar('Abrir a implantação', 'A implantação abre em rascunho com as condições fechadas, o contrato assinado e a convenção.', 'Abrir'))) return;
+      try {
+        var r = await api('POST', '/api/contratos/' + c.id + '/implantacao', {});
+        toast('Implantação aberta com as condições fechadas.', 'ok');
+        location.hash = '#/implantacao/' + r.implantacao;
+      } catch (e) { toast(e.message, 'erro'); }
+    };
     var decidir = function (aprovar) { post('diretoria', { aprovar: aprovar, observacao: $('#dObsCt').value }, aprovar ? 'Aprovado; o Jurídico e o executivo foram avisados.' : 'Não aprovado; o Jurídico e o executivo foram avisados.'); };
     if ($('#btDirSimCt')) $('#btDirSimCt').onclick = function () { decidir(true); };
     if ($('#btDirNaoCt')) $('#btDirNaoCt').onclick = function () { decidir(false); };
@@ -5546,7 +5587,7 @@
       var salvarFech = async function (concluir) {
         try {
           var r = await api('PUT', '/api/contratos/' + c.id + '/fechado', { condicoes: lerFechadoCt(fech), concluir: concluir });
-          toast(concluir ? 'Condições registradas: seguem para a Implantação.' : r.faltas.length ? 'Salvo. Para concluir, falta: ' + r.faltas.length + '.' : 'Salvo: pronto para concluir.', 'ok');
+          toast(concluir ? (r.implantacao_aberta ? 'Contrato concluído: a implantação foi aberta com as condições fechadas.' : 'Condições registradas: seguem para a implantação do condomínio.') : r.faltas.length ? 'Salvo. Para concluir, falta: ' + r.faltas.length + '.' : 'Salvo: pronto para concluir.', 'ok');
           recarregar();
         } catch (e) { toast(e.message, 'erro'); }
       };

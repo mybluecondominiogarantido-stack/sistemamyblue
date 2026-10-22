@@ -308,7 +308,7 @@ function paraImplantacao(c) {
   return out;
 }
 /* documentos do contrato → tipo na Implantação (o que não tem tipo próprio lá entra como "outro") */
-const DOC_IMPLANTACAO = { convencao: 'convencao', ata_eleicao: 'ata_eleicao', atas_taxas: 'ata_orcamento', cadastro_proprietarios: 'cadastro_moradores',
+const DOC_IMPLANTACAO = { analise_credito: 'analise_credito', convencao: 'convencao', ata_eleicao: 'ata_eleicao', atas_taxas: 'ata_orcamento', cadastro_proprietarios: 'cadastro_moradores',
   documento_sindico: 'documento_sindico', comprovante_endereco: 'comprovante_endereco', contrato_assinado: 'contrato',
   regimento: 'outro', cadastro_locatarios: 'outro', ata_ago: 'outro', procuracao: 'outro' };
 

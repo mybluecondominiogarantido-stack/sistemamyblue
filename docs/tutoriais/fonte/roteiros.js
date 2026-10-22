@@ -770,7 +770,7 @@ module.exports = [
     abertura: ['Da negociação fechada com o síndico ao contrato assinado.', ['Pedir a partir da análise', 'Condições e pedidos do síndico', 'Enviar ao Jurídico', 'Ajuste e contrato assinado']],
     async gravar(t, cen) {
       const A = '1 · Nova solicitação';
-      await t.legenda('No menu, <b>Solicitação de Contrato</b> substitui o formulário do Forms e o e-mail com o PDF.', { etapa: A, ms: 600 });
+      await t.legenda('No menu <b>Jurídico</b>, a <b>Solicitação de Contrato</b> substitui o formulário do Forms e o e-mail com o PDF.', { etapa: A, ms: 600 });
       await t.mostrar(menu('#/contratos'), 1800, { dx: 0.3 });
       await t.legenda('Clique em <b>Nova solicitação</b> e escolha a análise: os dados vêm preenchidos.', { etapa: A, ms: 400 });
       await t.clicar('#btNovoCt', { depois: 1400 });
@@ -809,6 +809,9 @@ module.exports = [
       await t.mostrar('#btAjusteCt', 2600);
       await t.legenda('Aprovou? <b>Síndico aprovou: pedir assinatura</b>. O Jurídico manda assinar, anexa a via assinada e registra as condições fechadas, que seguem para a Implantação. Você é avisado em cada passo.', { etapa: D, ms: 400 });
       await t.mostrar('#btPedirAssCt', 3600);
+      await t.legenda('Todos os seus contratos, até os assinados, ficam em <b>Acompanhamento de Contratos → Controle</b>.', { etapa: D, ms: 300 });
+      await t.ir('#/acompanhamento-contratos/controle', 1800);
+      await t.mostrar(menu('#/acompanhamento-contratos'), 2400, { dx: 0.3 });
     },
     resumo: ['<b>Nova solicitação</b> · escolha a análise', 'Condições, pedidos do síndico e minúcias', '<b>Enviar ao Jurídico</b> · ajuste · <b>Contrato assinado</b>'],
   },
@@ -839,8 +842,10 @@ module.exports = [
       await t.mostrar('#btPendCt', 2400);
 
       const S = '3 · Assinatura';
-      await t.ir('#/contratos/assinaturas', 1800);
-      await t.legenda('Quando o executivo informa que o síndico aprovou, a minuta aparece em <b>Assinaturas</b> como <b>Pronto para assinatura</b>.', { etapa: S, ms: 600 });
+      await t.legenda('O que vai para assinatura fica no menu <b>Jurídico → Acompanhamento de Contratos</b>.', { etapa: S, ms: 200 });
+      await t.ir('#/acompanhamento-contratos/assinaturas', 1800);
+      await t.mostrar(menu('#/acompanhamento-contratos'), 1600, { dx: 0.3 });
+      await t.legenda('Quando o executivo informa que o síndico aprovou, a minuta aparece na aba <b>Assinaturas</b> como <b>Pronto para assinatura</b>.', { etapa: S, ms: 600 });
       await t.mostrar('#corpoCt section.painel', 2600);
       await t.legenda('Mande para assinatura e clique em <b>Enviado para assinatura</b>, dizendo como foi (Clicksign, D4Sign, física…). O executivo é avisado.', { etapa: S, ms: 400 });
       await t.clicar(`[data-acao-ass="para_assinar"][data-c="${cen.ctParaAssinar}"]`, { depois: 900 });
@@ -857,14 +862,16 @@ module.exports = [
       for (const sel of await t.p.$$('[data-clausula] [data-k=resultado]')) { await sel.scrollIntoViewIfNeeded(); await sel.selectOption('aceito'); await t.pausa(900); }
       await t.legenda('<b>Salvar</b> guarda sem concluir e mostra o que ainda falta.', { etapa: C, ms: 300 });
       await t.clicar('#btFechSalvar', { depois: 2600 });
-      await t.legenda('<b>Concluir: enviar à Implantação</b>. O executivo é avisado, e a implantação abre com essas condições, o contrato e os documentos.', { etapa: C, ms: 600 });
+      await t.legenda('<b>Concluir: enviar à Implantação</b>. A implantação abre sozinha, em rascunho, com essas condições, o contrato assinado e a convenção, e o executivo é avisado.', { etapa: C, ms: 600 });
       await t.clicar('#btFechConcluir', { depois: 1000 });
       await t.clicar('#mOk', { depois: 2600 });
+      await t.mostrar('a.etiqueta[href^="#/implantacao/"]', 2600);
       const P = '5 · Dashboard Jurídico';
-      await t.legenda('O <b>Dashboard Jurídico</b> mostra o mês ou o ano: solicitados, alterações, assinaturas e fechados, e a situação de agora.', { etapa: P, ms: 200 });
-      await t.ir('#/contratos/painel', 3400);
+      await t.legenda('O <b>Dashboard Jurídico</b>, no menu Jurídico, mostra o mês ou o ano: solicitados, alterações, assinaturas e fechados, e a situação de agora.', { etapa: P, ms: 200 });
+      await t.ir('#/dashboard-juridico', 1800);
+      await t.mostrar(menu('#/dashboard-juridico'), 1600, { dx: 0.3 });
       await t.rolar(600);
-      await t.legenda('Mês a mês, solicitados e fechados; os tempos médios e quem está com cada contrato. Contratos encerrados ficam no <b>Controle</b>.', { etapa: P, ms: 3200 });
+      await t.legenda('Mês a mês, solicitados e fechados; os tempos médios e quem está com cada contrato. Os encerrados ficam em Acompanhamento de Contratos → <b>Controle</b>.', { etapa: P, ms: 3200 });
     },
     resumo: ['<b>Assumir</b> · 72h úteis para a minuta', '<b>Enviar minuta</b> · ajustes · <b>Enviado para assinatura</b> · <b>Assinado</b>', 'Registre as condições fechadas · <b>Concluir</b> · Dashboard Jurídico'],
   },
