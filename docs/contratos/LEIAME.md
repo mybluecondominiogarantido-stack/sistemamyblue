@@ -21,8 +21,9 @@ advogada registra as **condições fechadas**, que seguem para a Implantação. 
 
 ## Etapas
 
-`rascunho` → `fila` (enviada, ninguém assumiu) → `em_elaboracao` → `minuta_enviada` → `conferencia` (contrato assinado
-anexado, aguardando as condições fechadas) → `assinado`. Fora do caminho: `pendencia` (falta informação, volta ao
+`rascunho` → `fila` (enviada, ninguém assumiu) → `em_elaboracao` → `minuta_enviada` (com o comercial: pede ajuste ou a
+assinatura) → `para_assinar` (o Jurídico manda assinar) → `em_assinatura` → `conferencia` (a via assinada voltou, a
+advogada registra as condições fechadas) → `assinado`. Fora do caminho: `pendencia` (falta informação, volta ao
 comercial) e `cancelada`. O pedido de ajuste volta a solicitação para `em_elaboracao`, com a mesma pessoa.
 
 ## Quem faz o quê
@@ -60,8 +61,11 @@ comercial) e `cancelada`. O pedido de ajuste volta a solicitação para `em_elab
   a minuta só sai depois da decisão. Não aprovado, a minuta segue o contrato padrão nesses pontos.
 - **Minuta:** quem assumiu anexa e envia ao comercial; cada versão fica no histórico. Depois de um ajuste, só vai a
   minuta anexada depois do pedido.
-- **Assinado:** o comercial anexa o contrato assinado e a procuração (ou confirma que ela está no mesmo arquivo). A
-  advogada é avisada para registrar as condições fechadas.
+- **Assinatura:** com a minuta aprovada pelo síndico, o comercial clica em *Síndico aprovou: pedir assinatura*. Quem
+  elabora vê na aba **Assinaturas** (pronto para assinatura, em assinatura, registrar condições), manda assinar e marca
+  *Enviado para assinatura* (com a plataforma: Clicksign, D4Sign, física…). Quando a via assinada volta, marca
+  *Assinado*, anexando ali mesmo o contrato e a procuração (ou confirmando que ela está no mesmo arquivo), e registra as
+  condições fechadas. O comercial é avisado em cada passo.
 - **Condições fechadas:** vêm do pedido (foro na capital do estado se pedido, 30 dias de contestação se pedido, a
   decisão da diretoria) e a advogada corrige o que mudou: taxa, boleto, desconto e início, garantias, limite da taxa
   extra, cashback, início, vencimento, período mínimo, fidelização, foro, prazo de contestação e o resultado de cada
@@ -69,6 +73,19 @@ comercial) e `cancelada`. O pedido de ajuste volta a solicitação para `em_elab
 - **Contratos encerrados:** ficam na aba **Controle** (filtro "Assinado" ou busca). As condições ficam travadas; quem
   elabora usa **Corrigir condições**, com o motivo obrigatório. O histórico guarda o que mudou (de → para), e o
   executivo e a Implantação (quem conduz, ou a coordenação) são avisados.
+
+## Dashboard Jurídico
+
+Aba da Solicitação de Contrato para quem elabora e a diretoria (`GET /api/contratos/painel?ano=&mes=`; mês 0 = ano
+todo, datas em Brasília):
+
+- **No período:** solicitados, minutas enviadas (e % no prazo de 72h úteis), alterações pedidas, pedidos de assinatura,
+  enviados para assinatura, fechados e cancelados.
+- **Agora:** na fila, em elaboração (primeira minuta), em alteração (ajuste pedido), pendência com o comercial,
+  aguardando o executivo (pedir assinatura ou ajuste), pronto para assinatura, em assinatura, registrar condições e os
+  que passaram do prazo.
+- Solicitados e fechados mês a mês no ano (com a tabela), os tempos médios (até a primeira minuta, do pedido ao
+  fechamento, alterações por contrato) e as contas por executivo e por responsável no Jurídico.
 
 ## Implantação
 

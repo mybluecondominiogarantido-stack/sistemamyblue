@@ -142,9 +142,13 @@ async function contratoTut(base, nome, { ate } = {}) {
   await lara('POST', `/api/contratos/${id}/assumir`, {});
   await lara('POST', `/api/contratos/${id}/documentos`, pdf, { 'x-tipo': 'minuta', 'x-nome-arquivo': 'Minuta_exemplo.pdf' });
   await lara('POST', `/api/contratos/${id}/minuta`, {});
+  if (ate === 'minuta') return id;
+  await vera('POST', `/api/contratos/${id}/pedir-assinatura`, {});
+  if (ate === 'para_assinar') return id;
+  await lara('POST', `/api/contratos/${id}/em-assinatura`, { plataforma: 'Clicksign' });
   if (ate === 'assinado') {
-    await vera('POST', `/api/contratos/${id}/documentos`, pdf, { 'x-tipo': 'contrato_assinado', 'x-nome-arquivo': 'Contrato_assinado_exemplo.pdf' });
-    await vera('POST', `/api/contratos/${id}/assinado`, { procuracao_no_contrato: true });
+    await lara('POST', `/api/contratos/${id}/documentos`, pdf, { 'x-tipo': 'contrato_assinado', 'x-nome-arquivo': 'Contrato_assinado_exemplo.pdf' });
+    await lara('POST', `/api/contratos/${id}/assinado`, { procuracao_no_contrato: true });
   }
   return id;
 }
@@ -803,8 +807,8 @@ module.exports = [
       await t.ir(`#/contratos/${cen.ctMinuta}`, 1800);
       await t.legenda('Quando a minuta chega, leve ao síndico. Pediu mudança? <b>Pedir ajuste</b>: volta para o Jurídico com mais 72h úteis.', { etapa: D, ms: 400 });
       await t.mostrar('#btAjusteCt', 2600);
-      await t.legenda('Assinado, anexe o contrato e a procuração em Documentos e clique em <b>Contrato assinado</b>. A advogada registra as condições fechadas, que seguem para a Implantação.', { etapa: D, ms: 400 });
-      await t.mostrar('#btAssinadoCt', 3200);
+      await t.legenda('Aprovou? <b>Síndico aprovou: pedir assinatura</b>. O Jurídico manda assinar, anexa a via assinada e registra as condições fechadas, que seguem para a Implantação. Você é avisado em cada passo.', { etapa: D, ms: 400 });
+      await t.mostrar('#btPedirAssCt', 3600);
     },
     resumo: ['<b>Nova solicitação</b> · escolha a análise', 'Condições, pedidos do síndico e minúcias', '<b>Enviar ao Jurídico</b> · ajuste · <b>Contrato assinado</b>'],
   },
@@ -815,8 +819,9 @@ module.exports = [
     async preparar(cen, base) {
       cen.ctFila = await contratoTut(base, 'Residencial Vila das Palmeiras');
       cen.ctAssinado = await contratoTut(base, 'Edifício Mirante do Sol', { ate: 'assinado' });
+      cen.ctParaAssinar = await contratoTut(base, 'Condomínio Parque das Águas', { ate: 'para_assinar' });
     },
-    abertura: ['Da fila do Jurídico às condições fechadas na Implantação.', ['Assumir da fila', 'Pedidos com a resposta padrão', 'Enviar a minuta e os ajustes', 'Registrar as condições fechadas']],
+    abertura: ['Da fila do Jurídico às condições fechadas na Implantação.', ['Assumir da fila', 'Pedidos com a resposta padrão', 'Minuta, ajustes e assinatura', 'Registrar as condições fechadas', 'Dashboard Jurídico']],
     async gravar(t, cen) {
       const A = '1 · Fila';
       await t.legenda('Quando o comercial envia, quem elabora recebe o aviso no sino e por e-mail. A <b>Fila do Jurídico</b> mostra o prazo de cada minuta.', { etapa: A, ms: 600 });
@@ -833,7 +838,17 @@ module.exports = [
       await t.legenda('Faltou informação? <b>Devolver com pendência</b>: o reenvio volta para você, com novo prazo.', { etapa: B, ms: 400 });
       await t.mostrar('#btPendCt', 2400);
 
-      const C = '3 · Condições fechadas';
+      const S = '3 · Assinatura';
+      await t.ir('#/contratos/assinaturas', 1800);
+      await t.legenda('Quando o executivo informa que o síndico aprovou, a minuta aparece em <b>Assinaturas</b> como <b>Pronto para assinatura</b>.', { etapa: S, ms: 600 });
+      await t.mostrar('#corpoCt section.painel', 2600);
+      await t.legenda('Mande para assinatura e clique em <b>Enviado para assinatura</b>, dizendo como foi (Clicksign, D4Sign, física…). O executivo é avisado.', { etapa: S, ms: 400 });
+      await t.clicar(`[data-acao-ass="para_assinar"][data-c="${cen.ctParaAssinar}"]`, { depois: 900 });
+      await t.digitar('#mPlatCt', 'Clicksign', { atraso: 60 });
+      await t.clicar('#mEmAssOk', { depois: 2000 });
+      await t.legenda('Voltou a via assinada? <b>Assinado</b>: anexe o contrato e a procuração ali mesmo.', { etapa: S, ms: 2800 });
+
+      const C = '4 · Condições fechadas';
       await t.ir(`#/contratos/${cen.ctAssinado}`, 1800);
       await t.legenda('Com o contrato assinado anexado, você registra as <b>condições fechadas</b>. Elas vêm do pedido: corrija o que mudou na negociação.', { etapa: C, ms: 1200 });
       await t.mostrar('#fechadoCt', 2400);
@@ -845,10 +860,13 @@ module.exports = [
       await t.legenda('<b>Concluir: enviar à Implantação</b>. O executivo é avisado, e a implantação abre com essas condições, o contrato e os documentos.', { etapa: C, ms: 600 });
       await t.clicar('#btFechConcluir', { depois: 1000 });
       await t.clicar('#mOk', { depois: 2600 });
-      await t.legenda('No <b>Controle</b> ficam todas as solicitações: prazos, ajustes, primeira minuta e assinatura.', { etapa: C, ms: 400 });
-      await t.ir('#/contratos/controle', 3200);
+      const P = '5 · Dashboard Jurídico';
+      await t.ir('#/contratos/painel', 1800);
+      await t.legenda('O <b>Dashboard Jurídico</b> mostra o mês ou o ano: solicitados, alterações, assinaturas e fechados, e a situação de agora.', { etapa: P, ms: 3400 });
+      await t.rolar(600);
+      await t.legenda('Mês a mês, solicitados e fechados; os tempos médios e quem está com cada contrato. Contratos encerrados ficam no <b>Controle</b>.', { etapa: P, ms: 3200 });
     },
-    resumo: ['<b>Assumir</b> · 72h úteis para a minuta', 'Anexe e <b>Enviar minuta</b> · responda aos ajustes', 'Registre as condições fechadas · <b>Concluir</b>'],
+    resumo: ['<b>Assumir</b> · 72h úteis para a minuta', '<b>Enviar minuta</b> · ajustes · <b>Enviado para assinatura</b> · <b>Assinado</b>', 'Registre as condições fechadas · <b>Concluir</b> · Dashboard Jurídico'],
   },
 
   /* ======================= Gestão do setor ======================= */

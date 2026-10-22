@@ -4739,13 +4739,16 @@
   var resumoCt = null;
   var ETAPA_CT = {
     rascunho: ['Rascunho', 'cinza'], fila: ['Na fila do Jurídico', 'azul'], em_elaboracao: ['Em elaboração', 'azul'], pendencia: ['Pendência com o comercial', 'ambar'],
-    minuta_enviada: ['Minuta com o comercial', 'azul'], conferencia: ['Aguardando condições fechadas', 'ambar'], assinado: ['Assinado', 'verde'], cancelada: ['Cancelada', 'cinza'],
+    minuta_enviada: ['Minuta com o comercial', 'azul'], para_assinar: ['Pronto para assinatura', 'ambar'], em_assinatura: ['Em assinatura', 'azul'],
+    conferencia: ['Assinado · registrar condições', 'ambar'], assinado: ['Assinado', 'verde'], cancelada: ['Cancelada', 'cinza'],
   };
-  var ABAS_CT = [['minhas', 'Minhas solicitações'], ['fila', 'Fila do Jurídico'], ['controle', 'Controle'], ['diretoria', 'Diretoria'], ['equipe', 'Quem elabora']];
+  var ABAS_CT = [['minhas', 'Minhas solicitações'], ['fila', 'Fila do Jurídico'], ['assinaturas', 'Assinaturas'], ['painel', 'Dashboard Jurídico'], ['controle', 'Controle'], ['diretoria', 'Diretoria'], ['equipe', 'Quem elabora']];
+  var PLATAFORMAS_CT = ['Clicksign', 'D4Sign', 'DocuSign', 'Gov.br', 'Assinatura física'];
   var EVENTO_CT = {
     criada: 'criou a solicitação', formulario: 'alterou o formulário', documento: 'anexou um documento', documento_removido: 'removeu um documento',
     enviada: 'enviou ao Jurídico', reenviada: 'reenviou depois da pendência', assumida: 'assumiu a solicitação', passada: 'passou a solicitação',
-    pendencia: 'devolveu com pendência', minuta_enviada: 'enviou a minuta', ajuste: 'pediu ajuste na minuta', assinado: 'anexou o contrato assinado',
+    pendencia: 'devolveu com pendência', minuta_enviada: 'enviou a minuta', ajuste: 'pediu ajuste na minuta', assinatura_pedida: 'informou que o síndico aprovou e pediu a assinatura',
+    em_assinatura: 'mandou para assinatura', assinado: 'marcou o contrato como assinado',
     fechado: 'registrou as condições fechadas', fechado_corrigido: 'corrigiu as condições fechadas', cancelada: 'cancelou', diretoria_aprovou: 'aprovou (diretoria)', diretoria_recusou: 'não aprovou (diretoria)',
   };
   var DESC_CT = { nenhum: 'Não possui', percentual: 'Percentual', valor: 'Valor por unidade' };
@@ -4762,10 +4765,10 @@
     var b = $('#nav [data-contador=contratos]');
     if (!b || !resumoCt) return;
     var r = resumoCt;
-    var n = (r.fila || 0) + (r.minhas || 0) + (r.conferencia || 0) + (r.diretoria || 0) + (r.retorno || 0);
+    var n = (r.fila || 0) + (r.minhas || 0) + (r.para_assinar || 0) + (r.conferencia || 0) + (r.diretoria || 0) + (r.retorno || 0);
     b.textContent = n;
     b.hidden = !n;
-    b.title = [r.fila ? r.fila + ' na fila' : '', r.minhas ? r.minhas + ' com você' : '', r.conferencia ? r.conferencia + ' aguardando as condições fechadas' : '',
+    b.title = [r.fila ? r.fila + ' na fila' : '', r.minhas ? r.minhas + ' com você' : '', r.para_assinar ? r.para_assinar + ' pronto(s) para assinatura' : '', r.conferencia ? r.conferencia + ' aguardando as condições fechadas' : '',
       r.diretoria ? r.diretoria + ' para a diretoria decidir' : '', r.retorno ? r.retorno + ' com você (minuta ou pendência)' : ''].filter(Boolean).join(' · ');
   }
   function origemCt(c) {
@@ -4783,7 +4786,8 @@
     var m;
     try { m = await carregarMetaCt(true); } catch (e) { $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">' + esc(e.message) + '</div></div>'; return; }
     var p = m.perfil;
-    var pode = { minhas: !!p.executivo || p.admin, fila: p.elaborador, controle: !!p.executivo || p.elaborador || p.diretoria, diretoria: p.diretoria, equipe: p.gerencia_equipe };
+    var pode = { minhas: !!p.executivo || p.admin, fila: p.elaborador, assinaturas: p.elaborador, painel: p.elaborador || p.diretoria, controle: !!p.executivo || p.elaborador || p.diretoria,
+      diretoria: p.diretoria, equipe: p.gerencia_equipe };
     var abas = ABAS_CT.filter(function (a) { return pode[a[0]]; });
     if (!abas.length || (abas.length === 1 && abas[0][0] === 'equipe' && !p.admin)) {
       $('#conteudo').innerHTML = '<div class="pagina"><h1>Solicitação de Contrato</h1><div class="vazio">Você ainda não tem acesso. Executivos são marcados em Análise de Crédito → Pessoas e papéis; quem elabora os contratos é marcado pela administração em Solicitação de Contrato → Quem elabora.</div></div>';
@@ -4800,6 +4804,8 @@
     atualizarCt();
     if (aba === 'equipe') return abaEquipeCt();
     if (aba === 'controle') return abaControleCt(m);
+    if (aba === 'assinaturas') return abaAssinaturasCt();
+    if (aba === 'painel') return abaPainelCt();
     $('#corpoCt').innerHTML = '<div class="painel"><div class="cab-painel"><input class="campo" id="qCt" type="search" placeholder="Buscar por condomínio, CNPJ ou protocolo" style="max-width:360px"></div>' +
       '<div class="tabela-wrap"><table style="min-width:960px"><thead><tr><th>Protocolo</th><th>Condomínio</th><th>Origem</th><th>Executivo</th><th>Situação</th><th>Com quem</th><th>Prazo da minuta</th></tr></thead><tbody id="tbCt"></tbody></table></div></div>';
     var seq = 0;
@@ -4818,6 +4824,7 @@
   }
   function comQuemCt(c) {
     if (['rascunho', 'pendencia', 'minuta_enviada'].indexOf(c.etapa) >= 0) return 'Executivo';
+    if (c.etapa === 'em_assinatura') return 'Síndico' + (c.assinatura_plataforma ? '<span class="sec">' + esc(c.assinatura_plataforma) + '</span>' : '');
     if (c.etapa === 'fila') return '<span class="sec">ninguém assumiu</span>';
     if (['assinado', 'cancelada'].indexOf(c.etapa) >= 0) return '<span class="sec">—</span>';
     return esc(c.responsavel_nome || 'Jurídico');
@@ -4848,6 +4855,7 @@
       var k = r.contadores;
       var tile = function (rot, n, alerta) { return '<div class="tile' + (alerta && n ? ' alerta' : '') + '"><span class="rot-tile">' + rot + '</span><b>' + n + '</b></div>'; };
       $('#tilesCt').innerHTML = tile('Na fila', k.fila) + tile('Em elaboração', k.em_elaboracao) + tile('Com o comercial', k.minuta_enviada + k.pendencia) +
+        tile('Pronto para assinatura', k.para_assinar) + tile('Em assinatura', k.em_assinatura) +
         tile('Aguardando condições fechadas', k.conferencia) + tile('Assinados no mês', k.assinados_mes) + tile('Passaram do prazo', k.atrasados, true);
       $('#tbCtc').innerHTML = r.contratos.map(function (c) {
         return '<tr class="clicavel" data-id="' + c.id + '"><td style="white-space:nowrap"><b>' + esc(c.protocolo) + '</b><span class="sec">' + dataHoraCr(c.enviado_em) + '</span></td>' +
@@ -5171,9 +5179,11 @@
     if (daAnalise) html += '<div class="sub-doc" style="border-top:0">Vieram da análise</div>' + linha('analise_credito');
     html += '<div class="sub-doc"' + (daAnalise ? '' : ' style="border-top:0"') + '>Do síndico · não travam o contrato, mas travam a cobrança, os boletos e o repasse depois</div>' + operacionais.map(function (t) { return linha(t); }).join('');
     if (f.sem_cnpj) html += linha('ata_ago', { obrigatorio: true });
-    var juridico = ['minuta_enviada', 'conferencia', 'assinado'].indexOf(c.etapa) >= 0 || vig.some(function (x) { return x.tipo === 'minuta'; }) || pd.minuta;
+    var depoisDaMinuta = ['minuta_enviada', 'para_assinar', 'em_assinatura', 'conferencia', 'assinado'].indexOf(c.etapa) >= 0;
+    var podeAssinado = pd.documentos && ['para_assinar', 'em_assinatura', 'conferencia'].indexOf(c.etapa) >= 0;
+    var juridico = depoisDaMinuta || vig.some(function (x) { return x.tipo === 'minuta'; }) || pd.minuta;
     if (juridico) html += '<div class="sub-doc">Contrato</div>' + linha('minuta', { pode: pd.minuta }) +
-      (['minuta_enviada', 'conferencia', 'assinado'].indexOf(c.etapa) >= 0 ? linha('contrato_assinado', { pode: pd.assinar || (c.etapa === 'conferencia' && pd.documentos) }) + linha('procuracao', { pode: pd.assinar || (c.etapa === 'conferencia' && pd.documentos) }) : '');
+      (depoisDaMinuta && c.etapa !== 'minuta_enviada' ? linha('contrato_assinado', { pode: podeAssinado }) + linha('procuracao', { pode: podeAssinado }) : '');
     var antigas = d.documentos.filter(function (x) { return x.tipo === 'minuta' && x.substituido_em; });
     if (antigas.length) html += '<div class="doc-linha"><span class="ajuda" style="margin:0;flex:1 1 200px">Versões anteriores da minuta</span>' + antigas.map(function (x) {
       return '<a class="anexo" href="/api/contratos/' + c.id + '/documentos/' + x.id + '" target="_blank" rel="noopener">' + IC.historico + '<span>' + esc(x.nome) + '</span><span class="sec">' + dataHoraCr(x.enviado_em) + '</span></a>';
@@ -5263,6 +5273,134 @@
     aplicar();
   }
 
+  /* ---------- assinatura: o Jurídico manda assinar e anexa a via assinada ---------- */
+  function marcarEmAssinaturaCt(c, depois) {
+    var mo = modal({ titulo: 'Enviado para assinatura · ' + (c.condominio || ''), corpo: '<label class="rot" for="mPlatCt">Como foi para assinatura</label>' +
+      '<input class="campo" id="mPlatCt" list="lPlatCt" placeholder="Ex.: Clicksign"><datalist id="lPlatCt">' + PLATAFORMAS_CT.map(function (x) { return '<option value="' + esc(x) + '">'; }).join('') + '</datalist>' +
+      '<label class="rot" for="mObsAssCt" style="margin-top:12px">Observação (opcional)</label><textarea class="campo" id="mObsAssCt" rows="2" placeholder="Ex.: enviado ao síndico e às testemunhas."></textarea>' +
+      '<div class="ajuda">O executivo é avisado no sino. Quando voltar assinado, clique em <b>Assinado</b>.</div>',
+      pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mEmAssOk">Marcar em assinatura</button>' });
+    $('#mEmAssOk', mo).onclick = async function () {
+      try { await api('POST', '/api/contratos/' + c.id + '/em-assinatura', { plataforma: $('#mPlatCt', mo).value.trim(), observacao: $('#mObsAssCt', mo).value.trim() }); mo.fechar(); toast('Em assinatura.', 'ok'); depois(); } catch (e) { toast(e.message, 'erro'); }
+    };
+  }
+  /* a via assinada: anexa ali mesmo o contrato e a procuração e marca; em seguida, registra as condições fechadas */
+  function marcarAssinadoCt(d, depois) {
+    var c = d.contrato;
+    var tem = function (t) { return d.documentos.some(function (x) { return x.tipo === t && !x.substituido_em; }); };
+    var arq = function (id, rot, ja) { return '<div style="margin-bottom:12px"><label class="rot" for="' + id + '">' + rot + '</label>' + (ja ? '<div class="msg ok" style="margin-bottom:6px">Já anexado. Escolha outro arquivo só para trocar.</div>' : '') + '<input class="campo" type="file" id="' + id + '"></div>'; };
+    var mo = modal({ titulo: 'Contrato assinado · ' + (c.condominio || ''), corpo: arq('mArqAssCt', 'Contrato assinado', tem('contrato_assinado')) + arq('mArqProcCt', 'Procuração assinada', tem('procuracao')) +
+      '<label class="linha" style="font-size:13.5px;font-weight:700;color:var(--ink-2)"><input type="checkbox" id="mProcCt"> A procuração está no mesmo arquivo do contrato</label>' +
+      '<div class="ajuda">Em seguida, registre as condições fechadas: elas vêm do que foi pedido e seguem para a Implantação quando você concluir.</div>',
+      pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mAssCtOk">Marcar como assinado</button>' });
+    $('#mAssCtOk', mo).onclick = async function () {
+      var b = this;
+      b.disabled = true;
+      try {
+        var a1 = $('#mArqAssCt', mo).files[0], a2 = $('#mArqProcCt', mo).files[0];
+        if (a1) await enviarDocCt(c.id, 'contrato_assinado', a1);
+        if (a2) await enviarDocCt(c.id, 'procuracao', a2);
+        await api('POST', '/api/contratos/' + c.id + '/assinado', { procuracao_no_contrato: $('#mProcCt', mo).checked });
+        mo.fechar(); toast('Contrato assinado: registre as condições fechadas.', 'ok');
+        if (location.hash === '#/contratos/' + c.id) depois(); else location.hash = '#/contratos/' + c.id;
+      } catch (e) { b.disabled = false; toast(e.message, 'erro'); }
+    };
+  }
+  async function abaAssinaturasCt() {
+    var r;
+    try { r = await api('GET', '/api/contratos?vis=assinaturas'); } catch (e) { $('#corpoCt').innerHTML = '<div class="vazio">' + esc(e.message) + '</div>'; return; }
+    var grupo = function (etapa, titulo, ajuda, desde, botao) {
+      var lista = r.contratos.filter(function (c) { return c.etapa === etapa; });
+      return '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>' + titulo + '</h2><span class="etiqueta ' + ETAPA_CT[etapa][1] + '">' + lista.length + '</span><span class="ajuda" style="margin:0">' + ajuda + '</span></div>' +
+        (lista.length ? '<div class="tabela-wrap"><table style="min-width:820px"><thead><tr><th>Protocolo</th><th>Condomínio</th><th>Executivo</th><th>Desde</th><th>Com quem</th><th></th></tr></thead><tbody>' +
+          lista.map(function (c) {
+            return '<tr class="clicavel" data-id="' + c.id + '"><td style="white-space:nowrap"><b>' + esc(c.protocolo) + '</b></td><td><b>' + esc(c.condominio) + '</b><span class="sec">' + esc(c.uf || '') + (c.ajustes ? ' · ' + c.ajustes + ' ajuste(s)' : '') + '</span></td>' +
+              '<td>' + esc(c.executivo_nome || '—') + '</td><td style="white-space:nowrap">' + dataHoraCr(c[desde]) + '</td><td>' + comQuemCt(c) + '</td>' +
+              '<td style="text-align:right"><button class="btn primary sm" data-acao-ass="' + etapa + '" data-c="' + c.id + '">' + botao + '</button></td></tr>';
+          }).join('') + '</tbody></table></div>' : '<div class="corpo"><span class="sec">Nenhum.</span></div>') + '</section>';
+    };
+    $('#corpoCt').innerHTML = grupo('para_assinar', 'Pronto para assinatura', 'o executivo informou que o síndico aprovou a minuta', 'assinatura_pedida_em', 'Enviado para assinatura') +
+      grupo('em_assinatura', 'Em assinatura', 'aguardando a via assinada voltar', 'em_assinatura_em', 'Assinado') +
+      grupo('conferencia', 'Assinado · registrar as condições fechadas', 'confira a via assinada e conclua: as condições seguem para a Implantação', 'assinado_em', 'Registrar condições');
+    $$('#corpoCt tr[data-id]').forEach(function (tr) { tr.onclick = function (ev) { if (ev.target.closest('button')) return; location.hash = '#/contratos/' + tr.getAttribute('data-id'); }; });
+    $$('[data-acao-ass]').forEach(function (b) {
+      b.onclick = async function () {
+        var id = Number(b.getAttribute('data-c')), etapa = b.getAttribute('data-acao-ass');
+        var c = r.contratos.find(function (x) { return x.id === id; });
+        if (etapa === 'para_assinar') return marcarEmAssinaturaCt(c, function () { abaAssinaturasCt(); atualizarCt(); });
+        if (etapa === 'em_assinatura') {
+          try { var d = await api('GET', '/api/contratos/' + id); marcarAssinadoCt(d, function () { paginaContratoDetalhe(id); atualizarCt(); }); } catch (e) { toast(e.message, 'erro'); }
+          return;
+        }
+        location.hash = '#/contratos/' + id;
+      };
+    });
+  }
+
+  /* ---------- Dashboard Jurídico ---------- */
+  var MESES_CT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  var MESES_LONGO_CT = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+  var filtroPainelCt = null;
+  async function abaPainelCt() {
+    var hoje = new Date();
+    if (!filtroPainelCt) filtroPainelCt = { ano: hoje.getFullYear(), mes: hoje.getMonth() + 1 };
+    var f = filtroPainelCt;
+    var r;
+    try { r = await api('GET', '/api/contratos/painel?ano=' + f.ano + '&mes=' + f.mes); } catch (e) { $('#corpoCt').innerHTML = '<div class="vazio">' + esc(e.message) + '</div>'; return; }
+    var nomePer = f.mes ? MESES_LONGO_CT[f.mes - 1] + ' de ' + f.ano : f.ano;
+    var tile = function (rot, n, sec, alerta) { return '<div class="tile' + (alerta && n ? ' alerta' : '') + '"><span class="rot-tile">' + rot + '</span><b>' + (n == null ? '—' : n) + '</b>' + (sec ? '<span class="sec">' + sec + '</span>' : '') + '</div>'; };
+    var P = r.periodo, A = r.agora, T = r.tempos;
+    var maxv = Math.max(1, Math.max.apply(null, r.meses.map(function (m) { return Math.max(m.solicitados, m.fechados); })));
+    var passo = maxv <= 5 ? 1 : maxv <= 10 ? 2 : maxv <= 25 ? 5 : 10;
+    var topo = Math.ceil(maxv / passo) * passo;
+    var W = 760, H = 240, ml = 34, mb = 26, mt = 12, larg = (W - ml - 8) / 12, bw = Math.min(16, larg / 2 - 4);
+    var y = function (v) { return mt + (H - mt - mb) * (1 - v / topo); };
+    var grade = '';
+    for (var g = 0; g <= topo; g += passo) grade += '<line x1="' + ml + '" x2="' + (W - 8) + '" y1="' + y(g) + '" y2="' + y(g) + '" class="grade-ct"/><text x="' + (ml - 6) + '" y="' + (y(g) + 4) + '" text-anchor="end" class="eixo-ct">' + g + '</text>';
+    var barra = function (x, v, cls, rotulo) {
+      if (!v) return '';
+      var y0 = y(v), h = y(0) - y0, rr = Math.min(4, h / 2);
+      return '<path class="' + cls + '" d="M' + x + ' ' + y(0) + ' V' + (y0 + rr) + ' Q' + x + ' ' + y0 + ' ' + (x + rr) + ' ' + y0 + ' H' + (x + bw - rr) + ' Q' + (x + bw) + ' ' + y0 + ' ' + (x + bw) + ' ' + (y0 + rr) + ' V' + y(0) + ' Z"><title>' + rotulo + '</title></path>';
+    };
+    var barras = r.meses.map(function (m, k) {
+      var cx = ml + larg * k + larg / 2;
+      var ativo = f.mes === m.mes;
+      return '<g class="mes-ct' + (ativo ? ' ativo' : '') + '"><rect x="' + (ml + larg * k) + '" y="' + mt + '" width="' + larg + '" height="' + (H - mt - mb) + '" class="faixa-ct"><title>' + MESES_LONGO_CT[k] + ': ' + m.solicitados + ' solicitado(s), ' + m.fechados + ' fechado(s)</title></rect>' +
+        barra(cx - bw - 1, m.solicitados, 'b1-ct', MESES_LONGO_CT[k] + ': ' + m.solicitados + ' solicitado(s)') + barra(cx + 1, m.fechados, 'b2-ct', MESES_LONGO_CT[k] + ': ' + m.fechados + ' fechado(s)') +
+        '<text x="' + cx + '" y="' + (H - 8) + '" text-anchor="middle" class="eixo-ct' + (ativo ? ' forte' : '') + '">' + MESES_CT[k] + '</text></g>';
+    }).join('');
+    var tabela = function (titulo, lista, cols) {
+      return '<section class="painel"><div class="cab-painel"><h2>' + titulo + '</h2><span class="ajuda" style="margin:0">' + esc(String(nomePer)) + '</span></div><div class="tabela-wrap"><table><thead><tr><th>Nome</th>' +
+        cols.map(function (c) { return '<th style="text-align:right">' + c[1] + '</th>'; }).join('') + '</tr></thead><tbody>' +
+        (lista.map(function (x) { return '<tr><td><b>' + esc(x.nome) + '</b></td>' + cols.map(function (c) { return '<td style="text-align:right;font-variant-numeric:tabular-nums">' + x[c[0]] + '</td>'; }).join('') + '</tr>'; }).join('') ||
+          '<tr><td colspan="' + (cols.length + 1) + '"><span class="sec">Nada no período.</span></td></tr>') + '</tbody></table></div></section>';
+    };
+    $('#corpoCt').innerHTML = '<div class="linha" style="margin-bottom:14px"><label class="rot" for="pMesCt" style="margin:0">Período</label>' +
+      '<select class="campo" id="pMesCt" style="width:auto"><option value="0">Ano todo</option>' + MESES_LONGO_CT.map(function (n, k) { return '<option value="' + (k + 1) + '"' + (f.mes === k + 1 ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select>' +
+      '<select class="campo" id="pAnoCt" style="width:auto">' + r.anos.map(function (a) { return '<option' + (a === f.ano ? ' selected' : '') + '>' + a + '</option>'; }).join('') + '</select></div>' +
+      '<h2 class="titulo-painel-ct">No período · ' + esc(String(nomePer)) + '</h2>' +
+      '<div class="tiles" style="margin-bottom:22px;grid-template-columns:repeat(auto-fill,minmax(165px,1fr))">' + tile('Solicitados', P.solicitados) + tile('Minutas enviadas', P.minutas, P.minutas_no_prazo != null ? P.minutas_no_prazo + '% no prazo de 72h úteis' : '') +
+        tile('Alterações pedidas', P.ajustes) + tile('Pedidos de assinatura', P.assinaturas_pedidas) + tile('Enviados para assinatura', P.enviados_assinatura) + tile('Fechados', P.fechados) + tile('Cancelados', P.cancelados) + '</div>' +
+      '<h2 class="titulo-painel-ct">Agora</h2>' +
+      '<div class="tiles" style="margin-bottom:22px;grid-template-columns:repeat(auto-fill,minmax(165px,1fr))">' + tile('Na fila', A.fila, 'ninguém assumiu') + tile('Em elaboração', A.em_elaboracao, 'primeira minuta') + tile('Em alteração', A.em_alteracao, 'ajuste pedido pelo comercial') +
+        tile('Pendência com o comercial', A.pendencia) + tile('Aguardando o executivo', A.minuta_enviada, 'pedir assinatura ou ajuste') + tile('Pronto para assinatura', A.para_assinar, 'o Jurídico manda assinar') +
+        tile('Em assinatura', A.em_assinatura) + tile('Registrar condições', A.conferencia, 'assinados, falta concluir') + tile('Passaram do prazo', A.atrasados, 'minuta além das 72h úteis', true) + '</div>' +
+      '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Solicitados e fechados por mês · ' + f.ano + '</h2><span class="espaco"></span>' +
+        '<span class="legenda-ct"><i class="b1-ct"></i>Solicitados</span><span class="legenda-ct"><i class="b2-ct"></i>Fechados</span></div>' +
+        '<div class="corpo" style="overflow-x:auto"><svg viewBox="0 0 ' + W + ' ' + H + '" class="grafico-ct" role="img" aria-label="Solicitados e fechados por mês em ' + f.ano + '">' + grade + barras + '</svg>' +
+        '<details style="margin-top:8px"><summary class="ajuda" style="cursor:pointer;margin:0">Ver em tabela</summary><div class="tabela-wrap"><table><thead><tr><th>Mês</th><th style="text-align:right">Solicitados</th><th style="text-align:right">Fechados</th></tr></thead><tbody>' +
+        r.meses.map(function (m) { return '<tr><td>' + MESES_LONGO_CT[m.mes - 1] + '</td><td style="text-align:right">' + m.solicitados + '</td><td style="text-align:right">' + m.fechados + '</td></tr>'; }).join('') + '</tbody></table></div></details></div></section>' +
+      '<div class="tiles" style="margin-bottom:16px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))">' +
+        tile('Até a primeira minuta', T.primeira_minuta_dias == null ? null : fmtNumCr(T.primeira_minuta_dias) + ' dias', 'média, do pedido à 1ª minuta') +
+        tile('Do pedido ao fechamento', T.fechamento_dias == null ? null : fmtNumCr(T.fechamento_dias) + ' dias', 'média dos fechados no período') +
+        tile('Alterações por contrato', T.ajustes_por_contrato == null ? null : fmtNumCr(T.ajustes_por_contrato), 'média dos fechados no período') + '</div>' +
+      '<div class="grade-2">' + tabela('Por executivo', r.por_executivo, [['solicitados', 'Solicitados'], ['em_andamento', 'Em andamento'], ['fechados', 'Fechados']]) +
+        tabela('Por responsável no Jurídico', r.por_responsavel, [['em_andamento', 'Em andamento'], ['fechados', 'Fechados']]) + '</div>';
+    $('#pMesCt').onchange = function () { filtroPainelCt.mes = Number(this.value); abaPainelCt(); };
+    $('#pAnoCt').onchange = function () { filtroPainelCt.ano = Number(this.value); abaPainelCt(); };
+    $$('.mes-ct').forEach(function (g, k) { g.style.cursor = 'pointer'; g.onclick = function () { filtroPainelCt.mes = k + 1; abaPainelCt(); }; });
+  }
+
   /* ---------- detalhe ---------- */
   async function paginaContratoDetalhe(id) {
     definirBarra('<span class="setor">Solicitação de Contrato</span><span class="sep">/</span><span class="nome">…</span>');
@@ -5282,7 +5420,9 @@
     if (pd.pendencia) acoes += '<button class="btn ghost sm" id="btPendCt">Devolver com pendência</button>';
     if (pd.minuta) acoes += '<button class="btn primary sm" id="btMinutaCt"' + (pd.enviar_minuta ? '' : ' disabled title="A diretoria ainda não decidiu os itens que dependem dela."') + '>Enviar minuta ao comercial</button>';
     if (pd.ajuste) acoes += '<button class="btn ghost sm" id="btAjusteCt">Pedir ajuste</button>';
-    if (pd.assinar) acoes += '<button class="btn primary sm" id="btAssinadoCt">Contrato assinado</button>';
+    if (pd.pedir_assinatura) acoes += '<button class="btn primary sm" id="btPedirAssCt">Síndico aprovou: pedir assinatura</button>';
+    if (pd.enviar_assinatura) acoes += '<button class="btn primary sm" id="btEmAssCt">Enviado para assinatura</button>';
+    if (pd.assinar) acoes += '<button class="btn ' + (pd.enviar_assinatura ? 'ghost' : 'primary') + ' sm" id="btAssinadoCt">Assinado</button>';
     definirBarra('<span class="setor">Solicitação de Contrato</span><span class="sep">/</span><span class="nome">' + esc(c.protocolo || 'Rascunho') + '</span>', acoes);
     var difs = {};
     d.diferencas.forEach(function (x) { difs[x.campo] = x; });
@@ -5322,7 +5462,9 @@
     if (c.etapa === 'pendencia' && ultimaPend) html += '<div class="msg aviso" style="margin-bottom:16px;white-space:pre-wrap">' + esc(ultimaPend.detalhe.mensagem || '') + '</div>';
     var ultimoAjuste = d.eventos.filter(function (e) { return e.tipo === 'ajuste'; }).pop();
     if (c.etapa === 'em_elaboracao' && ultimoAjuste) html += '<div class="msg aviso" style="margin-bottom:16px;white-space:pre-wrap"><b>Ajuste pedido em ' + dataHoraCr(ultimoAjuste.criado_em) + ':</b> ' + esc(ultimoAjuste.detalhe.texto || '') + '</div>';
-    if (c.etapa === 'minuta_enviada' && pd.ajuste) html += '<div class="msg info" style="margin-bottom:16px">Leve a minuta ao síndico. Se ele pedir mudanças, use <b>Pedir ajuste</b>. Assinado, anexe o contrato e a procuração em Documentos e clique em <b>Contrato assinado</b>.</div>';
+    if (c.etapa === 'minuta_enviada' && pd.ajuste) html += '<div class="msg info" style="margin-bottom:16px">Leve a minuta ao síndico. Pediu mudanças? <b>Pedir ajuste</b>. Aprovou? <b>Síndico aprovou: pedir assinatura</b>: o Jurídico manda assinar e anexa a via assinada.</div>';
+    if (c.etapa === 'para_assinar') html += '<div class="msg aviso" style="margin-bottom:16px">' + (pd.enviar_assinatura ? 'O executivo informou que o síndico aprovou a minuta em ' + dataHoraCr(c.assinatura_pedida_em) + '. Mande para assinatura e clique em <b>Enviado para assinatura</b>.' : 'Pedido de assinatura enviado ao Jurídico em ' + dataHoraCr(c.assinatura_pedida_em) + '.') + '</div>';
+    if (c.etapa === 'em_assinatura') html += '<div class="msg info" style="margin-bottom:16px">Em assinatura desde ' + dataHoraCr(c.em_assinatura_em) + (c.assinatura_plataforma ? ' (' + esc(c.assinatura_plataforma) + ')' : '') + '.' + (pd.assinar ? ' Voltou assinado? Clique em <b>Assinado</b> e anexe a via assinada.' : ' O Jurídico avisa quando voltar assinado.') + '</div>';
     var fechadoHtml = ['conferencia', 'assinado'].indexOf(c.etapa) >= 0 ? htmlFechadoCt(d, m) : '';
     metaFechadoCt = (c.fechado && c.fechado.clausulas) || [];
     var formHtml = '<div id="formCt" class="pilha" style="gap:18px"' + (pd.editar ? '' : ' data-leitura') + '>' + htmlFormCt(c, m, difs) + '</div>';
@@ -5376,15 +5518,11 @@
     if ($('#btAjusteCt')) $('#btAjusteCt').onclick = function () {
       pedirTexto('Pedir ajuste na minuta', 'O que o síndico pediu para mudar', 'Ex.: trocar o foro para Natal/RN; prazo de 30 dias para contestar.', 'Pedir ajuste', 'ajuste', 'texto', 'Ajuste pedido ao Jurídico.', 'Volta para quem redigiu, com mais 72h úteis. Mudança em cláusula do manual? Confira a resposta padrão em Pedidos do síndico.');
     };
-    if ($('#btAssinadoCt')) $('#btAssinadoCt').onclick = function () {
-      var temProc = d.documentos.some(function (x) { return x.tipo === 'procuracao' && !x.substituido_em; });
-      var mo = modal({ titulo: 'Contrato assinado', corpo: '<p style="margin:0 0 10px">Anexe em Documentos o <b>contrato assinado</b>' + (temProc ? '' : ' e a <b>procuração</b>') + '. Depois, a advogada registra as condições fechadas e elas seguem para a Implantação.</p>' +
-        (temProc ? '<div class="msg ok">Procuração anexada.</div>' : '<label class="linha" style="font-size:13.5px;font-weight:700;color:var(--ink-2)"><input type="checkbox" id="mProcCt"> A procuração está no mesmo arquivo do contrato</label>'),
-        pe: '<button class="btn ghost" data-fechar>Ainda não</button><button class="btn primary" id="mAssCtOk">Confirmar</button>' });
-      $('#mAssCtOk', mo).onclick = async function () {
-        try { await api('POST', '/api/contratos/' + c.id + '/assinado', { procuracao_no_contrato: !!($('#mProcCt', mo) && $('#mProcCt', mo).checked) }); mo.fechar(); toast('Contrato assinado: a advogada foi avisada.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
-      };
+    if ($('#btPedirAssCt')) $('#btPedirAssCt').onclick = function () {
+      pedirTexto('Síndico aprovou: pedir assinatura', 'Observação para o Jurídico (opcional)', 'Ex.: o síndico assina pela Clicksign; e-mail dele: sindico@exemplo.com.', 'Pedir assinatura', 'pedir-assinatura', 'observacao', 'Pedido de assinatura enviado ao Jurídico.', 'O Jurídico manda para assinatura e anexa a via assinada. Você é avisado em cada passo.');
     };
+    if ($('#btEmAssCt')) $('#btEmAssCt').onclick = function () { marcarEmAssinaturaCt(c, recarregar); };
+    if ($('#btAssinadoCt')) $('#btAssinadoCt').onclick = function () { marcarAssinadoCt(d, recarregar); };
     var decidir = function (aprovar) { post('diretoria', { aprovar: aprovar, observacao: $('#dObsCt').value }, aprovar ? 'Aprovado; o Jurídico e o executivo foram avisados.' : 'Não aprovado; o Jurídico e o executivo foram avisados.'); };
     if ($('#btDirSimCt')) $('#btDirSimCt').onclick = function () { decidir(true); };
     if ($('#btDirNaoCt')) $('#btDirNaoCt').onclick = function () { decidir(false); };

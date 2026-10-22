@@ -613,7 +613,7 @@ CREATE TABLE IF NOT EXISTS contrato_protocolos (
 CREATE TABLE IF NOT EXISTS contratos (
   id SERIAL PRIMARY KEY,
   protocolo TEXT UNIQUE,
-  etapa TEXT NOT NULL DEFAULT 'rascunho' CHECK (etapa IN ('rascunho','fila','em_elaboracao','pendencia','minuta_enviada','conferencia','assinado','cancelada')),
+  etapa TEXT NOT NULL DEFAULT 'rascunho' CHECK (etapa IN ('rascunho','fila','em_elaboracao','pendencia','minuta_enviada','para_assinar','em_assinatura','conferencia','assinado','cancelada')),
   origem TEXT NOT NULL CHECK (origem IN ('analise','pdf','entrega')),
   analise_id INTEGER REFERENCES analises(id) ON DELETE SET NULL,
   analise_protocolo TEXT,
@@ -730,7 +730,13 @@ ALTER TABLE modulos ADD COLUMN IF NOT EXISTS criado_por INTEGER REFERENCES usuar
 ALTER TABLE modulo_versoes ADD COLUMN IF NOT EXISTS aprovada BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE modulos ADD COLUMN IF NOT EXISTS versao_pendente_id INTEGER;
 -- implantação aberta de uma análise que já tem contrato: os dados e o contrato assinado vêm de lá
-ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS contrato_id INTEGER REFERENCES contratos(id) ON DELETE SET NULL
+ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS contrato_id INTEGER REFERENCES contratos(id) ON DELETE SET NULL;
+-- Solicitação de Contrato: o executivo pede a assinatura e a advogada envia para assinar (etapas para_assinar e em_assinatura)
+ALTER TABLE contratos DROP CONSTRAINT IF EXISTS contratos_etapa_check;
+ALTER TABLE contratos ADD CONSTRAINT contratos_etapa_check CHECK (etapa IN ('rascunho','fila','em_elaboracao','pendencia','minuta_enviada','para_assinar','em_assinatura','conferencia','assinado','cancelada'));
+ALTER TABLE contratos ADD COLUMN IF NOT EXISTS assinatura_pedida_em TIMESTAMPTZ;
+ALTER TABLE contratos ADD COLUMN IF NOT EXISTS em_assinatura_em TIMESTAMPTZ;
+ALTER TABLE contratos ADD COLUMN IF NOT EXISTS assinatura_plataforma TEXT NOT NULL DEFAULT ''
 `;
 
 /* Funções e gatilhos do banco (cada item é um comando inteiro: o corpo das funções tem ";").
