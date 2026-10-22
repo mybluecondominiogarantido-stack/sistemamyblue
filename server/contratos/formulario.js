@@ -78,37 +78,42 @@ const temCashback = (f) => ['5', '10', 'outro'].includes(String(f.cashback || ''
 const comFidelizacao = (f) => UF_FIDELIZACAO.includes(texto(f.uf).toUpperCase()) || !!f.fidelizacao;
 const pctExtra = (f) => (num(f.taxa_extra) > 0 && num(f.taxa_ordinaria) > 0 ? (num(f.taxa_extra) / num(f.taxa_ordinaria)) * 100 : null);
 
-/* o que falta para enviar ao Jurídico (bloqueia o envio) */
-function faltas(f, { docs = new Set(), executivoId } = {}) {
+/* o que falta para enviar ao Jurídico (bloqueia o envio), com o campo de cada falta para a tela marcar em vermelho */
+function faltasCampos(f, { docs = new Set(), executivoId } = {}) {
   const l = [];
-  const exige = (cond, msg) => { if (!cond) l.push(msg); };
-  exige(texto(f.nome), 'Informar o nome do condomínio.');
+  const exige = (cond, campo, msg) => { if (!cond) l.push({ campo, msg }); };
+  // vazio pede para informar; preenchido errado diz o que conferir
+  const confere = (valor, ok, campo, vazio, errado) => exige(ok, campo, texto(valor) ? errado : vazio);
+  exige(texto(f.nome), 'nome', 'Informar o nome do condomínio.');
   if (f.sem_cnpj) {
-    exige(f.sem_cnpj_ciente, 'Marcar que o síndico está ciente dos 90 dias para regularizar o CNPJ.');
-    exige(texto(f.administradora), 'Informar a administradora (sem CNPJ, o repasse vai para a conta dela).');
-    exige(docs.has('ata_ago'), `Anexar: ${DOCUMENTOS.ata_ago.nome}.`);
-  } else exige(I.cnpjOk(f.cnpj), 'Informar um CNPJ válido (sem CNPJ: marque "O condomínio ainda não tem CNPJ").');
-  exige(/^[A-Z]{2}$/.test(texto(f.uf)), 'Informar o estado do condomínio.');
-  exige(texto(f.sindico_nome), 'Informar o nome do síndico.');
-  exige(I.cpfValido(f.sindico_cpf), 'Informar um CPF do síndico válido.');
-  exige(emailOk(f.sindico_email), 'Informar o e-mail do síndico ou do condomínio.');
-  exige(digitos(f.sindico_telefone).length >= 10, 'Informar o telefone do síndico (com DDD).');
-  exige(num(f.taxa_adm) > 0, 'Informar a taxa administrativa negociada.');
-  exige(num(f.boleto) > 0, 'Informar o valor do boleto negociado.');
-  exige(['nenhum', 'percentual', 'valor'].includes(f.desconto_tipo), 'Dizer se tem desconto de pontualidade.');
-  if (['percentual', 'valor'].includes(f.desconto_tipo)) exige(num(f.desconto_valor) > 0, 'Informar o valor ou o % do desconto de pontualidade.');
-  exige((f.garantias || []).length || texto(f.garantia_outra), 'Marcar o que iremos garantir.');
-  if ((f.garantias || []).includes('Taxa extraordinária')) exige(num(f.taxa_ordinaria) > 0, 'Informar a taxa ordinária (para conferir o limite da taxa extra).');
-  exige(['nao', '5', '10', 'outro'].includes(String(f.cashback || '')), 'Dizer se foi concedido cashback.');
-  if (f.cashback === 'outro') exige(num(f.cashback_pct) > 0, 'Informar o percentual do cashback.');
-  if (temCashback(f)) exige((f.cashback_receitas || []).length || texto(f.cashback_receita_outra), 'Marcar sobre quais receitas incide o cashback.');
-  exige(/^\d{4}-\d{2}-\d{2}$/.test(texto(f.inicio_contrato)), 'Informar a data de início do contrato (primeira arrecadação garantida).');
-  exige(num(f.dia_vencimento) >= 1 && num(f.dia_vencimento) <= 31, 'Informar o dia de vencimento da taxa condominial (1 a 31).');
-  for (const k of f.pedidos || []) if (!C.porChave.has(k)) l.push('Pedido de alteração desconhecido: desmarque e marque de novo.');
-  exige(texto(f.minucias), 'Informar as minúcias da negociação (se não houver nada diferente do habitual, escreva "Nenhuma").');
-  exige(executivoId, 'Escolher o executivo de negócios.');
+    exige(f.sem_cnpj_ciente, 'sem_cnpj_ciente', 'Marcar que o síndico está ciente dos 90 dias para regularizar o CNPJ.');
+    exige(texto(f.administradora), 'administradora', 'Informar a administradora (sem CNPJ, o repasse vai para a conta dela).');
+    exige(docs.has('ata_ago'), 'doc:ata_ago', `Anexar: ${DOCUMENTOS.ata_ago.nome}.`);
+  } else confere(f.cnpj, I.cnpjOk(f.cnpj), 'cnpj', 'Informar o CNPJ do condomínio (sem CNPJ: marque "O condomínio ainda não tem CNPJ").', 'CNPJ inválido: confira os números.');
+  exige(/^[A-Z]{2}$/.test(texto(f.uf)), 'uf', 'Informar o estado do condomínio.');
+  exige(texto(f.sindico_nome), 'sindico_nome', 'Informar o nome do síndico.');
+  const nCpf = digitos(f.sindico_cpf).length;
+  confere(f.sindico_cpf, I.cpfValido(f.sindico_cpf), 'sindico_cpf', 'Informar o CPF do síndico.',
+    nCpf !== 11 ? `CPF do síndico com ${nCpf} dígito(s): são 11.` : 'CPF do síndico inválido: confira os números.');
+  confere(f.sindico_email, emailOk(f.sindico_email), 'sindico_email', 'Informar o e-mail do síndico ou do condomínio.', 'E-mail do síndico inválido: use o formato nome@dominio.com.br.');
+  confere(f.sindico_telefone, digitos(f.sindico_telefone).length >= 10, 'sindico_telefone', 'Informar o telefone do síndico.', 'Telefone do síndico incompleto: informe com o DDD.');
+  exige(num(f.taxa_adm) > 0, 'taxa_adm', 'Informar a taxa administrativa negociada.');
+  exige(num(f.boleto) > 0, 'boleto', 'Informar o valor do boleto negociado.');
+  exige(['nenhum', 'percentual', 'valor'].includes(f.desconto_tipo), 'desconto_tipo', 'Dizer se tem desconto de pontualidade.');
+  if (['percentual', 'valor'].includes(f.desconto_tipo)) exige(num(f.desconto_valor) > 0, 'desconto_valor', 'Informar o valor ou o % do desconto de pontualidade.');
+  exige((f.garantias || []).length || texto(f.garantia_outra), 'garantias', 'Marcar o que iremos garantir.');
+  if ((f.garantias || []).includes('Taxa extraordinária')) exige(num(f.taxa_ordinaria) > 0, 'taxa_ordinaria', 'Informar a taxa ordinária (para conferir o limite da taxa extra).');
+  exige(['nao', '5', '10', 'outro'].includes(String(f.cashback || '')), 'cashback', 'Dizer se foi concedido cashback.');
+  if (f.cashback === 'outro') exige(num(f.cashback_pct) > 0, 'cashback_pct', 'Informar o percentual do cashback.');
+  if (temCashback(f)) exige((f.cashback_receitas || []).length || texto(f.cashback_receita_outra), 'cashback_receitas', 'Marcar sobre quais receitas incide o cashback.');
+  exige(/^\d{4}-\d{2}-\d{2}$/.test(texto(f.inicio_contrato)), 'inicio_contrato', 'Informar a data de início do contrato (primeira arrecadação garantida).');
+  confere(f.dia_vencimento, num(f.dia_vencimento) >= 1 && num(f.dia_vencimento) <= 31, 'dia_vencimento', 'Informar o dia de vencimento da taxa condominial.', 'Dia de vencimento inválido: de 1 a 31.');
+  for (const k of f.pedidos || []) if (!C.porChave.has(k)) l.push({ campo: 'pedidos', msg: 'Pedido de alteração desconhecido: desmarque e marque de novo.' });
+  exige(texto(f.minucias), 'minucias', 'Informar as minúcias da negociação (se não houver nada diferente do habitual, escreva "Nenhuma").');
+  exige(executivoId, 'executivo_id', 'Escolher o executivo de negócios.');
   return l;
 }
+const faltas = (f, opcoes) => faltasCampos(f, opcoes).map((x) => x.msg);
 
 /* o que só entra na minuta com a decisão da diretoria */
 function itensDiretoria(f, origem) {
@@ -381,5 +386,5 @@ function montarPdf(c, { executivo, responsavel, documentos = [], usuario, origem
   };
 }
 
-module.exports = { DOCUMENTOS, GARANTIAS, RECEITAS_CASHBACK, LIMITE_EXTRA, DOC_IMPLANTACAO, RESULTADO, CAPITAIS, FORO_PADRAO, daAnalise, doPdf, faltas, itensDiretoria, avisos,
+module.exports = { DOCUMENTOS, GARANTIAS, RECEITAS_CASHBACK, LIMITE_EXTRA, DOC_IMPLANTACAO, RESULTADO, CAPITAIS, FORO_PADRAO, daAnalise, doPdf, faltas, faltasCampos, itensDiretoria, avisos,
   pendencias, diferencas, fechadoInicial, normalizarFechado, faltasFechado, diferencasFechado, mudancasFechado, implantacaoDiferente, paraImplantacao, comFidelizacao, montarPdf, cpfValido: I.cpfValido, cnpjOk: I.cnpjOk };

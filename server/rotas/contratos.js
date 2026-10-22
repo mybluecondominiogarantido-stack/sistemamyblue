@@ -392,6 +392,7 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
       faltas_fechado: pd.registrar ? F.faltasFechado(fechado) : [],
       diferencas_fechado: ['conferencia', 'assinado'].includes(c.etapa) ? F.diferencasFechado(c.formulario || {}, fechado) : [],
       faltas: pd.enviar ? F.faltas(f, { docs, executivoId: c.executivo_id }) : [],
+      faltas_campos: pd.enviar ? F.faltasCampos(f, { docs, executivoId: c.executivo_id }) : [],
       avisos: F.avisos(f, { origem: c.origem, diasAnalise: await diasDaAnalise(c), validadeProposta: p.politica.validade_dias }),
       itens_diretoria: c.etapa === 'rascunho' || pd.editar ? F.itensDiretoria(f, c.origem) : (c.diretoria.itens || []),
       pendencias: F.pendencias(docs),
@@ -440,6 +441,18 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
       await evento(t, c.id, req.usuario.id, 'formulario', {});
     });
     res.json({ ok: true, diferencas: c.origem === 'entrega' ? [] : F.diferencas(f, c.referencia), itens_diretoria: F.itensDiretoria(f, c.origem) });
+  });
+
+  /* conferência ao vivo, enquanto o comercial preenche (não grava nada) */
+  r.post('/api/contratos/:id/conferir', json, async (req, res) => {
+    const x = await carregar(req, res);
+    if (!x) return;
+    const { c, p, pd } = x;
+    if (!pd.editar) return erro(res, 403, 'A solicitação só muda enquanto está em rascunho ou com pendência.');
+    const f = req.body && req.body.formulario && typeof req.body.formulario === 'object' ? req.body.formulario : c.formulario || {};
+    let executivoId = c.executivo_id;
+    if (p.admin && req.body && req.body.executivo_id !== undefined) executivoId = ((await db.um('SELECT id FROM executivos WHERE id = $1 AND ativo', [Number(req.body.executivo_id) || 0])) || {}).id || null;
+    res.json({ faltas_campos: F.faltasCampos(f, { docs: await tiposVigentes(db, c.id), executivoId }), itens_diretoria: F.itensDiretoria(f, c.origem) });
   });
 
   /* ===================== documentos ===================== */
@@ -513,8 +526,8 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
     if (!pd.enviar) return erro(res, 409, 'Esta solicitação já foi enviada.');
     const docs = await tiposVigentes(db, c.id);
     const f = c.formulario || {};
-    const lista = F.faltas(f, { docs, executivoId: c.executivo_id });
-    if (lista.length) return erro(res, 400, 'Faltam informações para enviar.', { faltas: lista });
+    const campos = F.faltasCampos(f, { docs, executivoId: c.executivo_id });
+    if (campos.length) return erro(res, 400, 'Faltam informações para enviar.', { faltas: campos.map((x) => x.msg), faltas_campos: campos });
     const pend = F.pendencias(docs);
     const itens = F.itensDiretoria(f, c.origem);
     const reenvio = c.etapa === 'pendencia';

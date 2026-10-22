@@ -5000,7 +5000,9 @@
     var pedidos = f.pedidos || [];
     var cb = String(f.cashback || '');
     return '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">1</span>Condomínio e síndico</h2>' + (temRef ? '<span class="etiqueta azul">preenchido com a análise, pode ajustar</span>' : '') + '</div><div class="corpo grade-3">' +
-      campoCt('nome', 'Nome do condomínio', f.nome, { span: 2 }) +
+      (m.perfil.admin ? selCt('executivo_id', 'Executivo de negócios', c.executivo_id || '', [['', 'Escolha o executivo']].concat(m.executivos.map(function (x) { return [x.id, x.nome + (x.uf ? ' · ' + x.uf : '')]; })),
+        { ajuda: 'Você está como administração: escolha em nome de qual executivo é a solicitação.' }) : '') +
+      campoCt('nome', 'Nome do condomínio', f.nome, { span: m.perfil.admin ? 1 : 2 }) +
       '<div><label class="rot" for="c_cnpj">CNPJ do condomínio</label><input class="campo" id="c_cnpj" value="' + esc(f.cnpj || '') + '" placeholder="00.000.000/0000-00"' + (f.sem_cnpj ? ' disabled' : '') + '>' +
       '<label class="linha" style="margin-top:8px;font-size:13px;font-weight:700;color:var(--ink-2)"><input type="checkbox" id="c_sem_cnpj"' + (f.sem_cnpj ? ' checked' : '') + '> O condomínio ainda não tem CNPJ</label></div>' +
       '<div style="grid-column:1/-1" data-se="sem_cnpj:true"><div class="msg aviso">Sem CNPJ, o condomínio tem 90 dias da primeira arrecadação para regularizar, senão o repasse fica retido. Até lá, o repasse vai para a conta da administradora (por e-mail), nunca para a do síndico. Anexe a ata da assembleia que autorizou a contratação.</div>' +
@@ -5086,13 +5088,50 @@
       }
       var cpf = $('#c_sindico_cpf', raiz);
       var d = cpf.value.replace(/\D/g, '');
-      var aj = cpf.parentNode.querySelector('.ajuda') || cpf.parentNode.appendChild(document.createElement('div'));
-      aj.className = 'ajuda' + (d.length === 11 ? (cpfValidoImp(d) ? ' ok' : ' diferente') : '');
-      aj.textContent = d.length === 11 ? (cpfValidoImp(d) ? 'CPF válido.' : 'CPF inválido: confira os números.') : '';
+      var aj = cpf.parentNode.querySelector('.ajuda-cpf') || cpf.parentNode.appendChild(document.createElement('div'));
+      aj.className = 'ajuda ok ajuda-cpf';
+      aj.textContent = cpfValidoImp(d) ? 'CPF válido.' : '';
     }
     raiz.addEventListener('change', aplicar);
     raiz.addEventListener('input', function (e) { if (['c_sindico_cpf', 'c_taxa_ordinaria', 'c_taxa_extra'].indexOf(e.target.id) >= 0) aplicar(); });
     aplicar();
+  }
+
+  /* ---------- o que falta: campo em vermelho, com a explicação embaixo ---------- */
+  function alvoFaltaCt(campo) {
+    if (campo.indexOf('doc:') === 0) { var inp = $('[data-doc-ct="' + campo.slice(4) + '"]'); return inp && inp.closest('.doc-linha'); }
+    if (campo === 'garantias' || campo === 'cashback_receitas') { var mc = $('[data-marca-ct="' + campo + '"]', $('#formCt')); return mc && mc.closest('fieldset'); }
+    if (campo === 'cashback') { var rd = $('input[name=c_cashback]', $('#formCt')); return rd && rd.closest('fieldset'); }
+    if (campo === 'sem_cnpj_ciente') { var cx = $('#c_sem_cnpj_ciente'); return cx && cx.closest('label'); }
+    return $('#c_' + campo, $('#formCt'));
+  }
+  function marcarFaltasCt(lista) {
+    $$('.invalido').forEach(function (el) { el.classList.remove('invalido'); });
+    $$('.ajuda-falta').forEach(function (el) { el.remove(); });
+    (lista || []).forEach(function (x) {
+      var el = alvoFaltaCt(x.campo);
+      if (!el || el.closest('[hidden]')) return;
+      el.classList.add('invalido');
+      var aj = document.createElement('div');
+      aj.className = 'ajuda invalido ajuda-falta';
+      aj.textContent = x.msg;
+      if (/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) el.parentNode.appendChild(aj); else if (el.tagName === 'FIELDSET') el.appendChild(aj); else el.insertAdjacentElement('afterend', aj);
+    });
+    var caixa = $('#faltasCt');
+    if (caixa) {
+      caixa.hidden = !(lista || []).length;
+      $('ul', caixa).innerHTML = (lista || []).map(function (x) { return '<li><a href="#" data-ir-campo="' + esc(x.campo) + '">' + esc(x.msg) + '</a></li>'; }).join('');
+      $$('[data-ir-campo]', caixa).forEach(function (a) {
+        a.onclick = function (ev) {
+          ev.preventDefault();
+          var el = alvoFaltaCt(a.getAttribute('data-ir-campo'));
+          if (!el) return;
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          var foco = /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName) ? el : $('input, select, textarea', el);
+          if (foco) setTimeout(function () { foco.focus({ preventScroll: true }); }, 350);
+        };
+      });
+    }
   }
 
   /* ---------- documentos ---------- */
@@ -5275,7 +5314,7 @@
       html += '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Decisão da diretoria</h2></div><div class="corpo">' + corpoDir + '</div></section>';
     }
     if (d.diferencas.length) html += '<div class="msg aviso" style="margin-bottom:16px"><b>Diferente da análise:</b> ' + d.diferencas.map(function (x) { return esc(x.rotulo.replace(/ \((%|R\$)\)$/, '')) + ' ' + esc(fmtDif(x)); }).join('; ') + '.</div>';
-    if (pd.editar && d.faltas.length) html += '<div class="msg aviso" style="margin-bottom:16px"><b>Para enviar, falta:</b><ul>' + d.faltas.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>';
+    if (pd.editar) html += '<div class="msg erro" id="faltasCt" style="margin-bottom:16px"' + (d.faltas.length ? '' : ' hidden') + '><b>Para enviar, falta (os campos estão em vermelho; clique para ir até cada um):</b><ul></ul></div>';
     var atencao = d.avisos.filter(function (a) { return a.nivel === 'atencao'; }), info = d.avisos.filter(function (a) { return a.nivel !== 'atencao'; });
     if (atencao.length) html += '<div class="msg aviso" style="margin-bottom:16px"><b>Atenção (Manual do Contrato):</b><ul>' + atencao.map(function (a) { return '<li>' + esc(a.texto) + '</li>'; }).join('') + '</ul></div>';
     if (info.length && ['conferencia', 'assinado'].indexOf(c.etapa) < 0) html += '<div class="msg info" style="margin-bottom:16px"><b>Do Manual do Contrato:</b><ul>' + info.map(function (a) { return '<li>' + esc(a.texto) + '</li>'; }).join('') + '</ul></div>';
@@ -5381,7 +5420,20 @@
       $$('input, select, textarea', raiz).forEach(function (el) { el.disabled = true; });
       return;
     }
-    var salvar = async function () { await api('PATCH', '/api/contratos/' + c.id, { formulario: lerFormCt(raiz) }); };
+    var exec = function () { var s = $('#c_executivo_id', raiz); return s && s.value ? Number(s.value) : undefined; };
+    var salvar = async function () { await api('PATCH', '/api/contratos/' + c.id, { formulario: lerFormCt(raiz), executivo_id: exec() }); };
+    // confere enquanto preenche: o que falta fica em vermelho na hora
+    marcarFaltasCt(d.faltas_campos);
+    var esperaConf, seqConf = 0;
+    var conferir = function () {
+      clearTimeout(esperaConf);
+      esperaConf = setTimeout(async function () {
+        var meu = ++seqConf;
+        try { var r = await api('POST', '/api/contratos/' + c.id + '/conferir', { formulario: lerFormCt(raiz), executivo_id: exec() }); if (meu === seqConf) marcarFaltasCt(r.faltas_campos); } catch (e) { /* confere na próxima */ }
+      }, 450);
+    };
+    raiz.addEventListener('input', conferir);
+    raiz.addEventListener('change', conferir);
     $('#btSalvarCt').onclick = async function () { try { await salvar(); toast('Rascunho salvo.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
     $('#btEnviarCt').onclick = async function () {
       try {

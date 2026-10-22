@@ -423,3 +423,9 @@ legend.rot,#formImp span.rot,.modal span.rot{display:block;font-size:12px;font-w
 .clausula-ct .campo:last-child{grid-column:1 / -1}
 @media (max-width:640px){.clausula-ct{grid-template-columns:1fr}}
 .atraso-ct{color:var(--red);font-weight:800}
+/* o que falta para enviar: o campo em vermelho, com a explicação embaixo */
+.campo.invalido{border-color:var(--red);box-shadow:0 0 0 3px rgba(216,70,59,.12)}
+.ajuda.invalido{color:var(--red)}
+fieldset.invalido legend,label.invalido{color:var(--red) !important}
+.doc-linha.invalido{background:var(--red-bg)}
+#faltasCt ul a{color:inherit;text-decoration:underline}

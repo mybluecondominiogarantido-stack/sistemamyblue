@@ -340,6 +340,25 @@ test('condomínio de entrega: sem análise, a diretoria aprova taxa e boleto ant
   assert.equal((await diretor('GET', '/api/contratos?vis=diretoria')).json.contratos[0].id, id);
 });
 
+test('conferência ao vivo: o campo de cada falta, CPF e e-mail errados e o executivo escolhido pela administração', async () => {
+  const { id } = (await admin('POST', '/api/contratos', { origem: 'entrega' })).json;
+  const forma = { ...FORM, nome: 'Condomínio Fictício Teste', sindico_cpf: '6166521397', sindico_email: 'Teste', pedidos: [] };
+  let r = await admin('POST', `/api/contratos/${id}/conferir`, { formulario: forma });
+  assert.equal(r.status, 200, r.texto);
+  const por = Object.fromEntries(r.json.faltas_campos.map((x) => [x.campo, x.msg]));
+  assert.equal(por.sindico_cpf, 'CPF do síndico com 10 dígito(s): são 11.');
+  assert.match(por.sindico_email, /E-mail do síndico inválido/);
+  assert.equal(por.executivo_id, 'Escolher o executivo de negócios.');
+  r = await admin('POST', `/api/contratos/${id}/conferir`, { formulario: { ...forma, sindico_cpf: '111.444.777-35', sindico_email: 's@exemplo.com' }, executivo_id: ids.executivo });
+  assert.deepEqual(r.json.faltas_campos, []);
+  assert.equal((await exec('POST', `/api/contratos/${id}/conferir`, { formulario: forma })).status, 404); // não é dela
+  assert.equal((await admin('PATCH', `/api/contratos/${id}`, { formulario: { ...forma, sindico_cpf: '111.444.777-35', sindico_email: 's@exemplo.com' }, executivo_id: ids.executivo })).status, 200);
+  const d = (await admin('GET', `/api/contratos/${id}`)).json;
+  assert.equal(d.contrato.executivo_id, ids.executivo);
+  assert.deepEqual(d.faltas_campos, []);
+  await admin('POST', `/api/contratos/${id}/cancelar`, {});
+});
+
 const temGerador = (() => { try { require('child_process').execFileSync('python3', ['-c', 'import reportlab'], { stdio: 'ignore' }); require('child_process').execFileSync('pdftotext', ['-v'], { stdio: 'ignore' }); return true; } catch { return false; } })();
 test('solicitação em PDF, com as condições fechadas', { skip: !temGerador && 'reportlab ou pdftotext não instalados' }, async () => {
   assert.equal((await outro('GET', `/api/contratos/${idC}/formulario.pdf`, undefined, { bruto: true })).status, 404);
