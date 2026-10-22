@@ -241,6 +241,45 @@ function diferencasFechado(f, x) {
   return l;
 }
 
+/* condições fechadas em texto, campo a campo (para comparar a correção com o que estava registrado) */
+function resumoFechado(x) {
+  x = x || {};
+  const desc = ['percentual', 'valor'].includes(x.desconto_tipo) ? (x.desconto_tipo === 'percentual' ? `${fmt(num(x.desconto_valor) || 0)}%` : `R$ ${fmt(num(x.desconto_valor) || 0)}`) : 'não possui';
+  return {
+    'Taxa administrativa': `${fmt(num(x.taxa_adm) || 0)}%`, Boleto: `R$ ${fmt(num(x.boleto) || 0)}`,
+    'Desconto de pontualidade': desc + (texto(x.desconto_inicio) ? ` a partir de ${texto(x.desconto_inicio)}` : ''),
+    Garantias: [...(x.garantias || []), texto(x.garantia_outra)].filter(Boolean).sort().join(', '),
+    'Taxa extra coberta': num(x.limite_extra) ? `até ${fmt(num(x.limite_extra))}%` : '',
+    Cashback: x.cashback === 'outro' ? `${fmt(num(x.cashback_pct) || 0)}%` : !x.cashback || x.cashback === 'nao' ? 'não' : `${x.cashback}%`,
+    'Cashback incide sobre': [...(x.cashback_receitas || [])].sort().join(', '),
+    'Início do contrato': dataBr(x.inicio_contrato), 'Dia de vencimento': num(x.dia_vencimento) ? String(num(x.dia_vencimento)) : '',
+    'Período mínimo': num(x.periodo_minimo) ? `${num(x.periodo_minimo)} meses` : 'padrão', Fidelização: x.fidelizacao ? 'com' : 'sem',
+    Foro: texto(x.foro), 'Prazo de contestação': num(x.prazo_contestacao) ? `${num(x.prazo_contestacao)} dias` : '',
+    ...Object.fromEntries((x.clausulas || []).map((k) => [`${k.clausula} ${k.pedido}`.trim(), `${RESULTADO[k.resultado] || '—'}${texto(k.redacao) ? `: ${texto(k.redacao)}` : ''}`])),
+    'Observações': texto(x.observacoes),
+  };
+}
+function mudancasFechado(antes, depois) {
+  const a = resumoFechado(antes), b = resumoFechado(depois);
+  return [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((k) => (a[k] || '') !== (b[k] || '')).map((k) => ({ rotulo: k, antes: a[k] || '—', depois: b[k] || '—' }));
+}
+
+/* o formulário da implantação diferente do contrato fechado (o setor confere antes de seguir) */
+function implantacaoDiferente(fi, x) {
+  if (!x || !x.taxa_adm) return [];
+  fi = fi || {};
+  const l = [];
+  const n = (v) => (num(v) == null ? null : Math.round(num(v) * 10000) / 10000);
+  const par = (rotulo, a, b, f = (v) => v) => { if (a != null && a !== '' && String(a) !== String(b)) l.push({ rotulo, implantacao: f(a), contrato: f(b) }); };
+  par('Taxa administrativa', n(fi.taxa_adm), n(x.taxa_adm), (v) => (v == null ? '—' : `${fmt(v)}%`));
+  par('Boleto', n(fi.boleto), n(x.boleto), (v) => (v == null ? '—' : `R$ ${fmt(v)}`));
+  const desc = (t, v) => (['percentual', 'valor'].includes(t) ? (t === 'percentual' ? `${fmt(num(v) || 0)}%` : `R$ ${fmt(num(v) || 0)}`) : 'não possui');
+  if (fi.desconto_tipo) par('Desconto de pontualidade', desc(fi.desconto_tipo, fi.desconto_valor), desc(x.desconto_tipo, x.desconto_valor));
+  par('Início do contrato', texto(fi.inicio_contrato), texto(x.inicio_contrato), dataBr);
+  par('Dia de vencimento', n(fi.dia_vencimento), n(x.dia_vencimento));
+  return l;
+}
+
 /* dados do contrato que seguem para o formulário de Implantação (o fechado vale sobre o pedido) */
 function paraImplantacao(c) {
   const fechado = c.fechado_em && c.fechado && c.fechado.taxa_adm ? c.fechado : null;
@@ -343,4 +382,4 @@ function montarPdf(c, { executivo, responsavel, documentos = [], usuario, origem
 }
 
 module.exports = { DOCUMENTOS, GARANTIAS, RECEITAS_CASHBACK, LIMITE_EXTRA, DOC_IMPLANTACAO, RESULTADO, CAPITAIS, FORO_PADRAO, daAnalise, doPdf, faltas, itensDiretoria, avisos,
-  pendencias, diferencas, fechadoInicial, normalizarFechado, faltasFechado, diferencasFechado, paraImplantacao, comFidelizacao, montarPdf, cpfValido: I.cpfValido, cnpjOk: I.cnpjOk };
+  pendencias, diferencas, fechadoInicial, normalizarFechado, faltasFechado, diferencasFechado, mudancasFechado, implantacaoDiferente, paraImplantacao, comFidelizacao, montarPdf, cpfValido: I.cpfValido, cnpjOk: I.cnpjOk };

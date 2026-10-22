@@ -231,6 +231,30 @@ test('Implantação: abre com as condições fechadas, o contrato assinado e os 
   assert.deepEqual(d.diferencas.map((x) => x.campo), ['taxa_adm']); // diferente da análise (3,50%)
 });
 
+test('contrato concluído: quem elabora corrige as condições com o motivo; o histórico guarda o que mudou e a implantação mostra a diferença', async () => {
+  const d = (await adv('GET', `/api/contratos/${idC}`)).json;
+  assert.ok(d.pode.corrigir);
+  assert.equal((await exec('GET', `/api/contratos/${idC}`)).json.pode.corrigir, false);
+  const x = d.contrato.fechado;
+  assert.equal((await exec('POST', `/api/contratos/${idC}/corrigir`, { condicoes: { ...x, taxa_adm: 3 }, motivo: 'x' })).status, 403);
+  assert.equal((await adv('POST', `/api/contratos/${idC}/corrigir`, { condicoes: { ...x, taxa_adm: 3 } })).status, 400); // sem motivo
+  assert.equal((await adv('POST', `/api/contratos/${idC}/corrigir`, { condicoes: x, motivo: 'Conferência' })).status, 400); // nada mudou
+  const r = await adv('POST', `/api/contratos/${idC}/corrigir`, { condicoes: { ...x, taxa_adm: 3, foro: 'Fortaleza/CE' }, motivo: 'A taxa do assinado é 3%.' });
+  assert.equal(r.status, 200, r.texto);
+  assert.deepEqual(r.json.mudancas.map((m) => [m.rotulo, m.antes, m.depois]), [['Taxa administrativa', '3,25%', '3,00%'], ['Foro', 'Natal/RN', 'Fortaleza/CE']]);
+  const ev = (await adv('GET', `/api/contratos/${idC}`)).json.eventos.pop();
+  assert.deepEqual([ev.tipo, ev.detalhe.motivo], ['fechado_corrigido', 'A taxa do assinado é 3%.']);
+  const aviso = (await avisosDe('exec@teste.com')).pop();
+  assert.match(aviso.titulo, /^Condições do contrato corrigidas/);
+  assert.match(aviso.texto, /Taxa administrativa: 3,25% → 3,00%/);
+  // a implantação aberta com 3,25% passa a mostrar a diferença para o contrato
+  const imp = (await exec('GET', '/api/implantacoes?vis=minhas')).json.implantacoes.find((i) => i.analise_id === aid);
+  const di = (await exec('GET', `/api/implantacoes/${imp.id}`)).json;
+  assert.deepEqual(di.contrato.diferente_da_implantacao.map((v) => [v.rotulo, v.implantacao, v.contrato]), [['Taxa administrativa', '3,25%', '3,00%']]);
+  assert.equal(di.contrato.corrigido.motivo, 'A taxa do assinado é 3%.');
+  assert.equal(di.contrato.fechado.foro, 'Fortaleza/CE');
+});
+
 test('implantação aberta antes do contrato fechar: passa a mostrar as condições e o setor é avisado', async () => {
   const a2 = await analiseLiberada(2, 'Edifício Fictício Horizonte');
   const { id: imp } = (await exec('POST', '/api/implantacoes', { origem: 'analise', analise_id: a2 })).json;
@@ -323,7 +347,7 @@ test('solicitação em PDF, com as condições fechadas', { skip: !temGerador &&
   assert.equal(r.status, 200);
   assert.equal(r.headers.get('content-type'), 'application/pdf');
   const texto = require('child_process').execFileSync('pdftotext', ['-', '-'], { input: r.buffer }).toString();
-  for (const t of [/SOLICITAÇÃO DE CONTRATO/, /CT-\d{4}-\d{2}-\d{2}-01/, /Condomínio Residencial Fictício/, /CONDIÇÕES FECHADAS/, /Natal\/RN/, /Primeiro repasse adiantado/, /Regimento interno/]) {
+  for (const t of [/SOLICITAÇÃO DE CONTRATO/, /CT-\d{4}-\d{2}-\d{2}-01/, /Condomínio Residencial Fictício/, /CONDIÇÕES FECHADAS/, /Fortaleza\/CE/, /3,00%/, /Primeiro repasse adiantado/, /Regimento interno/]) {
     assert.match(texto, t);
   }
 });

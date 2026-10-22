@@ -4021,7 +4021,7 @@
     criada: 'criou a implantação', formulario: 'alterou o formulário', documento: 'anexou um documento', documento_removido: 'removeu um documento',
     enviada: 'enviou ao setor Implantação', reenviada: 'reenviou depois da pendência', cancelada: 'cancelou',
     designada: 'designou', iniciada: 'iniciou a implantação', etapas: 'atualizou as etapas', pendencia: 'devolveu com pendência',
-    concluida: 'concluiu a implantação', parceiros: 'levou o condomínio à base de Parceiros', carteira: 'confirmou a entrada na Carteira', contrato: 'recebeu as condições fechadas do contrato',
+    concluida: 'concluiu a implantação', parceiros: 'levou o condomínio à base de Parceiros', carteira: 'confirmou a entrada na Carteira', contrato: 'recebeu as condições fechadas do contrato', contrato_corrigido: 'recebeu a correção das condições do contrato',
     diretoria_pedida: 'pediu a aprovação da diretoria', diretoria_aprovou: 'aprovou taxa e boleto', diretoria_recusou: 'não aprovou taxa e boleto',
   };
   var ETAPA_SETOR_IMP = [['documentacao', 'Documentação', 'Obrigatórios conferidos; os pendentes seguem com alerta ao executivo.'], ['vouch', 'Cadastro no sistema (Vouch)', 'O ID vai direto para a Carteira.'],
@@ -4489,7 +4489,10 @@
     var cb = x.cashback === 'outro' ? pctCr(x.cashback_pct) : x.cashback === 'nao' ? 'não' : x.cashback + '%';
     var RES = { aceito: 'aceito', parcial: 'aceito em parte', recusado: 'recusado' };
     return '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Condições fechadas no contrato</h2><span class="etiqueta verde">' + link + '</span>' +
-      '<span class="ajuda" style="margin:0">registradas por ' + esc(ct.fechado_por_nome || '') + ' em ' + dataHoraCr(ct.fechado_em) + '</span></div><div class="corpo">' +
+      '<span class="ajuda" style="margin:0">registradas por ' + esc(ct.fechado_por_nome || '') + ' em ' + dataHoraCr(ct.fechado_em) + '</span>' +
+      (ct.corrigido ? '<span class="etiqueta ambar" title="' + esc(ct.corrigido.motivo || '') + '">corrigidas por ' + esc(ct.corrigido.nome || '') + ' em ' + dataHoraCr(ct.corrigido.criado_em) + '</span>' : '') + '</div><div class="corpo">' +
+      (ct.diferente_da_implantacao.length ? '<div class="msg erro" style="margin-bottom:12px"><b>O formulário desta implantação está diferente do contrato:</b> ' + ct.diferente_da_implantacao.map(function (v) { return esc(v.rotulo) + ' ' + esc(String(v.implantacao)) + ' (contrato: ' + esc(String(v.contrato)) + ')'; }).join('; ') +
+        '. ' + (d.pode.editar ? 'Ajuste o formulário abaixo.' : 'Confira antes de seguir.') + '</div>' : '') +
       (ct.diferencas.length ? '<div class="msg aviso" style="margin-bottom:12px"><b>Mudou na negociação do contrato:</b> ' + ct.diferencas.map(function (v) { return esc(v.rotulo) + ' ' + esc(v.fechado) + ' (pedido: ' + esc(v.pedido) + ')'; }).join('; ') + '.</div>' : '') +
       '<div class="grade-2"><dl class="info-ticket" style="margin:0">' + par('Taxa administrativa', pctCr(x.taxa_adm)) + par('Boleto', reais(x.boleto)) +
       par('Desconto de pontualidade', esc(desc) + (x.desconto_inicio ? ' · a partir de ' + esc(x.desconto_inicio) : '')) + par('Garantias', esc([].concat(x.garantias || [], x.garantia_outra ? [x.garantia_outra] : []).join(', '))) +
@@ -4743,7 +4746,7 @@
     criada: 'criou a solicitação', formulario: 'alterou o formulário', documento: 'anexou um documento', documento_removido: 'removeu um documento',
     enviada: 'enviou ao Jurídico', reenviada: 'reenviou depois da pendência', assumida: 'assumiu a solicitação', passada: 'passou a solicitação',
     pendencia: 'devolveu com pendência', minuta_enviada: 'enviou a minuta', ajuste: 'pediu ajuste na minuta', assinado: 'anexou o contrato assinado',
-    fechado: 'registrou as condições fechadas', cancelada: 'cancelou', diretoria_aprovou: 'aprovou (diretoria)', diretoria_recusou: 'não aprovou (diretoria)',
+    fechado: 'registrou as condições fechadas', fechado_corrigido: 'corrigiu as condições fechadas', cancelada: 'cancelou', diretoria_aprovou: 'aprovou (diretoria)', diretoria_recusou: 'não aprovou (diretoria)',
   };
   var DESC_CT = { nenhum: 'Não possui', percentual: 'Percentual', valor: 'Valor por unidade' };
 
@@ -5155,8 +5158,9 @@
   }
 
   /* ---------- condições fechadas (advogada) ---------- */
+  var corrigindoCt = null; // contrato concluído com as condições fechadas abertas para correção
   function htmlFechadoCt(d, m) {
-    var c = d.contrato, x = c.fechado || {}, edita = d.pode.registrar;
+    var c = d.contrato, x = c.fechado || {}, corrigindo = d.pode.corrigir && corrigindoCt === c.id, edita = d.pode.registrar || corrigindo;
     var cb = String(x.cashback || '');
     var clausulas = (x.clausulas || []);
     var corpo = '<div class="corpo grade-3">' +
@@ -5180,11 +5184,17 @@
           '<textarea class="campo" data-k="redacao" rows="2" placeholder="Redação que ficou no contrato (opcional)" aria-label="Redação">' + esc(k.redacao || '') + '</textarea></div>';
       }).join('') : '') +
       '<div class="corpo">' + campoCt('f_observacoes', 'Observações para a Implantação', x.observacoes, { area: true, ph: 'Ex.: procuração no mesmo arquivo do contrato; primeiro repasse adiantado em 5 dias.' }) + '</div>';
-    var topo = c.fechado_em ? '<span class="etiqueta verde">registradas por ' + esc(c.fechado_por_nome || '') + ' em ' + dataHoraCr(c.fechado_em) + '</span>'
+    var correcao = d.eventos.filter(function (e) { return e.tipo === 'fechado_corrigido'; }).pop();
+    var topo = c.fechado_em ? '<span class="etiqueta verde">registradas por ' + esc(c.fechado_por_nome || '') + ' em ' + dataHoraCr(c.fechado_em) + '</span>' +
+        (correcao ? '<span class="etiqueta ambar">corrigidas por ' + esc(correcao.usuario_nome || '') + ' em ' + dataHoraCr(correcao.criado_em) + '</span>' : '') +
+        (d.pode.corrigir && !corrigindo ? '<span class="espaco"></span><button class="btn ghost sm" id="btCorrigirCt">' + IC.lapis + 'Corrigir condições</button>' : '')
       : '<span class="ajuda" style="margin:0">vêm do que o comercial pediu: corrija o que mudou na negociação</span>';
     return '<section class="painel" id="fechadoCt"' + (edita ? '' : ' data-leitura') + '><div class="cab-painel"><h2>Condições fechadas no contrato assinado</h2>' + topo + '</div>' +
       (d.diferencas_fechado.length ? '<div class="corpo" style="padding-bottom:0"><div class="msg aviso"><b>Mudou na negociação:</b> ' + d.diferencas_fechado.map(function (v) { return esc(v.rotulo) + ' ' + esc(v.fechado) + ' (pedido: ' + esc(v.pedido) + ')'; }).join('; ') + '.</div></div>' : '') +
-      corpo + (edita ? '<div class="doc-linha" style="justify-content:flex-end">' + (d.faltas_fechado.length ? '<span class="ajuda" style="flex:1 1 300px;margin:0">Para concluir, falta: ' + esc(d.faltas_fechado.join(' ')) + '</span>' : '') +
+      corpo + (corrigindo ? '<div class="corpo" style="border-top:1px solid var(--border)">' + campoCt('f_motivo', 'Motivo da correção (obrigatório)', '', { area: true, linhas: 2, ph: 'Ex.: a taxa do contrato assinado é 2,9%; registrei 3% por engano.' }) +
+          '<div class="ajuda">O histórico guarda o que mudou (de → para). O executivo e a Implantação são avisados.</div>' +
+          '<div class="linha" style="justify-content:flex-end;margin-top:10px"><button class="btn ghost sm" id="btCorrCancelar">Cancelar</button><button class="btn primary sm" id="btCorrSalvar">Salvar correção</button></div></div>'
+        : edita ? '<div class="doc-linha" style="justify-content:flex-end">' + (d.faltas_fechado.length ? '<span class="ajuda" style="flex:1 1 300px;margin:0">Para concluir, falta: ' + esc(d.faltas_fechado.join(' ')) + '</span>' : '') +
         '<button class="btn ghost sm" id="btFechSalvar">Salvar</button><button class="btn primary sm" id="btFechConcluir">Concluir: enviar à Implantação</button></div>' : '') + '</section>';
   }
   function lerFechadoCt(raiz) {
@@ -5286,7 +5296,8 @@
         var x = e.detalhe || {};
         var extra = e.tipo === 'documento' || e.tipo === 'documento_removido' ? ': ' + esc(x.nome) : e.tipo === 'enviada' ? ' (' + esc(x.protocolo) + ')' : e.tipo === 'criada' && x.analise ? ' a partir da análise ' + esc(x.analise)
           : e.tipo === 'passada' ? ' para ' + esc(x.para) : e.tipo === 'pendencia' ? ': ' + esc((x.itens || []).join('; ')) : e.tipo === 'ajuste' ? ': ' + esc(x.texto)
-            : e.tipo === 'minuta_enviada' ? ' (' + esc(x.nome) + (x.no_prazo === false ? ', fora do prazo' : '') + ')' : e.tipo === 'fechado' && (x.diferencas || []).length ? ' (mudou: ' + esc(x.diferencas.join(', ')) + ')' : '';
+            : e.tipo === 'minuta_enviada' ? ' (' + esc(x.nome) + (x.no_prazo === false ? ', fora do prazo' : '') + ')' : e.tipo === 'fechado' && (x.diferencas || []).length ? ' (mudou: ' + esc(x.diferencas.join(', ')) + ')'
+              : e.tipo === 'fechado_corrigido' ? ': ' + esc(x.motivo) + '<ul style="margin:4px 0 0;padding-left:18px">' + (x.mudancas || []).map(function (mu) { return '<li>' + esc(mu.rotulo) + ': ' + esc(mu.antes) + ' → <b>' + esc(mu.depois) + '</b></li>'; }).join('') + '</ul>' : '';
         return '<div><b style="color:var(--ink)">' + dataHoraCr(e.criado_em) + '</b> · ' + esc(e.usuario_nome || 'Sistema') + ' ' + (EVENTO_CT[e.tipo] || esc(e.tipo)) + extra + '</div>';
       }).join('') + '</div></section></div>';
     $('#conteudo').innerHTML = html;
@@ -5341,7 +5352,18 @@
     var fech = $('#fechadoCt');
     if (fech) {
       ligarFechadoCt(fech);
-      if (!pd.registrar) $$('input, select, textarea', fech).forEach(function (el) { el.disabled = true; });
+      var corrigindo = pd.corrigir && corrigindoCt === c.id;
+      if (!pd.registrar && !corrigindo) $$('input, select, textarea', fech).forEach(function (el) { el.disabled = true; });
+      if ($('#btCorrigirCt')) $('#btCorrigirCt').onclick = function () { corrigindoCt = c.id; paginaContratoDetalhe(id); };
+      if ($('#btCorrCancelar')) $('#btCorrCancelar').onclick = function () { corrigindoCt = null; paginaContratoDetalhe(id); };
+      if ($('#btCorrSalvar')) $('#btCorrSalvar').onclick = async function () {
+        try {
+          var r = await api('POST', '/api/contratos/' + c.id + '/corrigir', { condicoes: lerFechadoCt(fech), motivo: $('#c_f_motivo', fech).value.trim() });
+          corrigindoCt = null;
+          toast('Correção salva (' + r.mudancas.length + ' mudança(s)). O executivo e a Implantação foram avisados.', 'ok');
+          recarregar();
+        } catch (e) { toast(e.message, 'erro'); }
+      };
       var salvarFech = async function (concluir) {
         try {
           var r = await api('PUT', '/api/contratos/' + c.id + '/fechado', { condicoes: lerFechadoCt(fech), concluir: concluir });

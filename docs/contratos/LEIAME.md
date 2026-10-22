@@ -66,6 +66,9 @@ comercial) e `cancelada`. O pedido de ajuste volta a solicitação para `em_elab
   decisão da diretoria) e a advogada corrige o que mudou: taxa, boleto, desconto e início, garantias, limite da taxa
   extra, cashback, início, vencimento, período mínimo, fidelização, foro, prazo de contestação e o resultado de cada
   cláusula pedida (aceito, em parte ou recusado, com a redação). Concluir leva a `assinado` e avisa o executivo.
+- **Contratos encerrados:** ficam na aba **Controle** (filtro "Assinado" ou busca). As condições ficam travadas; quem
+  elabora usa **Corrigir condições**, com o motivo obrigatório. O histórico guarda o que mudou (de → para), e o
+  executivo e a Implantação (quem conduz, ou a coordenação) são avisados.
 
 ## Implantação
 
@@ -73,7 +76,8 @@ comercial) e `cancelada`. O pedido de ajuste volta a solicitação para `em_elab
   **condições fechadas valem sobre o pedido**. O contrato assinado entra nos documentos da implantação como "Contrato
   assinado", e os documentos do síndico, nos tipos de lá (as atas das taxas como ata de previsão orçamentária, o cadastro
   dos proprietários como cadastro de moradores; o que não tem tipo próprio entra como "outro").
-- A implantação mostra o quadro **Condições fechadas no contrato**. Aberta antes do contrato fechar, ela é ligada ao
+- A implantação mostra o quadro **Condições fechadas no contrato** (com a marca da última correção) e avisa quando o
+  formulário dela está diferente do contrato (taxa, boleto, desconto, início, vencimento). Aberta antes do contrato fechar, ela é ligada ao
   contrato na conclusão, e quem conduz é avisado.
 - Sem contrato assinado no portal, a implantação continua abrindo, com um aviso.
 

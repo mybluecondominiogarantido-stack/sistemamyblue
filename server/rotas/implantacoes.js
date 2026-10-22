@@ -410,6 +410,9 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
       : i.origem === 'entrega' ? null : await contratoDaAnalise(db, { analiseId: i.analise_id, protocolo: i.analise_protocolo });
     const contrato = ct ? { id: ct.id, protocolo: ct.protocolo, etapa: ct.etapa, fechado_em: ct.fechado_em,
       fechado: ct.fechado_em ? ct.fechado : null, diferencas: ct.fechado_em ? FC.diferencasFechado(ct.formulario || {}, ct.fechado) : [],
+      diferente_da_implantacao: ct.fechado_em ? FC.implantacaoDiferente(i.formulario, ct.fechado) : [],
+      corrigido: (await db.um(`SELECT ev.criado_em, ev.detalhe->>'motivo' AS motivo, u.nome FROM contrato_eventos ev LEFT JOIN usuarios u ON u.id = ev.usuario_id
+        WHERE ev.contrato_id = $1 AND ev.tipo = 'fechado_corrigido' ORDER BY ev.id DESC LIMIT 1`, [ct.id])) || null,
       fechado_por_nome: ct.fechado_por ? ((await db.um('SELECT nome FROM usuarios WHERE id = $1', [ct.fechado_por])) || {}).nome : null } : null;
     res.json({
       implantacao: { ...i, ...info, etapas: F.normalizarEtapas(i.etapas) }, documentos, eventos, pode: pd, contrato,

@@ -137,6 +137,7 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
       ajuste: c.etapa === 'minuta_enviada' && (dono || p.admin),
       assinar: c.etapa === 'minuta_enviada' && (dono || c.responsavel_id === u.id || p.admin),
       registrar: c.etapa === 'conferencia' && p.elaborador,
+      corrigir: c.etapa === 'assinado' && p.elaborador,
       cancelar: aberta && ((dono && c.etapa !== 'em_elaboracao') || (p.elaborador && c.etapa !== 'rascunho') || p.admin),
     };
   }
@@ -730,6 +731,42 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
         titulo: `Condições fechadas do contrato · ${imp.protocolo} · ${c.condominio}`, texto: `O contrato ${c.protocolo} foi concluído: as condições fechadas estão na implantação.` });
     }
     res.json({ ok: true, implantacao: imp ? imp.id : null });
+  });
+
+  /* contrato já concluído: quem elabora corrige as condições fechadas, com o motivo; o histórico guarda o que mudou */
+  r.post('/api/contratos/:id/corrigir', json, async (req, res) => {
+    const x = await carregar(req, res);
+    if (!x) return;
+    const { c, pd } = x;
+    if (!pd.corrigir) return erro(res, 403, 'As condições fechadas são corrigidas por quem elabora, depois que o contrato foi concluído.');
+    const motivo = texto(req.body && req.body.motivo, 1000);
+    if (!motivo) return erro(res, 400, 'Diga o motivo da correção.');
+    const fechado = F.normalizarFechado(req.body && req.body.condicoes);
+    const lista = F.faltasFechado(fechado);
+    if (lista.length) return erro(res, 400, 'Faltam condições.', { faltas: lista });
+    const mudancas = F.mudancasFechado(c.fechado, fechado);
+    if (!mudancas.length) return erro(res, 400, 'Nada mudou nas condições fechadas.');
+    await db.tx(async (t) => {
+      await t.q('UPDATE contratos SET fechado = $2::jsonb, atualizado_em = now() WHERE id = $1', [c.id, JSON.stringify(fechado)]);
+      await evento(t, c.id, req.usuario.id, 'fechado_corrigido', { motivo, mudancas });
+    });
+    await seg.auditar(req, 'contrato_corrigido', null, { contrato: c.id, protocolo: c.protocolo, mudancas: mudancas.map((m) => m.rotulo) });
+    const resumo = mudancas.map((m) => `${m.rotulo}: ${m.antes} → ${m.depois}`).join('; ');
+    const imp = await db.um("SELECT id, protocolo, etapa, responsavel_id FROM implantacoes WHERE contrato_id = $1 AND etapa <> 'cancelada' ORDER BY id DESC LIMIT 1", [c.id]);
+    await avisos.notificar(await donos(db, c), { link: link(c.id), autor_id: req.usuario.id, tipo: 'contrato', email: true,
+      titulo: `Condições do contrato corrigidas · ${c.protocolo} · ${c.condominio}`,
+      texto: `${req.usuario.nome} corrigiu as condições fechadas de ${c.condominio}. Motivo: ${motivo}\n\n${resumo}${imp && ['rascunho', 'pendencia'].includes(imp.etapa) ? `\n\nA implantação ${imp.protocolo || 'em rascunho'} está com você: confira o formulário.` : ''}` });
+    if (imp) {
+      await db.q('INSERT INTO implantacao_eventos (implantacao_id, usuario_id, tipo, detalhe) VALUES ($1, $2, $3, $4::jsonb)', [imp.id, req.usuario.id, 'contrato_corrigido', JSON.stringify({ protocolo: c.protocolo, motivo })]);
+      // quem conduz (ou a coordenação da Implantação, se ninguém conduz) confere a implantação
+      const para = imp.responsavel_id ? [imp.responsavel_id] : (await db.q(`SELECT u.id FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id JOIN usuarios u ON u.id = sm.usuario_id
+        WHERE s.nome = 'Implantação' AND u.ativo AND (sm.lider OR u.papel IN ('coordenador','supervisor'))`)).rows.map((r) => r.id);
+      if (!['rascunho', 'cancelada'].includes(imp.etapa)) {
+        await avisos.notificar(para, { link: `#/implantacao/${imp.id}`, autor_id: req.usuario.id, tipo: 'implantacao', email: true,
+          titulo: `Contrato corrigido · ${imp.protocolo} · ${c.condominio}`, texto: `${req.usuario.nome} corrigiu as condições fechadas do contrato ${c.protocolo}. Motivo: ${motivo}\n\n${resumo}` });
+      }
+    }
+    res.json({ ok: true, mudancas });
   });
 
   r.post('/api/contratos/:id/cancelar', json, async (req, res) => {
