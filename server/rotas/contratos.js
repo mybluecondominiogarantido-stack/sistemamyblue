@@ -702,7 +702,7 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
     });
     await avisos.notificar(await donos(db, c), { link: link(c.id), autor_id: req.usuario.id, tipo: 'contrato', email: true,
       titulo: `${c.ajustes ? 'Minuta ajustada' : 'Minuta do contrato'} pronta · ${c.protocolo} · ${c.condominio}`,
-      texto: `${req.usuario.nome} enviou a minuta de ${c.condominio} (${m.nome}). Leve ao síndico; se ele pedir mudanças, use "Pedir ajuste"; assinado, anexe o contrato no portal.${msg ? `\n\n${msg}` : ''}` });
+      texto: `${req.usuario.nome} enviou a minuta de ${c.condominio} (${m.nome}). Leve ao síndico: se ele pedir mudanças, use "Pedir ajuste"; se aprovar, clique em "Síndico aprovou: pedir assinatura".${msg ? `\n\n${msg}` : ''}` });
     res.json({ ok: true, no_prazo: noPrazo });
   });
 
