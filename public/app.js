@@ -5374,83 +5374,116 @@
   var MESES_CT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   var MESES_LONGO_CT = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
   var filtroPainelCt = null;
-  // séries do comparativo: [campo, rótulo, classe da cor] (ordem fixa da paleta validada)
-  var SERIES_PAINEL_CT = [['solicitados', 'Solicitados', 'b1-ct'], ['aguardando_assinatura', 'Aguardando assinatura', 'b2-ct'], ['em_assinatura', 'Em assinatura', 'b3-ct'], ['assinados', 'Assinados', 'b4-ct']];
+  // séries do comparativo: [campo, rótulo, classe, cor] (ordem fixa: a paleta foi conferida para daltonismo e contraste nessa ordem)
+  var SERIES_PAINEL_CT = [['solicitados', 'Solicitados', 'b1-ct', '#0b76ba'], ['aguardando_assinatura', 'Aguardando assinatura', 'b2-ct', '#eb6834'],
+    ['em_assinatura', 'Em assinatura', 'b3-ct', '#6250d6'], ['assinados', 'Assinados', 'b4-ct', '#2d8a56']];
   async function abaPainelCt() {
     var hoje = new Date();
     if (!filtroPainelCt) filtroPainelCt = { ano: hoje.getFullYear(), mes: hoje.getMonth() + 1 };
     var f = filtroPainelCt;
     var r;
     try { r = await api('GET', '/api/contratos/painel?ano=' + f.ano + '&mes=' + f.mes); } catch (e) { $('#corpoCt').innerHTML = '<div class="vazio">' + esc(e.message) + '</div>'; return; }
-    var nomePer = f.mes ? MESES_LONGO_CT[f.mes - 1] + ' de ' + f.ano : f.ano;
-    var tile = function (rot, n, sec, alerta) { return '<div class="tile' + (alerta && n ? ' alerta' : '') + '"><span class="rot-tile">' + rot + '</span><b>' + (n == null ? '—' : n) + '</b>' + (sec ? '<span class="sec">' + sec + '</span>' : '') + '</div>'; };
+    var nomePer = f.mes ? MESES_LONGO_CT[f.mes - 1] + ' de ' + f.ano : String(f.ano);
     var P = r.periodo, A = r.agora, T = r.tempos;
-    // comparativo mês a mês: as quatro séries lado a lado em cada mês
     var SERIES = SERIES_PAINEL_CT;
-    var maxv = Math.max(1, Math.max.apply(null, r.meses.map(function (m) { return Math.max.apply(null, SERIES.map(function (x) { return m[x[0]]; })); })));
-    var passo = maxv <= 5 ? 1 : maxv <= 10 ? 2 : maxv <= 25 ? 5 : 10;
-    var topo = Math.ceil(maxv / passo) * passo;
-    var W = 960, H = 260, ml = 34, mb = 26, mt = 12, larg = (W - ml - 8) / 12, bw = Math.min(13, (larg - 14) / SERIES.length - 2);
-    var y = function (v) { return mt + (H - mt - mb) * (1 - v / topo); };
-    var grade = '';
-    for (var g = 0; g <= topo; g += passo) grade += '<line x1="' + ml + '" x2="' + (W - 8) + '" y1="' + y(g) + '" y2="' + y(g) + '" class="grade-ct"/><text x="' + (ml - 6) + '" y="' + (y(g) + 4) + '" text-anchor="end" class="eixo-ct">' + g + '</text>';
-    var barra = function (x, v, cls, rotulo) {
-      if (!v) return '';
-      var y0 = y(v), h = y(0) - y0, rr = Math.min(4, h / 2);
-      return '<path class="' + cls + '" d="M' + x + ' ' + y(0) + ' V' + (y0 + rr) + ' Q' + x + ' ' + y0 + ' ' + (x + rr) + ' ' + y0 + ' H' + (x + bw - rr) + ' Q' + (x + bw) + ' ' + y0 + ' ' + (x + bw) + ' ' + (y0 + rr) + ' V' + y(0) + ' Z"><title>' + rotulo + '</title></path>';
+    var kpi = function (rot, val, sub, cls, barra) {
+      return '<div class="kpi-ct' + (cls ? ' ' + cls : '') + '"><div class="lab">' + rot + '</div><div class="val">' + (val == null ? '—' : val) + '</div>' +
+        (sub ? '<div class="sub">' + sub + '</div>' : '') + (barra != null ? '<div class="barra-ct"><i style="width:' + Math.min(100, barra).toFixed(1) + '%"></i></div>' : '') + '</div>';
     };
-    var grupo = SERIES.length * (bw + 2) - 2;
-    var barras = r.meses.map(function (m, k) {
-      var cx = ml + larg * k + larg / 2;
-      var ativo = f.mes === m.mes;
-      var resumoMes = MESES_LONGO_CT[k] + ': ' + SERIES.map(function (x) { return m[x[0]] + ' ' + x[1].toLowerCase(); }).join(', ');
-      return '<g class="mes-ct' + (ativo ? ' ativo' : '') + '"><rect x="' + (ml + larg * k) + '" y="' + mt + '" width="' + larg + '" height="' + (H - mt - mb) + '" class="faixa-ct"><title>' + resumoMes + '</title></rect>' +
-        SERIES.map(function (x, i) { return barra(cx - grupo / 2 + i * (bw + 2), m[x[0]], x[2], MESES_LONGO_CT[k] + ' · ' + x[1] + ': ' + m[x[0]]); }).join('') +
-        '<text x="' + cx + '" y="' + (H - 8) + '" text-anchor="middle" class="eixo-ct' + (ativo ? ' forte' : '') + '">' + MESES_CT[k] + '</text></g>';
-    }).join('');
-    // na tabela, só os meses que já começaram (no ano corrente)
+    var pctAss = P.solicitados ? Math.round((P.fechados / P.solicitados) * 100) : 0;
+
+    // comparativo mês a mês: as quatro séries lado a lado; dica ao passar o mouse e o valor do último mês com movimento
+    var maxv = Math.max(1, Math.max.apply(null, r.meses.map(function (m) { return Math.max.apply(null, SERIES.map(function (x) { return m[x[0]]; })); })));
+    var passo = maxv <= 5 ? 1 : maxv <= 10 ? 2 : maxv <= 25 ? 5 : maxv <= 50 ? 10 : 20;
+    var topo = Math.ceil(maxv / passo) * passo;
+    var W = 1040, H = 300, L = 40, R = 10, Tp = 22, Bm = 34, pw = (W - L - R) / 12, bw = Math.min(16, (pw - 20) / SERIES.length - 2), grupo = SERIES.length * (bw + 2) - 2;
+    var y = function (v) { return Tp + (H - Tp - Bm) * (1 - v / topo); };
+    var svg = '';
+    for (var g = 0; g <= topo; g += passo) svg += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y(g).toFixed(1) + '" y2="' + y(g).toFixed(1) + '" class="' + (g ? 'grade-ct' : 'base-ct') + '"/>' +
+      '<text x="' + (L - 10) + '" y="' + (y(g) + 4).toFixed(1) + '" text-anchor="end" class="eixo-ct">' + g + '</text>';
+    var barra = function (x, v, cor) {
+      if (!v) return '';
+      var y0 = y(v), h = y(0) - y0, rr = Math.min(4, h);
+      return '<path fill="' + cor + '" d="M' + x.toFixed(1) + ' ' + y(0).toFixed(1) + 'V' + (y0 + rr).toFixed(1) + 'Q' + x.toFixed(1) + ' ' + y0.toFixed(1) + ' ' + (x + rr).toFixed(1) + ' ' + y0.toFixed(1) +
+        'H' + (x + bw - rr).toFixed(1) + 'Q' + (x + bw).toFixed(1) + ' ' + y0.toFixed(1) + ' ' + (x + bw).toFixed(1) + ' ' + (y0 + rr).toFixed(1) + 'V' + y(0).toFixed(1) + 'Z"/>';
+    };
+    var ultimo = null;
+    r.meses.forEach(function (m, k) {
+      var cx = L + pw * k + pw / 2, tem = SERIES.some(function (x) { return m[x[0]]; });
+      if (f.mes === m.mes) svg += '<rect x="' + (L + pw * k + 2).toFixed(1) + '" y="' + Tp + '" width="' + (pw - 4).toFixed(1) + '" height="' + (H - Tp - Bm) + '" rx="8" class="sel-mes-ct"/>';
+      SERIES.forEach(function (x, i) { svg += barra(cx - grupo / 2 + i * (bw + 2), m[x[0]], x[3]); });
+      svg += '<text x="' + cx.toFixed(1) + '" y="' + (H - 12) + '" text-anchor="middle" class="mes-txt-ct' + (tem ? ' tem' : '') + (f.mes === m.mes ? ' sel' : '') + '">' + MESES_CT[k].charAt(0).toUpperCase() + MESES_CT[k].slice(1) + '</text>';
+      svg += '<rect x="' + (L + pw * k).toFixed(1) + '" y="' + Tp + '" width="' + pw.toFixed(1) + '" height="' + (H - Tp - Bm + 10) + '" fill="transparent" data-i="' + k + '" class="alvo-ct"/>';
+      if (tem) ultimo = { m: m, cx: cx };
+    });
+    if (ultimo) svg += '<text x="' + (ultimo.cx - grupo / 2 + bw / 2).toFixed(1) + '" y="' + (y(ultimo.m.solicitados) - 8).toFixed(1) + '" text-anchor="middle" class="rotulo-ct">' + ultimo.m.solicitados + '</text>';
+
+    // tabela do comparativo (os mesmos números, com a diferença para o mês anterior)
     var mesesTab = r.meses.filter(function (m) { return f.ano < hoje.getFullYear() || (f.ano === hoje.getFullYear() && m.mes <= hoje.getMonth() + 1); });
     var variacao = function (m, campo) {
       var ant = r.meses[m.mes - 2];
       if (!ant) return '';
       var dlt = m[campo] - ant[campo];
-      return dlt ? ' <span class="sec" style="display:inline">(' + (dlt > 0 ? '+' : '−') + Math.abs(dlt) + ')</span>' : '';
+      return dlt ? ' <span class="dif-ct ' + (dlt > 0 ? 'mais' : 'menos') + '">' + (dlt > 0 ? '+' : '−') + Math.abs(dlt) + '</span>' : '';
     };
-    var tabela = function (titulo, lista, cols) {
-      return '<section class="painel"><div class="cab-painel"><h2>' + titulo + '</h2><span class="ajuda" style="margin:0">' + esc(String(nomePer)) + '</span></div><div class="tabela-wrap"><table><thead><tr><th>Nome</th>' +
-        cols.map(function (c) { return '<th style="text-align:right">' + c[1] + '</th>'; }).join('') + '</tr></thead><tbody>' +
-        (lista.map(function (x) { return '<tr><td><b>' + esc(x.nome) + '</b></td>' + cols.map(function (c) { return '<td style="text-align:right;font-variant-numeric:tabular-nums">' + x[c[0]] + '</td>'; }).join('') + '</tr>'; }).join('') ||
-          '<tr><td colspan="' + (cols.length + 1) + '"><span class="sec">Nada no período.</span></td></tr>') + '</tbody></table></div></section>';
+    var rank = function (lista, campo, rotulo, extra) {
+      var l = lista.filter(function (x) { return x[campo] > 0; }).sort(function (a, b) { return b[campo] - a[campo]; }).slice(0, 10);
+      if (!l.length) return '<div class="vazio-ct">Nada no período.</div>';
+      var mx = l[0][campo];
+      return '<div class="rank-ct">' + l.map(function (x, k) {
+        return '<div class="rk-ct"><span class="n">' + (k + 1) + '</span><span class="nm" title="' + esc(x.nome) + '">' + esc(x.nome) + '</span><span class="tr"><span class="bf" style="width:' + Math.max(2, (x[campo] / mx) * 68).toFixed(1) + '%"></span>' +
+          '<span class="vv">' + x[campo] + ' ' + rotulo + (extra ? '<span class="mini"> · ' + extra(x) + '</span>' : '') + '</span></span></div>';
+      }).join('') + '</div>';
     };
-    $('#corpoCt').innerHTML = '<div class="linha" style="margin-bottom:14px"><label class="rot" for="pMesCt" style="margin:0">Período</label>' +
-      '<select class="campo" id="pMesCt" style="width:auto"><option value="0">Ano todo</option>' + MESES_LONGO_CT.map(function (n, k) { return '<option value="' + (k + 1) + '"' + (f.mes === k + 1 ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select>' +
-      '<select class="campo" id="pAnoCt" style="width:auto">' + r.anos.map(function (a) { return '<option' + (a === f.ano ? ' selected' : '') + '>' + a + '</option>'; }).join('') + '</select></div>' +
-      '<h2 class="titulo-painel-ct">No período · ' + esc(String(nomePer)) + '</h2>' +
-      '<div class="tiles" style="margin-bottom:22px;grid-template-columns:repeat(auto-fill,minmax(165px,1fr))">' + tile('Solicitados', P.solicitados) + tile('Minutas enviadas', P.minutas, P.minutas_no_prazo != null ? P.minutas_no_prazo + '% no prazo de 72h úteis' : '') +
-        tile('Alterações pedidas', P.ajustes) + tile('Pedidos de assinatura', P.assinaturas_pedidas) + tile('Enviados para assinatura', P.enviados_assinatura) + tile('Fechados', P.fechados) + tile('Cancelados', P.cancelados) + '</div>' +
-      '<section class="painel" style="margin-bottom:22px"><div class="cab-painel"><h2>Comparativo mês a mês · ' + f.ano + '</h2><span class="espaco"></span>' +
-        SERIES.map(function (x) { return '<span class="legenda-ct"><i class="' + x[2] + '"></i>' + x[1] + '</span>'; }).join('') + '</div>' +
-        '<div class="corpo" style="overflow-x:auto"><p class="ajuda" style="margin:0 0 8px">Quantos contratos foram solicitados, tiveram a assinatura pedida pelo executivo (aguardando assinatura), foram enviados para assinatura e voltaram assinados em cada mês. Clique num mês para ver os números dele.</p>' +
-        '<svg viewBox="0 0 ' + W + ' ' + H + '" class="grafico-ct" role="img" aria-label="Comparativo mês a mês em ' + f.ano + ': solicitados, aguardando assinatura, em assinatura e assinados">' + grade + barras + '</svg>' +
-        '<div class="tabela-wrap" style="margin-top:10px"><table><thead><tr><th>Mês</th>' + SERIES.map(function (x) { return '<th style="text-align:right">' + x[1] + '</th>'; }).join('') + '</tr></thead><tbody>' +
+    var sit = function (rot, n, sub, alerta) { return '<div class="c' + (alerta && n ? ' alerta' : '') + '"><div class="k">' + rot + '</div><div class="v">' + (n == null ? '—' : n) + '</div>' + (sub ? '<div class="s">' + sub + '</div>' : '') + '</div>'; };
+    var dias = function (v) { return v == null ? null : fmtNumCr(v) + (v === 1 ? ' dia' : ' dias'); };
+
+    $('#corpoCt').innerHTML = '<div class="painel-ct">' +
+      '<div class="filtros-ct"><span class="lbl">Ano</span>' + r.anos.slice().sort().map(function (a) { return '<button class="pill-ct' + (a === f.ano ? ' on' : '') + '" data-ano="' + a + '">' + a + '</button>'; }).join('') +
+        '<span class="lbl" style="margin-left:8px">Mês</span><select class="campo" id="pMesCt"><option value="0">Ano todo</option>' +
+        MESES_LONGO_CT.map(function (n, k) { return '<option value="' + (k + 1) + '"' + (f.mes === k + 1 ? ' selected' : '') + '>' + n.charAt(0).toUpperCase() + n.slice(1) + '</option>'; }).join('') + '</select></div>' +
+      '<div class="kpis-ct">' +
+        kpi('Solicitados · ' + esc(nomePer), P.solicitados, P.minutas + ' minuta(s) enviada(s)' + (P.minutas_no_prazo != null ? ' · ' + P.minutas_no_prazo + '% no prazo' : ''), 'destaque') +
+        kpi('Aguardando assinatura', P.assinaturas_pedidas, 'o executivo pediu a assinatura') +
+        kpi('Em assinatura', P.enviados_assinatura, 'enviados pelo Jurídico') +
+        kpi('Assinados', P.fechados, P.solicitados ? pctAss + '% dos solicitados no período' : 'contratos concluídos', '', P.solicitados ? pctAss : null) +
+        kpi('Alterações pedidas', P.ajustes, P.cancelados ? P.cancelados + ' cancelado(s)' : 'ajustes na minuta') + '</div>' +
+      '<section class="panel-ct"><div class="h-row-ct"><div><h2>Comparativo mês a mês — ' + f.ano + '</h2><div class="h-sub">Solicitados, aguardando assinatura, em assinatura e assinados em cada mês. Clique num mês para ver os números dele.</div></div>' +
+        '<div class="legenda-ct">' + SERIES.map(function (x) { return '<span><i style="background:' + x[3] + '"></i>' + x[1] + '</span>'; }).join('') + '</div></div>' +
+        '<div class="chart-ct"><svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Comparativo mês a mês em ' + f.ano + ': solicitados, aguardando assinatura, em assinatura e assinados">' + svg + '</svg></div>' +
+        '<details class="tab-ct"><summary>Ver em tabela</summary><div class="tabela-wrap"><table><thead><tr><th>Mês</th>' + SERIES.map(function (x) { return '<th style="text-align:right">' + x[1] + '</th>'; }).join('') + '</tr></thead><tbody>' +
         (mesesTab.map(function (m) {
           return '<tr' + (f.mes === m.mes ? ' class="sel-ct"' : '') + '><td>' + MESES_LONGO_CT[m.mes - 1] + '</td>' +
             SERIES.map(function (x) { return '<td style="text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap"><b>' + m[x[0]] + '</b>' + variacao(m, x[0]) + '</td>'; }).join('') + '</tr>';
-        }).join('') || '<tr><td colspan="5"><span class="sec">Nada no ano.</span></td></tr>') +
-        '</tbody></table></div><p class="ajuda" style="margin:6px 0 0">Entre parênteses, a diferença para o mês anterior.</p></div></section>' +
-      '<h2 class="titulo-painel-ct">Agora</h2>' +
-      '<div class="tiles" style="margin-bottom:22px;grid-template-columns:repeat(auto-fill,minmax(165px,1fr))">' + tile('Na fila', A.fila, 'ninguém assumiu') + tile('Em elaboração', A.em_elaboracao, 'primeira minuta') + tile('Em alteração', A.em_alteracao, 'ajuste pedido pelo comercial') +
-        tile('Pendência com o comercial', A.pendencia) + tile('Aguardando o executivo', A.minuta_enviada, 'pedir assinatura ou ajuste') + tile('Pronto para assinatura', A.para_assinar, 'o Jurídico manda assinar') +
-        tile('Em assinatura', A.em_assinatura) + tile('Registrar condições', A.conferencia, 'assinados, falta concluir') + tile('Passaram do prazo', A.atrasados, 'minuta além das 72h úteis', true) + '</div>' +
-      '<div class="tiles" style="margin-bottom:16px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))">' +
-        tile('Até a primeira minuta', T.primeira_minuta_dias == null ? null : fmtNumCr(T.primeira_minuta_dias) + ' dias', 'média, do pedido à 1ª minuta') +
-        tile('Do pedido ao fechamento', T.fechamento_dias == null ? null : fmtNumCr(T.fechamento_dias) + ' dias', 'média dos fechados no período') +
-        tile('Alterações por contrato', T.ajustes_por_contrato == null ? null : fmtNumCr(T.ajustes_por_contrato), 'média dos fechados no período') + '</div>' +
-      '<div class="grade-2">' + tabela('Por executivo', r.por_executivo, [['solicitados', 'Solicitados'], ['em_andamento', 'Em andamento'], ['fechados', 'Fechados']]) +
-        tabela('Por responsável no Jurídico', r.por_responsavel, [['em_andamento', 'Em andamento'], ['fechados', 'Fechados']]) + '</div>';
+        }).join('') || '<tr><td colspan="5"><span class="sec">Nada no ano.</span></td></tr>') + '</tbody></table></div><p class="ajuda" style="margin:6px 0 0">Ao lado de cada número, a diferença para o mês anterior.</p></div></details></section>' +
+      '<section class="panel-ct"><h2>Situação agora</h2><div class="h-sub">Onde estão os contratos em andamento neste momento</div><div class="sit-ct">' +
+        sit('Na fila', A.fila, 'ninguém assumiu') + sit('Em elaboração', A.em_elaboracao, 'primeira minuta') + sit('Em alteração', A.em_alteracao, 'ajuste pedido pelo comercial') +
+        sit('Pendência com o comercial', A.pendencia) + sit('Aguardando o executivo', A.minuta_enviada, 'pedir assinatura ou ajuste') + sit('Pronto para assinatura', A.para_assinar, 'o Jurídico manda assinar') +
+        sit('Em assinatura', A.em_assinatura) + sit('Registrar condições', A.conferencia, 'assinados, falta concluir') + sit('Passaram do prazo', A.atrasados, 'minuta além das 72h úteis', true) + '</div>' +
+        '<div class="sit-ct tempos-ct">' + sit('Até a primeira minuta', dias(T.primeira_minuta_dias), 'média, do pedido à 1ª minuta') + sit('Do pedido à assinatura', dias(T.fechamento_dias), 'média dos assinados no período') +
+        sit('Alterações por contrato', T.ajustes_por_contrato == null ? null : fmtNumCr(T.ajustes_por_contrato), 'média dos assinados no período') + '</div></section>' +
+      '<div class="dois-ct"><section class="panel-ct"><h2>Por executivo</h2><div class="h-sub">Solicitados em ' + esc(nomePer) + '</div>' +
+        rank(r.por_executivo, 'solicitados', 'solicitado(s)', function (x) { return x.fechados + ' assinado(s)'; }) + '</section>' +
+        '<section class="panel-ct"><h2>Por responsável no Jurídico</h2><div class="h-sub">Contratos em andamento agora</div>' +
+        rank(r.por_responsavel, 'em_andamento', 'em andamento', function (x) { return x.fechados + ' assinado(s) no período'; }) + '</section></div></div>';
+
     $('#pMesCt').onchange = function () { filtroPainelCt.mes = Number(this.value); abaPainelCt(); };
-    $('#pAnoCt').onchange = function () { filtroPainelCt.ano = Number(this.value); abaPainelCt(); };
-    $$('.mes-ct').forEach(function (g, k) { g.style.cursor = 'pointer'; g.onclick = function () { filtroPainelCt.mes = k + 1; abaPainelCt(); }; });
+    $$('[data-ano]', $('#corpoCt')).forEach(function (b) { b.onclick = function () { filtroPainelCt.ano = Number(b.getAttribute('data-ano')); abaPainelCt(); }; });
+    var tip = $('#tipCt');
+    if (!tip) { tip = document.createElement('div'); tip.id = 'tipCt'; tip.className = 'tip-ct'; document.body.appendChild(tip); }
+    $$('.alvo-ct', $('#corpoCt')).forEach(function (el) {
+      var m = r.meses[Number(el.getAttribute('data-i'))];
+      el.onclick = function () { tip.style.opacity = 0; filtroPainelCt.mes = m.mes; abaPainelCt(); };
+      el.onmousemove = function (ev) {
+        tip.innerHTML = '<b>' + MESES_LONGO_CT[m.mes - 1].charAt(0).toUpperCase() + MESES_LONGO_CT[m.mes - 1].slice(1) + ' de ' + f.ano + '</b>' +
+          SERIES.map(function (x) { return '<div class="l"><i style="background:' + x[3] + '"></i>' + x[1] + ': <b>' + m[x[0]] + '</b></div>'; }).join('');
+        tip.style.opacity = 1;
+        var x = ev.clientX + 14;
+        if (x + 240 > window.innerWidth) x = ev.clientX - 250;
+        tip.style.left = x + 'px'; tip.style.top = (ev.clientY + 14) + 'px';
+      };
+      el.onmouseleave = function () { tip.style.opacity = 0; };
+    });
   }
 
   /* ---------- detalhe ---------- */

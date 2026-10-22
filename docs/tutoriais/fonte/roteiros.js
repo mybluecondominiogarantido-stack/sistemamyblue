@@ -600,13 +600,18 @@ module.exports = [
       await t.digitar('#c_sindico_cpf', '111.444.777-35', { atraso: 45 });
       await t.digitar('#c_sindico_email', 'sindico@exemplo.com', { atraso: 25 });
       await t.digitar('#c_sindico_telefone', '(85) 90000-0000', { atraso: 35 });
-      await t.clicar('[data-marca-ct=garantias][value="Taxa ordinária"]', { depois: 400 });
+      // a conferência ao vivo tira os avisos em vermelho e a tela se ajusta: espera antes de clicar
+      await t.pausa(1500);
+      await t.mostrar('[data-marca-ct=garantias][value="Taxa ordinária"]', 600);
+      await t.clicar('[data-marca-ct=garantias][value="Taxa ordinária"]', { depois: 900 });
       await t.clicar('input[name=c_cashback][value=nao]', { depois: 400 });
       await t.preencherCampo('#c_inicio_contrato', diaUtil(20));
       await t.digitar('#c_minucias', 'Nenhuma', { atraso: 40 });
       await t.legenda('<b>Enviar ao Jurídico</b>: sai o protocolo CT, e o Jurídico tem <b>72h úteis</b> para a minuta.', { etapa: C, ms: 300 });
       await t.clicar('#btEnviarCt', { depois: 2800 });
       j.contrato = (await vera('GET', '/api/contratos?vis=minhas')).contratos.find((x) => x.condominio === NOME_JOR).id;
+      const ctEnv = await vera('GET', `/api/contratos/${j.contrato}`);
+      if (ctEnv.contrato.etapa !== 'fila') throw new Error('o contrato não foi enviado: ' + JSON.stringify(ctEnv.faltas) + ' ' + JSON.stringify(ctEnv.contrato.formulario));
 
       await capitulo(t, 4, 'Jurídico', 'A advogada assume e envia a minuta', 'lara@myblue.com.br', '#/contratos/fila');
       const D = '4 · Jurídico redige';
@@ -666,13 +671,13 @@ module.exports = [
       await t.clicar('#btEnviarImp', { depois: 2800 });
 
       await capitulo(t, 8, 'Setor Implantação', 'Conduz e coloca na Carteira', 'nina@myblue.com.br', `#/implantacao/${j.implantacao}`);
-      const nina = await sessaoCr(base, 'nina@myblue.com.br');
       const H8 = '8 · Carteira';
-      await t.legenda('A coordenação <b>designa</b> quem conduz (aqui, ela mesma), e a implantação é <b>iniciada</b>.', { etapa: H8, ms: 300 });
-      const eu = (await nina('GET', '/api/implantacoes/meta')).equipe.find((x) => x.nome === 'Nina Prado');
-      await nina('POST', `/api/implantacoes/${j.implantacao}/designar`, { usuario_id: eu.id });
-      await nina('POST', `/api/implantacoes/${j.implantacao}/iniciar`, {});
-      await t.ir(`#/implantacao/${j.implantacao}`, 1800);
+      await t.legenda('A coordenação clica em <b>Designar</b> e escolhe quem conduz (aqui, ela mesma).', { etapa: H8, ms: 300 });
+      await t.clicar('#btDesigImp', { depois: 900 });
+      await t.escolher('#mDesig', 'Nina Prado');
+      await t.clicar('#mDesigOk', { depois: 2000 });
+      await t.legenda('Quem conduz clica em <b>Iniciar implantação</b>: são 8h úteis para começar.', { etapa: H8, ms: 300 });
+      await t.clicar('#btIniImp', { depois: 2200 });
       await t.legenda('Marca as <b>5 etapas</b>: documentação, cadastro no Vouch, onboarding, emissão e envio dos boletos.', { etapa: H8, ms: 300 });
       await t.clicar('#e_doc', { depois: 400 });
       await t.digitar('#e_vouch', '90001', { atraso: 80 });
@@ -1042,7 +1047,7 @@ module.exports = [
       await t.ir('#/dashboard-juridico', 1800);
       await t.mostrar(menu('#/dashboard-juridico'), 1600, { dx: 0.3 });
       await t.legenda('O <b>comparativo mês a mês</b>: solicitados, aguardando assinatura, em assinatura e assinados, com a diferença para o mês anterior.', { etapa: P, ms: 300 });
-      await t.mostrar('svg.grafico-ct', 3400);
+      await t.mostrar('.chart-ct svg', 3400);
       await t.rolar(700);
       await t.legenda('Depois, a situação de agora, os tempos médios e quem está com cada contrato. Os encerrados ficam em Acompanhamento de Contratos → <b>Controle</b>.', { etapa: P, ms: 3200 });
     },

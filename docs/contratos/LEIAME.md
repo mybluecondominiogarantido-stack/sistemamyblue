@@ -94,7 +94,7 @@ todo, datas em Brasília):
 - **Agora:** na fila, em elaboração (primeira minuta), em alteração (ajuste pedido), pendência com o comercial,
   aguardando o executivo (pedir assinatura ou ajuste), pronto para assinatura, em assinatura, registrar condições e os
   que passaram do prazo.
-- **Comparativo mês a mês** do ano (gráfico de barras com a tabela e a diferença para o mês anterior): solicitados,
+- No modelo do PartnerChip: cartões do período (o primeiro em destaque), filtro de ano em botões e o **comparativo mês a mês** do ano (gráfico de barras com dica ao passar o mouse e, em "Ver em tabela", a diferença para o mês anterior): solicitados,
   aguardando assinatura (assinatura pedida pelo executivo no mês), em assinatura (enviados para assinatura no mês) e
   assinados (via assinada anexada no mês). Clicar num mês filtra o período.
 - Os tempos médios (até a primeira minuta, do pedido ao
