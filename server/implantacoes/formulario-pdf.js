@@ -64,7 +64,7 @@ function montarDados(i, { executivo, responsavel, documentos = [], diferencas = 
   const cores = [];
   for (const [tipo, d] of Object.entries(F.DOCUMENTOS)) {
     const atuais = vig.filter((x) => x.tipo === tipo);
-    if (tipo === 'outro' && !atuais.length) continue;
+    if (['outro', 'contrato'].includes(tipo) && !atuais.length) continue;
     if (tipo === 'analise_credito' && i.origem === 'entrega') continue;
     const sit = atuais.length ? (tipo === 'analise_credito' ? 'vinculada' : 'entregue') : obrig.includes(tipo) ? 'falta' : 'pendente';
     cores.push([linhas.length, 1, atuais.length ? '#2B7A55' : '#9A5B05']);

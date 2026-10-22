@@ -21,6 +21,7 @@ a supervisão, das pessoas que gerenciam.
 | **Carteira**: quem edita o quê | *Módulos e dados → Carteira: quem edita* (e *Ferramentas do setor → Carteira de condomínios: quem edita*) | administração; coordenação/supervisão liberam pessoas nas permissões do setor delas |
 | **Análise de Crédito**: executivo, analista, diretoria | *Análise de Crédito → Pessoas e papéis* (marca, entre os usuários do portal, quem é executivo, analista — entra no setor **Análise de Crédito** — e diretoria) | administração |
 | **Implantação**: comercial, equipe, coordenação, gestor da Análise de Crédito | comercial = executivo da Análise de Crédito; equipe = setor **Implantação**; coordenação = líder, coordenação ou supervisão do setor Implantação; gestor = líder, coordenação ou supervisão do setor Análise de Crédito (cadastro da pessoa e *Equipes e tipos de demanda*) | administração; coordenação/supervisão nos setores delas |
+| **Solicitação de Contrato**: comercial, quem elabora, diretoria | comercial = executivo da Análise de Crédito; quem elabora = pessoas marcadas em *Solicitação de Contrato → Quem elabora* (permissão *Elaborar as minutas de contrato*); diretoria = a da Análise de Crédito | administração |
 | **Demonstrativos de premiação**: quem lê o de cada pessoa | a própria Gestão de Premiações, ao enviar | quem usa a Gestão de Premiações |
 
 > Atenção: mudar os setores de uma pessoa (no cadastro ou em *Equipes e tipos de demanda*) muda também a equipe de
@@ -160,6 +161,19 @@ Tela própria do portal (menu **Implantação**), não é uma ferramenta em HTML
 | **Administração** | perfil | tudo |
 
 Detalhes em `docs/implantacao/LEIAME.md`.
+
+## Solicitação de Contrato
+
+Tela própria do portal (menu **Solicitação de Contrato**), não é uma ferramenta em HTML. Quem faz o quê:
+
+| Quem | Como entra | Pode |
+|---|---|---|
+| **Comercial** (executivo de negócios) | o mesmo cadastro de executivo da Análise de Crédito | pedir o contrato a partir das suas análises liberadas (ou do PDF, ou de condomínio de entrega), anexar os documentos do síndico, pedir ajuste na minuta, anexar o contrato assinado e ver o controle das suas |
+| **Quem elabora** (Jurídico) | marcado pela administração em *Solicitação de Contrato → Quem elabora* (sem ninguém marcado, a administração recebe) | ver a fila, todas as solicitações e o controle; assumir e passar para outra pessoa; quem assumiu devolve com pendência e envia a minuta; registrar as condições fechadas |
+| **Diretoria** | permissão *Chancelar análises de crédito* | decidir os itens que o Manual do Contrato reserva à diretoria antes da minuta; ver o controle |
+| **Administração** | perfil | tudo, inclusive escolher quem elabora |
+
+Detalhes em `docs/contratos/LEIAME.md`.
 
 ## Contrato para o HTML das ferramentas
 

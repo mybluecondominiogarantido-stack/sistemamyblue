@@ -122,6 +122,33 @@ function pdfsImp() {
   return r;
 }
 
+/* ---------- Solicitação de Contrato (dados fictícios) ---------- */
+const FORM_CT = {
+  nome: 'Condomínio Residencial Jardim das Acácias', cnpj: '11.222.333/0001-81', uf: 'CE', cidade: 'Fortaleza', administradora: 'Administradora Exemplo',
+  sindico_nome: 'Síndico Fictício', sindico_cpf: '111.444.777-35', sindico_email: 'sindico@exemplo.com', sindico_telefone: '(85) 90000-0000',
+  taxa_adm: 3, boleto: 2, desconto_tipo: 'nenhum', garantias: ['Taxa ordinária', 'Taxa extraordinária'], taxa_ordinaria: 1840, taxa_extra: 700, cashback: 'nao',
+  inicio_contrato: diaUtil(20), dia_vencimento: 10, pedidos: ['contestacao_30', 'foro_capital'], minucias: 'Primeiro repasse adiantado em 5 dias.',
+};
+/* solicitação pedida pela executiva (Vera) e enviada ao Jurídico; "ate" leva até a minuta enviada ou até o contrato assinado */
+async function contratoTut(base, nome, { ate } = {}) {
+  const aid = await analiseCr(base, { ...FORM_CR, razao_social: nome }, { liberar: true });
+  const vera = await sessaoCr(base, 'vera@myblue.com.br');
+  const { id } = await vera('POST', '/api/contratos', { origem: 'analise', analise_id: aid });
+  await vera('PATCH', `/api/contratos/${id}`, { formulario: { ...FORM_CT, nome } });
+  await vera('POST', `/api/contratos/${id}/enviar`, {});
+  if (!ate) return id;
+  const lara = await sessaoCr(base, 'lara@myblue.com.br');
+  const pdf = Buffer.from('%PDF-1.4\n% exemplo\n%%EOF\n');
+  await lara('POST', `/api/contratos/${id}/assumir`, {});
+  await lara('POST', `/api/contratos/${id}/documentos`, pdf, { 'x-tipo': 'minuta', 'x-nome-arquivo': 'Minuta_exemplo.pdf' });
+  await lara('POST', `/api/contratos/${id}/minuta`, {});
+  if (ate === 'assinado') {
+    await vera('POST', `/api/contratos/${id}/documentos`, pdf, { 'x-tipo': 'contrato_assinado', 'x-nome-arquivo': 'Contrato_assinado_exemplo.pdf' });
+    await vera('POST', `/api/contratos/${id}/assinado`, { procuracao_no_contrato: true });
+  }
+  return id;
+}
+
 module.exports = [
   /* ======================= Primeiros passos ======================= */
   {
@@ -725,6 +752,103 @@ module.exports = [
       await t.legenda('Pronto: o condomínio está na Carteira, e o Controle de Emissão de Boletos acompanha.', { etapa: D, ms: 3000 });
     },
     resumo: ['<b>Designar</b> · 8h úteis para iniciar', 'Marque as 5 etapas · confira as conferências', '<b>Concluir</b> · <b>Confirmar na Carteira</b>'],
+  },
+
+  /* ======================= Solicitação de Contrato ======================= */
+  {
+    nome: 'contrato-solicitar',
+    entrar: 'vera@myblue.com.br',
+    inicio: '#/contratos',
+    async preparar(cen, base) {
+      cen.analiseCt = await analiseCr(base, FORM_CR, { liberar: true });
+      cen.ctMinuta = await contratoTut(base, 'Edifício Mirante do Sol', { ate: 'minuta' });
+    },
+    abertura: ['Da negociação fechada com o síndico ao contrato assinado.', ['Pedir a partir da análise', 'Condições e pedidos do síndico', 'Enviar ao Jurídico', 'Ajuste e contrato assinado']],
+    async gravar(t, cen) {
+      const A = '1 · Nova solicitação';
+      await t.legenda('No menu, <b>Solicitação de Contrato</b> substitui o formulário do Forms e o e-mail com o PDF.', { etapa: A, ms: 600 });
+      await t.mostrar(menu('#/contratos'), 1800, { dx: 0.3 });
+      await t.legenda('Clique em <b>Nova solicitação</b> e escolha a análise: os dados vêm preenchidos.', { etapa: A, ms: 400 });
+      await t.clicar('#btNovoCt', { depois: 1400 });
+      await t.mostrar('.modal .grade-3', 2800, { dx: 0.5 });
+      await t.clicar('input[name=anCt]', { depois: 900 });
+      await t.clicar('#mCtOk', { depois: 2200 });
+
+      const B = '2 · Condições';
+      await t.legenda('Complete o síndico. O <b>CPF</b> é conferido na hora.', { etapa: B, ms: 400 });
+      await t.digitar('#c_sindico_nome', 'Síndico Fictício', { atraso: 35 });
+      await t.digitar('#c_sindico_cpf', '111.444.777-35', { atraso: 55 });
+      await t.digitar('#c_sindico_email', 'sindico@exemplo.com', { atraso: 30 });
+      await t.digitar('#c_sindico_telefone', '(85) 90000-0000', { atraso: 45 });
+      await t.legenda('Taxa e boleto negociados: embaixo fica o valor da análise, e a diferença aparece para o Jurídico.', { etapa: B, ms: 500 });
+      await t.mostrar('#c_taxa_adm', 2400);
+      await t.legenda('Marque o que vamos garantir. <b>Fundo de obras</b> não está no contrato-modelo: o portal avisa para confirmar com o Jurídico.', { etapa: B, ms: 400 });
+      await t.clicar('[data-marca-ct=garantias][value="Taxa ordinária"]', { depois: 500 });
+      await t.legenda('A taxa extra aparece em % da ordinária: acima de 40%, a diretoria decide antes da minuta.', { etapa: B, ms: 400 });
+      await t.mostrar('#c_taxa_extra', 2600);
+      await t.clicar('input[name=c_cashback][value=nao]', { depois: 500 });
+      await t.preencherCampo('#c_inicio_contrato', diaUtil(20));
+
+      const C = '3 · Pedidos do síndico';
+      await t.legenda('O síndico pediu para mudar alguma cláusula? Marque: aparece a <b>resposta padrão do Jurídico</b>, e o que é decisão da diretoria vai para ela.', { etapa: C, ms: 500 });
+      await t.clicar('[data-pedido=foro_capital]', { depois: 1600 });
+      await t.legenda('Embaixo fica o que <b>não se promete</b>: multa no repasse, procuração, cessão, notificação antes da execução.', { etapa: C, ms: 400 });
+      await t.mostrar('.fixas-ct', 3000);
+      await t.digitar('#c_minucias', 'Primeiro repasse adiantado em 5 dias.', { atraso: 30 });
+
+      const D = '4 · Enviar e acompanhar';
+      await t.legenda('Os documentos do síndico não travam o contrato, mas travam a operação: enquanto faltarem, você recebe um lembrete por dia útil.', { etapa: D, ms: 3200 });
+      await t.legenda('<b>Enviar ao Jurídico</b>: sai o protocolo CT, e o Jurídico tem <b>72h úteis</b> para a minuta.', { etapa: D, ms: 400 });
+      await t.clicar('#btEnviarCt', { depois: 2800 });
+      await t.ir(`#/contratos/${cen.ctMinuta}`, 1800);
+      await t.legenda('Quando a minuta chega, leve ao síndico. Pediu mudança? <b>Pedir ajuste</b>: volta para o Jurídico com mais 72h úteis.', { etapa: D, ms: 400 });
+      await t.mostrar('#btAjusteCt', 2600);
+      await t.legenda('Assinado, anexe o contrato e a procuração em Documentos e clique em <b>Contrato assinado</b>. A advogada registra as condições fechadas, que seguem para a Implantação.', { etapa: D, ms: 400 });
+      await t.mostrar('#btAssinadoCt', 3200);
+    },
+    resumo: ['<b>Nova solicitação</b> · escolha a análise', 'Condições, pedidos do síndico e minúcias', '<b>Enviar ao Jurídico</b> · ajuste · <b>Contrato assinado</b>'],
+  },
+  {
+    nome: 'contrato-elaborar',
+    entrar: 'lara@myblue.com.br',
+    inicio: '#/contratos/fila',
+    async preparar(cen, base) {
+      cen.ctFila = await contratoTut(base, 'Residencial Vila das Palmeiras');
+      cen.ctAssinado = await contratoTut(base, 'Edifício Mirante do Sol', { ate: 'assinado' });
+    },
+    abertura: ['Da fila do Jurídico às condições fechadas na Implantação.', ['Assumir da fila', 'Pedidos com a resposta padrão', 'Enviar a minuta e os ajustes', 'Registrar as condições fechadas']],
+    async gravar(t, cen) {
+      const A = '1 · Fila';
+      await t.legenda('Quando o comercial envia, quem elabora recebe o aviso no sino e por e-mail. A <b>Fila do Jurídico</b> mostra o prazo de cada minuta.', { etapa: A, ms: 600 });
+      await t.mostrar('#tbCt', 2600);
+      await t.clicar(`#tbCt tr[data-id="${cen.ctFila}"]`, { depois: 1800 });
+      await t.legenda('Clique em <b>Assumir</b>. Dá para passar para um colega a qualquer momento.', { etapa: A, ms: 400 });
+      await t.clicar('#btAssumirCt', { depois: 2000 });
+
+      const B = '2 · Minuta';
+      await t.legenda('A solicitação mostra o que mudou da análise, os avisos do manual e os <b>pedidos do síndico com a resposta padrão</b>.', { etapa: B, ms: 600 });
+      await t.rolar(700);
+      await t.pausa(2400);
+      await t.legenda('Anexe a minuta em Documentos e clique em <b>Enviar minuta ao comercial</b>. Cada versão fica guardada.', { etapa: B, ms: 3200 });
+      await t.legenda('Faltou informação? <b>Devolver com pendência</b>: o reenvio volta para você, com novo prazo.', { etapa: B, ms: 400 });
+      await t.mostrar('#btPendCt', 2400);
+
+      const C = '3 · Condições fechadas';
+      await t.ir(`#/contratos/${cen.ctAssinado}`, 1800);
+      await t.legenda('Com o contrato assinado anexado, você registra as <b>condições fechadas</b>. Elas vêm do pedido: corrija o que mudou na negociação.', { etapa: C, ms: 1200 });
+      await t.mostrar('#fechadoCt', 2400);
+      await t.digitar('#c_f_taxa_adm', '2,9', { atraso: 80 });
+      await t.legenda('Foro e prazo de contestação já vêm com o que o síndico pediu. Para cada cláusula pedida, diga como ficou e, se quiser, a redação.', { etapa: C, ms: 800 });
+      for (const sel of await t.p.$$('[data-clausula] [data-k=resultado]')) { await sel.scrollIntoViewIfNeeded(); await sel.selectOption('aceito'); await t.pausa(900); }
+      await t.legenda('<b>Salvar</b> guarda sem concluir e mostra o que ainda falta.', { etapa: C, ms: 300 });
+      await t.clicar('#btFechSalvar', { depois: 2600 });
+      await t.legenda('<b>Concluir: enviar à Implantação</b>. O executivo é avisado, e a implantação abre com essas condições, o contrato e os documentos.', { etapa: C, ms: 600 });
+      await t.clicar('#btFechConcluir', { depois: 1000 });
+      await t.clicar('#mOk', { depois: 2600 });
+      await t.legenda('No <b>Controle</b> ficam todas as solicitações: prazos, ajustes, primeira minuta e assinatura.', { etapa: C, ms: 400 });
+      await t.ir('#/contratos/controle', 3200);
+    },
+    resumo: ['<b>Assumir</b> · 72h úteis para a minuta', 'Anexe e <b>Enviar minuta</b> · responda aos ajustes', 'Registre as condições fechadas · <b>Concluir</b>'],
   },
 
   /* ======================= Gestão do setor ======================= */

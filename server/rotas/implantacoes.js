@@ -25,6 +25,7 @@ const { apelido } = require('../implantacao');
 const F = require('../implantacoes/formulario');
 const leitorPdf = require('../implantacoes/pdf');
 const formularioPdf = require('../implantacoes/formulario-pdf');
+const FC = require('../contratos/formulario');
 
 const SETOR = 'Implantação';
 const ETAPAS = ['rascunho', 'diretoria', 'fila', 'em_implantacao', 'pendencia', 'concluida', 'na_carteira', 'cancelada'];
@@ -106,6 +107,24 @@ function criarRotinasImplantacao({ db, seg, avisos, expediente }) {
     return feito;
   }
   return { executar };
+}
+
+/* solicitação de contrato da mesma análise: o assinado (com as condições fechadas) vale sobre a que ainda está em andamento */
+async function contratoDaAnalise(db, { analiseId, protocolo }) {
+  return db.um(`SELECT * FROM contratos WHERE etapa <> 'cancelada' AND ((analise_id IS NOT NULL AND analise_id = $1) OR (analise_protocolo IS NOT NULL AND analise_protocolo = $2))
+    ORDER BY (etapa = 'assinado') DESC, id DESC LIMIT 1`, [analiseId || null, protocolo || null]);
+}
+/* o contrato traz os dados (o fechado vale sobre o pedido) e os documentos que a implantação ainda não tem */
+async function trazerDoContrato(t, implantacaoId, ct) {
+  await t.q('UPDATE implantacoes SET contrato_id = $2 WHERE id = $1', [implantacaoId, ct.id]);
+  const ja = new Set((await t.q('SELECT DISTINCT tipo FROM implantacao_documentos WHERE implantacao_id = $1 AND substituido_em IS NULL', [implantacaoId])).rows.map((x) => x.tipo));
+  for (const d of (await t.q('SELECT id, tipo FROM contrato_documentos WHERE contrato_id = $1 AND substituido_em IS NULL ORDER BY id', [ct.id])).rows) {
+    const para = FC.DOC_IMPLANTACAO[d.tipo];
+    if (!para || (para !== 'outro' && ja.has(para))) continue;
+    ja.add(para);
+    await t.q(`INSERT INTO implantacao_documentos (implantacao_id, tipo, nome, mime, tamanho, sha256, conteudo, enviado_por, enviado_em)
+      SELECT $1, $2, nome, mime, tamanho, sha256, conteudo, enviado_por, enviado_em FROM contrato_documentos WHERE id = $3`, [implantacaoId, para, d.id]);
+  }
 }
 
 const HORAS_PARA_INICIAR = 8;
@@ -352,7 +371,9 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
           : `A análise foi liberada há mais de ${p.politica.implantacao_validade_dias} dias: peça a liberação ao gestor da Análise de Crédito.`);
     }
     const a = await db.um('SELECT * FROM analises WHERE id = $1', [disp.id]);
-    const { formulario, referencia } = F.daAnalise(a);
+    const { formulario: daAnalise, referencia } = F.daAnalise(a);
+    const ct = await contratoDaAnalise(db, { analiseId: a.id, protocolo: a.protocolo });
+    const formulario = ct ? { ...daAnalise, ...FC.paraImplantacao(ct) } : daAnalise;
     const id = await db.tx(async (t) => {
       const { id: novo } = await t.um(`INSERT INTO implantacoes (etapa, origem, analise_id, analise_protocolo, condominio, cnpj, uf, executivo_id, solicitante_id, formulario, referencia)
         VALUES ('rascunho', 'analise', $1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb) RETURNING id`,
@@ -363,7 +384,8 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
           SELECT $1, $2, nome, mime, tamanho, sha256, conteudo, enviado_por, enviado_em FROM analise_documentos
           WHERE id = (SELECT MAX(id) FROM analise_documentos WHERE analise_id = $3 AND tipo = $4 AND substituido_em IS NULL)`, [novo, para, a.id, de]);
       }
-      await evento(t, novo, u.id, 'criada', { origem: 'analise', analise: a.protocolo });
+      if (ct) await trazerDoContrato(t, novo, ct);
+      await evento(t, novo, u.id, 'criada', { origem: 'analise', analise: a.protocolo, contrato: ct ? ct.protocolo : null });
       return novo;
     });
     res.status(201).json({ id });
@@ -383,8 +405,14 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
       LEFT JOIN usuarios u ON u.id = ev.usuario_id WHERE ev.implantacao_id = $1 ORDER BY ev.id`, [i.id])).rows;
     const docs = new Set(documentos.filter((d) => !d.substituido_em).map((d) => d.tipo));
     await db.q('UPDATE notificacoes SET lida = TRUE WHERE usuario_id = $1 AND link = $2 AND NOT lida', [req.usuario.id, link(i.id)]);
+    // contrato: o ligado à implantação, ou o da mesma análise; sem contrato assinado no portal, a tela avisa
+    const ct = i.contrato_id ? await db.um('SELECT * FROM contratos WHERE id = $1', [i.contrato_id])
+      : i.origem === 'entrega' ? null : await contratoDaAnalise(db, { analiseId: i.analise_id, protocolo: i.analise_protocolo });
+    const contrato = ct ? { id: ct.id, protocolo: ct.protocolo, etapa: ct.etapa, fechado_em: ct.fechado_em,
+      fechado: ct.fechado_em ? ct.fechado : null, diferencas: ct.fechado_em ? FC.diferencasFechado(ct.formulario || {}, ct.fechado) : [],
+      fechado_por_nome: ct.fechado_por ? ((await db.um('SELECT nome FROM usuarios WHERE id = $1', [ct.fechado_por])) || {}).nome : null } : null;
     res.json({
-      implantacao: { ...i, ...info, etapas: F.normalizarEtapas(i.etapas) }, documentos, eventos, pode: pd,
+      implantacao: { ...i, ...info, etapas: F.normalizarEtapas(i.etapas) }, documentos, eventos, pode: pd, contrato,
       faltas_etapas: pd.interno && i.etapa === 'em_implantacao' ? F.faltasEtapas(i.etapas) : [],
       conferencias: pd.interno && !['rascunho', 'diretoria'].includes(i.etapa) ? await conferencias(i, docs) : null,
       faltas: pd.enviar ? F.faltas(i.formulario, { docs, origem: i.origem, executivoId: i.executivo_id, referencia: i.referencia }) : [],
@@ -640,7 +668,9 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     }
     let executivoId = p.executivo ? p.executivo.id : null;
     if (!executivoId && lido.executivo) executivoId = ((await db.um('SELECT id FROM executivos WHERE ativo AND lower(nome) = lower($1)', [lido.executivo])) || {}).id || null;
-    const { formulario, referencia } = F.doPdf(lido);
+    const { formulario: doPdf, referencia } = F.doPdf(lido);
+    const ct = await contratoDaAnalise(db, { protocolo: lido.protocolo });
+    const formulario = ct ? { ...doPdf, ...FC.paraImplantacao(ct), observacoes: [doPdf.observacoes, FC.paraImplantacao(ct).observacoes].filter(Boolean).join('\n').slice(0, 4000) } : doPdf;
     const id = await db.tx(async (t) => {
       const { id: novo } = await t.um(`INSERT INTO implantacoes (etapa, origem, analise_protocolo, condominio, cnpj, uf, executivo_id, solicitante_id, formulario, referencia)
         VALUES ('rascunho', 'pdf', $1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb) RETURNING id`,
@@ -649,7 +679,8 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
       try { nome = decodeURIComponent(String(req.headers['x-nome-arquivo'] || nome)).replace(/[\\/\r\n"]/g, '_').slice(0, 200) || nome; } catch { /* mantém */ }
       await t.q(`INSERT INTO implantacao_documentos (implantacao_id, tipo, nome, mime, tamanho, sha256, conteudo, enviado_por) VALUES ($1, 'analise_credito', $2, 'application/pdf', $3, $4, $5, $6)`,
         [novo, nome, buf.length, crypto.createHash('sha256').update(buf).digest('hex'), buf, u.id]);
-      await evento(t, novo, u.id, 'criada', { origem: 'pdf', analise: lido.protocolo });
+      if (ct) await trazerDoContrato(t, novo, ct);
+      await evento(t, novo, u.id, 'criada', { origem: 'pdf', analise: lido.protocolo, contrato: ct ? ct.protocolo : null });
       return novo;
     });
     res.status(201).json({ id, ...resumo });

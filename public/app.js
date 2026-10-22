@@ -227,6 +227,8 @@
         '<a href="#/carteira" class="' + (rota.indexOf('#/carteira') === 0 ? 'on' : '') + '">' + IC.casa + 'Carteira de condomínios</a>' +
         (resumoCredito && resumoCredito.acesso ? '<div class="grupo">Análise de Crédito</div><a href="#/credito" class="' + (rota.indexOf('#/credito') === 0 ? 'on' : '') + '">' + IC.escudo +
           '<span>Análise de Crédito</span><i data-contador="credito" class="contador" hidden></i></a>' : '') +
+        (resumoCt && resumoCt.acesso ? '<div class="grupo">Contratos</div><a href="#/contratos" class="' + (rota.indexOf('#/contratos') === 0 ? 'on' : '') + '">' + IC.documento +
+          '<span>Solicitação de Contrato</span><i data-contador="contratos" class="contador" hidden></i></a>' : '') +
         (resumoImp && resumoImp.acesso ? '<div class="grupo">Implantação</div><a href="#/implantacao" class="' + (rota.indexOf('#/implantacao') === 0 ? 'on' : '') + '">' + IC.casa +
           '<span>Implantação</span><i data-contador="implantacao" class="contador" hidden></i></a>' : '');
       // Comissões: a ferramenta (só para quem tem acesso) e os demonstrativos de cada pessoa
@@ -262,6 +264,7 @@
     $('#nav').innerHTML = html;
     desenharContadorCredito();
     desenharContadorImp();
+    desenharContadorCt();
     if (resumoTickets) { var bc = $('#nav [data-contador=fila]'); if (bc) { bc.textContent = resumoTickets.minha_fila; bc.hidden = !resumoTickets.minha_fila; if (resumoTickets.minha_fila_atrasados) bc.classList.add('alerta'); } }
     $$('#nav a').forEach(function (a) { a.addEventListener('click', function () { $('#casca').classList.remove('menu-aberto'); }); });
   }
@@ -299,6 +302,7 @@
     if (partes[0] === 'carteira') return paginaCarteira(partes[1]);
     if (partes[0] === 'credito') return /^\d+$/.test(partes[1] || '') ? paginaAnaliseCredito(Number(partes[1])) : paginaCredito(partes[1]);
     if (partes[0] === 'implantacao') return /^\d+$/.test(partes[1] || '') ? paginaImplantacaoDetalhe(Number(partes[1])) : paginaImplantacao(partes[1]);
+    if (partes[0] === 'contratos') return /^\d+$/.test(partes[1] || '') ? paginaContratoDetalhe(Number(partes[1])) : paginaContratos(partes[1]);
     if (partes[0] === 'premiacoes') return paginaComissoes(partes[1]);
     if (partes[0] === 'links') {
       if (partes[1] === 'gestao' && editorLinks()) return paginaGestaoLinks(partes[2]);
@@ -3697,6 +3701,7 @@
       '<div class="linha" style="margin-bottom:6px">' + etqCr(ETAPA_CR, a.etapa) + (a.resultado && (pd.interno || a.etapa === 'enviada') ? etqCr(RES_CR, a.resultado) : '') +
       (a.origem_protocolo ? '<a class="etiqueta cinza" href="#/credito/' + a.origem_id + '">reanálise de ' + esc(a.origem_protocolo) + '</a>' : '') +
       d.reanalises.map(function (x) { return '<a class="etiqueta cinza" href="#/credito/' + x.id + '">reanálise: ' + esc(x.protocolo || 'rascunho') + '</a>'; }).join('') +
+      (d.contrato ? '<a class="etiqueta azul" href="#/contratos/' + d.contrato.id + '">contrato ' + esc(d.contrato.protocolo || 'em rascunho') + '</a>' : '') +
       (d.implantacao ? '<a class="etiqueta azul" href="#/implantacao/' + d.implantacao.id + '">implantação ' + esc(d.implantacao.protocolo || 'em rascunho') + '</a>' : '') + '</div>' +
       '<h1>' + esc(a.condominio || 'Nova solicitação') + '</h1><p class="sub" style="margin:0">' + esc([a.cnpj, [a.cidade, a.uf].filter(Boolean).join('/'), a.executivo_nome ? 'Executivo: ' + a.executivo_nome : '', a.analista_nome ? 'Analista: ' + a.analista_nome : ''].filter(Boolean).join(' · ')) + '</p></div>' +
       '<dl class="info-ticket" style="min-width:260px">' + (a.protocolo ? '<dt>Protocolo</dt><dd>' + esc(a.protocolo) + '</dd>' : '') +
@@ -4016,7 +4021,7 @@
     criada: 'criou a implantação', formulario: 'alterou o formulário', documento: 'anexou um documento', documento_removido: 'removeu um documento',
     enviada: 'enviou ao setor Implantação', reenviada: 'reenviou depois da pendência', cancelada: 'cancelou',
     designada: 'designou', iniciada: 'iniciou a implantação', etapas: 'atualizou as etapas', pendencia: 'devolveu com pendência',
-    concluida: 'concluiu a implantação', parceiros: 'levou o condomínio à base de Parceiros', carteira: 'confirmou a entrada na Carteira',
+    concluida: 'concluiu a implantação', parceiros: 'levou o condomínio à base de Parceiros', carteira: 'confirmou a entrada na Carteira', contrato: 'recebeu as condições fechadas do contrato',
     diretoria_pedida: 'pediu a aprovação da diretoria', diretoria_aprovou: 'aprovou taxa e boleto', diretoria_recusou: 'não aprovou taxa e boleto',
   };
   var ETAPA_SETOR_IMP = [['documentacao', 'Documentação', 'Obrigatórios conferidos; os pendentes seguem com alerta ao executivo.'], ['vouch', 'Cadastro no sistema (Vouch)', 'O ID vai direto para a Carteira.'],
@@ -4445,8 +4450,8 @@
     }
     var obrigTipos = d.documentos_obrigatorios || [];
     var obrig = m.documentos.filter(function (t) { return obrigTipos.indexOf(t.tipo) >= 0; }).map(function (t) { return Object.assign({}, t, { obrigatorio: true }); });
-    var depois = m.documentos.filter(function (t) { return (t.pendente || (t.obrigatorio && obrigTipos.indexOf(t.tipo) < 0) || (t.tipo === 'analise_credito' && i.origem !== 'entrega')) && t.tipo !== 'outro'; })
-      .map(function (t) { return Object.assign({}, t, { obrigatorio: false, pendente: t.tipo !== 'analise_credito' }); });
+    var depois = m.documentos.filter(function (t) { return (t.pendente || (t.obrigatorio && obrigTipos.indexOf(t.tipo) < 0) || (t.tipo === 'analise_credito' && i.origem !== 'entrega') || t.tipo === 'contrato') && t.tipo !== 'outro'; })
+      .map(function (t) { return Object.assign({}, t, { obrigatorio: false, pendente: ['analise_credito', 'contrato'].indexOf(t.tipo) < 0 }); });
     var outro = m.documentos.filter(function (t) { return t.tipo === 'outro'; });
     var nObrig = obrig.filter(function (t) { return vig.some(function (x) { return x.tipo === t.tipo; }); }).length;
     return '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">7</span>Documentos</h2><span class="espaco"></span>' + (obrig.length ? '<span class="ajuda" style="margin:0">obrigatórios: ' + nObrig + ' de ' + obrig.length + '</span>' : '') + '</div>' +
@@ -4467,6 +4472,35 @@
         try { await api('DELETE', '/api/implantacoes/' + i.id + '/documentos/' + b.getAttribute('data-tirar-doc-imp')); recarregar(); } catch (e) { toast(e.message, 'erro'); }
       };
     });
+  }
+
+  /* ---------- contrato: as condições fechadas registradas pela advogada (Solicitação de Contrato) ---------- */
+  function htmlContratoImp(d) {
+    var ct = d.contrato;
+    if (!ct) {
+      return '<div class="msg aviso" style="margin-bottom:16px">Sem contrato assinado no portal para este condomínio. As condições do contrato ficam como o comercial preencher aqui' +
+        (d.pode.editar ? '; se o contrato ainda vai ser pedido, use <a href="#/contratos">Solicitação de Contrato</a>.' : '.') + '</div>';
+    }
+    var link = '<a href="#/contratos/' + ct.id + '">' + esc(ct.protocolo || 'solicitação em rascunho') + '</a>';
+    if (!ct.fechado) return '<div class="msg info" style="margin-bottom:16px">Contrato ' + link + ': ' + esc((ETAPA_CT[ct.etapa] || [ct.etapa])[0].toLowerCase()) + '. As condições fechadas aparecem aqui quando a advogada concluir.</div>';
+    var x = ct.fechado;
+    var par = function (rot, val) { return '<dt>' + esc(rot) + '</dt><dd>' + (val || '—') + '</dd>'; };
+    var desc = x.desconto_tipo === 'percentual' ? pctCr(x.desconto_valor) : x.desconto_tipo === 'valor' ? reais(x.desconto_valor) + ' por unidade' : 'não possui';
+    var cb = x.cashback === 'outro' ? pctCr(x.cashback_pct) : x.cashback === 'nao' ? 'não' : x.cashback + '%';
+    var RES = { aceito: 'aceito', parcial: 'aceito em parte', recusado: 'recusado' };
+    return '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Condições fechadas no contrato</h2><span class="etiqueta verde">' + link + '</span>' +
+      '<span class="ajuda" style="margin:0">registradas por ' + esc(ct.fechado_por_nome || '') + ' em ' + dataHoraCr(ct.fechado_em) + '</span></div><div class="corpo">' +
+      (ct.diferencas.length ? '<div class="msg aviso" style="margin-bottom:12px"><b>Mudou na negociação do contrato:</b> ' + ct.diferencas.map(function (v) { return esc(v.rotulo) + ' ' + esc(v.fechado) + ' (pedido: ' + esc(v.pedido) + ')'; }).join('; ') + '.</div>' : '') +
+      '<div class="grade-2"><dl class="info-ticket" style="margin:0">' + par('Taxa administrativa', pctCr(x.taxa_adm)) + par('Boleto', reais(x.boleto)) +
+      par('Desconto de pontualidade', esc(desc) + (x.desconto_inicio ? ' · a partir de ' + esc(x.desconto_inicio) : '')) + par('Garantias', esc([].concat(x.garantias || [], x.garantia_outra ? [x.garantia_outra] : []).join(', '))) +
+      par('Taxa extra coberta', x.limite_extra ? 'até ' + fmtNumCr(x.limite_extra) + '% da ordinária' : '') + par('Cashback', esc(cb) + ((x.cashback_receitas || []).length ? ' · ' + esc(x.cashback_receitas.join(', ')) : '')) + '</dl>' +
+      '<dl class="info-ticket" style="margin:0">' + par('Início (1ª arrecadação)', dataBr(x.inicio_contrato)) + par('Vencimento', x.dia_vencimento ? 'dia ' + x.dia_vencimento : '') +
+      par('Período mínimo', x.periodo_minimo ? x.periodo_minimo + ' meses' : 'padrão') + par('Cláusula 12ª', x.fidelizacao ? 'com fidelização' : 'sem fidelização') +
+      par('Foro', esc(x.foro)) + par('Contestação da prestação de contas', x.prazo_contestacao ? x.prazo_contestacao + ' dias' : '') + '</dl></div>' +
+      ((x.clausulas || []).length ? '<div class="pilha" style="gap:6px;margin-top:12px;font-size:13px;font-weight:600;color:var(--ink-2)">' + x.clausulas.map(function (k) {
+        return '<div><b style="color:var(--ink)">' + esc(k.clausula) + '</b> ' + esc(k.pedido) + ': <b>' + esc(RES[k.resultado] || '—') + '</b>' + (k.redacao ? '. ' + esc(k.redacao) : '') + '</div>';
+      }).join('') + '</div>' : '') +
+      (x.observacoes ? '<div class="ajuda" style="white-space:pre-wrap">' + esc(x.observacoes) + '</div>' : '') + '</div></section>';
   }
 
   /* ---------- condomínio de entrega: aprovação da diretoria ---------- */
@@ -4603,6 +4637,7 @@
       (i.responsavel_nome ? '<dt>Conduz</dt><dd>' + esc(i.responsavel_nome) + '</dd>' : '') +
       (i.prazo_inicio && i.etapa === 'em_implantacao' ? '<dt>' + (i.iniciado_em ? 'Iniciada em' : 'Iniciar até (8h úteis)') + '</dt><dd>' + (i.iniciado_em ? dataHoraCr(i.iniciado_em) : prazoCr(i.prazo_inicio, i.etapa)) + '</dd>' : '') +
       (i.concluido_em ? '<dt>Concluída em</dt><dd>' + dataHoraCr(i.concluido_em) + '</dd>' : '') + '</dl></div>';
+    html += htmlContratoImp(d);
     if (i.origem === 'entrega') html += htmlEntregaImp(d);
     if (d.diferencas.length) html += '<div class="msg aviso" style="margin-bottom:16px"><b>' + (i.origem === 'entrega' ? 'Diferente do aprovado pela diretoria' : 'Diferente da análise') + ':</b> ' + d.diferencas.map(function (x) { return esc(x.rotulo.replace(/ \((%|R\$)\)$/, '')) + ' ' + esc(fmtDif(x)); }).join('; ') + '.</div>';
     if (pd.editar && d.faltas.length) html += '<div class="msg aviso" style="margin-bottom:16px"><b>Para enviar, falta:</b><ul style="margin:6px 0 0;padding-left:18px">' + d.faltas.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>';
@@ -4696,6 +4731,646 @@
     };
   }
 
+  /* ======================= Solicitação de Contrato ======================= */
+  var metaCt = null;
+  var resumoCt = null;
+  var ETAPA_CT = {
+    rascunho: ['Rascunho', 'cinza'], fila: ['Na fila do Jurídico', 'azul'], em_elaboracao: ['Em elaboração', 'azul'], pendencia: ['Pendência com o comercial', 'ambar'],
+    minuta_enviada: ['Minuta com o comercial', 'azul'], conferencia: ['Aguardando condições fechadas', 'ambar'], assinado: ['Assinado', 'verde'], cancelada: ['Cancelada', 'cinza'],
+  };
+  var ABAS_CT = [['minhas', 'Minhas solicitações'], ['fila', 'Fila do Jurídico'], ['controle', 'Controle'], ['diretoria', 'Diretoria'], ['equipe', 'Quem elabora']];
+  var EVENTO_CT = {
+    criada: 'criou a solicitação', formulario: 'alterou o formulário', documento: 'anexou um documento', documento_removido: 'removeu um documento',
+    enviada: 'enviou ao Jurídico', reenviada: 'reenviou depois da pendência', assumida: 'assumiu a solicitação', passada: 'passou a solicitação',
+    pendencia: 'devolveu com pendência', minuta_enviada: 'enviou a minuta', ajuste: 'pediu ajuste na minuta', assinado: 'anexou o contrato assinado',
+    fechado: 'registrou as condições fechadas', cancelada: 'cancelou', diretoria_aprovou: 'aprovou (diretoria)', diretoria_recusou: 'não aprovou (diretoria)',
+  };
+  var DESC_CT = { nenhum: 'Não possui', percentual: 'Percentual', valor: 'Valor por unidade' };
+
+  async function carregarMetaCt(forcar) {
+    if (!metaCt || forcar) metaCt = await api('GET', '/api/contratos/meta');
+    return metaCt;
+  }
+  async function atualizarCt() {
+    try { resumoCt = await api('GET', '/api/contratos/resumo'); } catch (e) { return; }
+    desenharContadorCt();
+  }
+  function desenharContadorCt() {
+    var b = $('#nav [data-contador=contratos]');
+    if (!b || !resumoCt) return;
+    var r = resumoCt;
+    var n = (r.fila || 0) + (r.minhas || 0) + (r.conferencia || 0) + (r.diretoria || 0) + (r.retorno || 0);
+    b.textContent = n;
+    b.hidden = !n;
+    b.title = [r.fila ? r.fila + ' na fila' : '', r.minhas ? r.minhas + ' com você' : '', r.conferencia ? r.conferencia + ' aguardando as condições fechadas' : '',
+      r.diretoria ? r.diretoria + ' para a diretoria decidir' : '', r.retorno ? r.retorno + ' com você (minuta ou pendência)' : ''].filter(Boolean).join(' · ');
+  }
+  function origemCt(c) {
+    if (c.origem === 'analise') return 'Análise ' + (c.analise_protocolo || '');
+    return c.origem === 'pdf' ? 'Análise anterior ao portal' + (c.analise_protocolo ? ' · ' + c.analise_protocolo : '') : 'Condomínio de entrega';
+  }
+  function prazoCt(c) {
+    if (['fila', 'em_elaboracao'].indexOf(c.etapa) < 0 || !c.prazo) return '<span class="sec">—</span>';
+    var vencido = new Date(c.prazo) < new Date();
+    return '<span class="' + (vencido ? 'atraso-ct' : '') + '">' + (vencido ? 'venceu ' : 'até ') + dataHoraCr(c.prazo) + '</span>';
+  }
+
+  /* ---------- lista e abas ---------- */
+  async function paginaContratos(aba) {
+    var m;
+    try { m = await carregarMetaCt(true); } catch (e) { $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">' + esc(e.message) + '</div></div>'; return; }
+    var p = m.perfil;
+    var pode = { minhas: !!p.executivo || p.admin, fila: p.elaborador, controle: !!p.executivo || p.elaborador || p.diretoria, diretoria: p.diretoria, equipe: p.gerencia_equipe };
+    var abas = ABAS_CT.filter(function (a) { return pode[a[0]]; });
+    if (!abas.length || (abas.length === 1 && abas[0][0] === 'equipe' && !p.admin)) {
+      $('#conteudo').innerHTML = '<div class="pagina"><h1>Solicitação de Contrato</h1><div class="vazio">Você ainda não tem acesso. Executivos são marcados em Análise de Crédito → Pessoas e papéis; quem elabora os contratos é marcado pela administração em Solicitação de Contrato → Quem elabora.</div></div>';
+      return;
+    }
+    if (!abas.some(function (a) { return a[0] === aba; })) aba = p.elaborador ? 'fila' : p.executivo || p.admin ? 'minhas' : p.diretoria && resumoCt && resumoCt.diretoria ? 'diretoria' : abas[0][0];
+    definirBarra('<span class="setor">Solicitação de Contrato</span><span class="sep">/</span><span class="nome">' + esc(abas.find(function (a) { return a[0] === aba; })[1]) + '</span>');
+    var novo = (p.executivo || p.admin) && aba === 'minhas';
+    $('#conteudo').innerHTML = '<div class="pagina"><div class="linha" style="align-items:flex-end;margin-bottom:6px"><div style="flex:1 1 420px"><h1>Solicitação de Contrato</h1>' +
+      '<p class="sub" style="margin:0">O comercial pede a minuta com as condições negociadas, o Jurídico redige em até 72h úteis, a minuta vai e volta até a assinatura e a advogada registra as condições fechadas, que seguem para a Implantação.</p></div>' +
+      (novo ? '<button class="btn primary" id="btNovoCt">' + IC.mais + 'Nova solicitação</button>' : '') + '</div>' +
+      '<nav class="abas" style="margin-top:16px">' + abas.map(function (a) { return '<a href="#/contratos/' + a[0] + '" class="' + (a[0] === aba ? 'on' : '') + '">' + esc(a[1]) + '</a>'; }).join('') + '</nav><div id="corpoCt"></div></div>';
+    if ($('#btNovoCt')) $('#btNovoCt').onclick = novoContrato;
+    atualizarCt();
+    if (aba === 'equipe') return abaEquipeCt();
+    if (aba === 'controle') return abaControleCt(m);
+    $('#corpoCt').innerHTML = '<div class="painel"><div class="cab-painel"><input class="campo" id="qCt" type="search" placeholder="Buscar por condomínio, CNPJ ou protocolo" style="max-width:360px"></div>' +
+      '<div class="tabela-wrap"><table style="min-width:960px"><thead><tr><th>Protocolo</th><th>Condomínio</th><th>Origem</th><th>Executivo</th><th>Situação</th><th>Com quem</th><th>Prazo da minuta</th></tr></thead><tbody id="tbCt"></tbody></table></div></div>';
+    var seq = 0;
+    async function carregar() {
+      var meu = ++seq;
+      var q = $('#qCt').value.trim();
+      var r;
+      try { r = await api('GET', '/api/contratos?vis=' + aba + (q ? '&q=' + encodeURIComponent(q) : '')); } catch (e) { toast(e.message, 'erro'); return; }
+      if (meu !== seq) return;
+      $('#tbCt').innerHTML = r.contratos.map(linhaCt).join('') || '<tr><td colspan="7"><div class="vazio" style="border:0;padding:34px">' + (aba === 'minhas' ? 'Você ainda não pediu contratos.' : 'Nada por aqui.') + '</div></td></tr>';
+      $$('#tbCt tr[data-id]').forEach(function (tr) { tr.onclick = function () { location.hash = '#/contratos/' + tr.getAttribute('data-id'); }; });
+    }
+    var espera;
+    $('#qCt').oninput = function () { clearTimeout(espera); espera = setTimeout(carregar, 300); };
+    carregar();
+  }
+  function comQuemCt(c) {
+    if (['rascunho', 'pendencia', 'minuta_enviada'].indexOf(c.etapa) >= 0) return 'Executivo';
+    if (c.etapa === 'fila') return '<span class="sec">ninguém assumiu</span>';
+    if (['assinado', 'cancelada'].indexOf(c.etapa) >= 0) return '<span class="sec">—</span>';
+    return esc(c.responsavel_nome || 'Jurídico');
+  }
+  function linhaCt(c) {
+    return '<tr class="clicavel" data-id="' + c.id + '"><td style="white-space:nowrap"><b>' + esc(c.protocolo || 'Rascunho') + '</b><span class="sec">' + dataHoraCr(c.enviado_em || c.criado_em) + '</span></td>' +
+      '<td><b>' + esc(c.condominio || 'Sem nome') + '</b><span class="sec">' + esc([c.uf, c.pendentes.length ? c.pendentes.length + ' documento(s) pendente(s)' : ''].filter(Boolean).join(' · ')) + '</span></td>' +
+      '<td style="white-space:nowrap">' + esc(origemCt(c)) + '</td><td>' + esc(c.executivo_nome || '—') + '</td><td>' + etqCr(ETAPA_CT, c.etapa) +
+      (c.diretoria === 'aguardando' ? ' ' + etq(['diretoria', 'ambar']) : '') + (c.ajustes ? '<span class="sec">' + c.ajustes + ' ajuste(s)</span>' : '') + '</td>' +
+      '<td>' + comQuemCt(c) + '</td><td style="white-space:nowrap">' + prazoCt(c) + '</td></tr>';
+  }
+
+  /* ---------- controle ---------- */
+  async function abaControleCt(m) {
+    var filtro = { etapa: '', executivo: '' };
+    $('#corpoCt').innerHTML = '<div id="tilesCt" class="tiles" style="margin-bottom:16px;grid-template-columns:repeat(auto-fill,minmax(160px,1fr))"></div>' +
+      '<div class="painel"><div class="cab-painel"><input class="campo" id="qCtc" type="search" placeholder="Buscar por condomínio, CNPJ ou protocolo" style="max-width:320px">' +
+      '<select class="campo" id="fEtapaCt" style="width:auto" aria-label="Etapa"><option value="">Todas as etapas</option>' + Object.keys(ETAPA_CT).filter(function (k) { return k !== 'rascunho'; }).map(function (k) { return '<option value="' + k + '">' + esc(ETAPA_CT[k][0]) + '</option>'; }).join('') + '</select>' +
+      (m.executivos.length > 1 ? '<select class="campo" id="fExecCt" style="width:auto" aria-label="Executivo"><option value="">Todos os executivos</option>' + m.executivos.map(function (x) { return '<option value="' + x.id + '">' + esc(x.nome) + '</option>'; }).join('') + '</select>' : '') + '</div>' +
+      '<div class="tabela-wrap"><table style="min-width:1080px"><thead><tr><th>Protocolo</th><th>Condomínio</th><th>Executivo</th><th>Situação</th><th>Com quem</th><th>Prazo da minuta</th><th>Ajustes</th><th>1ª minuta</th><th>Assinado</th><th>Condições</th></tr></thead><tbody id="tbCtc"></tbody></table></div></div>';
+    var seq = 0;
+    async function carregar() {
+      var meu = ++seq;
+      var q = $('#qCtc').value.trim();
+      var r;
+      try { r = await api('GET', '/api/contratos?vis=controle' + (q ? '&q=' + encodeURIComponent(q) : '') + (filtro.etapa ? '&etapa=' + filtro.etapa : '') + (filtro.executivo ? '&executivo=' + filtro.executivo : '')); } catch (e) { toast(e.message, 'erro'); return; }
+      if (meu !== seq) return;
+      var k = r.contadores;
+      var tile = function (rot, n, alerta) { return '<div class="tile' + (alerta && n ? ' alerta' : '') + '"><span class="rot-tile">' + rot + '</span><b>' + n + '</b></div>'; };
+      $('#tilesCt').innerHTML = tile('Na fila', k.fila) + tile('Em elaboração', k.em_elaboracao) + tile('Com o comercial', k.minuta_enviada + k.pendencia) +
+        tile('Aguardando condições fechadas', k.conferencia) + tile('Assinados no mês', k.assinados_mes) + tile('Passaram do prazo', k.atrasados, true);
+      $('#tbCtc').innerHTML = r.contratos.map(function (c) {
+        return '<tr class="clicavel" data-id="' + c.id + '"><td style="white-space:nowrap"><b>' + esc(c.protocolo) + '</b><span class="sec">' + dataHoraCr(c.enviado_em) + '</span></td>' +
+          '<td><b>' + esc(c.condominio) + '</b><span class="sec">' + esc(origemCt(c)) + '</span></td><td>' + esc(c.executivo_nome || '—') + '</td>' +
+          '<td>' + etqCr(ETAPA_CT, c.etapa) + (c.diretoria === 'aguardando' ? ' ' + etq(['diretoria', 'ambar']) : '') + '</td><td>' + comQuemCt(c) + '</td>' +
+          '<td style="white-space:nowrap">' + prazoCt(c) + '</td><td style="text-align:center">' + (c.ajustes || 0) + '</td>' +
+          '<td style="white-space:nowrap">' + (c.primeira_minuta_em ? dataHoraCr(c.primeira_minuta_em) : '<span class="sec">—</span>') + '</td>' +
+          '<td style="white-space:nowrap">' + (c.assinado_em ? dataHoraCr(c.assinado_em) : '<span class="sec">—</span>') + '</td>' +
+          '<td>' + (c.fechado_em ? etq(['registradas', 'verde']) : c.etapa === 'conferencia' ? etq(['a registrar', 'ambar']) : '<span class="sec">—</span>') + '</td></tr>';
+      }).join('') || '<tr><td colspan="10"><div class="vazio" style="border:0;padding:34px">Nenhuma solicitação enviada.</div></td></tr>';
+      $$('#tbCtc tr[data-id]').forEach(function (tr) { tr.onclick = function () { location.hash = '#/contratos/' + tr.getAttribute('data-id'); }; });
+    }
+    var espera;
+    $('#qCtc').oninput = function () { clearTimeout(espera); espera = setTimeout(carregar, 300); };
+    $('#fEtapaCt').onchange = function () { filtro.etapa = this.value; carregar(); };
+    if ($('#fExecCt')) $('#fExecCt').onchange = function () { filtro.executivo = this.value; carregar(); };
+    carregar();
+  }
+
+  /* ---------- quem elabora (administração) ---------- */
+  async function abaEquipeCt() {
+    var j;
+    try { j = await api('GET', '/api/contratos/equipe'); } catch (e) { $('#corpoCt').innerHTML = '<div class="vazio">' + esc(e.message) + '</div>'; return; }
+    var marcadas = j.pessoas;
+    $('#corpoCt').innerHTML = '<div class="painel"><div class="cab-painel"><h2>Quem elabora os contratos</h2><input class="campo" id="qEqCt" type="search" placeholder="Buscar pessoa" style="max-width:260px;margin-left:auto"></div>' +
+      '<div class="corpo" style="padding-bottom:4px"><p class="ajuda" style="margin:0">Quem está marcado recebe as solicitações (sino e e-mail), assume, redige a minuta, responde aos ajustes e registra as condições fechadas. ' +
+      (j.pessoas.length ? '' : '<b>Ninguém marcado ainda: enquanto isso, a administração recebe.</b>') + '</p></div>' +
+      '<div class="tabela-wrap"><table><thead><tr><th>Pessoa</th><th>Setor Jurídico</th><th style="text-align:center">Elabora contratos</th></tr></thead><tbody id="tbEqCt">' +
+      j.usuarios.map(function (u) {
+        return '<tr data-u="' + u.id + '"><td><b>' + esc(u.nome) + '</b><span class="sec">' + esc(u.email) + '</span></td><td>' + (u.juridico ? etq(['Jurídico', 'azul']) : '<span class="sec">—</span>') + '</td>' +
+          '<td style="text-align:center"><input type="checkbox" data-eq="' + u.id + '"' + (marcadas.indexOf(u.id) >= 0 ? ' checked' : '') + ' aria-label="' + esc(u.nome) + ' elabora contratos"></td></tr>';
+      }).join('') + '</tbody></table></div></div>';
+    $('#qEqCt').oninput = function () { var q = normal(this.value); $$('#tbEqCt tr').forEach(function (tr) { tr.hidden = q && normal(tr.textContent).indexOf(q) < 0; }); };
+    $$('[data-eq]').forEach(function (c) {
+      c.onchange = async function () {
+        var lista = $$('[data-eq]:checked').map(function (x) { return Number(x.getAttribute('data-eq')); });
+        try { await api('PUT', '/api/contratos/equipe', { pessoas: lista }); metaCt = null; toast('Salvo.', 'ok'); } catch (e) { toast(e.message, 'erro'); abaEquipeCt(); }
+      };
+    });
+  }
+
+  /* ---------- nova solicitação: de onde vem ---------- */
+  async function novoContrato() {
+    var j;
+    try { j = await api('GET', '/api/contratos/analises'); } catch (e) { toast(e.message, 'erro'); return; }
+    function linhaAn(a) {
+      var vencida = a.dias > j.validade_proposta;
+      return '<label class="opcao-radio" style="align-items:center;flex-wrap:wrap;margin:0;border-radius:0;border-width:0 0 1px"><input type="radio" name="anCt" value="' + a.id + '">' +
+        '<div style="flex:1 1 260px"><b>' + esc(a.protocolo) + ' · ' + esc(a.condominio) + '</b><span>' + esc(RES_CR[a.resultado] ? RES_CR[a.resultado][0] : '') + ' · ' + pctCr(a.taxa_adm) + ' + boleto ' + reais(a.boleto) +
+        ' · liberada há ' + a.dias + ' dia(s)</span></div>' + (vencida ? etq(['proposta vencida: confira as condições', 'ambar']) : etq(['dentro dos ' + j.validade_proposta + ' dias da proposta', 'verde'])) + '</label>';
+    }
+    var mo = modal({
+      titulo: 'Nova solicitação de contrato', largo: true,
+      corpo: '<span class="rot">De onde vem este condomínio?</span><div class="grade-3" style="margin-bottom:14px">' +
+        '<label class="opcao-radio"><input type="radio" name="origCt" value="analise" checked><div><b>A partir de uma Análise de Crédito</b><span>Os dados da análise vêm preenchidos e podem ser ajustados.</span></div></label>' +
+        '<label class="opcao-radio"><input type="radio" name="origCt" value="pdf"><div><b>Análise feita antes do portal</b><span>Anexe o PDF do retorno; o portal lê os dados.</span></div></label>' +
+        '<label class="opcao-radio"><input type="radio" name="origCt" value="entrega"><div><b>Condomínio de entrega</b><span>Sem análise de crédito: a diretoria aprova taxa e boleto antes da minuta.</span></div></label></div>' +
+        '<div data-orig="analise"><span class="rot">Suas análises aprovadas ou com ressalvas, sem contrato pedido</span>' +
+        '<div class="painel" style="box-shadow:none;overflow:hidden">' + (j.analises.map(linhaAn).join('') || '<div class="vazio" style="border:0;padding:24px">Nenhuma análise liberada disponível. As reprovadas e as que já têm contrato pedido não aparecem.</div>') + '</div></div>' +
+        '<div data-orig="pdf" hidden><label class="btn ghost" style="align-self:flex-start">' + IC.enviar + 'Escolher o PDF do retorno<input type="file" id="arqPdfCt" accept="application/pdf" hidden></label><div id="lidoPdfCt" style="margin-top:12px"></div></div>' +
+        '<div data-orig="entrega" hidden><div class="msg aviso">Preencha o condomínio, o síndico e as condições propostas e envie: o Jurídico recebe e a diretoria é avisada para aprovar a taxa administrativa e o boleto antes da minuta. Sem CNPJ, anexe a ata da assembleia que autorizou a contratação.</div></div>',
+      pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mCtOk">Continuar para o formulário</button>',
+    });
+    var origem = function () { return $('input[name=origCt]:checked', mo).value; };
+    $$('input[name=origCt]', mo).forEach(function (r) { r.onchange = function () { $$('[data-orig]', mo).forEach(function (x) { x.hidden = x.getAttribute('data-orig') !== origem(); }); }; });
+    var arquivoPdf = null, lido = null;
+    async function enviarPdf(acao) {
+      var r = await fetch('/api/contratos/pdf?acao=' + acao, { method: 'POST', credentials: 'same-origin', body: arquivoPdf,
+        headers: { 'Content-Type': 'application/pdf', 'X-Nome-Arquivo': encodeURIComponent(arquivoPdf.name) } });
+      var j2 = {};
+      try { j2 = await r.json(); } catch (e) { /* sem JSON */ }
+      if (!r.ok) throw new Error(j2.erro || 'Falha ao ler o PDF.');
+      return j2;
+    }
+    $('#arqPdfCt', mo).onchange = async function () {
+      arquivoPdf = this.files[0];
+      if (!arquivoPdf) return;
+      $('#lidoPdfCt', mo).innerHTML = '<span class="ajuda">Lendo o PDF…</span>';
+      try {
+        lido = await enviarPdf('ler');
+        var l = lido.lido;
+        $('#lidoPdfCt', mo).innerHTML = '<div class="pilha" style="gap:10px">' +
+          (lido.existente ? '<div class="msg erro">Esta análise já tem solicitação de contrato (' + esc(lido.existente) + ').</div>' : '') +
+          (lido.no_portal ? '<div class="msg aviso">Esta análise está no portal: use a origem "A partir de uma Análise de Crédito".</div>' : '') +
+          (['aprovada', 'ressalvas'].indexOf(l.resultado) < 0 ? '<div class="msg erro">Só análise aprovada ou com ressalvas abre solicitação de contrato.</div>' : '') +
+          (lido.dias > lido.validade_proposta ? '<div class="msg aviso">Análise de ' + dataBr(l.data) + ': a proposta vale ' + lido.validade_proposta + ' dias. Confira as condições.</div>' : '') +
+          '<dl class="info-ticket"><dt>Protocolo</dt><dd>' + esc(l.protocolo) + ' · ' + dataBr(l.data) + '</dd><dt>Condomínio</dt><dd>' + esc(l.razao_social) + (l.cnpj ? ' · ' + esc(l.cnpj) : '') + '</dd>' +
+          '<dt>Status</dt><dd>' + (l.resultado ? etqCr(RES_CR, l.resultado) : '—') + '</dd><dt>Taxa e boleto</dt><dd>' + (l.taxa_adm != null ? pctCr(l.taxa_adm) + ' + ' + reais(l.boleto) : '—') + '</dd></dl></div>';
+      } catch (e) { lido = null; $('#lidoPdfCt', mo).innerHTML = '<div class="msg erro">' + esc(e.message) + '</div>'; }
+    };
+    $('#mCtOk', mo).onclick = async function () {
+      try {
+        var r;
+        if (origem() === 'entrega') r = await api('POST', '/api/contratos', { origem: 'entrega' });
+        else if (origem() === 'pdf') {
+          if (!arquivoPdf || !lido) { toast('Escolha o PDF do retorno da análise.', 'erro'); return; }
+          r = await enviarPdf('criar');
+        } else {
+          var sel = $('input[name=anCt]:checked', mo);
+          if (!sel) { toast('Escolha a análise.', 'erro'); return; }
+          r = await api('POST', '/api/contratos', { origem: 'analise', analise_id: Number(sel.value) });
+        }
+        mo.fechar(); location.hash = '#/contratos/' + r.id;
+      } catch (e) { toast(e.message, 'erro'); }
+    };
+  }
+
+  /* ---------- formulário ---------- */
+  function campoCt(nome, rotulo, valor, o) {
+    o = o || {};
+    var dif = o.dif;
+    var ajuda = [o.ref != null && o.ref !== '' ? 'Análise: ' + esc(o.ref) + '.' : '', o.ajuda || ''].filter(Boolean).join(' ');
+    return '<div' + (o.span ? ' style="grid-column:span ' + o.span + '"' : '') + (o.se ? ' data-se="' + o.se + '"' : '') + '><label class="rot" for="c_' + nome + '">' + esc(rotulo) + '</label>' +
+      (o.area ? '<textarea class="campo" id="c_' + nome + '" rows="' + (o.linhas || 3) + '"' + (o.ph ? ' placeholder="' + esc(o.ph) + '"' : '') + '>' + esc(valor == null ? '' : valor) + '</textarea>'
+        : '<input class="campo' + (dif ? ' diferente' : '') + '" id="c_' + nome + '" value="' + esc(valor == null ? '' : valor) + '"' + (o.ph ? ' placeholder="' + esc(o.ph) + '"' : '') + (o.tipo ? ' type="' + o.tipo + '"' : '') + '>') +
+      (ajuda || dif ? '<div class="ajuda' + (dif ? ' diferente' : '') + '">' + ajuda + (dif ? ' Diferente da análise: o Jurídico vê.' : '') + '</div>' : '') + '</div>';
+  }
+  function selCt(nome, rotulo, valor, opcoes, o) {
+    o = o || {};
+    return '<div' + (o.se ? ' data-se="' + o.se + '"' : '') + '><label class="rot" for="c_' + nome + '">' + esc(rotulo) + '</label><select class="campo' + (o.dif ? ' diferente' : '') + '" id="c_' + nome + '">' +
+      opcoes.map(function (x) { return '<option value="' + esc(x[0]) + '"' + (String(x[0]) === String(valor == null ? '' : valor) ? ' selected' : '') + '>' + esc(x[1]) + '</option>'; }).join('') + '</select>' +
+      (o.ref || o.ajuda ? '<div class="ajuda' + (o.dif ? ' diferente' : '') + '">' + (o.ref ? 'Análise: ' + esc(o.ref) + '.' : '') + (o.ajuda ? ' ' + o.ajuda : '') + '</div>' : '') + '</div>';
+  }
+  function radiosCt(nome, rotulo, valor, opcoes, o) {
+    o = o || {};
+    return '<fieldset style="grid-column:1/-1;border:0;padding:0;margin:0"' + (o.se ? ' data-se="' + o.se + '"' : '') + '><legend class="rot">' + esc(rotulo) + '</legend><div class="marcas">' +
+      opcoes.map(function (x) { return '<label class="marca"><input type="radio" name="c_' + nome + '" value="' + esc(x[0]) + '"' + (String(x[0]) === String(valor == null ? '' : valor) ? ' checked' : '') + '> ' + esc(x[1]) + '</label>'; }).join('') +
+      (o.extra || '') + '</div>' + (o.ajuda ? '<div class="ajuda">' + o.ajuda + '</div>' : '') + '</fieldset>';
+  }
+  function marcasCt(nome, rotulo, valores, opcoes, o) {
+    o = o || {};
+    return '<fieldset style="grid-column:1/-1;border:0;padding:0;margin:0"' + (o.se ? ' data-se="' + o.se + '"' : '') + '><legend class="rot">' + esc(rotulo) + '</legend><div class="marcas">' +
+      opcoes.map(function (x) { return '<label class="marca"><input type="checkbox" data-marca-ct="' + nome + '" value="' + esc(x) + '"' + ((valores || []).indexOf(x) >= 0 ? ' checked' : '') + '> ' + esc(x) + '</label>'; }).join('') +
+      (o.extra || '') + '</div>' + (o.ajuda ? '<div class="ajuda">' + o.ajuda + '</div>' : '') + '</fieldset>';
+  }
+  function valCt(nome, raiz) {
+    var rad = $('input[name=c_' + nome + ']:checked', raiz);
+    if (rad) return rad.value;
+    var el = $('#c_' + nome, raiz);
+    if (!el) return '';
+    if (el.type === 'checkbox') return el.checked;
+    return el.value.trim();
+  }
+
+  function htmlFormCt(c, m, difs) {
+    var f = c.formulario || {}, ref = c.origem === 'entrega' ? {} : c.referencia || {};
+    var temRef = ref.taxa_adm != null;
+    var r = function (v) { return temRef ? v : null; };
+    var det = f.pedidos_detalhe || {};
+    var pedidos = f.pedidos || [];
+    var cb = String(f.cashback || '');
+    return '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">1</span>Condomínio e síndico</h2>' + (temRef ? '<span class="etiqueta azul">preenchido com a análise, pode ajustar</span>' : '') + '</div><div class="corpo grade-3">' +
+      campoCt('nome', 'Nome do condomínio', f.nome, { span: 2 }) +
+      '<div><label class="rot" for="c_cnpj">CNPJ do condomínio</label><input class="campo" id="c_cnpj" value="' + esc(f.cnpj || '') + '" placeholder="00.000.000/0000-00"' + (f.sem_cnpj ? ' disabled' : '') + '>' +
+      '<label class="linha" style="margin-top:8px;font-size:13px;font-weight:700;color:var(--ink-2)"><input type="checkbox" id="c_sem_cnpj"' + (f.sem_cnpj ? ' checked' : '') + '> O condomínio ainda não tem CNPJ</label></div>' +
+      '<div style="grid-column:1/-1" data-se="sem_cnpj:true"><div class="msg aviso">Sem CNPJ, o condomínio tem 90 dias da primeira arrecadação para regularizar, senão o repasse fica retido. Até lá, o repasse vai para a conta da administradora (por e-mail), nunca para a do síndico. Anexe a ata da assembleia que autorizou a contratação.</div>' +
+      '<label class="linha" style="margin-top:8px;font-size:13px;font-weight:700;color:var(--ink-2)"><input type="checkbox" id="c_sem_cnpj_ciente"' + (f.sem_cnpj_ciente ? ' checked' : '') + '> O síndico está ciente dos 90 dias para regularizar o CNPJ</label></div>' +
+      selCt('uf', 'Estado', f.uf || '', [['', 'Escolha']].concat(UFS.map(function (u) { return [u, u]; }))) +
+      campoCt('cidade', 'Cidade', f.cidade) +
+      campoCt('administradora', 'Administradora', f.administradora) +
+      campoCt('sindico_nome', 'Nome do síndico', f.sindico_nome) +
+      campoCt('sindico_cpf', 'CPF do síndico', f.sindico_cpf, { ph: '000.000.000-00' }) +
+      campoCt('sindico_email', 'E-mail do síndico ou do condomínio', f.sindico_email, { tipo: 'email' }) +
+      campoCt('sindico_telefone', 'Telefone do síndico', f.sindico_telefone, { ph: '(00) 00000-0000' }) + '</div></section>' +
+
+      '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">2</span>Condições negociadas</h2></div><div class="corpo grade-3">' +
+      campoCt('taxa_adm', 'Taxa administrativa negociada (%)', fmtNumCr(f.taxa_adm), { ref: r(pctCr(ref.taxa_adm)), dif: difs.taxa_adm }) +
+      campoCt('boleto', 'Valor do boleto negociado (R$)', fmtNumCr(f.boleto), { ref: r(reais(ref.boleto)), dif: difs.boleto, ajuda: 'Pode ser reajustado uma vez por ano, com comprovação do custo bancário.' }) +
+      selCt('desconto_tipo', 'Desconto de pontualidade', f.desconto_tipo || 'nenhum', [['nenhum', 'Não possui'], ['percentual', 'Percentual (%)'], ['valor', 'Valor por unidade (R$)']],
+        { ref: temRef && ref.desconto_tipo ? DESC_CT[ref.desconto_tipo] + (ref.desconto_valor ? ' ' + fmtNumCr(ref.desconto_valor) : '') : null, dif: difs.desconto }) +
+      campoCt('desconto_valor', 'Desconto (% ou R$)', fmtNumCr(f.desconto_valor), { se: 'desconto_tipo:percentual,valor' }) +
+      marcasCt('garantias', 'O que iremos garantir (marque todos)', f.garantias, m.garantias, { extra: '<input class="campo" id="c_garantia_outra" style="max-width:240px" placeholder="Outra (descreva)" value="' + esc(f.garantia_outra || '') + '" aria-label="Outra garantia">',
+        ajuda: 'Só é garantido o que está na convenção e no regimento e foi aprovado em assembleia. Multas por descumprimento do regimento e locação de ambientes a quem não é condômino não entram.' }) +
+      campoCt('taxa_ordinaria', 'Taxa ordinária (R$)', fmtNumCr(f.taxa_ordinaria), { ref: temRef && ref.taxa_ordinaria != null ? reais(ref.taxa_ordinaria) : null }) +
+      campoCt('taxa_extra', 'Taxa extra vigente por unidade (R$)', fmtNumCr(f.taxa_extra), { ajuda: '<span id="pctExtraCt"></span>' }) +
+      radiosCt('cashback', 'Foi concedido o benefício do cashback?', cb, [['nao', 'Não'], ['5', 'Sim, 5%'], ['10', 'Sim, 10%'], ['outro', 'Outro']],
+        { extra: '<input class="campo" id="c_cashback_pct" data-se="cashback:outro" style="width:110px" placeholder="%" value="' + esc(fmtNumCr(f.cashback_pct)) + '" aria-label="Percentual do cashback">' }) +
+      marcasCt('cashback_receitas', 'Sobre quais receitas incide o cashback', f.cashback_receitas, m.receitas_cashback, { se: 'cashback:5,10,outro',
+        extra: '<input class="campo" id="c_cashback_receita_outra" style="max-width:220px" placeholder="Outra (descreva)" value="' + esc(f.cashback_receita_outra || '') + '" aria-label="Outra receita">' }) + '</div></section>' +
+
+      '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">3</span>Vigência</h2></div><div class="corpo grade-3">' +
+      campoCt('inicio_contrato', 'Início do contrato (primeira arrecadação garantida)', f.inicio_contrato, { tipo: 'date' }) +
+      campoCt('dia_vencimento', 'Dia de vencimento da taxa condominial', f.dia_vencimento, { ref: r(ref.dia_vencimento), dif: difs.dia_vencimento, ph: '1 a 31',
+        ajuda: 'O boleto sai até o 5º dia útil antes; o condomínio envia a composição e o balancete até o dia 20 do mês anterior.' }) +
+      '<div>' + '<label class="rot" for="c_periodo_minimo">Período mínimo (meses)</label><input class="campo" id="c_periodo_minimo" value="' + esc(f.periodo_minimo == null ? '' : f.periodo_minimo) + '" placeholder="vazio = padrão do contrato">' +
+      '<label class="linha" style="margin-top:8px;font-size:13px;font-weight:700;color:var(--ink-2);flex-wrap:nowrap;align-items:flex-start"><input type="checkbox" id="c_fidelizacao"' + (f.fidelizacao ? ' checked' : '') + '> Pedir a versão com fidelização (benefício a mais ou risco alto)</label>' +
+      '<div class="ajuda">Na Paraíba, o contrato já é com fidelização.</div></div></div></section>' +
+
+      '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">4</span>Pedidos do síndico</h2><span class="ajuda" style="margin:0">marque o que o síndico pediu para mudar no contrato</span></div><div>' +
+      m.clausulas.negociaveis.map(function (x) {
+        var on = pedidos.indexOf(x.chave) >= 0;
+        return '<div class="pedido-ct"><input type="checkbox" data-pedido="' + esc(x.chave) + '"' + (on ? ' checked' : '') + ' aria-label="' + esc(x.pedido) + '">' +
+          '<span class="t"><small>' + esc(x.clausula) + '</small>' + esc(x.pedido) + (x.diretoria ? ' ' + etq(['diretoria', 'ambar']) : '') + (x.juridico ? ' ' + etq(['exige o Jurídico', 'ambar']) : '') + '</span>' +
+          (x.detalhe ? '<input class="campo" data-pedido-det="' + esc(x.chave) + '" placeholder="' + esc(x.detalhe) + '" value="' + esc(det[x.chave] || '') + '"' + (on ? '' : ' hidden') + ' aria-label="' + esc(x.detalhe) + '">' : '') +
+          '<span class="resp" data-pedido-resp="' + esc(x.chave) + '"' + (on ? '' : ' hidden') + '><b>Resposta do Jurídico:</b> ' + esc(x.resposta) + '</span></div>';
+      }).join('') + '</div><div class="fixas-ct"><b>Não prometa (não muda no contrato):</b><ul>' + m.clausulas.fixas.map(function (x) { return '<li><b>' + esc(x.clausula) + ':</b> ' + esc(x.texto) + '</li>'; }).join('') + '</ul></div></section>' +
+
+      '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">5</span>Minúcias da negociação</h2></div><div class="corpo">' +
+      campoCt('minucias', 'Toda e qualquer tratativa diferente da habitual (adiantamento de repasse, condições especiais…)', f.minucias, { area: true, linhas: 4,
+        ph: 'Ex.: o síndico pediu o primeiro repasse adiantado em 5 dias. Se não houver nada diferente do habitual, escreva "Nenhuma".', ajuda: 'Qualquer observação sobre a solicitação vai só aqui.' }) + '</div></section>';
+  }
+  function lerFormCt(raiz) {
+    var v = function (k) { return valCt(k, raiz); };
+    var marcas = function (nome) { return $$('[data-marca-ct=' + nome + ']:checked', raiz).map(function (x) { return x.value; }); };
+    var det = {};
+    $$('[data-pedido-det]', raiz).forEach(function (x) { if (x.value.trim()) det[x.getAttribute('data-pedido-det')] = x.value.trim(); });
+    return {
+      nome: v('nome'), cnpj: v('cnpj'), sem_cnpj: $('#c_sem_cnpj', raiz).checked, sem_cnpj_ciente: $('#c_sem_cnpj_ciente', raiz).checked, uf: v('uf'), cidade: v('cidade'),
+      administradora: v('administradora'), sindico_nome: v('sindico_nome'), sindico_cpf: v('sindico_cpf'), sindico_email: v('sindico_email'), sindico_telefone: v('sindico_telefone'),
+      taxa_adm: numCr(v('taxa_adm')), boleto: numCr(v('boleto')), desconto_tipo: v('desconto_tipo'), desconto_valor: numCr(v('desconto_valor')),
+      garantias: marcas('garantias'), garantia_outra: $('#c_garantia_outra', raiz).value.trim(), taxa_ordinaria: numCr(v('taxa_ordinaria')), taxa_extra: numCr(v('taxa_extra')),
+      cashback: v('cashback'), cashback_pct: numCr($('#c_cashback_pct', raiz).value), cashback_receitas: marcas('cashback_receitas'), cashback_receita_outra: $('#c_cashback_receita_outra', raiz).value.trim(),
+      inicio_contrato: v('inicio_contrato'), dia_vencimento: numCr(v('dia_vencimento')), periodo_minimo: numCr(v('periodo_minimo')), fidelizacao: $('#c_fidelizacao', raiz).checked,
+      pedidos: $$('[data-pedido]:checked', raiz).map(function (x) { return x.getAttribute('data-pedido'); }), pedidos_detalhe: det, minucias: $('#c_minucias', raiz).value.trim(),
+    };
+  }
+  function ligarFormCt(raiz) {
+    function aplicar() {
+      $$('[data-se]', raiz).forEach(function (el) {
+        var p = el.getAttribute('data-se').split(':');
+        var val = p[0] === 'sem_cnpj' ? String($('#c_sem_cnpj', raiz).checked) : valCt(p[0], raiz);
+        el.hidden = p[1].split(',').indexOf(String(val)) < 0;
+      });
+      var cnpj = $('#c_cnpj', raiz);
+      if (!raiz.hasAttribute('data-leitura')) cnpj.disabled = $('#c_sem_cnpj', raiz).checked;
+      $$('[data-pedido]', raiz).forEach(function (cx) {
+        var k = cx.getAttribute('data-pedido');
+        $$('[data-pedido-resp="' + k + '"], [data-pedido-det="' + k + '"]', raiz).forEach(function (x) { x.hidden = !cx.checked; });
+      });
+      var ord = numCr(valCt('taxa_ordinaria', raiz)), ext = numCr(valCt('taxa_extra', raiz));
+      var alvo = $('#pctExtraCt', raiz);
+      if (alvo) {
+        var pc = ord > 0 && ext > 0 ? ext / ord * 100 : null;
+        alvo.textContent = pc == null ? 'Some as taxas extras vigentes (R$ por unidade).' : fmtNumCr(Math.round(pc * 100) / 100) + '% da ordinária' + (pc > 40 ? ': acima de 40% precisa de aditivo, a diretoria decide.' : ' (limite: 40%).');
+        alvo.parentNode.className = 'ajuda' + (pc > 40 ? ' diferente' : '');
+      }
+      var cpf = $('#c_sindico_cpf', raiz);
+      var d = cpf.value.replace(/\D/g, '');
+      var aj = cpf.parentNode.querySelector('.ajuda') || cpf.parentNode.appendChild(document.createElement('div'));
+      aj.className = 'ajuda' + (d.length === 11 ? (cpfValidoImp(d) ? ' ok' : ' diferente') : '');
+      aj.textContent = d.length === 11 ? (cpfValidoImp(d) ? 'CPF válido.' : 'CPF inválido: confira os números.') : '';
+    }
+    raiz.addEventListener('change', aplicar);
+    raiz.addEventListener('input', function (e) { if (['c_sindico_cpf', 'c_taxa_ordinaria', 'c_taxa_extra'].indexOf(e.target.id) >= 0) aplicar(); });
+    aplicar();
+  }
+
+  /* ---------- documentos ---------- */
+  async function enviarDocCt(id, tipo, arquivo) {
+    var r = await fetch('/api/contratos/' + id + '/documentos', {
+      method: 'POST', credentials: 'same-origin', body: arquivo,
+      headers: { 'Content-Type': arquivo.type || 'application/octet-stream', 'X-Nome-Arquivo': encodeURIComponent(arquivo.name), 'X-Tipo': tipo },
+    });
+    if (r.status === 413) throw new Error('"' + arquivo.name + '" passa do tamanho máximo permitido.');
+    if (!r.ok) { var j = {}; try { j = await r.json(); } catch (e) { /* sem JSON */ } throw new Error(j.erro || 'Falha ao enviar ' + arquivo.name); }
+  }
+  function htmlDocsCt(d, m) {
+    var c = d.contrato, pd = d.pode, f = c.formulario || {};
+    var vig = d.documentos.filter(function (x) { return !x.substituido_em; });
+    var porTipo = {};
+    m.documentos.forEach(function (t) { porTipo[t.tipo] = t; });
+    function lnk(x) {
+      var tirar = x.tipo === 'minuta' ? pd.minuta : pd.tirar_documentos && x.tipo !== 'analise_credito';
+      return '<a class="anexo" href="/api/contratos/' + c.id + '/documentos/' + x.id + (x.mime === 'application/pdf' ? '?ver=1' : '') + '" target="_blank" rel="noopener">' + IC.documento + '<span>' + esc(x.nome) + '</span><span class="sec">' + tamanho(x.tamanho) + '</span></a>' +
+        (tirar ? '<button type="button" class="btn icon ghost" data-tirar-doc-ct="' + x.id + '" aria-label="Remover ' + esc(x.nome) + '">' + IC.fechar + '</button>' : '');
+    }
+    function linha(tipo, o) {
+      o = o || {};
+      var t = porTipo[tipo];
+      var atual = vig.filter(function (x) { return x.tipo === tipo; });
+      var st = atual.length ? etq([tipo === 'analise_credito' ? 'vinculada' : 'entregue', 'verde']) : o.obrigatorio ? etq(['falta', 'vermelha']) : t.operacional ? etq(['pendente', 'ambar'])
+        : ['minuta', 'contrato_assinado', 'procuracao'].indexOf(tipo) >= 0 ? etq(['a anexar', 'cinza']) : etq(['opcional', 'cinza']);
+      var podeAnexar = o.pode !== undefined ? o.pode : pd.documentos;
+      return '<div class="doc-linha"><b style="flex:1 1 260px">' + esc(t.nome) + (o.obrigatorio ? ' <span style="color:var(--red)" aria-label="obrigatório">*</span>' : '') + '</b>' + st + atual.map(lnk).join('') +
+        (podeAnexar && tipo !== 'analise_credito' ? '<label class="btn ghost sm">' + IC.enviar + (atual.length ? (tipo === 'outro' ? 'Anexar outro' : 'Trocar') : 'Anexar') + '<input type="file" data-doc-ct="' + tipo + '" hidden></label>' : '') + '</div>';
+    }
+    var operacionais = m.documentos.filter(function (t) { return t.operacional; }).map(function (t) { return t.tipo; });
+    var nPend = operacionais.filter(function (t) { return !vig.some(function (x) { return x.tipo === t; }); }).length;
+    var html = '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">6</span>Documentos</h2><span class="espaco"></span><span class="ajuda" style="margin:0">' +
+      (nPend ? nPend + ' documento(s) do síndico pendente(s)' : 'documentos do síndico completos') + '</span></div>';
+    var daAnalise = vig.some(function (x) { return x.tipo === 'analise_credito'; });
+    if (daAnalise) html += '<div class="sub-doc" style="border-top:0">Vieram da análise</div>' + linha('analise_credito');
+    html += '<div class="sub-doc"' + (daAnalise ? '' : ' style="border-top:0"') + '>Do síndico · não travam o contrato, mas travam a cobrança, os boletos e o repasse depois</div>' + operacionais.map(function (t) { return linha(t); }).join('');
+    if (f.sem_cnpj) html += linha('ata_ago', { obrigatorio: true });
+    var juridico = ['minuta_enviada', 'conferencia', 'assinado'].indexOf(c.etapa) >= 0 || vig.some(function (x) { return x.tipo === 'minuta'; }) || pd.minuta;
+    if (juridico) html += '<div class="sub-doc">Contrato</div>' + linha('minuta', { pode: pd.minuta }) +
+      (['minuta_enviada', 'conferencia', 'assinado'].indexOf(c.etapa) >= 0 ? linha('contrato_assinado', { pode: pd.assinar || (c.etapa === 'conferencia' && pd.documentos) }) + linha('procuracao', { pode: pd.assinar || (c.etapa === 'conferencia' && pd.documentos) }) : '');
+    var antigas = d.documentos.filter(function (x) { return x.tipo === 'minuta' && x.substituido_em; });
+    if (antigas.length) html += '<div class="doc-linha"><span class="ajuda" style="margin:0;flex:1 1 200px">Versões anteriores da minuta</span>' + antigas.map(function (x) {
+      return '<a class="anexo" href="/api/contratos/' + c.id + '/documentos/' + x.id + '" target="_blank" rel="noopener">' + IC.historico + '<span>' + esc(x.nome) + '</span><span class="sec">' + dataHoraCr(x.enviado_em) + '</span></a>';
+    }).join('') + '</div>';
+    html += linha('outro') + '</section>';
+    return html;
+  }
+  function ligarDocsCt(c, recarregar) {
+    $$('input[data-doc-ct]').forEach(function (inp) {
+      inp.onchange = async function () {
+        if (!inp.files[0]) return;
+        try { await enviarDocCt(c.id, inp.getAttribute('data-doc-ct'), inp.files[0]); toast('Documento anexado.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+      };
+    });
+    $$('[data-tirar-doc-ct]').forEach(function (b) {
+      b.onclick = async function () {
+        if (!(await confirmar('Remover documento', 'O arquivo sai desta solicitação.', 'Remover', true))) return;
+        try { await api('DELETE', '/api/contratos/' + c.id + '/documentos/' + b.getAttribute('data-tirar-doc-ct')); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+      };
+    });
+  }
+
+  /* ---------- condições fechadas (advogada) ---------- */
+  function htmlFechadoCt(d, m) {
+    var c = d.contrato, x = c.fechado || {}, edita = d.pode.registrar;
+    var cb = String(x.cashback || '');
+    var clausulas = (x.clausulas || []);
+    var corpo = '<div class="corpo grade-3">' +
+      campoCt('f_taxa_adm', 'Taxa administrativa (%)', fmtNumCr(x.taxa_adm)) + campoCt('f_boleto', 'Boleto (R$)', fmtNumCr(x.boleto)) +
+      selCt('f_desconto_tipo', 'Desconto de pontualidade', x.desconto_tipo || 'nenhum', [['nenhum', 'Não possui'], ['percentual', 'Percentual (%)'], ['valor', 'Valor por unidade (R$)']]) +
+      campoCt('f_desconto_valor', 'Desconto (% ou R$)', fmtNumCr(x.desconto_valor), { se: 'f_desconto_tipo:percentual,valor' }) +
+      campoCt('f_desconto_inicio', 'Desconto vale a partir de', x.desconto_inicio, { se: 'f_desconto_tipo:percentual,valor', ph: 'Ex.: janeiro/2027 (vazio = assinatura)' }) +
+      marcasCt('f_garantias', 'O que o contrato garante', x.garantias, m.garantias, { extra: '<input class="campo" id="c_f_garantia_outra" style="max-width:240px" placeholder="Outra" value="' + esc(x.garantia_outra || '') + '" aria-label="Outra garantia">' }) +
+      campoCt('f_limite_extra', 'Taxa extra coberta até (% da ordinária)', fmtNumCr(x.limite_extra), { ajuda: 'O padrão é 40%.' }) +
+      radiosCt('f_cashback', 'Cashback', cb, [['nao', 'Não'], ['5', '5%'], ['10', '10%'], ['outro', 'Outro']],
+        { extra: '<input class="campo" id="c_f_cashback_pct" data-se="f_cashback:outro" style="width:110px" placeholder="%" value="' + esc(fmtNumCr(x.cashback_pct)) + '" aria-label="Percentual do cashback">' }) +
+      marcasCt('f_cashback_receitas', 'Cashback incide sobre', x.cashback_receitas, m.receitas_cashback, { se: 'f_cashback:5,10,outro' }) +
+      campoCt('f_inicio_contrato', 'Início (primeira arrecadação garantida)', x.inicio_contrato, { tipo: 'date' }) +
+      campoCt('f_dia_vencimento', 'Dia de vencimento', x.dia_vencimento) +
+      campoCt('f_periodo_minimo', 'Período mínimo (meses)', x.periodo_minimo, { ph: 'vazio = padrão' }) +
+      selCt('f_fidelizacao', 'Cláusula 12ª', x.fidelizacao ? 'sim' : 'nao', [['nao', 'Sem fidelização'], ['sim', 'Com fidelização']]) +
+      campoCt('f_foro', 'Foro', x.foro, { ph: m.foro_padrao }) + campoCt('f_prazo_contestacao', 'Prazo para contestar a prestação de contas (dias)', x.prazo_contestacao) + '</div>' +
+      (clausulas.length ? '<div class="sub-doc">Cláusulas que o síndico pediu para mudar</div>' + clausulas.map(function (k, n) {
+        return '<div class="clausula-ct" data-clausula="' + n + '"><div><b style="font-size:13.5px">' + esc(k.clausula) + '</b> <span style="font-size:13.5px;color:var(--ink-2)">' + esc(k.pedido) + '</span></div>' +
+          '<select class="campo" data-k="resultado" aria-label="Resultado"><option value="">Como ficou?</option>' + Object.keys(m.resultados).map(function (r) { return '<option value="' + r + '"' + (k.resultado === r ? ' selected' : '') + '>' + esc(m.resultados[r]) + '</option>'; }).join('') + '</select>' +
+          '<textarea class="campo" data-k="redacao" rows="2" placeholder="Redação que ficou no contrato (opcional)" aria-label="Redação">' + esc(k.redacao || '') + '</textarea></div>';
+      }).join('') : '') +
+      '<div class="corpo">' + campoCt('f_observacoes', 'Observações para a Implantação', x.observacoes, { area: true, ph: 'Ex.: procuração no mesmo arquivo do contrato; primeiro repasse adiantado em 5 dias.' }) + '</div>';
+    var topo = c.fechado_em ? '<span class="etiqueta verde">registradas por ' + esc(c.fechado_por_nome || '') + ' em ' + dataHoraCr(c.fechado_em) + '</span>'
+      : '<span class="ajuda" style="margin:0">vêm do que o comercial pediu: corrija o que mudou na negociação</span>';
+    return '<section class="painel" id="fechadoCt"' + (edita ? '' : ' data-leitura') + '><div class="cab-painel"><h2>Condições fechadas no contrato assinado</h2>' + topo + '</div>' +
+      (d.diferencas_fechado.length ? '<div class="corpo" style="padding-bottom:0"><div class="msg aviso"><b>Mudou na negociação:</b> ' + d.diferencas_fechado.map(function (v) { return esc(v.rotulo) + ' ' + esc(v.fechado) + ' (pedido: ' + esc(v.pedido) + ')'; }).join('; ') + '.</div></div>' : '') +
+      corpo + (edita ? '<div class="doc-linha" style="justify-content:flex-end">' + (d.faltas_fechado.length ? '<span class="ajuda" style="flex:1 1 300px;margin:0">Para concluir, falta: ' + esc(d.faltas_fechado.join(' ')) + '</span>' : '') +
+        '<button class="btn ghost sm" id="btFechSalvar">Salvar</button><button class="btn primary sm" id="btFechConcluir">Concluir: enviar à Implantação</button></div>' : '') + '</section>';
+  }
+  function lerFechadoCt(raiz) {
+    var v = function (k) { return valCt(k, raiz); };
+    var marcas = function (nome) { return $$('[data-marca-ct=' + nome + ']:checked', raiz).map(function (x) { return x.value; }); };
+    return {
+      taxa_adm: numCr(v('f_taxa_adm')), boleto: numCr(v('f_boleto')), desconto_tipo: v('f_desconto_tipo'), desconto_valor: numCr(v('f_desconto_valor')), desconto_inicio: v('f_desconto_inicio'),
+      garantias: marcas('f_garantias'), garantia_outra: $('#c_f_garantia_outra', raiz).value.trim(), limite_extra: numCr(v('f_limite_extra')),
+      cashback: v('f_cashback'), cashback_pct: numCr($('#c_f_cashback_pct', raiz).value), cashback_receitas: marcas('f_cashback_receitas'),
+      inicio_contrato: v('f_inicio_contrato'), dia_vencimento: numCr(v('f_dia_vencimento')), periodo_minimo: numCr(v('f_periodo_minimo')), fidelizacao: v('f_fidelizacao') === 'sim',
+      foro: v('f_foro'), prazo_contestacao: numCr(v('f_prazo_contestacao')), observacoes: $('#c_f_observacoes', raiz).value.trim(),
+      clausulas: $$('[data-clausula]', raiz).map(function (el) {
+        var k = metaFechadoCt[Number(el.getAttribute('data-clausula'))] || {};
+        return { chave: k.chave, clausula: k.clausula, pedido: k.pedido, resultado: $('[data-k=resultado]', el).value, redacao: $('[data-k=redacao]', el).value.trim() };
+      }),
+    };
+  }
+  var metaFechadoCt = [];
+  function ligarFechadoCt(raiz) {
+    function aplicar() {
+      $$('[data-se]', raiz).forEach(function (el) {
+        var p = el.getAttribute('data-se').split(':');
+        el.hidden = p[1].split(',').indexOf(String(valCt(p[0], raiz))) < 0;
+      });
+    }
+    raiz.addEventListener('change', aplicar);
+    aplicar();
+  }
+
+  /* ---------- detalhe ---------- */
+  async function paginaContratoDetalhe(id) {
+    definirBarra('<span class="setor">Solicitação de Contrato</span><span class="sep">/</span><span class="nome">…</span>');
+    $('#conteudo').innerHTML = carregandoHtml();
+    var d, m;
+    try { d = await api('GET', '/api/contratos/' + id); m = await carregarMetaCt(); } catch (e) {
+      $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">' + esc(e.message) + '<br><a class="btn ghost" style="margin-top:14px" href="#/contratos">Voltar</a></div></div>';
+      return;
+    }
+    var c = d.contrato, pd = d.pode;
+    var recarregar = function () { paginaContratoDetalhe(id); atualizarCt(); };
+    var acoes = '<a class="btn ghost sm" href="#/contratos">Voltar</a>' +
+      '<a class="btn ghost sm" href="/api/contratos/' + c.id + '/formulario.pdf" target="_blank" rel="noopener" title="Exportar a solicitação em PDF">' + IC.documento + 'PDF</a>';
+    if (pd.cancelar) acoes += '<button class="btn danger sm" id="btCancCt">Cancelar</button>';
+    if (pd.assumir) acoes += '<button class="btn primary sm" id="btAssumirCt">Assumir</button>';
+    if (pd.passar) acoes += '<button class="btn ghost sm" id="btPassarCt">' + (c.responsavel_id ? 'Passar para outra pessoa' : 'Passar para alguém') + '</button>';
+    if (pd.pendencia) acoes += '<button class="btn ghost sm" id="btPendCt">Devolver com pendência</button>';
+    if (pd.minuta) acoes += '<button class="btn primary sm" id="btMinutaCt"' + (pd.enviar_minuta ? '' : ' disabled title="A diretoria ainda não decidiu os itens que dependem dela."') + '>Enviar minuta ao comercial</button>';
+    if (pd.ajuste) acoes += '<button class="btn ghost sm" id="btAjusteCt">Pedir ajuste</button>';
+    if (pd.assinar) acoes += '<button class="btn primary sm" id="btAssinadoCt">Contrato assinado</button>';
+    definirBarra('<span class="setor">Solicitação de Contrato</span><span class="sep">/</span><span class="nome">' + esc(c.protocolo || 'Rascunho') + '</span>', acoes);
+    var difs = {};
+    d.diferencas.forEach(function (x) { difs[x.campo] = x; });
+    var fmtDif = function (x) {
+      var f = /R\$/.test(x.rotulo) ? reais : /%/.test(x.rotulo) ? pctCr : fmtNumCr;
+      return typeof x.valor === 'number' ? f(x.valor) + ' (análise: ' + f(x.analise) + ')' : x.valor + ' (análise: ' + x.analise + ')';
+    };
+    var html = '<div class="pagina"><div class="linha" style="align-items:flex-start;margin-bottom:16px"><div style="flex:1 1 420px">' +
+      '<div class="linha" style="margin-bottom:6px">' + etqCr(ETAPA_CT, c.etapa) +
+      (c.analise_id ? '<a class="etiqueta azul" href="#/credito/' + c.analise_id + '">da análise ' + esc(c.analise_protocolo || '') + '</a>' : '<span class="etiqueta cinza">' + esc(origemCt(c)) + '</span>') +
+      (d.implantacao ? '<a class="etiqueta azul" href="#/implantacao/' + d.implantacao.id + '">implantação ' + esc(d.implantacao.protocolo || 'em rascunho') + '</a>' : '') +
+      (c.executivo_nome ? '<span class="etiqueta cinza">' + esc(c.executivo_nome + (c.executivo_uf ? ' · ' + c.executivo_uf : '')) + '</span>' : '') + '</div>' +
+      '<h1>' + esc(c.condominio || 'Nova solicitação de contrato') + '</h1><p class="sub" style="margin:0">' + esc([c.cnpj, c.uf, c.responsavel_nome ? 'Com: ' + c.responsavel_nome : ''].filter(Boolean).join(' · ')) + '</p></div>' +
+      '<dl class="info-ticket" style="min-width:260px">' + (c.protocolo ? '<dt>Protocolo</dt><dd>' + esc(c.protocolo) + '</dd>' : '') +
+      (c.enviado_em ? '<dt>Enviada ao Jurídico</dt><dd>' + dataHoraCr(c.enviado_em) + '</dd>' : '') + '<dt>Pedida por</dt><dd>' + esc(c.solicitante_nome || '—') + '</dd>' +
+      (['fila', 'em_elaboracao'].indexOf(c.etapa) >= 0 && c.prazo ? '<dt>Minuta até (72h úteis)</dt><dd>' + prazoCt(c) + '</dd>' : '') +
+      (c.ajustes ? '<dt>Ajustes pedidos</dt><dd>' + c.ajustes + '</dd>' : '') +
+      (c.minuta_enviada_em ? '<dt>Última minuta</dt><dd>' + dataHoraCr(c.minuta_enviada_em) + '</dd>' : '') +
+      (c.assinado_em ? '<dt>Assinado (anexado)</dt><dd>' + dataHoraCr(c.assinado_em) + '</dd>' : '') + '</dl></div>';
+
+    var dir = c.diretoria || {};
+    var itensDir = d.itens_diretoria || [];
+    if (itensDir.length) {
+      var corpoDir = '<ul style="margin:0 0 10px;padding-left:18px;font-size:13.5px;font-weight:600;color:var(--ink-2)">' + itensDir.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>';
+      if (dir.decidido_em) corpoDir += '<div class="msg ' + (dir.aprovado ? 'ok' : 'erro') + '">' + esc(dir.por) + ' ' + (dir.aprovado ? 'aprovou' : 'não aprovou') + ' em ' + dataHoraCr(dir.decidido_em) + (dir.observacao ? ': ' + esc(dir.observacao) : '.') + (dir.aprovado ? '' : ' A minuta segue o contrato padrão nesses pontos.') + '</div>';
+      else if (pd.decidir_diretoria) corpoDir += campoCr('dObsCt', 'Observação (obrigatória para não aprovar)', '') + '<div class="linha" style="justify-content:flex-end;margin-top:10px"><button class="btn danger sm" id="btDirNaoCt">Não aprovar</button><button class="btn primary sm" id="btDirSimCt">Aprovar</button></div>';
+      else if (c.etapa === 'rascunho' || pd.editar) corpoDir += '<div class="ajuda" style="margin:0">Ao enviar, a diretoria é avisada; a minuta só sai depois da decisão.</div>';
+      else corpoDir += '<div class="msg aviso">Aguardando a decisão da diretoria; a minuta só sai depois.</div>';
+      html += '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Decisão da diretoria</h2></div><div class="corpo">' + corpoDir + '</div></section>';
+    }
+    if (d.diferencas.length) html += '<div class="msg aviso" style="margin-bottom:16px"><b>Diferente da análise:</b> ' + d.diferencas.map(function (x) { return esc(x.rotulo.replace(/ \((%|R\$)\)$/, '')) + ' ' + esc(fmtDif(x)); }).join('; ') + '.</div>';
+    if (pd.editar && d.faltas.length) html += '<div class="msg aviso" style="margin-bottom:16px"><b>Para enviar, falta:</b><ul>' + d.faltas.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>';
+    var atencao = d.avisos.filter(function (a) { return a.nivel === 'atencao'; }), info = d.avisos.filter(function (a) { return a.nivel !== 'atencao'; });
+    if (atencao.length) html += '<div class="msg aviso" style="margin-bottom:16px"><b>Atenção (Manual do Contrato):</b><ul>' + atencao.map(function (a) { return '<li>' + esc(a.texto) + '</li>'; }).join('') + '</ul></div>';
+    if (info.length && ['conferencia', 'assinado'].indexOf(c.etapa) < 0) html += '<div class="msg info" style="margin-bottom:16px"><b>Do Manual do Contrato:</b><ul>' + info.map(function (a) { return '<li>' + esc(a.texto) + '</li>'; }).join('') + '</ul></div>';
+    var ultimaPend = d.eventos.filter(function (e) { return e.tipo === 'pendencia'; }).pop();
+    if (c.etapa === 'pendencia' && ultimaPend) html += '<div class="msg aviso" style="margin-bottom:16px;white-space:pre-wrap">' + esc(ultimaPend.detalhe.mensagem || '') + '</div>';
+    var ultimoAjuste = d.eventos.filter(function (e) { return e.tipo === 'ajuste'; }).pop();
+    if (c.etapa === 'em_elaboracao' && ultimoAjuste) html += '<div class="msg aviso" style="margin-bottom:16px;white-space:pre-wrap"><b>Ajuste pedido em ' + dataHoraCr(ultimoAjuste.criado_em) + ':</b> ' + esc(ultimoAjuste.detalhe.texto || '') + '</div>';
+    if (c.etapa === 'minuta_enviada' && pd.ajuste) html += '<div class="msg info" style="margin-bottom:16px">Leve a minuta ao síndico. Se ele pedir mudanças, use <b>Pedir ajuste</b>. Assinado, anexe o contrato e a procuração em Documentos e clique em <b>Contrato assinado</b>.</div>';
+    var fechadoHtml = ['conferencia', 'assinado'].indexOf(c.etapa) >= 0 ? htmlFechadoCt(d, m) : '';
+    metaFechadoCt = (c.fechado && c.fechado.clausulas) || [];
+    var formHtml = '<div id="formCt" class="pilha" style="gap:18px"' + (pd.editar ? '' : ' data-leitura') + '>' + htmlFormCt(c, m, difs) + '</div>';
+    if (!pd.editar) formHtml = '<details class="painel"' + (pd.interno && ['fila', 'em_elaboracao'].indexOf(c.etapa) >= 0 ? ' open' : '') + '><summary class="cab-painel" style="cursor:pointer"><h2 style="display:inline">Solicitação do comercial</h2></summary><div class="corpo">' + formHtml + '</div></details>';
+    html += '<div class="pilha" style="gap:18px">' + fechadoHtml + formHtml + htmlDocsCt(d, m) +
+      (pd.editar ? '<div class="linha" style="justify-content:flex-end"><span class="ajuda" style="flex:1 1 320px;margin:0">Ao enviar, o portal confere o que falta, gera o protocolo e avisa o Jurídico (72h úteis para a minuta). O que depende da diretoria vai para ela no mesmo momento.</span>' +
+        '<button class="btn ghost" id="btSalvarCt">Salvar rascunho</button><button class="btn primary" id="btEnviarCt">' + (c.etapa === 'pendencia' ? 'Reenviar ao Jurídico' : 'Enviar ao Jurídico') + '</button></div>' : '') + '</div>';
+    html += '<section class="painel" style="margin-top:16px"><div class="cab-painel"><h2>Histórico</h2></div><div class="corpo pilha" style="gap:8px;font-size:13px;font-weight:600;color:var(--ink-2)">' +
+      d.eventos.map(function (e) {
+        var x = e.detalhe || {};
+        var extra = e.tipo === 'documento' || e.tipo === 'documento_removido' ? ': ' + esc(x.nome) : e.tipo === 'enviada' ? ' (' + esc(x.protocolo) + ')' : e.tipo === 'criada' && x.analise ? ' a partir da análise ' + esc(x.analise)
+          : e.tipo === 'passada' ? ' para ' + esc(x.para) : e.tipo === 'pendencia' ? ': ' + esc((x.itens || []).join('; ')) : e.tipo === 'ajuste' ? ': ' + esc(x.texto)
+            : e.tipo === 'minuta_enviada' ? ' (' + esc(x.nome) + (x.no_prazo === false ? ', fora do prazo' : '') + ')' : e.tipo === 'fechado' && (x.diferencas || []).length ? ' (mudou: ' + esc(x.diferencas.join(', ')) + ')' : '';
+        return '<div><b style="color:var(--ink)">' + dataHoraCr(e.criado_em) + '</b> · ' + esc(e.usuario_nome || 'Sistema') + ' ' + (EVENTO_CT[e.tipo] || esc(e.tipo)) + extra + '</div>';
+      }).join('') + '</div></section></div>';
+    $('#conteudo').innerHTML = html;
+    var raiz = $('#formCt');
+    ligarFormCt(raiz);
+    ligarDocsCt(c, recarregar);
+    var post = async function (rota, corpo, msg) { try { await api('POST', '/api/contratos/' + c.id + '/' + rota, corpo || {}); toast(msg, 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
+    var pedirTexto = function (titulo, rotulo, ph, botao, rota, chave, msg, ajuda, lista) {
+      var mo = modal({ titulo: titulo, corpo: '<label class="rot" for="mTxtCt">' + esc(rotulo) + '</label><textarea class="campo" id="mTxtCt" rows="5" placeholder="' + esc(ph) + '"></textarea>' + (ajuda ? '<div class="ajuda">' + ajuda + '</div>' : ''),
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mTxtCtOk">' + esc(botao) + '</button>' });
+      $('#mTxtCtOk', mo).onclick = async function () {
+        var t = $('#mTxtCt', mo).value;
+        var corpo = {};
+        corpo[chave] = lista ? t.split(/\n/) : t;
+        try { await api('POST', '/api/contratos/' + c.id + '/' + rota, corpo); mo.fechar(); toast(msg, 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+      };
+    };
+    if ($('#btCancCt')) $('#btCancCt').onclick = function () {
+      pedirTexto('Cancelar a solicitação', 'Motivo', 'Ex.: o síndico desistiu.', 'Cancelar a solicitação', 'cancelar', 'motivo', 'Solicitação cancelada.', 'Fica no histórico como cancelada' + (c.analise_id ? ' e a análise volta a ficar disponível.' : '.'));
+    };
+    if ($('#btAssumirCt')) $('#btAssumirCt').onclick = function () { post('assumir', {}, 'Solicitação assumida.'); };
+    if ($('#btPassarCt')) $('#btPassarCt').onclick = function () {
+      var lista = m.elaboradores.filter(function (x) { return x.id !== c.responsavel_id; });
+      if (!lista.length) { toast('Ninguém mais elabora contratos: a administração marca em Quem elabora.', 'erro'); return; }
+      var mo = modal({ titulo: 'Passar a solicitação', corpo: selCr('mPassCt', 'Para quem', lista[0].id, lista.map(function (x) { return [x.id, x.nome]; })) + '<div class="ajuda">A pessoa é avisada no sino e por e-mail. O prazo continua o mesmo.</div>',
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mPassCtOk">Passar</button>' });
+      $('#mPassCtOk', mo).onclick = async function () {
+        try { await api('POST', '/api/contratos/' + c.id + '/passar', { usuario_id: Number($('#mPassCt', mo).value) }); mo.fechar(); toast('Passada.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+      };
+    };
+    if ($('#btPendCt')) $('#btPendCt').onclick = function () {
+      pedirTexto('Devolver ao comercial com pendência', 'O que falta — um item por linha', '', 'Devolver', 'pendencia', 'itens', 'Devolvida ao comercial.', 'O executivo recebe a lista no portal e por e-mail. Quando reenviar, volta para você com novo prazo.', true);
+    };
+    if ($('#btMinutaCt')) $('#btMinutaCt').onclick = function () {
+      pedirTexto('Enviar a minuta ao comercial', 'Mensagem ao executivo (opcional)', 'Ex.: ajustei o foro e o prazo de contestação, como pedido.', 'Enviar minuta', 'minuta', 'mensagem', 'Minuta enviada ao comercial.', 'Vai a minuta anexada em Documentos. O executivo é avisado no sino e por e-mail.');
+    };
+    if ($('#btAjusteCt')) $('#btAjusteCt').onclick = function () {
+      pedirTexto('Pedir ajuste na minuta', 'O que o síndico pediu para mudar', 'Ex.: trocar o foro para Natal/RN; prazo de 30 dias para contestar.', 'Pedir ajuste', 'ajuste', 'texto', 'Ajuste pedido ao Jurídico.', 'Volta para quem redigiu, com mais 72h úteis. Mudança em cláusula do manual? Confira a resposta padrão em Pedidos do síndico.');
+    };
+    if ($('#btAssinadoCt')) $('#btAssinadoCt').onclick = function () {
+      var temProc = d.documentos.some(function (x) { return x.tipo === 'procuracao' && !x.substituido_em; });
+      var mo = modal({ titulo: 'Contrato assinado', corpo: '<p style="margin:0 0 10px">Anexe em Documentos o <b>contrato assinado</b>' + (temProc ? '' : ' e a <b>procuração</b>') + '. Depois, a advogada registra as condições fechadas e elas seguem para a Implantação.</p>' +
+        (temProc ? '<div class="msg ok">Procuração anexada.</div>' : '<label class="linha" style="font-size:13.5px;font-weight:700;color:var(--ink-2)"><input type="checkbox" id="mProcCt"> A procuração está no mesmo arquivo do contrato</label>'),
+        pe: '<button class="btn ghost" data-fechar>Ainda não</button><button class="btn primary" id="mAssCtOk">Confirmar</button>' });
+      $('#mAssCtOk', mo).onclick = async function () {
+        try { await api('POST', '/api/contratos/' + c.id + '/assinado', { procuracao_no_contrato: !!($('#mProcCt', mo) && $('#mProcCt', mo).checked) }); mo.fechar(); toast('Contrato assinado: a advogada foi avisada.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+      };
+    };
+    var decidir = function (aprovar) { post('diretoria', { aprovar: aprovar, observacao: $('#dObsCt').value }, aprovar ? 'Aprovado; o Jurídico e o executivo foram avisados.' : 'Não aprovado; o Jurídico e o executivo foram avisados.'); };
+    if ($('#btDirSimCt')) $('#btDirSimCt').onclick = function () { decidir(true); };
+    if ($('#btDirNaoCt')) $('#btDirNaoCt').onclick = function () { decidir(false); };
+    var fech = $('#fechadoCt');
+    if (fech) {
+      ligarFechadoCt(fech);
+      if (!pd.registrar) $$('input, select, textarea', fech).forEach(function (el) { el.disabled = true; });
+      var salvarFech = async function (concluir) {
+        try {
+          var r = await api('PUT', '/api/contratos/' + c.id + '/fechado', { condicoes: lerFechadoCt(fech), concluir: concluir });
+          toast(concluir ? 'Condições registradas: seguem para a Implantação.' : r.faltas.length ? 'Salvo. Para concluir, falta: ' + r.faltas.length + '.' : 'Salvo: pronto para concluir.', 'ok');
+          recarregar();
+        } catch (e) { toast(e.message, 'erro'); }
+      };
+      if ($('#btFechSalvar')) $('#btFechSalvar').onclick = function () { salvarFech(false); };
+      if ($('#btFechConcluir')) $('#btFechConcluir').onclick = async function () {
+        if (!(await confirmar('Concluir o contrato', 'As condições fechadas seguem para a Implantação e o executivo é avisado.', 'Concluir'))) return;
+        salvarFech(true);
+      };
+    }
+    if (!pd.editar) {
+      $$('input, select, textarea', raiz).forEach(function (el) { el.disabled = true; });
+      return;
+    }
+    var salvar = async function () { await api('PATCH', '/api/contratos/' + c.id, { formulario: lerFormCt(raiz) }); };
+    $('#btSalvarCt').onclick = async function () { try { await salvar(); toast('Rascunho salvo.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
+    $('#btEnviarCt').onclick = async function () {
+      try {
+        await salvar();
+        var r = await api('POST', '/api/contratos/' + c.id + '/enviar', {});
+        toast('Enviada: protocolo ' + r.protocolo + '. Minuta até ' + dataHoraCr(r.prazo) + (r.diretoria.length ? '. A diretoria foi avisada.' : '.'), 'ok');
+        recarregar();
+      } catch (e) { toast(e.message, 'erro'); recarregar(); }
+    };
+  }
+
   async function iniciar() {
     try {
       var r = await fetch('/api/auth/eu', { credentials: 'same-origin' });
@@ -4712,13 +5387,14 @@
     try { await carregarMeta(); } catch (e) { /* a central carrega depois */ }
     try { resumoCredito = await api('GET', '/api/credito/resumo'); } catch (e) { /* aparece no próximo ciclo */ }
     try { resumoImp = await api('GET', '/api/implantacoes/resumo'); } catch (e) { /* aparece no próximo ciclo */ }
+    try { resumoCt = await api('GET', '/api/contratos/resumo'); } catch (e) { /* aparece no próximo ciclo */ }
     montarCasca();
     carregarTutoriais();
     atualizarResumo();
     atualizarComissao();
     buscarAvisos();
     $('#btSino').onclick = abrirAvisos;
-    setInterval(function () { atualizarResumo(); atualizarComissao(); atualizarCredito(); atualizarImp(); buscarAvisos(); }, 30 * 1000);
+    setInterval(function () { atualizarResumo(); atualizarComissao(); atualizarCredito(); atualizarImp(); atualizarCt(); buscarAvisos(); }, 30 * 1000);
     window.addEventListener('hashchange', rotear);
     rotear();
   }

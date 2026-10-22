@@ -24,6 +24,7 @@ const { rotasComissao } = require('./rotas/comissao');
 const { rotasCdn } = require('./rotas/cdn');
 const { rotasCredito } = require('./rotas/credito');
 const { rotasImplantacoes, criarRotinasImplantacao } = require('./rotas/implantacoes');
+const { rotasContratos, criarRotinasContratos } = require('./rotas/contratos');
 
 function carregarEnv(arquivo) {
   if (!fs.existsSync(arquivo)) return;
@@ -93,7 +94,9 @@ async function criarApp(cfg) {
   const boletosCarteira = criarBoletosCarteira({ db, documentos, espera: cfg.esperaCarteiraMs ?? 3000 });
   // Implantação: lembretes (fila sem designação, prazo para iniciar, documentos pendentes); o intervalo é ligado em iniciar()
   const rotinasImplantacao = criarRotinasImplantacao({ db, seg, avisos, expediente });
-  const ctx = { db, seg, modulos, registros, documentos, avisos, expediente, acessos, regras, boletosCarteira, rotinasImplantacao, cfg };
+  // Solicitação de Contrato: prazo da minuta vencido e documentos do síndico pendentes
+  const rotinasContratos = criarRotinasContratos({ db, avisos, expediente, regras });
+  const ctx = { db, seg, modulos, registros, documentos, avisos, expediente, acessos, regras, boletosCarteira, rotinasImplantacao, rotinasContratos, cfg };
 
   const app = express();
   app.disable('x-powered-by');
@@ -125,6 +128,7 @@ async function criarApp(cfg) {
   app.use(rotasCdn(ctx));
   app.use(rotasCredito(ctx));
   app.use(rotasImplantacoes(ctx));
+  app.use(rotasContratos(ctx));
 
   const publico = path.join(__dirname, '..', 'public');
   app.get('/login', (req, res) => res.sendFile(path.join(publico, 'login.html')));
@@ -173,8 +177,11 @@ async function iniciar(cfg = lerConfig()) {
   servidor.listen(cfg.porta, () => {
     if (!cfg.silencioso) console.log(`Portal MyBlue rodando em http://localhost:${servidor.address().port}`);
   });
-  // rotinas da Implantação a cada 10 minutos (cada lembrete sai uma vez por dia útil)
-  const rodar = () => ctx.rotinasImplantacao.executar().catch((e) => console.error('[implantação] rotina:', e.message));
+  // rotinas da Implantação e da Solicitação de Contrato a cada 10 minutos (cada lembrete sai uma vez por dia útil)
+  const rodar = () => {
+    ctx.rotinasImplantacao.executar().catch((e) => console.error('[implantação] rotina:', e.message));
+    ctx.rotinasContratos.executar().catch((e) => console.error('[contratos] rotina:', e.message));
+  };
   const rotinas = setInterval(rodar, 10 * 60 * 1000);
   rotinas.unref();
   const fechar = () => { clearInterval(rotinas); servidor.close(async () => { await db.fechar(); process.exit(0); }); };

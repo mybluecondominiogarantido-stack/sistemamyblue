@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-Formulário de Implantação em PDF (A4 retrato), no visual do Retorno de Análise de Crédito:
+Formulário de Implantação (e Solicitação de Contrato) em PDF (A4 retrato), no visual do Retorno de Análise de Crédito:
 logo, canto azul, rodapé com os contatos e o número da página.
 
   python3 formulario_pdf.py <dados.json> <saida.pdf> <logo.png>
 
-O conteúdo vem pronto do portal (server/implantacoes/formulario-pdf.js): cabeçalho, faixa do condomínio,
+O conteúdo vem pronto do portal (server/implantacoes/formulario-pdf.js e server/contratos/formulario.js): cabeçalho
+(cabecalho, titulo_pdf e nota_final mudam o documento; o padrão é o da implantação), faixa do condomínio,
 diferenças em relação à análise, seções com pares rótulo/valor e tabelas, documentos e andamento do setor.
 """
 import sys
@@ -61,7 +62,7 @@ def decorar(c, doc):
     if LOGO and os.path.exists(LOGO):
         c.drawImage(LOGO, MARG, PAGE_H - MARG - 30, width=120, height=36, mask="auto", preserveAspectRatio=True, anchor="sw")
     c.setFillColor(COR_PRIMARIA); c.setFont("Helvetica-Bold", 8)
-    c.drawRightString(PAGE_W - MARG - 40, PAGE_H - MARG - 6, "FORMULÁRIO DE IMPLANTAÇÃO")
+    c.drawRightString(PAGE_W - MARG - 40, PAGE_H - MARG - 6, DADOS.get("cabecalho") or "FORMULÁRIO DE IMPLANTAÇÃO")
     c.setFillColor(COR_ESCURA); c.setFont("Helvetica-Bold", 13)
     c.drawRightString(PAGE_W - MARG - 40, PAGE_H - MARG - 21, DADOS.get("protocolo") or "Rascunho")
     c.setFillColor(COR_LEVE); c.setFont("Helvetica", 7.5)
@@ -144,9 +145,9 @@ for s in DADOS.get("secoes", []):
         bloco += [Spacer(1, 4), Paragraph(E(s.get("texto_titulo", "")), S_PEQ), Paragraph(E(s["texto"]).replace("\n", "<br/>"), S_TXT)]
     historia += [KeepTogether(bloco[:3]), *bloco[3:], Spacer(1, 10)]
 
-historia.append(Paragraph("Documento gerado pelo portal MyBlue com os dados da implantação na data de emissão.", S_PEQ))
+historia.append(Paragraph(E(DADOS.get("nota_final") or "Documento gerado pelo portal MyBlue com os dados da implantação na data de emissão."), S_PEQ))
 
 doc = SimpleDocTemplate(SAIDA, pagesize=A4, leftMargin=MARG, rightMargin=MARG, topMargin=MARG + 42, bottomMargin=MARG + 8,
-                        title=f"Formulário de Implantação {DADOS.get('protocolo') or ''}", author="MyBlue")
+                        title=DADOS.get("titulo_pdf") or f"Formulário de Implantação {DADOS.get('protocolo') or ''}", author="MyBlue")
 doc.build(historia, onFirstPage=decorar, onLaterPages=decorar)
 print(json.dumps({"paginas": doc.page}))
