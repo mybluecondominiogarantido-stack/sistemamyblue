@@ -430,6 +430,7 @@ const SETORES = [
     papel: 'Coloca os novos condomínios em operação: cadastro, unidades, moradores e passagem para os setores.',
     ferramentas: [],
     tambem: [
+      '<b>Implantação → Acompanhamento</b> (menu do portal): painel, mês vigente, metas de onboarding (30 dias do 1º vencimento) e de documentação (60 dias do envio do formulário), cobrança de documentos ao executivo, antecipações e os parâmetros das metas, que a coordenação ajusta.',
       '<b>Carteira de condomínios → Adicionar novos</b>: o coordenador ou supervisor da Implantação envia o <i>Controle de Implantações</i> (.xlsx ou .csv, como está), escolhe a <b>vigência</b> e cadastra cada condomínio novo com <b>ID Vouch</b> (obrigatório), apelido, executivo de negócios e CNPJ. É dessa carteira que a Comissões de Novos Condomínios puxa os condomínios de cada vigência. O passo a passo está no <b>Manual do Portal – Geral</b>, capítulo da Carteira.',
     ],
     recebe: [

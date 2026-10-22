@@ -51,7 +51,7 @@ test('administração interna ainda pede quem administra', () => {
 
 test('pendências: documentos que podem chegar depois', () => {
   assert.deepEqual(F.pendencias(COMPLETO, new Set([...TODOS_DOCS, 'conta_bancaria'])),
-    ['RG/CPF ou CNH do síndico', 'Comprovante de endereço do síndico', 'Modelo do boleto anterior']);
+    ['RG/CPF ou CNH do síndico', 'Comprovante de endereço do síndico', 'Modelo do boleto anterior', 'Procuração']);
 });
 
 test('da análise: formulário preenchido e referência para o comparativo', () => {

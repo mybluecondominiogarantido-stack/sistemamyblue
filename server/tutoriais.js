@@ -16,6 +16,7 @@
  *   credito_analise  analistas (setor da política) e diretoria da Análise de Crédito
  *   implantacao      quem usa a Implantação (executivos cadastrados, setor Implantação e diretoria)
  *   implantacao_setor  o setor Implantação
+ *   implantacao_acompanhar  quem vê o Acompanhamento (setor Implantação e diretoria)
  *   contrato    quem usa a Solicitação de Contrato (executivos cadastrados, quem elabora e diretoria)
  *   contrato_juridico  quem elabora os contratos (Solicitação de Contrato → Quem elabora)
  *   { modulo }  quem abre aquela ferramenta
@@ -28,7 +29,7 @@ const ROTULO_PUBLICO = {
   todos: 'Para todos', equipe: 'Para quem atende tickets', lider: 'Para líderes de setor', gestor: 'Para coordenadores e supervisores',
   supervisao: 'Para a supervisão de tickets', links: 'Para quem edita a Central de Links', admin: 'Para a administração',
   credito: 'Para executivos de negócios e a Análise de Crédito', credito_analise: 'Para analistas de crédito e a diretoria',
-  implantacao: 'Para executivos de negócios e o setor Implantação', implantacao_setor: 'Para o setor Implantação',
+  implantacao: 'Para executivos de negócios e o setor Implantação', implantacao_setor: 'Para o setor Implantação', implantacao_acompanhar: 'Para o setor Implantação e a diretoria',
   contrato: 'Para executivos de negócios e o Jurídico', contrato_juridico: 'Para quem elabora os contratos (Jurídico)',
 };
 
@@ -81,6 +82,8 @@ const TUTORIAIS = [
     descricao: 'Abrir a implantação a partir da análise (ou de um PDF antigo, ou de um condomínio de entrega), preencher o formulário, anexar os documentos, enviar e acompanhar.' },
   { slug: 'implantacao-conduzir', grupo: 'Ferramentas', publico: 'implantacao_setor', titulo: 'Implantação — designar, conduzir e levar à Carteira',
     descricao: 'Designar quem conduz, as 5 etapas, as conferências, devolver com pendência, concluir e confirmar a entrada na Carteira.' },
+  { slug: 'implantacao-acompanhar', grupo: 'Ferramentas', publico: 'implantacao_acompanhar', titulo: 'Implantação — acompanhamento e metas',
+    descricao: 'Painel, mês vigente, metas de onboarding e de documentação, cobrança de documentos ao executivo, antecipações e os parâmetros das metas.' },
   { slug: 'contrato-solicitar', grupo: 'Ferramentas', publico: 'contrato', titulo: 'Solicitação de Contrato — pedir e acompanhar',
     descricao: 'Pedir o contrato a partir da análise, preencher as condições e os pedidos do síndico, enviar ao Jurídico, pedir ajuste na minuta e anexar o contrato assinado.' },
   { slug: 'contrato-elaborar', grupo: 'Ferramentas', publico: 'contrato_juridico', titulo: 'Solicitação de Contrato — elaborar e registrar as condições fechadas',
@@ -130,6 +133,7 @@ async function visibilidade(db, seg, u) {
     credito_analise: analista || diretoria,
     implantacao: executivo || setorImplantacao || diretoria,
     implantacao_setor: setorImplantacao,
+    implantacao_acompanhar: setorImplantacao || diretoria,
     contrato: executivo || elaborador || diretoria,
     contrato_juridico: elaborador,
     admin: false,

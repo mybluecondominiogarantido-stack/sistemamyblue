@@ -176,7 +176,7 @@ test('enviar: confere o que falta, gera o protocolo e avisa a coordenação, a e
   assert.equal(env.status, 200, env.texto);
   assert.match(env.json.protocolo, /^IMP-\d{4}-\d{2}-\d{2}-01$/);
   assert.equal(env.json.etapa, 'fila');
-  assert.deepEqual(env.json.pendencias, ['Conta bancária', 'Comprovante de endereço do síndico', 'Modelo do boleto anterior']);
+  assert.deepEqual(env.json.pendencias, ['Conta bancária', 'Comprovante de endereço do síndico', 'Modelo do boleto anterior', 'Procuração']);
   assert.match((await avisosDe('coord@teste.com')).pop().titulo, /^Nova implantação · IMP-/);
   assert.match((await avisosDe('equipe@teste.com')).pop().titulo, /^Chegou uma nova implantação/);
   assert.equal(emailsPara('coord@teste.com').length, 1);
@@ -194,7 +194,7 @@ test('enviar: confere o que falta, gera o protocolo e avisa a coordenação, a e
 
 test('listas: o executivo vê as suas; a fila é do setor; a coordenação conta o que chegou', async () => {
   const minhas = (await exec('GET', '/api/implantacoes?vis=minhas')).json.implantacoes;
-  assert.ok(minhas.some((x) => x.id === idI && x.pendentes.length === 3));
+  assert.ok(minhas.some((x) => x.id === idI && x.pendentes.length === 4));
   const fila = (await equipe('GET', '/api/implantacoes?vis=fila')).json.implantacoes;
   assert.deepEqual(fila.map((x) => x.id), [idI]);
   assert.equal((await coord('GET', '/api/implantacoes/resumo')).json.fila, 1);
@@ -283,11 +283,12 @@ test('iniciar, conferências do setor e as 5 etapas', async () => {
   assert.deepEqual(d.conferencias.cadastro, { unidades: 2, tem_documento: true, documentos_invalidos: [3], sem_documento: 0, unidades_formulario: 24 });
   assert.equal(d.conferencias.cpf_sindico, true);
   assert.deepEqual(d.conferencias.diferencas.map((x) => x.campo), ['taxa_adm']);
-  assert.equal(d.faltas_etapas.length, 5);
+  assert.equal(d.faltas_etapas.length, 6); // as 5 etapas e o 1º vencimento
   assert.equal((await exec('PATCH', `/api/implantacoes/${idI}/etapas`, { etapas: {} })).status, 403);
   let r = await equipe('PATCH', `/api/implantacoes/${idI}/etapas`, { etapas: { documentacao: { feito: true }, vouch: { id: '90001' }, onboarding: { situacao: 'marcado', data: '2026-10-23 15:00' } } });
   assert.equal(r.status, 200, r.texto);
-  assert.equal(r.json.faltas.length, 3);
+  assert.equal(r.json.faltas.length, 4);
+  assert.equal(r.json.etapas.onboarding.por, (await ctx.db.um("SELECT id FROM usuarios WHERE email = 'equipe@teste.com'")).id); // quem conduz
   assert.equal((await equipe('POST', `/api/implantacoes/${idI}/concluir`, {})).status, 400);
 });
 
@@ -307,8 +308,10 @@ test('pendência: volta ao executivo e o reenvio volta para quem conduz', async 
 test('concluir: aviso à coordenação e ao setor Parceiros, e o condomínio entra na base de comissão com o parceiro', async () => {
   await pessoa('Parceiros Fictício', 'parceiros@teste.com');
   await noSetor('Parceiros', 'parceiros@teste.com', false);
-  const r0 = await equipe('PATCH', `/api/implantacoes/${idI}/etapas`, { etapas: { documentacao: { feito: true }, vouch: { id: '90001' }, onboarding: { situacao: 'realizado' }, boletos: { feito: true }, envio: { forma: 'email' } } });
-  assert.deepEqual(r0.json.faltas, []);
+  const r0 = await equipe('PATCH', `/api/implantacoes/${idI}/etapas`, { etapas: { documentacao: { feito: true }, vouch: { id: '90001' }, onboarding: { situacao: 'realizado' }, boletos: { feito: true, primeiro_vencimento: '2026-11-10' }, envio: { forma: 'email' } } });
+  assert.deepEqual(r0.json.faltas, ['Informar a data em que o onboarding foi feito.']);
+  const r1 = await equipe('PATCH', `/api/implantacoes/${idI}/etapas`, { etapas: { ...r0.json.etapas, onboarding: { situacao: 'realizado', data: '2026-10-20', hora: '10:00' } } });
+  assert.deepEqual(r1.json.faltas, []);
   const r = await equipe('POST', `/api/implantacoes/${idI}/concluir`, {});
   assert.equal(r.status, 200, r.texto);
   assert.equal(r.json.parceiros.criado, 'Condomínio Residencial Fictício');
@@ -445,4 +448,66 @@ test('formulário em PDF: quem vê a implantação exporta, com as seções, a p
   const texto = require('child_process').execFileSync('pdftotext', ['-', '-'], { input: r.buffer }).toString();
   for (const trecho of [/IMP-\d{4}-\d{2}-\d{2}-01/, /Condomínio Residencial Fictício/, /Diferente da análise/, /3,50% \(análise: 3,00%\)/, /Alfa Administradora/, /definido pelo setor Parceiros/,
     /ANDAMENTO NO SETOR/, /ID 90001/, /Contato Fictício/]) assert.match(texto, trecho);
+});
+
+test('acompanhamento: o setor, a coordenação e a diretoria veem; o executivo não', async () => {
+  assert.equal((await exec('GET', '/api/implantacoes/acompanhamento')).status, 403);
+  assert.equal((await outro('GET', '/api/implantacoes/acompanhamento')).status, 403);
+  const r = await equipe('GET', '/api/implantacoes/acompanhamento');
+  assert.equal(r.status, 200, r.texto);
+  const l = r.json.linhas.find((x) => x.id === idI);
+  assert.equal(l.pct, 100);
+  assert.deepEqual([l.primeiro_vencimento, l.vencimento_previsto, l.onboarding.limite, l.onboarding.status, l.onboarding.por_nome], ['2026-11-10', false, '2026-12-10', 'batida', 'Analista de Implantação Fictícia']);
+  assert.equal(l.documentacao.status, 'pendente');
+  assert.deepEqual(l.documentacao.falta, ['Procuração']);
+  assert.deepEqual(r.json.pode, { parametros: false, marcar: false, cobrar: true });
+  assert.equal((await coord('GET', '/api/implantacoes/acompanhamento')).json.pode.parametros, true);
+  assert.ok((await equipe('GET', '/api/implantacoes/resumo')).json.acompanhamento);
+  assert.ok(!(await exec('GET', '/api/implantacoes/resumo')).json.acompanhamento);
+});
+
+test('documentos da meta: lembrete 3 dias antes do limite e cobrança, só ao executivo', async () => {
+  const { lembretesDocumentacao } = require('../server/rotas/implantacoes-acompanhamento');
+  const M = require('../server/implantacoes/metas');
+  const l = (await equipe('GET', '/api/implantacoes/acompanhamento')).json.linhas.find((x) => x.id === idI);
+  const antes = (await avisosDe('exec@teste.com')).length;
+  assert.equal(await lembretesDocumentacao(ctx.db, ctx.avisos, M.somarDias(l.documentacao.limite, -4)), 0);
+  assert.ok(await lembretesDocumentacao(ctx.db, ctx.avisos, M.somarDias(l.documentacao.limite, -2)) >= 1);
+  assert.equal(await lembretesDocumentacao(ctx.db, ctx.avisos, M.somarDias(l.documentacao.limite, -1)), 0); // uma vez só
+  const lembrete = (await avisosDe('exec@teste.com')).slice(antes);
+  assert.ok(lembrete.some((x) => /^Faltam poucos dias · Documentos pendentes para implantação – /.test(x.titulo) && /Procuração/.test(x.texto)));
+  assert.equal((await exec('POST', `/api/implantacoes/${idI}/cobrar-documentos`, {})).status, 403);
+  const quantos = (await avisosDe('equipe@teste.com')).length;
+  const r = await equipe('POST', `/api/implantacoes/${idI}/cobrar-documentos`, {});
+  assert.equal(r.status, 200, r.texto);
+  assert.deepEqual(r.json.faltam, ['Procuração']);
+  assert.match((await avisosDe('exec@teste.com')).pop().titulo, /^Documentos pendentes para implantação – /);
+  assert.equal((await avisosDe('equipe@teste.com')).length, quantos); // ninguém além do executivo
+});
+
+test('meta de documentação à mão: só a coordenação, com motivo; e volta ao cálculo', async () => {
+  assert.equal((await equipe('POST', `/api/implantacoes/${idI}/meta-documentacao`, { resultado: 'bateu', motivo: 'x' })).status, 403);
+  assert.equal((await coord('POST', `/api/implantacoes/${idI}/meta-documentacao`, { resultado: 'bateu' })).status, 400);
+  assert.equal((await coord('POST', `/api/implantacoes/${idI}/meta-documentacao`, { resultado: 'bateu', motivo: 'Procuração dispensada: o síndico assina' })).status, 200);
+  let l = (await coord('GET', '/api/implantacoes/acompanhamento')).json.linhas.find((x) => x.id === idI);
+  assert.deepEqual([l.documentacao.status, l.documentacao.manual.motivo], ['batida', 'Procuração dispensada: o síndico assina']);
+  assert.equal((await equipe('POST', `/api/implantacoes/${idI}/cobrar-documentos`, {})).status, 409);
+  assert.equal((await coord('POST', `/api/implantacoes/${idI}/meta-documentacao`, { resultado: null })).status, 200);
+  l = (await coord('GET', '/api/implantacoes/acompanhamento')).json.linhas.find((x) => x.id === idI);
+  assert.deepEqual([l.documentacao.status, l.documentacao.manual], ['pendente', null]);
+});
+
+test('parâmetros das metas: só a coordenação altera; valem a partir da data escolhida', async () => {
+  const M = require('../server/implantacoes/metas');
+  const hoje = M.diaSP(Date.now());
+  const valores = { ...M.PADRAO, documentacao_dias: 45, docs_meta: ['convencao', 'ata_eleicao', 'ata_orcamento', 'procuracao'] };
+  assert.equal((await equipe('POST', '/api/implantacoes/acompanhamento/parametros', { valores, vale_desde: hoje })).status, 403);
+  assert.equal((await coord('POST', '/api/implantacoes/acompanhamento/parametros', { valores: { ...valores, meta_pct: 0 }, vale_desde: hoje })).status, 400);
+  assert.equal((await coord('POST', '/api/implantacoes/acompanhamento/parametros', { valores, vale_desde: '2026-02-30' })).status, 400);
+  assert.equal((await coord('POST', '/api/implantacoes/acompanhamento/parametros', { valores, vale_desde: '2000-01-01' })).status, 201);
+  const j = (await coord('GET', '/api/implantacoes/acompanhamento')).json;
+  assert.equal(j.parametros.documentacao_dias, 45);
+  assert.equal(j.historico[0].alterado_por_nome, 'Coordenadora Fictícia');
+  const l = j.linhas.find((x) => x.id === idI);
+  assert.equal(l.documentacao.limite, M.somarDias(l.enviado, 45));
 });

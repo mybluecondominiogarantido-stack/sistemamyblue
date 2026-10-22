@@ -263,7 +263,7 @@ function paraImplantacao(c) {
 /* documentos do contrato → tipo na Implantação (o que não tem tipo próprio lá entra como "outro") */
 const DOC_IMPLANTACAO = { convencao: 'convencao', ata_eleicao: 'ata_eleicao', atas_taxas: 'ata_orcamento', cadastro_proprietarios: 'cadastro_moradores',
   documento_sindico: 'documento_sindico', comprovante_endereco: 'comprovante_endereco', contrato_assinado: 'contrato',
-  regimento: 'outro', cadastro_locatarios: 'outro', ata_ago: 'outro', procuracao: 'outro' };
+  regimento: 'outro', cadastro_locatarios: 'outro', ata_ago: 'outro', procuracao: 'procuracao' };
 
 /* ---------- PDF da solicitação (o gerador é o do Formulário de Implantação) ---------- */
 const pct = (v) => (num(v) == null ? '' : `${fmt(num(v))}%`);

@@ -601,6 +601,16 @@ CREATE TABLE IF NOT EXISTS implantacao_liberacoes (
 );
 CREATE INDEX IF NOT EXISTS idx_implantacao_liberacoes ON implantacao_liberacoes(analise_id);
 
+-- metas do acompanhamento (prazo do onboarding e da documentação, meta da carteira, virada do mês vigente, data-marco,
+-- documentos da meta). Cada mudança vale a partir de uma data: os meses anteriores seguem com a regra da época
+CREATE TABLE IF NOT EXISTS implantacao_parametros (
+  id SERIAL PRIMARY KEY,
+  valores JSONB NOT NULL,
+  vale_desde DATE NOT NULL,
+  alterado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  alterado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- ===== Solicitação de Contrato (server/rotas/contratos.js) =====
 -- o comercial pede a minuta a partir da análise liberada, quem elabora (Jurídico) redige em até 72h úteis, o comercial
 -- leva ao síndico, pede ajustes e anexa o contrato assinado, a advogada registra as condições fechadas e elas seguem para a Implantação.
@@ -681,7 +691,7 @@ const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 
   'links_pagina', 'links', 'links_campanhas', 'tutoriais', 'comissao_relatorios', 'comissao_leitores', 'comissao_planilhas', 'cdn_cache', 'regras_acesso',
   'parametros_politica', 'faixas_precificacao', 'executivos', 'analise_protocolos', 'analises', 'analise_documentos', 'analise_unidades',
   'analise_lancamentos', 'analise_exclusoes', 'analise_alertas', 'analise_eventos',
-  'implantacao_protocolos', 'implantacoes', 'implantacao_documentos', 'implantacao_eventos', 'implantacao_liberacoes',
+  'implantacao_protocolos', 'implantacoes', 'implantacao_documentos', 'implantacao_eventos', 'implantacao_liberacoes', 'implantacao_parametros',
   'contrato_protocolos', 'contratos', 'contrato_documentos', 'contrato_eventos'];
 const RLS = TABELAS.map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`).join(';\n');
 
@@ -730,7 +740,11 @@ ALTER TABLE modulos ADD COLUMN IF NOT EXISTS criado_por INTEGER REFERENCES usuar
 ALTER TABLE modulo_versoes ADD COLUMN IF NOT EXISTS aprovada BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE modulos ADD COLUMN IF NOT EXISTS versao_pendente_id INTEGER;
 -- implantação aberta de uma análise que já tem contrato: os dados e o contrato assinado vêm de lá
-ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS contrato_id INTEGER REFERENCES contratos(id) ON DELETE SET NULL
+ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS contrato_id INTEGER REFERENCES contratos(id) ON DELETE SET NULL;
+-- meta de documentação marcada à mão pela coordenação ({resultado: bateu|faltou, motivo, por, em}) e cobranças ao executivo
+ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS meta_doc_manual JSONB;
+ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS cobranca_doc_em TIMESTAMPTZ;
+ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS lembrete_doc_em TIMESTAMPTZ
 `;
 
 /* Funções e gatilhos do banco (cada item é um comando inteiro: o corpo das funções tem ";").

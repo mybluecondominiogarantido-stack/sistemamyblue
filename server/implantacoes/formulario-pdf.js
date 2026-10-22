@@ -74,7 +74,7 @@ function montarDados(i, { executivo, responsavel, documentos = [], diferencas = 
   if (i.responsavel_id || ['concluida', 'na_carteira'].includes(i.etapa)) {
     secoes.push({ titulo: 'Andamento no setor Implantação', campos: [['Responsável', responsavel], ['Designada em', quando(i.designado_em)], ['Iniciada em', quando(i.iniciado_em)],
       ['Documentação', e.documentacao.feito ? 'Conferida' : 'a fazer'], ['Cadastro no Vouch', e.vouch.id ? `Feito · ID ${e.vouch.id}` : 'a fazer'],
-      ['Onboarding', F.ONBOARDING[e.onboarding.situacao] + (e.onboarding.data ? ` · ${e.onboarding.data}` : '')], ['Emissão de boletos', e.boletos.feito ? 'Feita' : 'a fazer'],
+      ['Onboarding', F.ONBOARDING[e.onboarding.situacao] + (e.onboarding.data ? ` · ${e.onboarding.data}` : '')], ['Emissão de boletos', e.boletos.feito ? 'Feita' : 'a fazer'], ['1º vencimento', dataBr(e.boletos.primeiro_vencimento) || 'a informar'],
       ['Envio dos boletos', F.ENVIO[e.envio.forma] || 'a escolher'], ...(i.concluido_em ? [['Concluída em', quando(i.concluido_em)]] : [])] });
   }
   return {
