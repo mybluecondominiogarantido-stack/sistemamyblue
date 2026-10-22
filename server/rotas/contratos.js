@@ -5,8 +5,9 @@
  * (Jurídico) assume e envia a minuta em até 72h úteis; o comercial leva ao síndico, pede ajustes e anexa o contrato
  * assinado; a advogada registra as condições fechadas, que seguem para a Implantação com os documentos.
  *
- * Etapas: rascunho → fila (enviada, ninguém assumiu) → em_elaboracao → minuta_enviada → conferencia (assinado anexado,
- *         aguardando as condições fechadas) → assinado.
+ * Etapas: rascunho → fila (enviada, ninguém assumiu) → em_elaboracao → minuta_enviada (com o comercial: pede ajuste ou a
+ *         assinatura) → para_assinar (o Jurídico manda assinar) → em_assinatura → conferencia (a via assinada voltou,
+ *         a advogada registra as condições fechadas) → assinado.
  *         pendencia: devolvida ao comercial (falta informação). Ajuste pedido: volta para em_elaboracao. cancelada.
  *
  * Quem faz o quê (definido no portal, nunca no código):
@@ -25,8 +26,9 @@ const leitorPdf = require('../implantacoes/pdf');
 const { gerarPdf } = require('../implantacoes/formulario-pdf');
 const F = require('../contratos/formulario');
 const C = require('../contratos/clausulas');
+const { abrirDoContrato } = require('./implantacoes');
 
-const ETAPAS = ['rascunho', 'fila', 'em_elaboracao', 'pendencia', 'minuta_enviada', 'conferencia', 'assinado', 'cancelada'];
+const ETAPAS = ['rascunho', 'fila', 'em_elaboracao', 'pendencia', 'minuta_enviada', 'para_assinar', 'em_assinatura', 'conferencia', 'assinado', 'cancelada'];
 const ORIGEM = { analise: 'Análise de Crédito', pdf: 'Análise anterior ao portal', entrega: 'Condomínio de entrega' };
 const PERMISSAO = 'contratos.elaborar';
 const SETOR_JURIDICO = 'Jurídico';
@@ -61,14 +63,13 @@ async function donos(db, c) {
 const tiposVigentes = async (db, id) => new Set((await db.q('SELECT DISTINCT tipo FROM contrato_documentos WHERE contrato_id = $1 AND substituido_em IS NULL', [id])).rows.map((x) => x.tipo));
 const precisaDiretoria = (c) => !!(c.diretoria && (c.diretoria.itens || []).length);
 const diretoriaDecidiu = (c) => !!(c.diretoria && c.diretoria.decidido_em);
-const ABERTAS = "('fila','em_elaboracao','pendencia','minuta_enviada','conferencia')";
+const ABERTAS = "('fila','em_elaboracao','pendencia','minuta_enviada','para_assinar','em_assinatura','conferencia')";
 
-/* Rotinas (rodam a cada poucos minutos):
- *  - prazo da minuta (72h úteis) vencido: aviso, uma vez, a quem assumiu (ou a quem elabora, se ninguém assumiu);
- *  - documentos do síndico pendentes: lembrete por e-mail ao executivo, uma vez por dia útil, no expediente. */
-function criarRotinasContratos({ db, avisos, expediente, regras }) {
+/* Rotina (roda a cada poucos minutos): prazo da minuta (72h úteis) vencido avisa, uma vez, quem assumiu (ou quem
+ * elabora, se ninguém assumiu). Os documentos do síndico são pedidos na Implantação, não aqui. */
+function criarRotinasContratos({ db, avisos, regras }) {
   async function executar(agora = new Date()) {
-    const feito = { prazos: 0, documentos: 0 };
+    const feito = { prazos: 0 };
     for (const c of (await db.q(`SELECT id, protocolo, condominio, responsavel_id, prazo FROM contratos
         WHERE etapa IN ('fila','em_elaboracao') AND prazo < $1 AND aviso_prazo_em IS NULL`, [agora])).rows) {
       await avisos.notificar(c.responsavel_id ? [c.responsavel_id] : await elaboradores(db, regras), { link: `#/contratos/${c.id}`, tipo: 'contrato', email: true,
@@ -76,20 +77,6 @@ function criarRotinasContratos({ db, avisos, expediente, regras }) {
         texto: `A minuta de ${c.condominio} devia ter saído até ${quando(c.prazo)} (72h úteis).${c.responsavel_id ? '' : ' Ninguém assumiu a solicitação ainda.'}` });
       await db.q('UPDATE contratos SET aviso_prazo_em = $2 WHERE id = $1', [c.id, agora]);
       feito.prazos++;
-    }
-    const m = expediente.momento(agora);
-    if (!m.noExpediente) return feito;
-    const { rows } = await db.q(`SELECT id, protocolo, condominio, solicitante_id, executivo_id FROM contratos
-      WHERE etapa IN ${ABERTAS} AND (aviso_docs_em IS NULL OR aviso_docs_em < $1::date)`, [m.dia]);
-    for (const c of rows) {
-      const pend = F.pendencias(await tiposVigentes(db, c.id));
-      if (pend.length) {
-        await avisos.notificar(await donos(db, c), { link: `#/contratos/${c.id}`, tipo: 'contrato', email: true,
-          titulo: `Documentos do síndico pendentes · ${c.protocolo} · ${c.condominio}`,
-          texto: `Sem eles o contrato pode ser assinado, mas a cobrança, os boletos e o repasse travam depois. Ainda falta: ${pend.join('; ')}. Anexe no portal, na solicitação ${c.protocolo}.` });
-        feito.documentos++;
-      }
-      await db.q('UPDATE contratos SET aviso_docs_em = $2::date WHERE id = $1', [c.id, m.dia]);
     }
     return feito;
   }
@@ -129,14 +116,18 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
       documentos: aberta && (dono || p.elaborador || p.admin),
       tirar_documentos: editavel && (dono || p.admin),
       assumir: p.elaborador && c.etapa === 'fila',
-      passar: p.elaborador && ['fila', 'em_elaboracao', 'pendencia', 'minuta_enviada'].includes(c.etapa),
+      passar: p.elaborador && ['fila', 'em_elaboracao', 'pendencia', 'minuta_enviada', 'para_assinar', 'em_assinatura'].includes(c.etapa),
       pendencia: conduz,
       minuta: conduz,
       enviar_minuta: conduz && !aguardaDiretoria,
       decidir_diretoria: p.diretoria && aguardaDiretoria && ['fila', 'em_elaboracao', 'pendencia'].includes(c.etapa),
-      ajuste: c.etapa === 'minuta_enviada' && (dono || p.admin),
-      assinar: c.etapa === 'minuta_enviada' && (dono || c.responsavel_id === u.id || p.admin),
+      ajuste: ['minuta_enviada', 'para_assinar'].includes(c.etapa) && (dono || p.admin),
+      pedir_assinatura: c.etapa === 'minuta_enviada' && (dono || p.admin),
+      enviar_assinatura: c.etapa === 'para_assinar' && p.elaborador,
+      assinar: ['para_assinar', 'em_assinatura'].includes(c.etapa) && p.elaborador,
       registrar: c.etapa === 'conferencia' && p.elaborador,
+      corrigir: c.etapa === 'assinado' && p.elaborador,
+      abrir_implantacao: c.etapa === 'assinado' && (dono || p.admin),
       cancelar: aberta && ((dono && c.etapa !== 'em_elaboracao') || (p.elaborador && c.etapa !== 'rascunho') || p.admin),
     };
   }
@@ -191,11 +182,12 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
 
   r.get('/api/contratos/resumo', async (req, res) => {
     const p = await perfil(req.usuario);
-    const out = { acesso: !!(p.executivo || p.elaborador || p.diretoria) };
+    const out = { acesso: !!(p.executivo || p.elaborador || p.diretoria), painel: !!(p.elaborador || p.diretoria) };
     if (!out.acesso) return res.json(out);
     if (p.elaborador) {
       Object.assign(out, await db.um(`SELECT COUNT(*) FILTER (WHERE etapa = 'fila')::int AS fila,
         COUNT(*) FILTER (WHERE etapa = 'em_elaboracao' AND responsavel_id = $1)::int AS minhas,
+        COUNT(*) FILTER (WHERE etapa = 'para_assinar')::int AS para_assinar,
         COUNT(*) FILTER (WHERE etapa = 'conferencia')::int AS conferencia FROM contratos`, [req.usuario.id]));
     }
     if (p.diretoria) {
@@ -237,6 +229,79 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
     res.json(await equipe());
   });
 
+  /* ===================== Dashboard Jurídico ===================== */
+  // período: ano inteiro (mes = 0) ou um mês, pelo dia em Brasília; "agora" é a situação de hoje, sem período
+  r.get('/api/contratos/painel', async (req, res) => {
+    const p = await perfil(req.usuario);
+    if (!p.elaborador && !p.diretoria) return erro(res, 403, 'O Dashboard Jurídico é de quem elabora os contratos e da diretoria.');
+    const agora = new Date();
+    const ano = Number(req.query.ano) || Number(diaBrasilia(agora).slice(0, 4));
+    const mes = Math.min(12, Math.max(0, Number(req.query.mes) || 0));
+    const chave = (d) => (d ? diaBrasilia(new Date(d)).slice(0, 7) : '');
+    const noPeriodo = (d) => { const k = chave(d); return !!k && Number(k.slice(0, 4)) === ano && (!mes || Number(k.slice(5, 7)) === mes); };
+    const contratos = (await db.q(`SELECT c.id, c.etapa, c.ajustes, c.prazo, c.enviado_em, c.fechado_em, c.assinatura_pedida_em, c.em_assinatura_em, c.assinado_em,
+        e.nome AS executivo, ur.nome AS responsavel FROM contratos c LEFT JOIN executivos e ON e.id = c.executivo_id LEFT JOIN usuarios ur ON ur.id = c.responsavel_id
+      WHERE c.etapa <> 'rascunho' AND c.enviado_em IS NOT NULL`)).rows;
+    const eventos = (await db.q(`SELECT ev.contrato_id, ev.tipo, ev.detalhe, ev.criado_em FROM contrato_eventos ev
+      WHERE ev.tipo IN ('minuta_enviada','ajuste','cancelada') ORDER BY ev.id`)).rows;
+    const conta = (lista, f) => lista.filter(f).length;
+    const media = (l) => (l.length ? Math.round((l.reduce((s, v) => s + v, 0) / l.length) * 10) / 10 : null);
+    const dias = (a, b) => (new Date(b).getTime() - new Date(a).getTime()) / DIA_MS;
+    const minutas = eventos.filter((e) => e.tipo === 'minuta_enviada' && noPeriodo(e.criado_em));
+    const primeira = new Map();
+    for (const e of eventos) if (e.tipo === 'minuta_enviada' && !primeira.has(e.contrato_id)) primeira.set(e.contrato_id, e.criado_em);
+    const fechados = contratos.filter((c) => c.etapa === 'assinado' && noPeriodo(c.fechado_em));
+    const abertos = contratos.filter((c) => !['assinado', 'cancelada'].includes(c.etapa));
+    const porNome = (campo, f) => {
+      const m = new Map();
+      for (const c of contratos) {
+        const nome = c[campo] || (campo === 'responsavel' ? 'Ninguém assumiu' : 'Sem executivo');
+        const x = m.get(nome) || { nome, solicitados: 0, em_andamento: 0, fechados: 0 };
+        if (noPeriodo(c.enviado_em)) x.solicitados++;
+        if (!['assinado', 'cancelada'].includes(c.etapa)) x.em_andamento++;
+        if (c.etapa === 'assinado' && noPeriodo(c.fechado_em)) x.fechados++;
+        m.set(nome, x);
+      }
+      return [...m.values()].filter((x) => x.solicitados || x.em_andamento || x.fechados).sort((a, b) => b.solicitados + b.em_andamento - a.solicitados - a.em_andamento || a.nome.localeCompare(b.nome, 'pt-BR'));
+    };
+    const anos = [...new Set(contratos.map((c) => Number(chave(c.enviado_em).slice(0, 4))).concat([Number(diaBrasilia(agora).slice(0, 4)), ano]))].sort((a, b) => b - a);
+    res.json({
+      ano, mes, anos,
+      periodo: {
+        solicitados: conta(contratos, (c) => noPeriodo(c.enviado_em)),
+        minutas: minutas.length,
+        minutas_no_prazo: minutas.length ? Math.round((minutas.filter((e) => e.detalhe.no_prazo !== false).length / minutas.length) * 100) : null,
+        ajustes: conta(eventos, (e) => e.tipo === 'ajuste' && noPeriodo(e.criado_em)),
+        assinaturas_pedidas: conta(contratos, (c) => noPeriodo(c.assinatura_pedida_em)),
+        enviados_assinatura: conta(contratos, (c) => noPeriodo(c.em_assinatura_em)),
+        fechados: fechados.length,
+        cancelados: conta(eventos, (e) => e.tipo === 'cancelada' && noPeriodo(e.criado_em)),
+      },
+      agora: {
+        fila: conta(abertos, (c) => c.etapa === 'fila'), em_elaboracao: conta(abertos, (c) => c.etapa === 'em_elaboracao' && !c.ajustes),
+        em_alteracao: conta(abertos, (c) => c.etapa === 'em_elaboracao' && c.ajustes > 0), pendencia: conta(abertos, (c) => c.etapa === 'pendencia'),
+        minuta_enviada: conta(abertos, (c) => c.etapa === 'minuta_enviada'), para_assinar: conta(abertos, (c) => c.etapa === 'para_assinar'),
+        em_assinatura: conta(abertos, (c) => c.etapa === 'em_assinatura'), conferencia: conta(abertos, (c) => c.etapa === 'conferencia'),
+        atrasados: conta(abertos, (c) => ['fila', 'em_elaboracao'].includes(c.etapa) && c.prazo && new Date(c.prazo) < agora),
+      },
+      meses: Array.from({ length: 12 }, (_, k) => {
+        const m = `${ano}-${String(k + 1).padStart(2, '0')}`;
+        // o comparativo mês a mês: o que aconteceu em cada mês (pedido, pedido de assinatura, enviado para assinatura, assinado)
+        return { mes: k + 1, solicitados: conta(contratos, (c) => chave(c.enviado_em) === m),
+          aguardando_assinatura: conta(contratos, (c) => chave(c.assinatura_pedida_em) === m), em_assinatura: conta(contratos, (c) => chave(c.em_assinatura_em) === m),
+          assinados: conta(contratos, (c) => c.etapa !== 'cancelada' && chave(c.assinado_em) === m),
+          fechados: conta(contratos, (c) => c.etapa === 'assinado' && chave(c.fechado_em) === m) };
+      }),
+      tempos: {
+        primeira_minuta_dias: media(contratos.filter((c) => primeira.has(c.id) && noPeriodo(primeira.get(c.id))).map((c) => dias(c.enviado_em, primeira.get(c.id)))),
+        fechamento_dias: media(fechados.map((c) => dias(c.enviado_em, c.fechado_em))),
+        ajustes_por_contrato: media(fechados.map((c) => c.ajustes || 0)),
+      },
+      por_executivo: porNome('executivo'),
+      por_responsavel: porNome('responsavel'),
+    });
+  });
+
   /* ===================== análises disponíveis ===================== */
   r.get('/api/contratos/analises', async (req, res) => {
     const p = await perfil(req.usuario);
@@ -253,7 +318,8 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
     const where = [];
     const vis = String(req.query.vis || 'minhas');
     if (vis === 'minhas') where.push(`(c.solicitante_id = ${v(u.id)} OR c.executivo_id = ${v(p.executivo ? p.executivo.id : 0)})`);
-    else if (vis === 'fila') { if (!p.elaborador) return erro(res, 403, 'A fila é de quem elabora os contratos.'); where.push("c.etapa IN ('fila','em_elaboracao','pendencia','conferencia')"); }
+    else if (vis === 'fila') { if (!p.elaborador) return erro(res, 403, 'A fila é de quem elabora os contratos.'); where.push("c.etapa IN ('fila','em_elaboracao','pendencia')"); }
+    else if (vis === 'assinaturas') { if (!p.elaborador) return erro(res, 403, 'As assinaturas são de quem elabora os contratos.'); where.push("c.etapa IN ('para_assinar','em_assinatura','conferencia')"); }
     else if (vis === 'controle') {
       // controle: tudo o que já foi enviado (quem não elabora nem é diretoria vê só as suas)
       where.push("c.etapa <> 'rascunho'");
@@ -270,6 +336,7 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
     if (busca) where.push(`(c.condominio ILIKE ${v('%' + busca + '%')} OR c.protocolo ILIKE $${args.length} OR c.cnpj ILIKE $${args.length})`);
     const { rows } = await db.q(`SELECT c.id, c.protocolo, c.etapa, c.origem, c.analise_id, c.analise_protocolo, c.condominio, c.cnpj, c.uf, c.enviado_em, c.prazo,
         c.minuta_enviada_em, c.ajustes, c.assinado_em, c.fechado_em, c.criado_em, c.atualizado_em, c.diretoria, c.executivo_id, e.nome AS executivo_nome, ur.nome AS responsavel_nome,
+        c.assinatura_pedida_em, c.em_assinatura_em, c.assinatura_plataforma,
         (SELECT MIN(ev.criado_em) FROM contrato_eventos ev WHERE ev.contrato_id = c.id AND ev.tipo = 'minuta_enviada') AS primeira_minuta_em,
         (SELECT array_agg(DISTINCT d.tipo) FROM contrato_documentos d WHERE d.contrato_id = c.id AND d.substituido_em IS NULL) AS tipos
       FROM contratos c LEFT JOIN executivos e ON e.id = c.executivo_id LEFT JOIN usuarios ur ON ur.id = c.responsavel_id
@@ -279,13 +346,14 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
     const contratos = rows.map(({ tipos, diretoria, ...x }) => ({ ...x,
       atrasado: ['fila', 'em_elaboracao'].includes(x.etapa) && !!x.prazo && new Date(x.prazo) < agora,
       diretoria: (diretoria.itens || []).length ? (diretoria.decidido_em ? (diretoria.aprovado ? 'aprovado' : 'nao_aprovado') : 'aguardando') : null,
-      pendentes: ['rascunho', 'cancelada', 'assinado'].includes(x.etapa) ? [] : F.pendencias(new Set(tipos || [])) }));
+      sem_convencao: !(tipos || []).includes('convencao') }));
     const out = { contratos };
     if (vis === 'controle') {
       const mes = diaBrasilia(agora).slice(0, 7);
       const conta = (f) => contratos.filter(f).length;
       out.contadores = { fila: conta((x) => x.etapa === 'fila'), em_elaboracao: conta((x) => x.etapa === 'em_elaboracao'), pendencia: conta((x) => x.etapa === 'pendencia'),
-        minuta_enviada: conta((x) => x.etapa === 'minuta_enviada'), conferencia: conta((x) => x.etapa === 'conferencia'),
+        minuta_enviada: conta((x) => x.etapa === 'minuta_enviada'), para_assinar: conta((x) => x.etapa === 'para_assinar'), em_assinatura: conta((x) => x.etapa === 'em_assinatura'),
+        conferencia: conta((x) => x.etapa === 'conferencia'),
         assinados_mes: conta((x) => x.etapa === 'assinado' && x.fechado_em && diaBrasilia(new Date(x.fechado_em)).slice(0, 7) === mes), atrasados: conta((x) => x.atrasado) };
     }
     res.json(out);
@@ -391,9 +459,10 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
       faltas_fechado: pd.registrar ? F.faltasFechado(fechado) : [],
       diferencas_fechado: ['conferencia', 'assinado'].includes(c.etapa) ? F.diferencasFechado(c.formulario || {}, fechado) : [],
       faltas: pd.enviar ? F.faltas(f, { docs, executivoId: c.executivo_id }) : [],
-      avisos: F.avisos(f, { origem: c.origem, diasAnalise: await diasDaAnalise(c), validadeProposta: p.politica.validade_dias }),
+      faltas_campos: pd.enviar ? F.faltasCampos(f, { docs, executivoId: c.executivo_id }) : [],
+      avisos: F.avisos(f, { origem: c.origem, diasAnalise: await diasDaAnalise(c), validadeProposta: p.politica.validade_dias, semConvencao: !docs.has('convencao') && c.etapa !== 'assinado' }),
       itens_diretoria: c.etapa === 'rascunho' || pd.editar ? F.itensDiretoria(f, c.origem) : (c.diretoria.itens || []),
-      pendencias: F.pendencias(docs),
+      sem_convencao: !docs.has('convencao'),
       diferencas: c.origem === 'entrega' ? [] : F.diferencas(f, c.referencia),
     });
   });
@@ -441,6 +510,18 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
     res.json({ ok: true, diferencas: c.origem === 'entrega' ? [] : F.diferencas(f, c.referencia), itens_diretoria: F.itensDiretoria(f, c.origem) });
   });
 
+  /* conferência ao vivo, enquanto o comercial preenche (não grava nada) */
+  r.post('/api/contratos/:id/conferir', json, async (req, res) => {
+    const x = await carregar(req, res);
+    if (!x) return;
+    const { c, p, pd } = x;
+    if (!pd.editar) return erro(res, 403, 'A solicitação só muda enquanto está em rascunho ou com pendência.');
+    const f = req.body && req.body.formulario && typeof req.body.formulario === 'object' ? req.body.formulario : c.formulario || {};
+    let executivoId = c.executivo_id;
+    if (p.admin && req.body && req.body.executivo_id !== undefined) executivoId = ((await db.um('SELECT id FROM executivos WHERE id = $1 AND ativo', [Number(req.body.executivo_id) || 0])) || {}).id || null;
+    res.json({ faltas_campos: F.faltasCampos(f, { docs: await tiposVigentes(db, c.id), executivoId }), itens_diretoria: F.itensDiretoria(f, c.origem) });
+  });
+
   /* ===================== documentos ===================== */
   r.post('/api/contratos/:id/documentos', corpoDoc, async (req, res) => {
     const x = await carregar(req, res);
@@ -448,10 +529,10 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
     const { c, p, pd } = x;
     if (!pd.documentos) return erro(res, 403, 'Os documentos desta solicitação não podem mais mudar.');
     const tipo = String(req.headers['x-tipo'] || '');
-    if (!F.DOCUMENTOS[tipo] || tipo === 'analise_credito') return erro(res, 400, 'Tipo de documento inválido.');
+    if (!F.DOCUMENTOS[tipo] || tipo === 'analise_credito' || F.DOCUMENTOS[tipo].antigo) return erro(res, 400, 'Tipo de documento inválido (os documentos do síndico são pedidos na Implantação).');
     if (tipo === 'minuta' && !pd.minuta) return erro(res, 403, 'A minuta é anexada por quem assumiu a solicitação.');
     // o assinado entra com a minuta no comercial; enquanto a advogada não conclui, ainda dá para trocar o arquivo
-    if (['contrato_assinado', 'procuracao'].includes(tipo) && !['minuta_enviada', 'conferencia'].includes(c.etapa)) return erro(res, 409, 'O contrato assinado entra depois que a minuta chega ao comercial.');
+    if (tipo === 'contrato_assinado' && !['para_assinar', 'em_assinatura', 'conferencia'].includes(c.etapa)) return erro(res, 409, 'O contrato assinado entra depois que o executivo pede a assinatura.');
     const buf = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
     if (!buf.length) return erro(res, 400, 'Arquivo vazio.');
     let nome = 'arquivo';
@@ -469,10 +550,10 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
       await t.q('UPDATE contratos SET atualizado_em = now() WHERE id = $1', [c.id]);
       return d.id;
     });
-    // documento do síndico que chegou depois do envio: avisa quem assumiu
-    if (!['rascunho', 'pendencia'].includes(c.etapa) && F.DOCUMENTOS[tipo].operacional && !antes.has(tipo) && c.responsavel_id) {
-      await avisos.notificar([c.responsavel_id], { link: link(c.id), autor_id: req.usuario.id, tipo: 'contrato', email: false,
-        titulo: `Documento chegou · ${c.protocolo} · ${c.condominio}`, texto: `${req.usuario.nome} anexou: ${F.DOCUMENTOS[tipo].nome}.` });
+    // a convenção que faltava chegou depois do envio: avisa quem assumiu (sem ela o contrato não é assinado)
+    if (!['rascunho', 'pendencia'].includes(c.etapa) && tipo === 'convencao' && !antes.has(tipo) && c.responsavel_id) {
+      await avisos.notificar([c.responsavel_id], { link: link(c.id), autor_id: req.usuario.id, tipo: 'contrato', email: true,
+        titulo: `Convenção chegou · ${c.protocolo} · ${c.condominio}`, texto: `${req.usuario.nome} anexou a convenção do condomínio. Já pode seguir para a assinatura.` });
     }
     res.status(201).json({ id, interno: p.elaborador });
   });
@@ -512,9 +593,9 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
     if (!pd.enviar) return erro(res, 409, 'Esta solicitação já foi enviada.');
     const docs = await tiposVigentes(db, c.id);
     const f = c.formulario || {};
-    const lista = F.faltas(f, { docs, executivoId: c.executivo_id });
-    if (lista.length) return erro(res, 400, 'Faltam informações para enviar.', { faltas: lista });
-    const pend = F.pendencias(docs);
+    const campos = F.faltasCampos(f, { docs, executivoId: c.executivo_id });
+    if (campos.length) return erro(res, 400, 'Faltam informações para enviar.', { faltas: campos.map((x) => x.msg), faltas_campos: campos });
+    const semConvencao = !docs.has('convencao');
     const itens = F.itensDiretoria(f, c.origem);
     const reenvio = c.etapa === 'pendencia';
     // a decisão da diretoria continua valendo se os itens não mudaram
@@ -528,8 +609,8 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
     const prazo = expediente.somarDiasUteis(agora, DIAS_PRAZO);
     await db.tx(async (t) => {
       await t.q(`UPDATE contratos SET protocolo = $2, etapa = $3, enviado_em = COALESCE(enviado_em, $4), prazo = $5, aviso_prazo_em = NULL, diretoria = $6::jsonb,
-        aviso_docs_em = $7::date, atualizado_em = now() WHERE id = $1`, [c.id, protocolo, etapa, agora, prazo, JSON.stringify(diretoria), diaBrasilia(agora)]);
-      await evento(t, c.id, req.usuario.id, reenvio ? 'reenviada' : 'enviada', { protocolo, prazo, pendentes: pend, diretoria: itens });
+        atualizado_em = now() WHERE id = $1`, [c.id, protocolo, etapa, agora, prazo, JSON.stringify(diretoria)]);
+      await evento(t, c.id, req.usuario.id, reenvio ? 'reenviada' : 'enviada', { protocolo, prazo, sem_convencao: semConvencao, diretoria: itens });
     });
     await seg.auditar(req, 'contrato_enviado', null, { contrato: c.id, protocolo, condominio: c.condominio });
     const fimPrazo = quando(prazo);
@@ -541,19 +622,14 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
       const origem = c.origem === 'entrega' ? 'condomínio de entrega' : `análise ${c.analise_protocolo}`;
       await avisos.notificar(await elaboradores(db, regras), { link: link(c.id), autor_id: req.usuario.id, tipo: 'contrato', email: true,
         titulo: `Nova solicitação de contrato · ${protocolo} · ${c.condominio}`,
-        texto: `${req.usuario.nome} pediu a minuta de ${c.condominio} (${origem}). Prazo: ${fimPrazo} (72h úteis).${resumoDir}` });
+        texto: `${req.usuario.nome} pediu a minuta de ${c.condominio} (${origem}). Prazo: ${fimPrazo} (72h úteis).${resumoDir}${semConvencao ? ` Atenção: ${F.AVISO_CONVENCAO_JURIDICO}` : ''}` });
     }
     if (novaDiretoria) {
       await avisos.notificar(await diretores(db, regras), { link: link(c.id), autor_id: req.usuario.id, tipo: 'contrato', email: true,
         titulo: `Decisão da diretoria no contrato · ${protocolo} · ${c.condominio}`,
         texto: `${req.usuario.nome} pediu o contrato de ${c.condominio}. Antes da minuta, precisa da diretoria: ${itens.join(' ')}` });
     }
-    if (pend.length) {
-      await avisos.notificar(await donos(db, c), { link: link(c.id), autor_id: null, tipo: 'contrato', email: false,
-        titulo: `Documentos do síndico pendentes · ${protocolo} · ${c.condominio}`,
-        texto: `Enviada ao Jurídico. Os documentos não travam o contrato, mas travam a operação depois. Ainda falta: ${pend.join('; ')}. Você recebe um lembrete por e-mail a cada dia útil até chegarem.` });
-    }
-    res.json({ protocolo, etapa, prazo, pendencias: pend, diretoria: itens });
+    res.json({ protocolo, etapa, prazo, sem_convencao: semConvencao, diretoria: itens });
   });
 
   /* ===================== Jurídico: assumir, passar, pendência, minuta ===================== */
@@ -651,7 +727,7 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
     res.json({ ok: true });
   });
 
-  /* ===================== comercial: ajuste e contrato assinado ===================== */
+  /* ===================== comercial: ajuste ou pedido de assinatura · Jurídico: assinatura ===================== */
   r.post('/api/contratos/:id/ajuste', json, async (req, res) => {
     const x = await carregar(req, res);
     if (!x) return;
@@ -671,25 +747,66 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
     res.json({ ok: true, prazo });
   });
 
+  /* o síndico aprovou a minuta: o executivo pede ao Jurídico que mande assinar */
+  r.post('/api/contratos/:id/pedir-assinatura', json, async (req, res) => {
+    const x = await carregar(req, res);
+    if (!x) return;
+    const { c, pd } = x;
+    if (!pd.pedir_assinatura) return erro(res, 403, 'A assinatura é pedida pelo comercial, com a minuta aprovada pelo síndico.');
+    const obs = texto(req.body && req.body.observacao, 1000);
+    const semConvencao = !(await tiposVigentes(db, c.id)).has('convencao');
+    await db.tx(async (t) => {
+      await t.q("UPDATE contratos SET etapa = 'para_assinar', assinatura_pedida_em = now(), atualizado_em = now() WHERE id = $1", [c.id]);
+      await evento(t, c.id, req.usuario.id, 'assinatura_pedida', { observacao: obs, sem_convencao: semConvencao });
+    });
+    await avisos.notificar(c.responsavel_id ? [c.responsavel_id] : await elaboradores(db, regras), { link: link(c.id), autor_id: req.usuario.id, tipo: 'contrato', email: true,
+      titulo: `Pronto para assinatura${semConvencao ? ' (sem convenção)' : ''} · ${c.protocolo} · ${c.condominio}`,
+      texto: `${req.usuario.nome} informou que o síndico aprovou a minuta de ${c.condominio}. Mande para assinatura e marque no portal.${semConvencao ? `\n\nAtenção: ${F.AVISO_CONVENCAO_JURIDICO}` : ''}${obs ? `\n\n${obs}` : ''}` });
+    res.json({ ok: true, sem_convencao: semConvencao });
+  });
+
+  /* o Jurídico mandou assinar (plataforma de assinatura eletrônica ou via física) */
+  r.post('/api/contratos/:id/em-assinatura', json, async (req, res) => {
+    const x = await carregar(req, res);
+    if (!x) return;
+    const { c, pd } = x;
+    if (!pd.enviar_assinatura) return erro(res, 403, 'Quem elabora marca o envio para assinatura, depois que o executivo pede.');
+    const plataforma = texto(req.body && req.body.plataforma, 120);
+    const obs = texto(req.body && req.body.observacao, 1000);
+    await db.tx(async (t) => {
+      await t.q(`UPDATE contratos SET etapa = 'em_assinatura', em_assinatura_em = now(), assinatura_plataforma = $2, responsavel_id = COALESCE(responsavel_id, $3),
+        atualizado_em = now() WHERE id = $1`, [c.id, plataforma, req.usuario.id]);
+      await evento(t, c.id, req.usuario.id, 'em_assinatura', { plataforma, observacao: obs });
+    });
+    await avisos.notificar(await donos(db, c), { link: link(c.id), autor_id: req.usuario.id, tipo: 'contrato', email: false,
+      titulo: `Contrato em assinatura · ${c.protocolo} · ${c.condominio}`,
+      texto: `${req.usuario.nome} mandou o contrato de ${c.condominio} para assinatura${plataforma ? ` (${plataforma})` : ''}.${obs ? ` ${obs}` : ''}` });
+    res.json({ ok: true });
+  });
+
+  /* a via assinada voltou para o Jurídico: a advogada anexa e registra as condições fechadas */
   r.post('/api/contratos/:id/assinado', json, async (req, res) => {
     const x = await carregar(req, res);
     if (!x) return;
     const { c, pd } = x;
-    if (!pd.assinar) return erro(res, 403, 'O contrato assinado entra depois que a minuta chega ao comercial.');
+    if (!pd.assinar) return erro(res, 403, 'Quem elabora marca o contrato como assinado, depois que o executivo pede a assinatura.');
     const docs = await tiposVigentes(db, c.id);
     if (!docs.has('contrato_assinado')) return erro(res, 400, 'Anexe o contrato assinado.');
-    if (!docs.has('procuracao') && !(req.body && req.body.procuracao_no_contrato === true)) {
-      return erro(res, 400, 'Anexe a procuração assinada, ou confirme que ela está no mesmo arquivo do contrato.');
-    }
     // a advogada parte do que foi pedido (e do que a diretoria decidiu) e registra o que ficou no contrato assinado
     await db.tx(async (t) => {
       await t.q("UPDATE contratos SET etapa = 'conferencia', assinado_em = now(), fechado = $2::jsonb, atualizado_em = now() WHERE id = $1", [c.id, JSON.stringify(F.fechadoInicial(c))]);
-      await evento(t, c.id, req.usuario.id, 'assinado', { procuracao: docs.has('procuracao') ? 'anexada' : 'no contrato' });
+      await evento(t, c.id, req.usuario.id, 'assinado', { sem_convencao: !docs.has('convencao') });
     });
     await seg.auditar(req, 'contrato_assinado', null, { contrato: c.id, protocolo: c.protocolo, condominio: c.condominio });
-    await avisos.notificar(c.responsavel_id ? [c.responsavel_id] : await elaboradores(db, regras), { link: link(c.id), autor_id: req.usuario.id, tipo: 'contrato', email: true,
-      titulo: `Registrar as condições fechadas · ${c.protocolo} · ${c.condominio}`,
-      texto: `${req.usuario.nome} anexou o contrato assinado de ${c.condominio}. Confira e registre as condições fechadas: elas seguem para a Implantação.` });
+    await avisos.notificar(await donos(db, c), { link: link(c.id), autor_id: req.usuario.id, tipo: 'contrato', email: false,
+      titulo: `Contrato assinado · ${c.protocolo} · ${c.condominio}`,
+      texto: `O contrato de ${c.condominio} foi assinado. ${req.usuario.nome} registra as condições fechadas e você é avisado quando seguirem para a Implantação.` });
+    // quem assumiu é avisado se outra pessoa do Jurídico marcou o assinado
+    if (c.responsavel_id) {
+      await avisos.notificar([c.responsavel_id], { link: link(c.id), autor_id: req.usuario.id, tipo: 'contrato', email: true,
+        titulo: `Registrar as condições fechadas · ${c.protocolo} · ${c.condominio}`,
+        texto: `${req.usuario.nome} anexou o contrato assinado de ${c.condominio}. Confira e registre as condições fechadas: elas seguem para a Implantação.` });
+    }
     res.json({ ok: true });
   });
 
@@ -712,24 +829,75 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
       if (concluir) {
         await t.q("UPDATE contratos SET fechado = $2::jsonb, fechado_por = $3, fechado_em = now(), concluido_em = now(), etapa = 'assinado', atualizado_em = now() WHERE id = $1",
           [c.id, JSON.stringify(fechado), req.usuario.id]);
-        await evento(t, c.id, req.usuario.id, 'fechado', { diferencas: F.diferencasFechado(c.formulario || {}, fechado).map((d) => d.rotulo), implantacao: imp ? imp.protocolo || imp.id : null });
         if (imp) {
           await t.q('UPDATE implantacoes SET contrato_id = $2, atualizado_em = now() WHERE id = $1', [imp.id, c.id]);
           await t.q('INSERT INTO implantacao_eventos (implantacao_id, usuario_id, tipo, detalhe) VALUES ($1, $2, $3, $4::jsonb)', [imp.id, req.usuario.id, 'contrato', JSON.stringify({ protocolo: c.protocolo })]);
         }
+        // sem implantação: quem solicita é o executivo (Solicitar implantação, no contrato); as condições vão junto
+        await evento(t, c.id, req.usuario.id, 'fechado', { diferencas: F.diferencasFechado(c.formulario || {}, fechado).map((d) => d.rotulo), implantacao: imp ? imp.protocolo || imp.id : null });
       } else await t.q('UPDATE contratos SET fechado = $2::jsonb, atualizado_em = now() WHERE id = $1', [c.id, JSON.stringify(fechado)]);
     });
     if (!concluir) return res.json({ ok: true, faltas: F.faltasFechado(fechado) });
     await seg.auditar(req, 'contrato_fechado', null, { contrato: c.id, protocolo: c.protocolo, condominio: c.condominio });
     await avisos.notificar(await donos(db, c), { link: link(c.id), autor_id: req.usuario.id, tipo: 'contrato', email: true,
-      titulo: `Contrato concluído · ${c.protocolo} · ${c.condominio}`,
+      titulo: imp ? `Contrato concluído · ${c.protocolo} · ${c.condominio}` : `Contrato assinado: solicite a implantação · ${c.condominio}`,
       texto: imp ? `${req.usuario.nome} registrou as condições fechadas de ${c.condominio}. Elas já aparecem na implantação ${imp.protocolo || 'em rascunho'}.`
-        : `${req.usuario.nome} registrou as condições fechadas de ${c.condominio}. Próximo passo: abrir a implantação; as condições, o contrato e os documentos seguem junto.` });
+        : `${req.usuario.nome} registrou as condições fechadas de ${c.condominio}. Abra o contrato e clique em Solicitar implantação: ela vem com as condições fechadas, o contrato assinado e a convenção.` });
     if (imp && imp.responsavel_id) {
       await avisos.notificar([imp.responsavel_id], { link: `#/implantacao/${imp.id}`, autor_id: req.usuario.id, tipo: 'implantacao', email: false,
         titulo: `Condições fechadas do contrato · ${imp.protocolo} · ${c.condominio}`, texto: `O contrato ${c.protocolo} foi concluído: as condições fechadas estão na implantação.` });
     }
     res.json({ ok: true, implantacao: imp ? imp.id : null });
+  });
+
+  /* o executivo solicita a implantação do contrato concluído: abre em rascunho com as condições fechadas, o contrato e a convenção */
+  r.post('/api/contratos/:id/implantacao', json, async (req, res) => {
+    const x = await carregar(req, res);
+    if (!x) return;
+    const { c, pd } = x;
+    if (!pd.abrir_implantacao) return erro(res, 403, c.etapa === 'assinado' ? 'Quem solicita a implantação é o executivo do contrato.' : 'A implantação é solicitada com o contrato concluído (condições fechadas registradas).');
+    const ja = await db.um(`SELECT id, protocolo FROM implantacoes WHERE etapa <> 'cancelada' AND (contrato_id = $3 OR (contrato_id IS NULL
+      AND ((analise_id IS NOT NULL AND analise_id = $1) OR (analise_protocolo IS NOT NULL AND analise_protocolo = $2)))) ORDER BY id DESC LIMIT 1`, [c.analise_id, c.analise_protocolo, c.id]);
+    if (ja) return erro(res, 409, `Este condomínio já tem implantação (${ja.protocolo || 'em rascunho'}).`, { implantacao: ja.id });
+    const id = await db.tx((t) => abrirDoContrato(t, c, req.usuario.id));
+    await evento(db, c.id, req.usuario.id, 'implantacao_solicitada', { implantacao: id });
+    res.status(201).json({ implantacao: id });
+  });
+
+  /* contrato já concluído: quem elabora corrige as condições fechadas, com o motivo; o histórico guarda o que mudou */
+  r.post('/api/contratos/:id/corrigir', json, async (req, res) => {
+    const x = await carregar(req, res);
+    if (!x) return;
+    const { c, pd } = x;
+    if (!pd.corrigir) return erro(res, 403, 'As condições fechadas são corrigidas por quem elabora, depois que o contrato foi concluído.');
+    const motivo = texto(req.body && req.body.motivo, 1000);
+    if (!motivo) return erro(res, 400, 'Diga o motivo da correção.');
+    const fechado = F.normalizarFechado(req.body && req.body.condicoes);
+    const lista = F.faltasFechado(fechado);
+    if (lista.length) return erro(res, 400, 'Faltam condições.', { faltas: lista });
+    const mudancas = F.mudancasFechado(c.fechado, fechado);
+    if (!mudancas.length) return erro(res, 400, 'Nada mudou nas condições fechadas.');
+    await db.tx(async (t) => {
+      await t.q('UPDATE contratos SET fechado = $2::jsonb, atualizado_em = now() WHERE id = $1', [c.id, JSON.stringify(fechado)]);
+      await evento(t, c.id, req.usuario.id, 'fechado_corrigido', { motivo, mudancas });
+    });
+    await seg.auditar(req, 'contrato_corrigido', null, { contrato: c.id, protocolo: c.protocolo, mudancas: mudancas.map((m) => m.rotulo) });
+    const resumo = mudancas.map((m) => `${m.rotulo}: ${m.antes} → ${m.depois}`).join('; ');
+    const imp = await db.um("SELECT id, protocolo, etapa, responsavel_id FROM implantacoes WHERE contrato_id = $1 AND etapa <> 'cancelada' ORDER BY id DESC LIMIT 1", [c.id]);
+    await avisos.notificar(await donos(db, c), { link: link(c.id), autor_id: req.usuario.id, tipo: 'contrato', email: true,
+      titulo: `Condições do contrato corrigidas · ${c.protocolo} · ${c.condominio}`,
+      texto: `${req.usuario.nome} corrigiu as condições fechadas de ${c.condominio}. Motivo: ${motivo}\n\n${resumo}${imp && ['rascunho', 'pendencia'].includes(imp.etapa) ? `\n\nA implantação ${imp.protocolo || 'em rascunho'} está com você: confira o formulário.` : ''}` });
+    if (imp) {
+      await db.q('INSERT INTO implantacao_eventos (implantacao_id, usuario_id, tipo, detalhe) VALUES ($1, $2, $3, $4::jsonb)', [imp.id, req.usuario.id, 'contrato_corrigido', JSON.stringify({ protocolo: c.protocolo, motivo })]);
+      // quem conduz (ou a coordenação da Implantação, se ninguém conduz) confere a implantação
+      const para = imp.responsavel_id ? [imp.responsavel_id] : (await db.q(`SELECT u.id FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id JOIN usuarios u ON u.id = sm.usuario_id
+        WHERE s.nome = 'Implantação' AND u.ativo AND (sm.lider OR u.papel IN ('coordenador','supervisor'))`)).rows.map((r) => r.id);
+      if (!['rascunho', 'cancelada'].includes(imp.etapa)) {
+        await avisos.notificar(para, { link: `#/implantacao/${imp.id}`, autor_id: req.usuario.id, tipo: 'implantacao', email: true,
+          titulo: `Contrato corrigido · ${imp.protocolo} · ${c.condominio}`, texto: `${req.usuario.nome} corrigiu as condições fechadas do contrato ${c.protocolo}. Motivo: ${motivo}\n\n${resumo}` });
+      }
+    }
+    res.json({ ok: true, mudancas });
   });
 
   r.post('/api/contratos/:id/cancelar', json, async (req, res) => {

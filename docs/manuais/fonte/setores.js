@@ -375,7 +375,7 @@ const SETORES = [
     papel: 'Prospecta e fecha novos condomínios clientes e cuida das propostas comerciais.',
     ferramentas: ['partnerchip'],
     tambem: [
-      '<b>Solicitação de Contrato</b> (menu do portal): fechada a negociação, o executivo pede a minuta a partir da análise liberada, com as condições e os pedidos do síndico (a resposta padrão do Jurídico aparece na hora). O Jurídico tem 72h úteis; a minuta vai e volta com os ajustes até a assinatura, e o contrato assinado segue para a Implantação com as condições fechadas.',
+      '<b>Solicitação de Contrato</b> (menu do portal): fechada a negociação, o executivo pede a minuta a partir da análise liberada, com as condições e os pedidos do síndico (a resposta padrão do Jurídico aparece na hora). O Jurídico tem 72h úteis; a minuta vai e volta com os ajustes até a assinatura (acompanhe em <i>Jurídico → Acompanhamento de Contratos</i>), e com o contrato assinado e as condições registradas pelo Jurídico você clica em <b>Solicitar implantação</b>, no próprio contrato: ela já vem com as condições fechadas.',
       '<b>Comissões de Novos Condomínios</b>: o condomínio fechado entra na Carteira com a <b>vigência</b> e o <b>executivo de negócios</b>. No início do mês a gestão comercial clica em <i>Puxar da carteira</i> e escolhe a vigência; cada executivo vê os condomínios dele, informa se tem parceiro (só da lista; parceiro novo é pedido ao Financeiro por ticket) e a gestão aprova. O passo a passo está no <b>Manual do Portal – Setor Administrativa/Financeira</b> (subárea Comissões de Novos Condomínios).',
     ],
     recebe: [
@@ -448,7 +448,7 @@ const SETORES = [
     papel: 'Contratos, cobrança judicial, notificações e pareceres.',
     ferramentas: [],
     tambem: [
-      '<b>Solicitação de Contrato</b> (menu do portal): quem a administração marca em <i>Quem elabora</i> recebe os pedidos do comercial, assume da fila, redige a minuta em até 72h úteis, responde aos ajustes e, com o contrato assinado, registra as <b>condições fechadas</b>, que seguem para a Implantação. O que o manual reserva à diretoria passa por ela antes da minuta.',
+      '<b>Solicitação de Contrato</b> (menu do portal): quem a administração marca em <i>Quem elabora</i> recebe os pedidos do comercial, assume da fila, redige a minuta em até 72h úteis, responde aos ajustes e, com o contrato assinado, registra as <b>condições fechadas</b> (em <i>Acompanhamento de Contratos → Assinaturas</i>); o executivo é avisado e solicita a implantação, que vem com elas. Os números ficam no <b>Dashboard Jurídico</b>. O que o manual reserva à diretoria passa por ela antes da minuta.',
     ],
     recebe: [
       ['Análise / minuta de contrato', 27, 'media', 'Anexe o contrato ou a proposta e destaque os pontos de atenção.'],

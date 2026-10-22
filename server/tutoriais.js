@@ -18,6 +18,7 @@
  *   implantacao_setor  o setor Implantação
  *   contrato    quem usa a Solicitação de Contrato (executivos cadastrados, quem elabora e diretoria)
  *   contrato_juridico  quem elabora os contratos (Solicitação de Contrato → Quem elabora)
+ *   jornada     quem usa a Análise de Crédito, a Solicitação de Contrato ou a Implantação (o caminho inteiro)
  *   { modulo }  quem abre aquela ferramenta
  * O administrador vê todos.
  */
@@ -30,6 +31,7 @@ const ROTULO_PUBLICO = {
   credito: 'Para executivos de negócios e a Análise de Crédito', credito_analise: 'Para analistas de crédito e a diretoria',
   implantacao: 'Para executivos de negócios e o setor Implantação', implantacao_setor: 'Para o setor Implantação',
   contrato: 'Para executivos de negócios e o Jurídico', contrato_juridico: 'Para quem elabora os contratos (Jurídico)',
+  jornada: 'Para o comercial, a Análise de Crédito, o Jurídico e a Implantação',
 };
 
 const TUTORIAIS = [
@@ -73,6 +75,8 @@ const TUTORIAIS = [
     descricao: 'Registrar renegociações, acompanhar a perda de receita e os tickets do CS.' },
   { slug: 'ferramenta-partnerchip', grupo: 'Ferramentas', publico: { modulo: 'partnerchip-resultados' }, titulo: 'PartnerChip — Resultados',
     descricao: 'O painel de resultados dos parceiros.' },
+  { slug: 'jornada-credito-implantacao', grupo: 'Ferramentas', publico: 'jornada', titulo: 'Da Análise de Crédito à Implantação',
+    descricao: 'O caminho inteiro de um condomínio: a análise de crédito, a solicitação de contrato, a minuta, a assinatura, as condições fechadas, a implantação solicitada pelo executivo e a Carteira.' },
   { slug: 'credito-solicitar', grupo: 'Ferramentas', publico: 'credito', titulo: 'Análise de Crédito — pedir e acompanhar',
     descricao: 'Preencher a solicitação, anexar a convenção e o relatório, enviar, responder pendências, abrir o retorno e pedir reanálise.' },
   { slug: 'credito-analisar', grupo: 'Ferramentas', publico: 'credito_analise', titulo: 'Análise de Crédito — analisar e liberar',
@@ -82,9 +86,9 @@ const TUTORIAIS = [
   { slug: 'implantacao-conduzir', grupo: 'Ferramentas', publico: 'implantacao_setor', titulo: 'Implantação — designar, conduzir e levar à Carteira',
     descricao: 'Designar quem conduz, as 5 etapas, as conferências, devolver com pendência, concluir e confirmar a entrada na Carteira.' },
   { slug: 'contrato-solicitar', grupo: 'Ferramentas', publico: 'contrato', titulo: 'Solicitação de Contrato — pedir e acompanhar',
-    descricao: 'Pedir o contrato a partir da análise, preencher as condições e os pedidos do síndico, enviar ao Jurídico, pedir ajuste na minuta e anexar o contrato assinado.' },
+    descricao: 'Pedir o contrato a partir da análise, preencher as condições e os pedidos do síndico, enviar ao Jurídico, pedir ajuste na minuta ou a assinatura, acompanhar os contratos e, assinado, solicitar a implantação.' },
   { slug: 'contrato-elaborar', grupo: 'Ferramentas', publico: 'contrato_juridico', titulo: 'Solicitação de Contrato — elaborar e registrar as condições fechadas',
-    descricao: 'Assumir da fila, ver os pedidos com a resposta padrão, anexar e enviar a minuta, responder ao ajuste e registrar as condições fechadas que vão para a Implantação.' },
+    descricao: 'Assumir da fila, ver os pedidos com a resposta padrão, anexar e enviar a minuta, responder ao ajuste, marcar a assinatura e registrar as condições fechadas (o executivo solicita a implantação com elas).' },
   { slug: 'gestao-usuarios', grupo: 'Gestão do setor', publico: 'gestor', titulo: 'Usuários do setor',
     descricao: 'Criar o acesso de alguém do setor, liberar ferramentas e redefinir a senha.' },
   { slug: 'gestao-ferramentas', grupo: 'Gestão do setor', publico: 'gestor', titulo: 'Ferramentas do setor',
@@ -132,6 +136,7 @@ async function visibilidade(db, seg, u) {
     implantacao_setor: setorImplantacao,
     contrato: executivo || elaborador || diretoria,
     contrato_juridico: elaborador,
+    jornada: analista || diretoria || executivo || setorImplantacao || elaborador,
     admin: false,
   };
   return (t) => (typeof t.publico === 'string' ? !!regra[t.publico] : mods.has(t.publico.modulo));

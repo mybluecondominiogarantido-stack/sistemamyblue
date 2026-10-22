@@ -127,6 +127,44 @@ async function trazerDoContrato(t, implantacaoId, ct) {
   }
 }
 
+/* contrato concluído (condições fechadas) sem implantação: o portal abre a implantação em rascunho para o executivo,
+   com as condições fechadas, o contrato assinado, a convenção e o retorno da análise. Roda dentro da transação de quem chama. */
+async function abrirDoContrato(t, ct, usuarioId) {
+  const analise = ct.analise_id ? await t.um('SELECT * FROM analises WHERE id = $1', [ct.analise_id]) : null;
+  let origem, base, referencia;
+  if (analise) {
+    origem = 'analise';
+    ({ formulario: base, referencia } = F.daAnalise(analise));
+  } else if (ct.origem === 'pdf') {
+    origem = 'pdf';
+    base = {};
+    referencia = { ...(ct.referencia || {}) };
+  } else {
+    // condomínio de entrega: a taxa e o boleto aprovados pela diretoria no contrato valem como a aprovação da implantação
+    origem = 'entrega';
+    base = { entrega: true };
+    const d = ct.diretoria || {};
+    referencia = d.aprovado && d.decidido_em ? { taxa_adm: Number((ct.fechado || {}).taxa_adm) || null, boleto: Number((ct.fechado || {}).boleto) || null, aprovado_por: d.por,
+      aprovado_em: d.decidido_em, observacao: `Aprovado no contrato ${ct.protocolo}.${d.observacao ? ` ${d.observacao}` : ''}` } : {};
+  }
+  const formulario = { ...base, ...FC.paraImplantacao(ct) };
+  const { id } = await t.um(`INSERT INTO implantacoes (etapa, origem, analise_id, analise_protocolo, condominio, cnpj, uf, executivo_id, solicitante_id, formulario, referencia, contrato_id)
+    VALUES ('rascunho', $1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11) RETURNING id`,
+  [origem, analise ? analise.id : null, ct.analise_protocolo || null, formulario.nome || ct.condominio || '', formulario.sem_cnpj ? '' : formulario.cnpj || ct.cnpj || '',
+    String(formulario.uf || ct.uf || '').toUpperCase(), ct.executivo_id, ct.solicitante_id, JSON.stringify(formulario), JSON.stringify(referencia), ct.id]);
+  if (analise) {
+    for (const [de, para] of [['convencao', 'convencao'], ['retorno_pdf', 'analise_credito']]) {
+      await t.q(`INSERT INTO implantacao_documentos (implantacao_id, tipo, nome, mime, tamanho, sha256, conteudo, enviado_por, enviado_em)
+        SELECT $1, $2, nome, mime, tamanho, sha256, conteudo, enviado_por, enviado_em FROM analise_documentos
+        WHERE id = (SELECT MAX(id) FROM analise_documentos WHERE analise_id = $3 AND tipo = $4 AND substituido_em IS NULL)`, [id, para, analise.id, de]);
+    }
+  }
+  await trazerDoContrato(t, id, ct);
+  await t.q('INSERT INTO implantacao_eventos (implantacao_id, usuario_id, tipo, detalhe) VALUES ($1, $2, $3, $4::jsonb)',
+    [id, usuarioId, 'criada', JSON.stringify({ origem, analise: ct.analise_protocolo || null, contrato: ct.protocolo, do_contrato: true })]);
+  return id;
+}
+
 const HORAS_PARA_INICIAR = 8;
 const normal = (s) => semAcento(s).toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -410,6 +448,9 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
       : i.origem === 'entrega' ? null : await contratoDaAnalise(db, { analiseId: i.analise_id, protocolo: i.analise_protocolo });
     const contrato = ct ? { id: ct.id, protocolo: ct.protocolo, etapa: ct.etapa, fechado_em: ct.fechado_em,
       fechado: ct.fechado_em ? ct.fechado : null, diferencas: ct.fechado_em ? FC.diferencasFechado(ct.formulario || {}, ct.fechado) : [],
+      diferente_da_implantacao: ct.fechado_em ? FC.implantacaoDiferente(i.formulario, ct.fechado) : [],
+      corrigido: (await db.um(`SELECT ev.criado_em, ev.detalhe->>'motivo' AS motivo, u.nome FROM contrato_eventos ev LEFT JOIN usuarios u ON u.id = ev.usuario_id
+        WHERE ev.contrato_id = $1 AND ev.tipo = 'fechado_corrigido' ORDER BY ev.id DESC LIMIT 1`, [ct.id])) || null,
       fechado_por_nome: ct.fechado_por ? ((await db.um('SELECT nome FROM usuarios WHERE id = $1', [ct.fechado_por])) || {}).nome : null } : null;
     res.json({
       implantacao: { ...i, ...info, etapas: F.normalizarEtapas(i.etapas) }, documentos, eventos, pode: pd, contrato,
@@ -902,4 +943,4 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
   return r;
 }
 
-module.exports = { rotasImplantacoes, criarRotinasImplantacao, proximoProtocolo, ETAPAS, ORIGEM, SETOR };
+module.exports = { rotasImplantacoes, criarRotinasImplantacao, abrirDoContrato, proximoProtocolo, ETAPAS, ORIGEM, SETOR };

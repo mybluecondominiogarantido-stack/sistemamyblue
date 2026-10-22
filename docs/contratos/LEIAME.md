@@ -3,8 +3,16 @@
 Da negociação fechada com o síndico ao contrato assinado. Substitui o formulário "Solicitação de Contrato MyBlue" do
 Microsoft Forms e o e-mail com o PDF. O comercial pede a minuta a partir de uma análise de crédito liberada, quem
 elabora os contratos (Jurídico) redige em até 72h úteis, a minuta vai e volta com os ajustes até a assinatura, e a
-advogada registra as **condições fechadas**, que seguem para a Implantação. Tela própria do portal (menu
-**Solicitação de Contrato**), com os mesmos padrões da Análise de Crédito e da Implantação.
+advogada registra as **condições fechadas**, que seguem para a Implantação. Telas próprias do portal, com os mesmos
+padrões da Análise de Crédito e da Implantação, no grupo **Jurídico** do menu:
+
+| Menu | Endereço | Abas |
+|---|---|---|
+| **Solicitação de Contrato** | `#/contratos` | Minhas solicitações, Fila do Jurídico (assumir), Diretoria, Quem elabora |
+| **Acompanhamento de Contratos** | `#/acompanhamento-contratos` | Assinaturas (quem elabora), Controle (todos os contratos, até os encerrados) |
+| **Dashboard Jurídico** | `#/dashboard-juridico` | — (quem elabora e a diretoria) |
+
+Os endereços antigos (`#/contratos/assinaturas`, `#/contratos/controle`, `#/contratos/painel`) levam à tela nova.
 
 ## Onde está cada parte
 
@@ -21,14 +29,15 @@ advogada registra as **condições fechadas**, que seguem para a Implantação. 
 
 ## Etapas
 
-`rascunho` → `fila` (enviada, ninguém assumiu) → `em_elaboracao` → `minuta_enviada` → `conferencia` (contrato assinado
-anexado, aguardando as condições fechadas) → `assinado`. Fora do caminho: `pendencia` (falta informação, volta ao
+`rascunho` → `fila` (enviada, ninguém assumiu) → `em_elaboracao` → `minuta_enviada` (com o comercial: pede ajuste ou a
+assinatura) → `para_assinar` (o Jurídico manda assinar) → `em_assinatura` → `conferencia` (a via assinada voltou, a
+advogada registra as condições fechadas) → `assinado`. Fora do caminho: `pendencia` (falta informação, volta ao
 comercial) e `cancelada`. O pedido de ajuste volta a solicitação para `em_elaboracao`, com a mesma pessoa.
 
 ## Quem faz o quê
 
 - **Comercial:** quem está ligado a um cadastro de executivo (Análise de Crédito → Pessoas e papéis). Pede, preenche,
-  anexa os documentos do síndico, pede ajuste na minuta e anexa o contrato assinado e a procuração.
+  anexa a convenção (quando a análise não trouxe), pede ajuste na minuta ou a assinatura.
 - **Quem elabora:** as pessoas marcadas pela administração em **Solicitação de Contrato → Quem elabora** (permissão
   `contratos.elaborar`). Enquanto ninguém for marcado, a administração recebe. Qualquer uma delas assume da fila e pode
   passar para outra; quem assumiu devolve com pendência, anexa e envia a minuta e registra as condições fechadas.
@@ -48,10 +57,12 @@ comercial) e `cancelada`. O pedido de ajuste volta a solicitação para `em_elab
 - **Obrigatórios para enviar:** os dados do formulário (CPF do síndico válido, e-mail, telefone, taxa, boleto, desconto,
   garantias, cashback, início, vencimento e as minúcias; sem nada diferente, "Nenhuma"). Sem CNPJ: a ciência dos 90 dias,
   a administradora e a ata da assembleia que autorizou a contratação.
-- **Documentos do síndico** (convenção, regimento, ata de eleição, atas das taxas, cadastro de proprietários e de
-  locatários, RG/CPF e comprovante de endereço do síndico): não travam o contrato, mas travam a operação. Ficam como
-  pendência, com o aviso no sino no envio e um e-mail por dia útil ao executivo até chegarem. A convenção e o retorno da
-  análise vêm da análise.
+- **Documentos:** o retorno e a convenção vêm da análise. Os documentos do síndico (atas, cadastros, RG…) **não** são
+  pedidos aqui: são da Implantação (os que já tinham sido anexados continuam visíveis e seguem para ela).
+- **Sem convenção:** não impede o envio, mas a solicitação avisa que o contrato não pode ser assinado sem ela, e a
+  advogada é avisada na nova solicitação, no pedido de assinatura ("Pronto para assinatura (sem convenção)"), na aba
+  Assinaturas e nas janelas de assinatura: ela pede a convenção antes de mandar assinar. Quando a convenção chega,
+  quem assumiu é avisado.
 - **Envio:** protocolo **CT-AAAA-MM-DD-NN** (sequencial por dia, Brasília). Prazo da minuta: **72h úteis = 3 dias de
   expediente** (`server/expediente.js`, pulando fim de semana e feriado), contado do envio; recomeça a cada ajuste e no
   reenvio depois de pendência. Passou do prazo, avisa (uma vez) quem assumiu, ou quem elabora se ninguém assumiu.
@@ -60,20 +71,50 @@ comercial) e `cancelada`. O pedido de ajuste volta a solicitação para `em_elab
   a minuta só sai depois da decisão. Não aprovado, a minuta segue o contrato padrão nesses pontos.
 - **Minuta:** quem assumiu anexa e envia ao comercial; cada versão fica no histórico. Depois de um ajuste, só vai a
   minuta anexada depois do pedido.
-- **Assinado:** o comercial anexa o contrato assinado e a procuração (ou confirma que ela está no mesmo arquivo). A
-  advogada é avisada para registrar as condições fechadas.
+- **Assinatura:** com a minuta aprovada pelo síndico, o comercial clica em *Síndico aprovou: pedir assinatura*. Quem
+  elabora vê na aba **Assinaturas** (pronto para assinatura, em assinatura, registrar condições), manda assinar e marca
+  *Enviado para assinatura* (com a plataforma: Clicksign, D4Sign, física…). Quando a via assinada volta, marca
+  *Assinado*, anexando ali mesmo o contrato assinado, e registra as condições fechadas (a procuração não é pedida). O comercial é avisado em cada passo.
 - **Condições fechadas:** vêm do pedido (foro na capital do estado se pedido, 30 dias de contestação se pedido, a
   decisão da diretoria) e a advogada corrige o que mudou: taxa, boleto, desconto e início, garantias, limite da taxa
   extra, cashback, início, vencimento, período mínimo, fidelização, foro, prazo de contestação e o resultado de cada
-  cláusula pedida (aceito, em parte ou recusado, com a redação). Concluir leva a `assinado` e avisa o executivo.
+  cláusula pedida (aceito, em parte ou recusado, com a redação). Concluir leva a `assinado` e avisa o executivo para
+  **solicitar a implantação** (veja abaixo). O Jurídico não abre a implantação.
+- **Contratos encerrados:** ficam em Acompanhamento de Contratos → **Controle** (filtro "Assinado" ou busca). As condições ficam travadas; quem
+  elabora usa **Corrigir condições**, com o motivo obrigatório. O histórico guarda o que mudou (de → para), e o
+  executivo e a Implantação (quem conduz, ou a coordenação) são avisados.
+
+## Dashboard Jurídico
+
+Item próprio do menu Jurídico, para quem elabora e a diretoria (`GET /api/contratos/painel?ano=&mes=`; mês 0 = ano
+todo, datas em Brasília):
+
+- **No período:** solicitados, minutas enviadas (e % no prazo de 72h úteis), alterações pedidas, pedidos de assinatura,
+  enviados para assinatura, fechados e cancelados.
+- **Agora:** na fila, em elaboração (primeira minuta), em alteração (ajuste pedido), pendência com o comercial,
+  aguardando o executivo (pedir assinatura ou ajuste), pronto para assinatura, em assinatura, registrar condições e os
+  que passaram do prazo.
+- No modelo do PartnerChip: cartões do período (o primeiro em destaque), filtro de ano em botões e o **comparativo mês a mês** do ano (gráfico de barras com dica ao passar o mouse e, em "Ver em tabela", a diferença para o mês anterior): solicitados,
+  aguardando assinatura (assinatura pedida pelo executivo no mês), em assinatura (enviados para assinatura no mês) e
+  assinados (via assinada anexada no mês). Clicar num mês filtra o período.
+- Os tempos médios (até a primeira minuta, do pedido ao
+  fechamento, alterações por contrato) e as contas por executivo e por responsável no Jurídico.
 
 ## Implantação
 
+- **Quem solicita a implantação é o executivo.** Concluído o contrato, ele é avisado e clica em **Solicitar implantação**
+  no próprio contrato (`POST /api/contratos/:id/implantacao`, só o executivo do contrato ou a administração). A
+  implantação abre em rascunho, ligada ao contrato (`abrirDoContrato` em `server/rotas/implantacoes.js`): o formulário
+  vem da análise (ou do PDF do retorno, ou da entrega, já com a aprovação da diretoria) com as condições fechadas por
+  cima, e entram o contrato assinado, a convenção e o retorno da análise. Ele completa e envia ao setor Implantação.
+  Também pode abrir pela própria Implantação (Nova implantação → a análise), que traz o contrato do mesmo jeito. Se o
+  condomínio já tinha implantação quando o contrato foi concluído, ela só é ligada ao contrato.
 - A implantação aberta de uma análise (ou do PDF) que tem solicitação de contrato traz os dados do contrato: as
   **condições fechadas valem sobre o pedido**. O contrato assinado entra nos documentos da implantação como "Contrato
-  assinado", e os documentos do síndico, nos tipos de lá (as atas das taxas como ata de previsão orçamentária, o cadastro
-  dos proprietários como cadastro de moradores; o que não tem tipo próprio entra como "outro").
-- A implantação mostra o quadro **Condições fechadas no contrato**. Aberta antes do contrato fechar, ela é ligada ao
+  assinado", e a convenção, se a implantação ainda não tiver (documentos do síndico anexados antes também vão, nos tipos
+  de lá).
+- A implantação mostra o quadro **Condições fechadas no contrato** (com a marca da última correção) e avisa quando o
+  formulário dela está diferente do contrato (taxa, boleto, desconto, início, vencimento). Aberta antes do contrato fechar, ela é ligada ao
   contrato na conclusão, e quem conduz é avisado.
 - Sem contrato assinado no portal, a implantação continua abrindo, com um aviso.
 
@@ -86,7 +127,10 @@ ficam em `server/contratos/clausulas.js`. Mudou o manual? Atualize esse arquivo 
 ## Tutoriais
 
 No catálogo (`server/tutoriais.js`): `contrato-solicitar` (executivos, quem elabora e diretoria) e `contrato-elaborar`
-(quem elabora). Roteiros em `docs/tutoriais/fonte/roteiros.js`; no cenário de gravação, a advogada fictícia Lara Mendes.
+(quem elabora). E `jornada-credito-implantacao`: um condomínio fictício da análise de crédito até a Carteira, passando
+pelo contrato, com cada pessoa fazendo a sua parte (executivo, analista, advogada, o executivo solicitando a implantação
+e o setor Implantação). Roteiros em
+`docs/tutoriais/fonte/roteiros.js`; no cenário de gravação, a advogada fictícia Lara Mendes.
 
 ## Dados
 
