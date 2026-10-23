@@ -630,3 +630,6 @@ tr.sel-ct td{background:var(--surface-2)}
 
 /* Análise de Crédito: campo preenchido pela skill, para conferir */
 .campo.da-skill{border-color:var(--green);box-shadow:0 0 0 3px rgba(31,157,107,.16)}
+
+/* aviso de versão nova do portal */
+#avisoVersao{position:fixed;left:50%;top:12px;transform:translateX(-50%);z-index:200;display:flex;align-items:center;gap:12px;max-width:calc(100% - 32px);padding:10px 14px;border-radius:12px;background:var(--surface);border:1px solid var(--teal);box-shadow:0 8px 24px rgba(0,0,0,.14);font-size:13.5px;font-weight:700;color:var(--ink)}
