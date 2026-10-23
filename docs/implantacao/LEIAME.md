@@ -65,9 +65,10 @@ do síndico entram nos documentos (tipo "Contrato assinado" e os tipos equivalen
 **Condições fechadas no contrato** (foro, fidelização, cláusulas negociadas); se o contrato fechar depois, a
 implantação é ligada a ele na conclusão. Sem implantação, o executivo é avisado e clica em **Solicitar implantação** no
 contrato (`abrirDoContrato`): abre em rascunho, já com as condições fechadas.
-O que vem das condições fechadas no contrato (taxa administrativa, boleto, desconto de pontualidade, início, vencimento,
-honorários, garantias e cashback, em `CAMPOS_FECHADOS_IMPLANTACAO`) não muda na implantação: a tela trava e o servidor
-mantém o do contrato. Os documentos
+O que vem das condições fechadas no contrato (taxa administrativa, boleto, desconto de pontualidade, vigência,
+primeiro vencimento e dia de vencimento, honorários e cashback, em `CAMPOS_FECHADOS_IMPLANTACAO`) não muda na
+implantação: a tela trava e o servidor mantém o do contrato. **O que será garantido** vem marcado do pedido do contrato,
+mas o comercial confere e preenche na implantação. O boleto é gerado para o dia do primeiro vencimento. Os documentos
 que vieram da análise ou do contrato (convenção, retorno da análise, contrato assinado) ficam marcados `vinculado`: não
 se trocam nem se removem na implantação. O retorno da análise é obrigatório para enviar (no condomínio de entrega, não). Sem contrato assinado no portal, a implantação continua abrindo, com um aviso.
 

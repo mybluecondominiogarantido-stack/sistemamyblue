@@ -58,7 +58,7 @@ comercial) e `cancelada`. O pedido de ajuste volta a solicitação para `em_elab
   cliente, em dias) e as **Outras solicitações** (opcional). Os pedidos que saíram da lista (out/2026) ficam marcados
   `antigo` em `clausulas.js`: aparecem nas solicitações que já os tinham.
 - **Obrigatórios para enviar:** os dados do formulário (CPF do síndico válido, e-mail, telefone, taxa, boleto, desconto,
-  garantias, cashback, início e vencimento). Sem CNPJ: a ciência dos 90 dias,
+  garantias, cashback e a **data do primeiro vencimento**: o dia dela é o dia de vencimento dos boletos). Sem CNPJ: a ciência dos 90 dias,
   a administradora e a ata da assembleia que autorizou a contratação.
 - **Documentos:** o retorno e a convenção vêm da análise. Os documentos do síndico (atas, cadastros, RG…) **não** são
   pedidos aqui: são da Implantação (os que já tinham sido anexados continuam visíveis e seguem para ela).
@@ -79,10 +79,10 @@ comercial) e `cancelada`. O pedido de ajuste volta a solicitação para `em_elab
   *Enviado para assinatura* (com uma observação, se quiser). Quando a via assinada volta, marca
   *Assinado*, anexando ali mesmo o contrato assinado, e registra as condições fechadas (a procuração não é pedida). O comercial é avisado em cada passo.
 - **Condições fechadas:** vêm do pedido (foro na capital do estado se pedido, o prazo de contestação pedido pelo
-  cliente, a decisão da diretoria) e a advogada corrige o que mudou: taxa, boleto, desconto e início, limite da taxa
-  extra, início, período mínimo, fidelização, **honorários de cobrança extrajudicial**, foro, prazo de contestação e o
-  resultado de cada cláusula pedida (aceito, em parte ou recusado, com a redação). Garantias, cashback e vencimento
-  são do executivo: valem sempre os do pedido (`comPedido`), e a advogada não os altera. Concluir leva a `assinado` e avisa o executivo para
+  cliente, a decisão da diretoria) e a advogada corrige o que mudou: taxa, boleto, desconto, limite da taxa
+  extra, a **vigência (início do contrato)**, período mínimo, fidelização, **honorários de cobrança extrajudicial**, foro, prazo de contestação e o
+  resultado de cada cláusula pedida (aceito, em parte ou recusado, com a redação). Garantias, cashback e o primeiro
+  vencimento são do executivo: valem sempre os do pedido (`comPedido`), e a advogada não os altera. Concluir leva a `assinado` e avisa o executivo para
   **solicitar a implantação** (veja abaixo). O Jurídico não abre a implantação.
 - **Contratos encerrados:** ficam em Acompanhamento de demandas Jurídicas → **Controle** (filtro "Assinado" ou busca). As condições ficam travadas; quem
   elabora usa **Corrigir condições**, com o motivo obrigatório. O histórico guarda o que mudou (de → para), e o
