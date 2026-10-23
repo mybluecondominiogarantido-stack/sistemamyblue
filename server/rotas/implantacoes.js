@@ -407,7 +407,7 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     const busca = texto(req.query.q, 100);
     if (busca) where.push(`(i.condominio ILIKE ${v('%' + busca + '%')} OR i.protocolo ILIKE $${args.length} OR i.cnpj ILIKE $${args.length})`);
     const { rows } = await db.q(`SELECT i.id, i.protocolo, i.etapa, i.origem, i.analise_id, i.analise_protocolo, i.condominio, i.cnpj, i.uf, i.formulario,
-        i.enviado_em, i.prazo_inicio, i.iniciado_em, i.criado_em, i.atualizado_em, e.nome AS executivo_nome, ur.nome AS responsavel_nome,
+        i.enviado_em, i.prazo_inicio, i.iniciado_em, i.criado_em, i.atualizado_em, i.responsavel_id, e.nome AS executivo_nome, ur.nome AS responsavel_nome,
         (SELECT array_agg(DISTINCT d.tipo) FROM implantacao_documentos d WHERE d.implantacao_id = i.id AND d.substituido_em IS NULL) AS tipos
       FROM implantacoes i LEFT JOIN executivos e ON e.id = i.executivo_id LEFT JOIN usuarios ur ON ur.id = i.responsavel_id
       WHERE ${where.join(' AND ')}

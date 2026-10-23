@@ -4039,6 +4039,9 @@
     designada: 'designou', iniciada: 'iniciou a implantação', etapas: 'atualizou as etapas', pendencia: 'devolveu com pendência',
     concluida: 'concluiu a implantação', parceiros: 'levou o condomínio à base de Parceiros', carteira: 'confirmou a entrada na Carteira', contrato: 'recebeu as condições fechadas do contrato', contrato_corrigido: 'recebeu a correção das condições do contrato',
     diretoria_pedida: 'pediu a aprovação da diretoria', diretoria_aprovou: 'aprovou taxa e boleto', diretoria_recusou: 'não aprovou taxa e boleto',
+    autorizacao_pedida: 'pediu autorização para editar', autorizacao: 'autorizou', autorizacao_recusada: 'não autorizou o pedido para editar', autorizacao_revogada: 'revogou uma autorização para editar',
+    impedimento: 'marcou impedimento (prazo pausado)', retomada: 'retomou o prazo', onboarding_justificado: 'justificou o onboarding fora do prazo',
+    documento_marcado: 'marcou recebido sem arquivo', documento_desmarcado: 'desfez a marcação de recebido', cobranca_prazo: 'cobrou o prazo', meta_documentacao: 'marcou a meta de documentação à mão', cobranca_documentos: 'cobrou documentos do executivo',
   };
   var ETAPA_SETOR_IMP = [['documentacao', 'Documentação', 'Obrigatórios conferidos; os pendentes seguem com alerta ao executivo.'], ['vouch', 'Cadastro no sistema (Vouch)', 'O ID vai direto para a Carteira.'],
     ['onboarding', 'Onboarding', 'Reunião de boas-vindas com o síndico.'], ['boletos', 'Emissão de boletos', 'Primeira emissão pelo novo contrato. Informe o 1º vencimento: o prazo do onboarding conta dele.'], ['envio', 'Envio dos boletos', 'Vai para a Carteira como forma de envio.']];
@@ -4111,7 +4114,9 @@
         return '<tr class="clicavel" data-id="' + i.id + '"><td style="white-space:nowrap"><b>' + esc(i.protocolo || 'Rascunho') + '</b><span class="sec">' + dataHoraCr(i.enviado_em || i.criado_em) + '</span></td>' +
           '<td><b>' + esc(i.condominio || 'Sem nome') + '</b><span class="sec">' + esc([i.uf, i.uh_total ? i.uh_total + ' unidades' : ''].filter(Boolean).join(' · ')) + '</span></td>' +
           '<td style="white-space:nowrap">' + esc(origemImp(i)) + '</td><td>' + esc(i.executivo_nome || '—') + '</td><td>' + etqCr(ETAPA_IMP, i.etapa) + '</td>' +
-          '<td>' + esc(i.responsavel_nome || (i.etapa === 'fila' ? 'aguardando designação' : '—')) +
+          // 🔒: a equipe vê, mas só quem conduz edita (outra pessoa, só com autorização da coordenação)
+          '<td>' + (p.equipe && !p.coordenacao && i.responsavel_id && i.responsavel_id !== eu.id && ['em_implantacao', 'pendencia', 'concluida'].indexOf(i.etapa) >= 0 ? '<span title="Com outra pessoa: você consulta; para editar, peça autorização à coordenação">🔒 </span>' : '') +
+          esc(i.responsavel_nome || (i.etapa === 'fila' ? 'aguardando designação' : '—')) +
           (i.etapa === 'em_implantacao' && i.prazo_inicio ? (i.iniciado_em ? '<span class="sec">iniciada</span>' : '<span class="sec">' + prazoCr(i.prazo_inicio, i.etapa).replace('Até ', 'iniciar até ').replace('Venceu ', 'prazo para iniciar venceu ') + '</span>') : '') + '</td>' +
           '<td>' + (i.pendentes.length ? '<span class="etiqueta ambar" title="' + esc(i.pendentes.join('; ')) + '">' + i.pendentes.length + ' pendente(s)</span>' : '<span class="sec">—</span>') + '</td></tr>';
       }).join('') || '<tr><td colspan="7"><div class="vazio" style="border:0;padding:34px">' + (aba === 'minhas' ? 'Você ainda não pediu implantações.' : 'Nada por aqui.') + '</div></td></tr>';
@@ -4459,15 +4464,22 @@
     var i = d.implantacao, pd = d.pode;
     var vig = d.documentos.filter(function (x) { return !x.substituido_em; });
     function lnk(x) {
+      // recebido sem arquivo (em papel, no CPD): conta como recebido na data da marcação
+      if (x.sem_arquivo) {
+        return '<span class="anexo" title="' + esc(x.observacao || '') + '">' + IC.documento + '<span>Sem arquivo</span><span class="sec">' + esc(x.observacao || '') + ' · ' + esc(x.enviado_por_nome || '') + ' em ' + dataHoraCr(x.enviado_em) + '</span></span>' +
+          (pd.marcar_documentos ? '<button type="button" class="btn ghost sm" data-desfazer-doc-imp="' + x.id + '">Desfazer</button>' : '');
+      }
       return '<a class="anexo" href="/api/implantacoes/' + i.id + '/documentos/' + x.id + (x.mime === 'application/pdf' ? '?ver=1' : '') + '" target="_blank" rel="noopener">' + IC.documento + '<span>' + esc(x.nome) + '</span><span class="sec">' + tamanho(x.tamanho) + '</span></a>' +
         (pd.tirar_documentos && !x.vinculado && x.tipo !== 'analise_credito' ? '<button type="button" class="btn icon ghost" data-tirar-doc-imp="' + x.id + '" aria-label="Remover ' + esc(x.nome) + '">' + IC.fechar + '</button>' : '');
     }
     function linha(t) {
       var atual = vig.filter(function (x) { return x.tipo === t.tipo; });
       var vinc = atual.some(function (x) { return x.vinculado; });
-      var st = atual.length ? etq([vinc || t.tipo === 'analise_credito' ? 'vinculada' : 'entregue', 'verde']) : t.obrigatorio ? etq(['falta', 'vermelha']) : t.setor ? etq(['com a Implantação', 'azul']) : t.pendente ? etq(['pendente', 'ambar']) : etq(['opcional', 'cinza']);
+      var semArq = atual.length && atual.every(function (x) { return x.sem_arquivo; });
+      var st = atual.length ? etq([vinc || t.tipo === 'analise_credito' ? 'vinculada' : semArq ? 'recebido sem arquivo' : 'entregue', 'verde']) : t.obrigatorio ? etq(['falta', 'vermelha']) : t.setor ? etq(['com a Implantação', 'azul']) : t.pendente ? etq(['pendente', 'ambar']) : etq(['opcional', 'cinza']);
       return '<div class="doc-linha"><b style="flex:1 1 260px">' + esc(t.nome) + (t.obrigatorio ? ' <span style="color:var(--red)" aria-label="obrigatório">*</span>' : '') + '</b>' + st + atual.map(lnk).join('') +
-        (pd.documentos && t.tipo !== 'analise_credito' && (!vinc || t.tipo === 'outro') ? '<label class="btn ghost sm">' + IC.enviar + (atual.length ? (t.tipo === 'outro' ? 'Anexar outro' : 'Trocar') : 'Anexar') + '<input type="file" data-doc-imp="' + t.tipo + '" hidden></label>' : '') + '</div>';
+        (pd.documentos && t.tipo !== 'analise_credito' && (!vinc || t.tipo === 'outro') ? '<label class="btn ghost sm">' + IC.enviar + (atual.length ? (t.tipo === 'outro' ? 'Anexar outro' : semArq ? 'Anexar o arquivo' : 'Trocar') : 'Anexar') + '<input type="file" data-doc-imp="' + t.tipo + '" hidden></label>' : '') +
+        (pd.marcar_documentos && !atual.length && ['analise_credito', 'outro'].indexOf(t.tipo) < 0 ? '<button type="button" class="btn ghost sm" data-marcar-doc-imp="' + t.tipo + '" data-nome="' + esc(t.nome) + '">Marcar recebido</button>' : '') + '</div>';
     }
     var obrigTipos = d.documentos_obrigatorios || [];
     var obrig = m.documentos.filter(function (t) { return obrigTipos.indexOf(t.tipo) >= 0; }).map(function (t) { return Object.assign({}, t, { obrigatorio: true }); });
@@ -4488,6 +4500,22 @@
       inp.onchange = async function () {
         if (!inp.files[0]) return;
         try { await enviarDocImp(i.id, inp.getAttribute('data-doc-imp'), inp.files[0]); toast('Documento anexado.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+      };
+    });
+    $$('[data-marcar-doc-imp]').forEach(function (b) {
+      b.onclick = function () {
+        var mo = modal({ titulo: 'Marcar recebido · ' + b.getAttribute('data-nome'), corpo: '<p class="ajuda" style="margin-top:0">Para documento recebido sem arquivo (em papel, já arquivado). Conta como recebido hoje, também na meta de documentação.</p>' +
+          '<label class="rot" for="mDocObs">Observação (obrigatória)</label><textarea class="campo" id="mDocObs" rows="2" placeholder="Ex.: original em papel, arquivado no CPD."></textarea>',
+          pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mDocOk">Marcar recebido</button>' });
+        $('#mDocOk', mo).onclick = async function () {
+          try { await api('POST', '/api/implantacoes/' + i.id + '/documentos/marcar', { tipo: b.getAttribute('data-marcar-doc-imp'), observacao: $('#mDocObs', mo).value }); mo.fechar(); toast('Marcado como recebido.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+        };
+      };
+    });
+    $$('[data-desfazer-doc-imp]').forEach(function (b) {
+      b.onclick = async function () {
+        if (!(await confirmar('Desfazer recebido', 'O documento volta a ficar pendente.', 'Desfazer', true))) return;
+        try { await api('POST', '/api/implantacoes/' + i.id + '/documentos/' + b.getAttribute('data-desfazer-doc-imp') + '/desfazer', {}); recarregar(); } catch (e) { toast(e.message, 'erro'); }
       };
     });
     $$('[data-tirar-doc-imp]').forEach(function (b) {
@@ -4608,6 +4636,164 @@
       onboarding: { situacao: onb, data: onb === 'marcado' || onb === 'realizado' ? $('#e_onb_data').value : '', hora: onb === 'marcado' || onb === 'realizado' ? $('#e_onb_hora').value : '',
         por: onb === 'marcado' || onb === 'realizado' ? Number($('#e_onb_por').value) || null : null },
       boletos: { feito: $('#e_bol').checked, primeiro_vencimento: $('#e_bol_venc').value }, envio: { forma: env ? env.value : '' } };
+  }
+
+  /* ---------- setor no dia a dia: quem edita, prazo para concluir (pausas) e onboarding depois de concluir ---------- */
+  var ESCOPO_CURTO_IMP = { tudo: 'tudo', etapas: 'só as etapas', documentos: 'só documentos e ficha' };
+  function diasUteisImp(n) { return n === 1 ? '1 dia útil' : n + ' dias úteis'; }
+  function prazoConcluirImp(s) {
+    if (!s) return null;
+    var v = s.vence ? dataBr(s.vence) : '';
+    if (s.status === 'no_prazo') return ['Concluir até ' + v + ' · faltam ' + diasUteisImp(s.faltam), 'azul'];
+    if (s.status === 'vence_amanha') return ['Concluir até ' + v + ' · vence no próximo dia útil', 'ambar'];
+    if (s.status === 'vence_hoje') return ['Concluir hoje (' + v + ')', 'ambar'];
+    if (s.status === 'atrasado') return ['Atrasada · ' + diasUteisImp(s.atraso) + ' (venceu ' + v + ')', 'vermelha'];
+    if (s.status === 'pausado') return ['Prazo pausado desde ' + dataBr(s.desde) + (s.atraso ? ' · ' + diasUteisImp(s.atraso) + ' de atraso' : ' · faltam ' + diasUteisImp(s.faltam)), 'cinza'];
+    if (s.status === 'cumprido') return ['Concluída no prazo (' + dataBr(s.em) + ')', 'verde'];
+    return ['Concluída com ' + diasUteisImp(s.atraso) + ' de atraso (' + dataBr(s.em) + ')', 'ambar'];
+  }
+  function htmlDiaADiaImp(d) {
+    var i = d.implantacao, pd = d.pode, st = d.setor;
+    if (!st) return '';
+    var html = '';
+    var meusPedidos = st.autorizacoes.filter(function (a) { return eu && a.usuario_id === eu.id && a.situacao === 'pedida'; });
+    // quem edita
+    if (st.autorizacao) {
+      html += '<div class="msg info" style="margin-bottom:16px">🔓 <b>Você pode editar esta implantação</b> (' + esc(ESCOPO_CURTO_IMP[st.autorizacao.escopo]) + ')' + (st.autorizacao.ate ? ' até ' + dataBr(st.autorizacao.ate) : '') +
+        ', com autorização da coordenação. Ela continua com ' + esc(i.responsavel_nome || 'quem conduz') + '.</div>';
+    } else if (i.responsavel_id && !pd.editar_setor && (pd.pedir_autorizacao || meusPedidos.length)) {
+      html += '<div class="msg aviso" style="margin-bottom:16px"><div class="linha"><span style="flex:1 1 320px">🔒 <b>Esta implantação está com ' + esc(i.responsavel_nome || 'outra pessoa') + '.</b> Você consulta tudo; para editar, a coordenação precisa autorizar.' +
+        (meusPedidos.length ? ' Seu pedido de ' + dataHoraCr(meusPedidos[0].pedida_em) + ' está com a coordenação.' : '') + '</span>' +
+        (pd.pedir_autorizacao && !meusPedidos.length ? '<button class="btn ghost sm" id="btPedirAutImp">Pedir autorização</button>' : '') + '</div></div>';
+    }
+    var recusada = st.autorizacoes.filter(function (a) { return eu && a.usuario_id === eu.id && a.situacao === 'recusada'; })[0];
+    if (recusada && !st.autorizacao && !meusPedidos.length) html += '<div class="msg erro" style="margin-bottom:16px">A coordenação não autorizou seu pedido de ' + dataHoraCr(recusada.pedida_em) + (recusada.resposta ? ': "' + esc(recusada.resposta) + '"' : '.') + '</div>';
+    if (pd.autorizar) {
+      var pedidos = st.autorizacoes.filter(function (a) { return a.situacao === 'pedida'; });
+      var ativas = st.autorizacoes.filter(function (a) { return a.situacao === 'ativa' && !a.vencida; });
+      if (pedidos.length || ativas.length) {
+        html += '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Quem edita além de ' + esc(i.responsavel_nome || 'quem conduz') + '</h2><span class="espaco"></span><button class="btn ghost sm" data-autorizar-imp="">Autorizar outra pessoa</button></div>' +
+          pedidos.map(function (a) {
+            return '<div class="doc-linha">' + etq(['pedido', 'ambar']) + '<span style="flex:1 1 280px"><b>' + esc(a.usuario_nome) + '</b> pede para editar: "' + esc(a.motivo || '') + '"<span class="sec" style="display:block">' + dataHoraCr(a.pedida_em) + '</span></span>' +
+              '<button class="btn ghost sm" data-recusar-aut-imp="' + a.id + '">Recusar</button><button class="btn primary sm" data-autorizar-imp="' + a.id + '">Autorizar</button></div>';
+          }).join('') +
+          ativas.map(function (a) {
+            return '<div class="doc-linha">' + etq(['autorizada', 'verde']) + '<span style="flex:1 1 280px"><b>' + esc(a.usuario_nome) + '</b> · ' + esc(ESCOPO_CURTO_IMP[a.escopo]) + (a.ate ? ' · até ' + dataBr(a.ate) : ' · sem prazo') +
+              '<span class="sec" style="display:block">' + esc(a.decidida_por_nome ? 'por ' + a.decidida_por_nome + ' em ' + dataHoraCr(a.decidida_em) : '') + (a.motivo ? ' · "' + esc(a.motivo) + '"' : '') + '</span></span>' +
+              '<button class="btn ghost sm" data-revogar-aut-imp="' + a.id + '">Revogar</button></div>';
+          }).join('') + '</section>';
+      }
+    }
+    // prazo para concluir
+    var s = st.prazo_concluir, chip = prazoConcluirImp(s);
+    var aberta = st.pausas.filter(function (p) { return !p.fim; })[0];
+    if (chip) {
+      var acoes = '';
+      if (pd.impedimento && !aberta) acoes += '<button class="btn ghost sm" id="btImpedImp">Marcar impedimento</button>';
+      if (pd.impedimento && aberta && aberta.tipo === 'impedimento') acoes += '<button class="btn primary sm" id="btRetomarImp">Resolvido: retomar o prazo</button>';
+      if (pd.autorizar && s.status === 'atrasado') acoes += '<button class="btn ghost sm" data-cobrar-imp="concluir">Cobrar</button>';
+      html += '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Prazo para concluir</h2>' + etq(chip) + '<span class="espaco"></span>' + acoes + '</div><div class="corpo pilha" style="gap:8px">' +
+        '<span class="ajuda" style="margin:0">' + diasUteisImp(s.dias) + ' depois de assumir (' + dataBr(s.assumida) + '). Pausa enquanto há pendência com o comercial ou um impedimento marcado, e continua de onde parou.</span>' +
+        (aberta ? '<div class="msg aviso" style="margin:0">' + (aberta.tipo === 'pendencia' ? '<b>Pausado: pendência com o comercial.</b> Volta a contar quando o comercial reenviar.'
+          : '<b>Pausado: ' + esc(aberta.motivo) + '.</b> "' + esc(aberta.detalhe || '') + '" · ' + esc(aberta.por_nome || '') + ' em ' + dataHoraCr(aberta.inicio) + '. A coordenação foi avisada.') + '</div>' : '') +
+        (st.pausas.some(function (p) { return p.fim; }) ? '<details><summary class="ajuda" style="cursor:pointer;margin:0">Pausas anteriores</summary><div class="pilha" style="gap:4px;margin-top:6px;font-size:13px;color:var(--ink-2)">' +
+          st.pausas.filter(function (p) { return p.fim; }).map(function (p) {
+            return '<div>' + dataHoraCr(p.inicio) + ' → ' + dataHoraCr(p.fim) + ' · ' + (p.tipo === 'pendencia' ? 'pendência com o comercial' : esc(p.motivo) + (p.detalhe ? ': "' + esc(p.detalhe) + '"' : '')) +
+              (p.resolucao ? ' · resolvido: "' + esc(p.resolucao) + '" (' + esc(p.encerrada_por_nome || '') + ')' : '') + '</div>';
+          }).join('') + '</div></details>' : '') + '</div></section>';
+    }
+    // onboarding depois de concluir
+    var o = st.onboarding;
+    if (d.onboarding_pendente && ['concluida', 'na_carteira'].indexOf(i.etapa) >= 0) {
+      html += '<div class="msg ' + (o && o.vencido ? 'erro' : 'aviso') + '" style="margin-bottom:16px"><div class="linha" style="gap:10px"><span style="flex:1 1 320px"><b>Onboarding pendente.</b> ' +
+        (o && o.limite ? (o.vencido ? 'O prazo venceu em ' + dataBr(o.limite) + ': a meta do onboarding fica como não batida.' : 'Prazo até ' + dataBr(o.limite) + '.') : 'Registre quando for feito.') + '</span>' +
+        (pd.onboarding ? '<button class="btn primary sm" id="btOnbDepoisImp">Registrar onboarding</button>' : '') + '</div>' +
+        (o && o.vencido ? (o.justificativa ? '<div style="margin-top:8px"><b>Justificativa</b> (' + esc(o.justificativa.por_nome || '') + ', ' + dataHoraCr(o.justificativa.em) + '): "' + esc(o.justificativa.texto) + '". A meta continua não batida.</div>'
+          : pd.justificar_onboarding ? '<label class="rot" for="mJustOnb" style="margin-top:10px">Justificativa: por que o onboarding não foi feito no prazo (obrigatória)</label><textarea class="campo" id="mJustOnb" rows="2"></textarea>' +
+            '<div class="linha" style="justify-content:flex-end;margin-top:8px"><button class="btn primary sm" id="btJustOnbImp">Salvar justificativa</button></div>' : '<div style="margin-top:6px">Aguardando a justificativa de quem conduz.</div>') : '') + '</div>';
+    } else if (o && o.justificativa) {
+      html += '<div class="msg info" style="margin-bottom:16px"><b>Onboarding fora do prazo, justificado</b> por ' + esc(o.justificativa.por_nome || '') + ': "' + esc(o.justificativa.texto) + '". A meta fica como não batida.</div>';
+    }
+    return html;
+  }
+  function ligarDiaADiaImp(d, m, recarregar) {
+    var i = d.implantacao, st = d.setor;
+    if (!st) return;
+    var post = async function (url, corpo, ok, mo) {
+      try { await api('POST', '/api/implantacoes/' + i.id + url, corpo || {}); if (mo) mo.fechar(); toast(ok, 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+    };
+    if ($('#btPedirAutImp')) $('#btPedirAutImp').onclick = function () {
+      var mo = modal({ titulo: 'Pedir autorização para editar', corpo: '<p class="ajuda" style="margin-top:0">A implantação está com ' + esc(i.responsavel_nome || 'outra pessoa') + '. A coordenação recebe o pedido no portal e por e-mail.</p>' +
+        '<label class="rot" for="mAutMot">Por que precisa editar (obrigatório)</label><textarea class="campo" id="mAutMot" rows="3" placeholder="Ex.: a responsável está de férias e o síndico enviou a conta bancária."></textarea>',
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mAutOk">Pedir</button>' });
+      $('#mAutOk', mo).onclick = function () { post('/autorizacoes/pedir', { motivo: $('#mAutMot', mo).value }, 'Pedido enviado à coordenação.', mo); };
+    };
+    $$('[data-autorizar-imp]').forEach(function (b) {
+      b.onclick = function () {
+        var pid = b.getAttribute('data-autorizar-imp');
+        var pedido = pid ? st.autorizacoes.filter(function (a) { return String(a.id) === pid; })[0] : null;
+        var gente = (m.equipe || []).filter(function (x) { return x.id !== i.responsavel_id; });
+        var mo = modal({ titulo: pedido ? 'Autorizar ' + pedido.usuario_nome : 'Autorizar outra pessoa a editar',
+          corpo: (pedido ? '<p class="ajuda" style="margin-top:0">Pedido: "' + esc(pedido.motivo || '') + '"</p>' : selCr('mAutQuem', 'Quem', gente.length ? gente[0].id : '', gente.map(function (x) { return [x.id, x.nome]; }))) +
+            '<span class="rot">O que pode editar</span><div class="pilha" style="gap:6px;margin-bottom:12px">' + Object.keys(st.escopos).map(function (k, n) {
+              return '<label class="opcao-radio"><input type="radio" name="mAutEsc" value="' + k + '"' + (n === 0 ? ' checked' : '') + '><div><b>' + esc(st.escopos[k].charAt(0).toUpperCase() + st.escopos[k].slice(1)) + '</b></div></label>';
+            }).join('') + '</div>' +
+            '<div class="grade-2"><div><label class="rot" for="mAutAte">Até (opcional)</label><input class="campo" type="date" id="mAutAte"></div>' +
+            (pedido ? '' : '<div><label class="rot" for="mAutMotC">Motivo</label><input class="campo" id="mAutMotC" placeholder="Ex.: cobrir as férias"></div>') + '</div>' +
+            '<div class="ajuda">A implantação continua com ' + esc(i.responsavel_nome || 'quem conduz') + '. Você revoga quando quiser.</div>',
+          pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mAutDar">Autorizar</button>' });
+        $('#mAutDar', mo).onclick = function () {
+          var corpo = { escopo: $('input[name=mAutEsc]:checked', mo).value, ate: $('#mAutAte', mo).value };
+          if (pedido) corpo.pedido_id = pedido.id; else { corpo.usuario_id = Number($('#mAutQuem', mo).value); corpo.motivo = $('#mAutMotC', mo).value; }
+          post('/autorizacoes', corpo, 'Autorizado; a pessoa foi avisada.', mo);
+        };
+      };
+    });
+    $$('[data-recusar-aut-imp]').forEach(function (b) {
+      b.onclick = function () {
+        var mo = modal({ titulo: 'Recusar o pedido', corpo: '<label class="rot" for="mAutResp">Resposta (opcional)</label><textarea class="campo" id="mAutResp" rows="2"></textarea>',
+          pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn danger" id="mAutRec">Recusar</button>' });
+        $('#mAutRec', mo).onclick = function () { post('/autorizacoes/' + b.getAttribute('data-recusar-aut-imp') + '/recusar', { resposta: $('#mAutResp', mo).value }, 'Pedido recusado.', mo); };
+      };
+    });
+    $$('[data-revogar-aut-imp]').forEach(function (b) {
+      b.onclick = async function () {
+        if (!(await confirmar('Revogar autorização', 'A pessoa deixa de editar esta implantação e é avisada.', 'Revogar', true))) return;
+        post('/autorizacoes/' + b.getAttribute('data-revogar-aut-imp') + '/revogar', {}, 'Autorização revogada.');
+      };
+    });
+    if ($('#btImpedImp')) $('#btImpedImp').onclick = function () {
+      var mo = modal({ titulo: 'Marcar impedimento', corpo: '<p class="ajuda" style="margin-top:0">O prazo para concluir pausa agora. A coordenação é avisada com o motivo (não precisa aprovar).</p>' +
+        selCr('mImpMot', 'O que impede concluir', '', [['', 'Escolha']].concat(Object.keys(st.motivos_impedimento).map(function (k) { return [k, st.motivos_impedimento[k]]; }))) +
+        '<label class="rot" for="mImpDet" style="margin-top:12px">Descreva (obrigatório)</label><textarea class="campo" id="mImpDet" rows="3" placeholder="Ex.: o síndico ainda não enviou a conta bancária."></textarea>',
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mImpOk">Pausar o prazo</button>' });
+      $('#mImpOk', mo).onclick = function () { post('/impedimento', { motivo: $('#mImpMot', mo).value, detalhe: $('#mImpDet', mo).value }, 'Prazo pausado; a coordenação foi avisada.', mo); };
+    };
+    if ($('#btRetomarImp')) $('#btRetomarImp').onclick = function () {
+      var mo = modal({ titulo: 'Resolvido: retomar o prazo', corpo: '<p class="ajuda" style="margin-top:0">O prazo continua de onde parou. A coordenação é avisada.</p>' +
+        '<label class="rot" for="mRetRes">O que foi resolvido (obrigatório)</label><textarea class="campo" id="mRetRes" rows="3" placeholder="Ex.: conta bancária recebida por e-mail."></textarea>',
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mRetOk">Retomar o prazo</button>' });
+      $('#mRetOk', mo).onclick = function () { post('/impedimento/retomar', { resolucao: $('#mRetRes', mo).value }, 'Prazo retomado.', mo); };
+    };
+    $$('[data-cobrar-imp]').forEach(function (b) {
+      b.onclick = async function () {
+        var ficha = b.getAttribute('data-cobrar-imp') === 'ficha';
+        if (!(await confirmar('Cobrar ' + (ficha ? 'a ficha de repasse' : 'a conclusão'), esc(i.responsavel_nome || 'Quem conduz') + ' recebe a cobrança no portal e por e-mail.', 'Cobrar'))) return;
+        post('/cobrar', { qual: ficha ? 'ficha' : 'concluir' }, 'Cobrança enviada.');
+      };
+    });
+    if ($('#btOnbDepoisImp')) $('#btOnbDepoisImp').onclick = function () {
+      var o = i.etapas.onboarding;
+      var mo = modal({ titulo: 'Registrar o onboarding', corpo: selCr('mOnbSit', 'Situação', ['marcado', 'realizado', 'sindico_myblue'].indexOf(o.situacao) >= 0 ? o.situacao : 'realizado', Object.keys(m.onboarding).map(function (k) { return [k, m.onboarding[k]]; })) +
+        '<div class="grade-2" style="margin-top:12px"><div><label class="rot" for="mOnbData">Data</label><input class="campo" type="date" id="mOnbData" value="' + (/^\d{4}-\d{2}-\d{2}$/.test(o.data) ? esc(o.data) : '') + '"></div>' +
+        '<div><label class="rot" for="mOnbHora">Hora</label><input class="campo" type="time" id="mOnbHora" value="' + esc(o.hora || '') + '"></div></div>' +
+        selCr('mOnbPor', 'Feito por', o.por || i.responsavel_id || '', (m.equipe || []).map(function (x) { return [x.id, x.nome]; })),
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mOnbOk">Salvar</button>' });
+      $('#mOnbOk', mo).onclick = function () {
+        post('/onboarding', { onboarding: { situacao: $('#mOnbSit', mo).value, data: $('#mOnbData', mo).value, hora: $('#mOnbHora', mo).value, por: Number($('#mOnbPor', mo).value) || null } }, 'Onboarding registrado.', mo);
+      };
+    };
+    if ($('#btJustOnbImp')) $('#btJustOnbImp').onclick = function () { post('/onboarding-justificativa', { texto: $('#mJustOnb').value }, 'Justificativa salva.'); };
   }
 
   async function confirmarCarteiraImp(i, recarregar) {
@@ -4960,6 +5146,7 @@
     if (!pd.editar && ['rascunho', 'diretoria'].indexOf(i.etapa) < 0 && d.pendencias.length) html += '<div class="msg aviso" style="margin-bottom:16px"><b>Pendente:</b> ' + esc(d.pendencias.join('; ')) + '. O executivo recebe um lembrete por e-mail a cada dia útil até chegar.</div>';
     var ultimaPend = d.eventos.filter(function (e) { return e.tipo === 'pendencia'; }).pop();
     if (i.etapa === 'pendencia' && ultimaPend) html += '<div class="msg aviso" style="margin-bottom:16px;white-space:pre-wrap">' + esc(ultimaPend.detalhe.mensagem || '') + '</div>';
+    html += htmlDiaADiaImp(d);
     var setorHtml = pd.interno ? htmlSetorImp(d, m) : '';
     var formHtml = '<div id="formImp" class="pilha" style="gap:18px"' + (pd.editar ? '' : ' data-leitura') + '>' + htmlFormImp(i, m, parceiros, difs) + '</div>';
     // para o setor, o formulário fica recolhido depois das etapas
@@ -4972,13 +5159,18 @@
         var x = e.detalhe || {};
         var extra = e.tipo === 'documento' || e.tipo === 'documento_removido' ? ': ' + esc(x.nome) : e.tipo === 'enviada' ? ' (' + esc(x.protocolo) + ')' : e.tipo === 'criada' && x.analise ? ' a partir da análise ' + esc(x.analise)
           : e.tipo === 'designada' ? ' para ' + esc(x.para) : e.tipo === 'pendencia' ? ': ' + esc((x.itens || []).join('; ')) : e.tipo === 'carteira' ? ' (ID ' + esc(x.codigo) + ')'
-            : e.tipo === 'parceiros' ? (x.criado ? ': ' + esc(x.criado) : x.ja_existia ? ': já existia ' + esc(x.ja_existia) : ': parceiro sem cadastro') : '';
+            : e.tipo === 'parceiros' ? (x.criado ? ': ' + esc(x.criado) : x.ja_existia ? ': já existia ' + esc(x.ja_existia) : ': parceiro sem cadastro')
+              : e.tipo === 'autorizacao' ? ' ' + esc(x.para) + ' a editar (' + esc(ESCOPO_CURTO_IMP[x.escopo] || x.escopo) + (x.ate ? ' até ' + dataBr(x.ate) : '') + ')'
+                : e.tipo === 'autorizacao_pedida' ? ': "' + esc(x.motivo) + '"' : e.tipo === 'impedimento' ? ': ' + esc(x.motivo) + ' · "' + esc(x.detalhe) + '"' : e.tipo === 'retomada' ? ': "' + esc(x.resolucao) + '"'
+                  : e.tipo === 'documento_marcado' ? ': ' + esc(x.nome) + ' · "' + esc(x.observacao) + '"' : e.tipo === 'documento_desmarcado' ? ': ' + esc(x.nome)
+                    : e.tipo === 'cobranca_prazo' ? (x.qual === 'ficha' ? ' da ficha de repasse' : ' para concluir') : e.tipo === 'concluida' && x.onboarding_pendente ? ' (com o onboarding pendente)' : '';
         return '<div><b style="color:var(--ink)">' + dataHoraCr(e.criado_em) + '</b> · ' + esc(e.usuario_nome || 'Sistema') + ' ' + (EVENTO_IMP[e.tipo] || esc(e.tipo)) + extra + '</div>';
       }).join('') + '</div></section></div>';
     $('#conteudo').innerHTML = html;
     var raiz = $('#formImp');
     ligarCondicoesImp(raiz);
     ligarDocsImp(i, recarregar);
+    ligarDiaADiaImp(d, m, recarregar);
     if ($('#btCancImp')) $('#btCancImp').onclick = async function () {
       if (!(await confirmar('Cancelar implantação', 'A implantação fica no histórico como cancelada' + (i.analise_id ? ' e a análise volta a ficar disponível' : '') + '.', 'Cancelar implantação', true))) return;
       try { await api('POST', '/api/implantacoes/' + i.id + '/cancelar', {}); location.hash = '#/implantacao'; } catch (e) { toast(e.message, 'erro'); }
@@ -5013,7 +5205,8 @@
     };
     if ($('#btConclImp')) $('#btConclImp').onclick = async function () {
       var parc = (i.formulario.parceria === 'sim' && (i.formulario.parceiros || []).length) ? ' Como há parceria, o setor Parceiros é avisado e o condomínio entra na Prestação de Contas ligado ao parceiro (comissão a definir).' : '';
-      if (!(await confirmar('Concluir a implantação', 'A coordenação é avisada para confirmar a entrada na Carteira.' + parc, 'Concluir'))) return;
+      var onb = d.onboarding_pendente ? '<br><br><b>O onboarding ainda não foi feito.</b> Dá para concluir: o alerta continua na implantação até registrar o onboarding' + (d.setor && d.setor.onboarding && d.setor.onboarding.limite ? ' (prazo até ' + dataBr(d.setor.onboarding.limite) + ')' : '') + '; se o prazo vencer, é preciso justificar.' : '';
+      if (!(await confirmar('Concluir a implantação', 'A coordenação é avisada para confirmar a entrada na Carteira.' + parc + onb, 'Concluir'))) return;
       try { await api('POST', '/api/implantacoes/' + i.id + '/concluir', {}); toast('Implantação concluída.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
     };
     if ($('#btCartImp')) $('#btCartImp').onclick = function () { confirmarCarteiraImp(i, recarregar); };
