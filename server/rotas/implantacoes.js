@@ -506,6 +506,8 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
       const doContrato = FC.paraImplantacao(ct);
       for (const k of FC.CAMPOS_FECHADOS_IMPLANTACAO) { if (doContrato[k] !== undefined) f[k] = doContrato[k]; else delete f[k]; }
     }
+    // o dia de vencimento dos boletos acompanha a data do primeiro vencimento
+    if (/^\d{4}-\d{2}-\d{2}$/.test(texto(f.primeiro_vencimento))) f.dia_vencimento = Number(texto(f.primeiro_vencimento).slice(8, 10));
     await db.tx(async (t) => {
       await t.q(`UPDATE implantacoes SET formulario = $2::jsonb, condominio = $3, cnpj = $4, uf = $5, executivo_id = $6, atualizado_em = now() WHERE id = $1`,
         [i.id, JSON.stringify(f), texto(f.nome, 200), f.sem_cnpj ? '' : texto(f.cnpj, 20), texto(f.uf, 2).toUpperCase(), executivoId]);

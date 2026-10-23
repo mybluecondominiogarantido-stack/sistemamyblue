@@ -126,7 +126,7 @@ const FORM = {
   nome: 'Condomínio Residencial Fictício', cnpj: '11.222.333/0001-81', uf: 'RN', cidade: 'Natal', administradora: 'Administradora Exemplo',
   sindico_nome: 'Síndico Fictício', sindico_cpf: '111.444.777-35', sindico_email: 'sindico@exemplo.com', sindico_telefone: '(84) 90000-0000',
   taxa_adm: 3.5, boleto: 2, desconto_tipo: 'percentual', desconto_valor: 10, garantias: ['Taxa ordinária', 'Taxa extraordinária', 'Água'], taxa_ordinaria: 1840, taxa_extra: 700,
-  cashback: 'nao', primeiro_vencimento: '2026-12-10', periodo_minimo: 12,
+  cashback: 'nao', inicio_contrato: '2026-12-01', primeiro_vencimento: '2026-12-10', periodo_minimo: 12,
   pedidos: ['foro_capital', 'reembolso_limitar'], pedidos_detalhe: { reembolso_limitar: 'teto de R$ 50 por certidão' }, minucias: 'Primeiro repasse adiantado em 5 dias.',
 };
 
@@ -216,9 +216,9 @@ test('assinatura: o executivo pede, a advogada manda assinar, anexa a via assina
   assert.equal((await exec('PUT', `/api/contratos/${idC}/fechado`, { condicoes: x })).status, 403);
   let r = await adv('PUT', `/api/contratos/${idC}/fechado`, { condicoes: { ...x, taxa_adm: 3.25 } });
   assert.equal(r.status, 200, r.texto);
-  // a vigência e os honorários são da advogada; o primeiro vencimento (e o dia dos boletos) vem do executivo
-  assert.deepEqual(r.json.faltas.filter((f) => !/Dizer como ficou/.test(f)), ['Informar a vigência (início do contrato).', 'Informar os honorários de cobrança extrajudicial.']);
-  assert.deepEqual([x.primeiro_vencimento, x.dia_vencimento, x.inicio_contrato], ['2026-12-10', 10, '']);
+  // a vigência vem do pedido (a advogada confirma), os honorários são dela; o primeiro vencimento (e o dia dos boletos) vem do executivo
+  assert.deepEqual(r.json.faltas.filter((f) => !/Dizer como ficou/.test(f)), ['Informar os honorários de cobrança extrajudicial.']);
+  assert.deepEqual([x.primeiro_vencimento, x.dia_vencimento, x.inicio_contrato], ['2026-12-10', 10, '2026-12-01']);
   r = await adv('PUT', `/api/contratos/${idC}/fechado`, { condicoes: { ...x, taxa_adm: 3.25 }, concluir: true });
   assert.equal(r.status, 400);
   const fechado = { ...x, taxa_adm: 3.25, honorarios: 15, inicio_contrato: '2026-12-01', dia_vencimento: 5, clausulas: x.clausulas.map((k) => ({ ...k, resultado: 'aceito', redacao: 'Redação padrão do Jurídico.' })), observacoes: 'Procuração no mesmo arquivo.' };
@@ -259,8 +259,12 @@ test('Implantação: o executivo solicita pelo contrato, e ela vem com as condi�
   assert.equal((await exec('DELETE', `/api/implantacoes/${idImpC}/documentos/${d.documentos.find((x) => x.tipo === 'contrato').id}`)).status, 409);
   // o que vem das condições fechadas (taxa, boleto, honorários…) o executivo não muda na implantação; as garantias ele preenche
   assert.equal((await exec('PATCH', `/api/implantacoes/${idImpC}`, { formulario: { ...d.implantacao.formulario, garantias: ['Gás'], taxa_adm: 9, boleto: 1, honorarios: 10, consultor_nome: 'Consultor Fictício' } })).status, 200);
-  const fi = (await exec('GET', `/api/implantacoes/${idImpC}`)).json.implantacao.formulario;
+  let fi = (await exec('GET', `/api/implantacoes/${idImpC}`)).json.implantacao.formulario;
   assert.deepEqual([fi.garantias, fi.taxa_adm, fi.boleto, fi.honorarios, fi.consultor_nome], [['Gás'], 3.25, 2, 15, 'Consultor Fictício']); // o que será garantido o comercial preenche
+  // o primeiro vencimento vem do contrato, mas o comercial ajusta (o síndico mudou); o dia dos boletos acompanha, a vigência não muda
+  assert.equal((await exec('PATCH', `/api/implantacoes/${idImpC}`, { formulario: { ...fi, primeiro_vencimento: '2026-12-15', inicio_contrato: '2027-01-01' } })).status, 200);
+  fi = (await exec('GET', `/api/implantacoes/${idImpC}`)).json.implantacao.formulario;
+  assert.deepEqual([fi.primeiro_vencimento, fi.dia_vencimento, fi.inicio_contrato], ['2026-12-15', 15, '2026-12-01']);
   assert.equal(d.implantacao.formulario.honorarios, 15); // os honorários das condições fechadas
   assert.equal(d.contrato.fechado.foro, 'Natal/RN');
   assert.deepEqual(d.diferencas.map((x) => x.campo), ['taxa_adm']); // diferente da análise (3,50%)

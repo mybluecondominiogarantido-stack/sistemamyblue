@@ -4293,7 +4293,7 @@
   }
 
   // campos da implantação que vêm das condições fechadas no contrato
-  var CAMPOS_CONTRATO_IMP = '#i_taxa_adm, #i_boleto, #i_desconto_tipo, #i_desconto_valor, #i_inicio_contrato, #i_primeiro_vencimento, #i_dia_vencimento, input[name=i_honorarios_op], #i_honorarios_outro, ' +
+  var CAMPOS_CONTRATO_IMP = '#i_taxa_adm, #i_boleto, #i_desconto_tipo, #i_desconto_valor, #i_inicio_contrato, input[name=i_honorarios_op], #i_honorarios_outro, ' +
     'input[name=i_cashback], #i_cashback_pct, [data-marca=cashback_receitas]';
   function htmlFormImp(i, m, parceiros, difs) {
     var f = i.formulario || {}, ref = i.referencia || {};
@@ -4337,7 +4337,7 @@
       campoImp('desconto_valor', 'Desconto (% ou R$)', fmtNumCr(f.desconto_valor), { se: 'desconto_tipo:percentual,valor' }) +
       campoImp('desconto_ate_dia', 'Desconto vale até o dia', f.desconto_ate_dia, { se: 'desconto_tipo:percentual,valor', ph: '1 a 31' }) +
       campoImp('inicio_contrato', 'Data de início do contrato (vigência)', f.inicio_contrato, { tipo: 'date', ajuda: 'Também conta as parcelas restantes da taxa extra.' }) +
-      (f.primeiro_vencimento ? campoImp('primeiro_vencimento', 'Data do primeiro vencimento', f.primeiro_vencimento, { tipo: 'date', ajuda: 'O boleto é gerado para o dia ' + (f.dia_vencimento || Number(String(f.primeiro_vencimento).slice(8, 10))) + '.' }) : '') +
+      (f.primeiro_vencimento ? campoImp('primeiro_vencimento', 'Data do primeiro vencimento', f.primeiro_vencimento, { tipo: 'date', ajuda: 'Veio do contrato: se o síndico pedir, ajuste aqui. O boleto é gerado para o dia desta data.' }) : '') +
       radiosImp('honorarios_op', 'Honorários de cobrança extrajudicial', honOutro ? 'outro' : f.honorarios != null ? String(f.honorarios) : '', hon.map(function (h) { return [String(h), fmtNumCr(h) + '%']; }).concat([['outro', 'Outro']]),
         { extra: '<input class="campo" id="i_honorarios_outro" data-se="honorarios_op:outro" style="width:110px" placeholder="%" value="' + esc(honOutro ? fmtNumCr(f.honorarios) : '') + '" aria-label="Outro percentual de honorários">' }) +
       marcasImp('garantias', 'O que será garantido (marque todos)', f.garantias, m.garantias, { extra: '<input class="campo" id="i_garantia_outra" style="max-width:220px" placeholder="Outra (descreva)" value="' + esc(f.garantia_outra || '') + '" aria-label="Outra garantia">' }) +
@@ -4740,7 +4740,8 @@
       $$('[data-tirar-contato]').forEach(function (b) { b.onclick = function () { b.closest('[data-contato]').remove(); }; });
     };
     ligarTirar();
-    // o que vem das condições fechadas no contrato (taxa, boleto, desconto, vigência, vencimento, honorários e cashback) não se altera aqui; o que será garantido o comercial preenche
+    // o que vem das condições fechadas no contrato (taxa, boleto, desconto, vigência, honorários e cashback) não se altera aqui;
+    // o que será garantido e o primeiro vencimento o comercial ajusta (o dia de vencimento acompanha a data)
     if (d.contrato && d.contrato.fechado) {
       var fImp = $('#formImp');
       $$(CAMPOS_CONTRATO_IMP, fImp).forEach(function (el) { el.disabled = true; el.title = 'Vem das condições fechadas no contrato'; });
@@ -4748,6 +4749,10 @@
       var sec = cond && cond.closest('section');
       if (sec) $('.cab-painel', sec).insertAdjacentHTML('beforeend', '<span class="etiqueta azul">do contrato ' + esc(d.contrato.protocolo || '') + ': não pode ser alterado</span>');
     }
+    // o dia de vencimento acompanha a data do primeiro vencimento
+    if ($('#i_primeiro_vencimento') && $('#i_dia_vencimento')) $('#i_primeiro_vencimento').addEventListener('change', function () {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(this.value)) $('#i_dia_vencimento').value = Number(this.value.slice(8, 10));
+    });
     $('#btExtraImp').onclick = function () { $('#tbExtrasImp').insertAdjacentHTML('beforeend', linhaExtraCr()); ligarTirar(); };
     $('#btParcImp').onclick = function () { $('#parceirosImp').insertAdjacentHTML('beforeend', linhaParceiroImp({}, parceiros.parceiros || [])); ligarTirar(); };
     $('#btContatoImp').onclick = function () { $('#contatosImp').insertAdjacentHTML('beforeend', linhaContatoImp()); ligarTirar(); };
@@ -5088,6 +5093,7 @@
         extra: '<input class="campo" id="c_cashback_receita_outra" style="max-width:220px" placeholder="Outra (descreva)" value="' + esc(f.cashback_receita_outra || '') + '" aria-label="Outra receita">' }) + '</div></section>' +
 
       '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">3</span>Vigência</h2></div><div class="corpo grade-3">' +
+      campoCt('inicio_contrato', 'Vigência (início do contrato)', f.inicio_contrato, { tipo: 'date' }) +
       campoCt('primeiro_vencimento', 'Data do primeiro vencimento', f.primeiro_vencimento, { tipo: 'date', ref: ref.dia_vencimento ? 'dia ' + ref.dia_vencimento : '', dif: difs.dia_vencimento,
         ajuda: 'O dia desta data é o dia de vencimento dos boletos. O boleto sai até o 5º dia útil antes; o condomínio envia a composição e o balancete até o dia 20 do mês anterior.' }) +
       '<div>' + '<label class="rot" for="c_periodo_minimo">Período mínimo (meses)</label><input class="campo" id="c_periodo_minimo" value="' + esc(f.periodo_minimo == null ? '' : f.periodo_minimo) + '" placeholder="vazio = padrão do contrato">' +
@@ -5118,7 +5124,7 @@
       taxa_adm: numCr(v('taxa_adm')), boleto: numCr(v('boleto')), desconto_tipo: v('desconto_tipo'), desconto_valor: numCr(v('desconto_valor')),
       garantias: marcas('garantias'), garantia_outra: $('#c_garantia_outra', raiz).value.trim(), taxa_ordinaria: numCr(v('taxa_ordinaria')), taxa_extra: numCr(v('taxa_extra')),
       cashback: v('cashback'), cashback_pct: numCr($('#c_cashback_pct', raiz).value), cashback_receitas: marcas('cashback_receitas'), cashback_receita_outra: $('#c_cashback_receita_outra', raiz).value.trim(),
-      primeiro_vencimento: v('primeiro_vencimento'), periodo_minimo: numCr(v('periodo_minimo')), fidelizacao: $('#c_fidelizacao', raiz).checked,
+      inicio_contrato: v('inicio_contrato'), primeiro_vencimento: v('primeiro_vencimento'), periodo_minimo: numCr(v('periodo_minimo')), fidelizacao: $('#c_fidelizacao', raiz).checked,
       pedidos: $$('[data-pedido]:checked', raiz).map(function (x) { return x.getAttribute('data-pedido'); }), pedidos_detalhe: det, minucias: $('#c_minucias', raiz).value.trim(),
     };
   }

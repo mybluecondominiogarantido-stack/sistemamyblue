@@ -23,12 +23,13 @@ function diaUtil(n) {
   return d.toLocaleDateString('sv-SE', { timeZone: FUSO });
 }
 const hoje = () => new Date().toLocaleDateString('sv-SE', { timeZone: FUSO });
-/* dia 10 do mês que vem (AAAA-MM-DD): o primeiro vencimento dos exemplos */
-function dia10() {
+/* dia n do mês que vem (AAAA-MM-DD): a vigência (dia 1) e o primeiro vencimento (dia 10) dos exemplos */
+function diaDoProximoMes(n) {
   const h = new Date();
-  const d = new Date(Date.UTC(h.getUTCFullYear(), h.getUTCMonth() + 1, 10));
-  return d.toISOString().slice(0, 10);
+  return new Date(Date.UTC(h.getUTCFullYear(), h.getUTCMonth() + 1, n)).toISOString().slice(0, 10);
 }
+const dia10 = () => diaDoProximoMes(10);
+const dia1 = () => diaDoProximoMes(1);
 
 /* ---------- Análise de Crédito (dados fictícios) ---------- */
 const os = require('os');
@@ -133,7 +134,7 @@ const FORM_CT = {
   nome: 'Condomínio Residencial Jardim das Acácias', cnpj: '11.222.333/0001-81', uf: 'CE', cidade: 'Fortaleza', administradora: 'Administradora Exemplo',
   sindico_nome: 'Síndico Fictício', sindico_cpf: '111.444.777-35', sindico_email: 'sindico@exemplo.com', sindico_telefone: '(85) 90000-0000',
   taxa_adm: 3, boleto: 2, desconto_tipo: 'nenhum', garantias: ['Taxa ordinária', 'Taxa extraordinária'], taxa_ordinaria: 1840, taxa_extra: 700, cashback: 'nao',
-  primeiro_vencimento: dia10(), pedidos: ['contestacao_30', 'foro_capital'], minucias: 'Primeiro repasse adiantado em 5 dias.',
+  inicio_contrato: dia1(), primeiro_vencimento: dia10(), pedidos: ['contestacao_30', 'foro_capital'], minucias: 'Primeiro repasse adiantado em 5 dias.',
 };
 /* solicitação pedida pela executiva (Vera) e enviada ao Jurídico; "ate" leva até a minuta enviada ou até o contrato assinado */
 async function contratoTut(base, nome, { ate } = {}) {
@@ -224,7 +225,7 @@ async function passosJor(base) {
     },
     async concluirContrato() {
       const d = await lara('GET', `/api/contratos/${j.contrato}`);
-      await ok('concluir contrato', lara('PUT', `/api/contratos/${j.contrato}/fechado`, { condicoes: { ...d.contrato.fechado, honorarios: 12, inicio_contrato: diaUtil(10) }, concluir: true }));
+      await ok('concluir contrato', lara('PUT', `/api/contratos/${j.contrato}/fechado`, { condicoes: { ...d.contrato.fechado, honorarios: 12 }, concluir: true }));
     },
     async solicitarImplantacao() { j.implantacao = (await ok('solicitar implantação', vera('POST', `/api/contratos/${j.contrato}/implantacao`, {}))).implantacao; },
     async implantacaoId() { j.implantacao = (await vera('GET', `/api/contratos/${j.contrato}`)).implantacao.id; return j.implantacao; },
@@ -663,6 +664,7 @@ module.exports = [
       await t.mostrar('[data-marca-ct=garantias][value="Taxa ordinária"]', 600);
       await t.clicar('[data-marca-ct=garantias][value="Taxa ordinária"]', { depois: 900 });
       await t.clicar('input[name=c_cashback][value=nao]', { depois: 400 });
+      await t.preencherCampo('#c_inicio_contrato', dia1());
       await t.preencherCampo('#c_primeiro_vencimento', dia10());
       await t.digitar('#c_minucias', 'Nenhuma', { atraso: 40 });
       await t.legenda('<b>Enviar ao Jurídico</b>: o Jurídico tem <b>72h úteis</b> para a minuta.', { etapa: C, ms: 300 });
@@ -1075,6 +1077,7 @@ module.exports = [
       await t.legenda('A taxa extra aparece em % da ordinária: acima de 40%, a diretoria decide antes da minuta.', { etapa: B, ms: 400 });
       await t.mostrar('#c_taxa_extra', 2600);
       await t.clicar('input[name=c_cashback][value=nao]', { depois: 500 });
+      await t.preencherCampo('#c_inicio_contrato', dia1());
       await t.preencherCampo('#c_primeiro_vencimento', dia10());
 
       const C = '3 · Pedidos do síndico';

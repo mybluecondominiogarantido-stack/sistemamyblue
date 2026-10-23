@@ -10,6 +10,7 @@
  *   condições   taxa_adm, boleto, desconto_tipo (nenhum|percentual|valor), desconto_valor,
  *               garantias [], garantia_outra, taxa_ordinaria, taxa_extra (R$ por unidade, somadas)
  *   cashback    cashback (nao|5|10|outro), cashback_pct, cashback_receitas [], cashback_receita_outra
+ *   vigência    inicio_contrato (AAAA-MM-DD, início do contrato: o executivo informa, a advogada confirma o que foi fechado)
  *   vencimento  primeiro_vencimento (AAAA-MM-DD, o executivo informa; o dia dele é o dia_vencimento dos boletos), periodo_minimo (meses),
  *               fidelizacao (true = pedir a versão com fidelização fora da Paraíba)
  *   pedidos     pedidos [chave de server/contratos/clausulas.js], pedidos_detalhe { chave: texto }
@@ -111,6 +112,7 @@ function faltasCampos(f, { docs = new Set(), executivoId } = {}) {
   exige(['nao', '5', '10', 'outro'].includes(String(f.cashback || '')), 'cashback', 'Dizer se foi concedido cashback.');
   if (f.cashback === 'outro') exige(num(f.cashback_pct) > 0, 'cashback_pct', 'Informar o percentual do cashback.');
   if (temCashback(f)) exige((f.cashback_receitas || []).length || texto(f.cashback_receita_outra), 'cashback_receitas', 'Marcar sobre quais receitas incide o cashback.');
+  exige(dataOk(f.inicio_contrato), 'inicio_contrato', 'Informar a vigência (início do contrato).');
   exige(dataOk(f.primeiro_vencimento), 'primeiro_vencimento', 'Informar a data do primeiro vencimento.');
   for (const k of f.pedidos || []) if (!C.porChave.has(k)) l.push({ campo: 'pedidos', msg: 'Pedido de alteração desconhecido: desmarque e marque de novo.' });
   exige(executivoId, 'executivo_id', 'Escolher o executivo de negócios.');
@@ -192,7 +194,7 @@ function fechadoInicial(c) {
     desconto_inicio: texto((f.pedidos_detalhe || {}).pontualidade_adiar), garantias: lista(f.garantias), garantia_outra: texto(f.garantia_outra),
     limite_extra: pedidos.includes('taxa_extra_ampliar') && !negou ? num(String((f.pedidos_detalhe || {}).taxa_extra_ampliar || '').replace(/[^\d,.]/g, '').replace(',', '.')) || LIMITE_EXTRA : LIMITE_EXTRA,
     cashback: String(f.cashback || 'nao'), cashback_pct: num(f.cashback_pct), cashback_receitas: lista(f.cashback_receitas),
-    // a vigência (início do contrato) é da advogada; o primeiro vencimento é do executivo
+    // a vigência vem do pedido (a advogada confirma o que foi fechado); o primeiro vencimento é do executivo
     inicio_contrato: texto(f.inicio_contrato), primeiro_vencimento: texto(f.primeiro_vencimento), dia_vencimento: diaDe(f.primeiro_vencimento) || num(f.dia_vencimento),
     periodo_minimo: num(f.periodo_minimo), fidelizacao: comFidelizacao(f),
     honorarios: num(f.honorarios),
@@ -255,6 +257,7 @@ function diferencasFechado(f, x) {
   par('Taxa administrativa', `${fmt(num(f.taxa_adm) || 0)}%`, `${fmt(num(x.taxa_adm) || 0)}%`);
   par('Boleto', `R$ ${fmt(num(f.boleto) || 0)}`, `R$ ${fmt(num(x.boleto) || 0)}`);
   par('Desconto de pontualidade', desc(f.desconto_tipo, num(f.desconto_valor)), desc(x.desconto_tipo, num(x.desconto_valor)));
+  par('Vigência (início do contrato)', dataBr(f.inicio_contrato), dataBr(x.inicio_contrato));
   par('Garantias', g(f), g(x));
   par('Cashback', cb(f), cb(x));
   par('Fidelização', comFidelizacao(f) ? 'com' : 'sem', x.fidelizacao ? 'com' : 'sem');
@@ -298,8 +301,6 @@ function implantacaoDiferente(fi, x) {
   const desc = (t, v) => (['percentual', 'valor'].includes(t) ? (t === 'percentual' ? `${fmt(num(v) || 0)}%` : `R$ ${fmt(num(v) || 0)}`) : 'não possui');
   if (fi.desconto_tipo) par('Desconto de pontualidade', desc(fi.desconto_tipo, fi.desconto_valor), desc(x.desconto_tipo, x.desconto_valor));
   par('Vigência (início do contrato)', texto(fi.inicio_contrato), texto(x.inicio_contrato), dataBr);
-  par('Primeiro vencimento', texto(fi.primeiro_vencimento), texto(x.primeiro_vencimento), dataBr);
-  par('Dia de vencimento', n(fi.dia_vencimento), n(x.dia_vencimento));
   if (x.honorarios) par('Honorários de cobrança extrajudicial', n(fi.honorarios), n(x.honorarios), (v) => (v == null ? '—' : `${fmt(v)}%`));
   return l;
 }
@@ -307,8 +308,8 @@ function implantacaoDiferente(fi, x) {
 /* campos da implantação que vêm das condições fechadas: travados lá (vale o do contrato) */
 const CAMPOS_FECHADOS = ['taxa_adm', 'boleto', 'desconto_tipo', 'desconto_valor', 'garantias', 'garantia_outra', 'cashback', 'cashback_pct', 'cashback_receitas',
   'inicio_contrato', 'primeiro_vencimento', 'dia_vencimento', 'honorarios'];
-// o que será garantido o comercial confere e preenche na implantação: vem do contrato, mas não fica travado
-const CAMPOS_FECHADOS_IMPLANTACAO = CAMPOS_FECHADOS.filter((k) => !['garantias', 'garantia_outra'].includes(k));
+// vêm do contrato, mas o comercial ajusta na implantação: o que será garantido e o primeiro vencimento (o síndico às vezes muda)
+const CAMPOS_FECHADOS_IMPLANTACAO = CAMPOS_FECHADOS.filter((k) => !['garantias', 'garantia_outra', 'primeiro_vencimento', 'dia_vencimento'].includes(k));
 
 /* dados do contrato que seguem para o formulário de Implantação (o fechado vale sobre o pedido) */
 function paraImplantacao(c) {
