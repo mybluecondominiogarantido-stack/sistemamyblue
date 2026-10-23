@@ -39,7 +39,7 @@ svg{flex-shrink:0}
 
 label.rot{display:block;font-size:12px;font-weight:800;color:var(--ink-2);margin:0 0 6px;letter-spacing:.2px}
 .campo{width:100%;border:1px solid var(--border-2);background:var(--surface);border-radius:var(--r-sm);padding:10px 12px;font-size:14.5px;transition:border-color .15s,box-shadow .15s}
-.campo[readonly],select.campo:disabled{background:var(--bg);color:var(--ink-2)}
+.campo[readonly],.campo:disabled,select.campo:disabled{background:var(--bg);color:var(--ink-2)}
 .campo:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(25,156,177,.15)}
 textarea.campo{min-height:80px;resize:vertical}
 .campo-senha{position:relative}
@@ -414,11 +414,11 @@ legend.rot,#formImp span.rot,.modal span.rot{display:block;font-size:12px;font-w
 .pedido-ct:first-child{border-top:0}
 .pedido-ct .t{font-size:13.5px;font-weight:700;color:var(--ink)}
 .pedido-ct .t small{font-weight:800;color:var(--muted);margin-right:6px}
+.pedido-ct .det-ct{grid-column:2;display:flex;flex-direction:column;gap:4px}
+.pedido-ct .det-ct span{font-size:12.5px;font-weight:700;color:var(--ink-2)}
 .pedido-ct .resp{grid-column:2;font-size:13px;font-weight:600;color:var(--ink-2);background:var(--surface-2);border-radius:10px;padding:8px 10px}
 .pedido-ct .resp b{color:var(--teal-d)}
 .pedido-ct .campo{grid-column:2}
-.fixas-ct{padding:12px 16px;font-size:12.5px;font-weight:600;color:var(--muted);background:var(--surface-2);border-top:1px solid var(--border);border-radius:0 0 var(--r) var(--r)}
-.fixas-ct ul{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:3px}
 .clausula-ct{display:grid;grid-template-columns:minmax(0,1fr) 200px;gap:8px 12px;padding:12px 16px;border-top:1px solid var(--border)}
 .clausula-ct .campo:last-child{grid-column:1 / -1}
 @media (max-width:640px){.clausula-ct{grid-template-columns:1fr}}

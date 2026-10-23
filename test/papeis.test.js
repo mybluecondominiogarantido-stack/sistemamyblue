@@ -31,7 +31,7 @@ async function entrar(email, senha) {
   return c;
 }
 async function criar(nome, email, extra = {}) {
-  const r = await admin('POST', '/api/admin/usuarios', { nome, email, senha: 'Senha1234', ...extra });
+  const r = await admin('POST', '/api/admin/usuarios', { data_nascimento: '1990-05-10', data_admissao: '2024-02-01', nome, email, senha: 'Senha1234', ...extra });
   assert.equal(r.status, 201, r.texto);
   await ctx.db.q('UPDATE usuarios SET trocar_senha = FALSE WHERE id = $1', [r.json.id]);
   ids[email] = r.json.id;
@@ -64,7 +64,7 @@ after(async () => {
 });
 
 test('coordenador e supervisor precisam de setor; o setor forma a equipe da Central de Tickets', async () => {
-  const r = await admin('POST', '/api/admin/usuarios', { nome: 'Sem Setor', email: 'semsetor@teste.com', papel: 'coordenador', setores: [] });
+  const r = await admin('POST', '/api/admin/usuarios', { data_nascimento: '1990-05-10', data_admissao: '2024-02-01', nome: 'Sem Setor', email: 'semsetor@teste.com', papel: 'coordenador', setores: [] });
   assert.equal(r.status, 400);
   const eq = (await admin('GET', '/api/admin/equipes')).json.setores.find((x) => x.id === S('Crédito'));
   assert.deepEqual(eq.membros.map((m) => m.usuario_id).sort(), [coordId, ids['ivo@teste.com']].sort());
@@ -81,7 +81,7 @@ test('coordenador vê só os usuários comuns do setor e as ferramentas do setor
 });
 
 test('coordenador cria usuário comum no setor dele, só com as ferramentas do setor', async () => {
-  const r = await coord('POST', '/api/admin/usuarios', { nome: 'Nina Nova', email: 'nina@teste.com', modulos: ['boletos', 'parceiros'], setores: [S('Crédito'), S('Cobrança')], supervisor_tickets: true, editor_links: true });
+  const r = await coord('POST', '/api/admin/usuarios', { data_nascimento: '1990-05-10', data_admissao: '2024-02-01', nome: 'Nina Nova', email: 'nina@teste.com', modulos: ['boletos', 'parceiros'], setores: [S('Crédito'), S('Cobrança')], supervisor_tickets: true, editor_links: true });
   assert.equal(r.status, 201, r.texto);
   const u = (await admin('GET', '/api/admin/usuarios')).json.usuarios.find((x) => x.email === 'nina@teste.com');
   assert.equal(u.papel, 'usuario');
@@ -89,9 +89,20 @@ test('coordenador cria usuário comum no setor dele, só com as ferramentas do s
   assert.deepEqual(u.setores, [S('Crédito')], 'Cobrança não é setor dela');
   assert.equal(u.supervisor_tickets, false);
   assert.equal(u.editor_links, false);
-  assert.equal((await coord('POST', '/api/admin/usuarios', { nome: 'Sem', email: 'sem@teste.com', setores: [S('Cobrança')] })).status, 400, 'precisa de um setor dela');
+  assert.deepEqual([u.data_nascimento, u.data_admissao], ['1990-05-10', '2024-02-01']);
+  // nascimento e admissão são obrigatórios para quem cria (coordenação ou administração) e para quem edita
+  const semData = await coord('POST', '/api/admin/usuarios', { nome: 'Sem Data', email: 'semdata@teste.com', setores: [S('Crédito')] });
+  assert.equal(semData.status, 400);
+  assert.match(semData.json.erro, /nascimento/);
+  assert.match((await admin('POST', '/api/admin/usuarios', { nome: 'Sem Admissão', email: 'semadm@teste.com', data_nascimento: '1990-05-10' })).json.erro, /admissão/);
+  assert.equal((await admin('POST', '/api/admin/usuarios', { nome: 'Ano Errado', email: 'ano@teste.com', data_nascimento: '2025-05-10', data_admissao: '2024-02-01' })).status, 400);
+  assert.equal((await admin('POST', '/api/admin/usuarios', { nome: 'Data Torta', email: 'torta@teste.com', data_nascimento: '1990-02-31', data_admissao: '2024-02-01' })).status, 400);
+  assert.equal((await coord('PATCH', `/api/admin/usuarios/${u.id}`, { nome: 'Nina Nova', data_admissao: '2024-03-01' })).status, 200);
+  assert.equal((await admin('GET', '/api/admin/usuarios')).json.usuarios.find((x) => x.id === u.id).data_admissao, '2024-03-01');
+  assert.equal((await coord('PATCH', `/api/admin/usuarios/${u.id}`, { nome: 'Nina Nova', data_nascimento: '' })).status, 400);
+  assert.equal((await coord('POST', '/api/admin/usuarios', { data_nascimento: '1990-05-10', data_admissao: '2024-02-01', nome: 'Sem', email: 'sem@teste.com', setores: [S('Cobrança')] })).status, 400, 'precisa de um setor dela');
   for (const papel of ['admin', 'coordenador', 'supervisor']) {
-    assert.equal((await coord('POST', '/api/admin/usuarios', { nome: 'X', email: `x-${papel}@teste.com`, papel, setores: [S('Crédito')] })).status, 403);
+    assert.equal((await coord('POST', '/api/admin/usuarios', { data_nascimento: '1990-05-10', data_admissao: '2024-02-01', nome: 'X', email: `x-${papel}@teste.com`, papel, setores: [S('Crédito')] })).status, 403);
   }
 });
 
@@ -125,7 +136,7 @@ test('supervisor tem os mesmos poderes no setor dele, e não fica acima do coord
   assert.equal(r.status, 200);
   assert.deepEqual(r.json.usuarios.map((u) => u.email), ['olga@teste.com']);
   assert.equal((await sup('PATCH', `/api/admin/usuarios/${coordId}`, { nome: 'X' })).status, 404, 'não gerencia coordenador');
-  assert.equal((await sup('POST', '/api/admin/usuarios', { nome: 'Y', email: 'y@teste.com', setores: [S('Cobrança')] })).status, 201);
+  assert.equal((await sup('POST', '/api/admin/usuarios', { data_nascimento: '1990-05-10', data_admissao: '2024-02-01', nome: 'Y', email: 'y@teste.com', setores: [S('Cobrança')] })).status, 201);
   // tickets: o perfil já traz a Supervisão da Central de Tickets (vê e direciona todos os setores)
   assert.equal((await sup('GET', '/api/tickets?vis=todos')).status, 200);
   assert.equal((await sup('GET', '/api/auth/eu')).json.usuario.supervisor_tickets, true);

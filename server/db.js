@@ -731,6 +731,15 @@ ALTER TABLE modulo_versoes ADD COLUMN IF NOT EXISTS aprovada BOOLEAN NOT NULL DE
 ALTER TABLE modulos ADD COLUMN IF NOT EXISTS versao_pendente_id INTEGER;
 -- implantação aberta de uma análise que já tem contrato: os dados e o contrato assinado vêm de lá
 ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS contrato_id INTEGER REFERENCES contratos(id) ON DELETE SET NULL;
+-- cadastro da pessoa: nascimento e admissão (obrigatórios ao criar ou editar, e quem já existia completa na próxima edição)
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS data_nascimento DATE;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS data_admissao DATE;
+-- documento da implantação que veio da análise ou do contrato: não se troca nem se remove ali
+ALTER TABLE implantacao_documentos ADD COLUMN IF NOT EXISTS vinculado BOOLEAN NOT NULL DEFAULT FALSE;
+UPDATE implantacao_documentos SET vinculado = TRUE WHERE tipo = 'analise_credito' AND NOT vinculado;
+-- e-mail de cada aviso: quando saiu ou por que falhou (para conferir quando alguém diz que não recebeu)
+ALTER TABLE notificacoes ADD COLUMN IF NOT EXISTS email_enviado_em TIMESTAMPTZ;
+ALTER TABLE notificacoes ADD COLUMN IF NOT EXISTS email_erro TEXT;
 -- Solicitação de Contrato: o executivo pede a assinatura e a advogada envia para assinar (etapas para_assinar e em_assinatura)
 ALTER TABLE contratos DROP CONSTRAINT IF EXISTS contratos_etapa_check;
 ALTER TABLE contratos ADD CONSTRAINT contratos_etapa_check CHECK (etapa IN ('rascunho','fila','em_elaboracao','pendencia','minuta_enviada','para_assinar','em_assinatura','conferencia','assinado','cancelada'));

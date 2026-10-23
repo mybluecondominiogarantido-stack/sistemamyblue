@@ -37,7 +37,7 @@ async function entrar(email, senha) {
 let admin, exec, adv, adv2, diretor, outro;
 const ids = {};
 async function pessoa(nome, email) {
-  const r = await admin('POST', '/api/admin/usuarios', { nome, email, papel: 'usuario', senha: 'Senha1234' });
+  const r = await admin('POST', '/api/admin/usuarios', { data_nascimento: '1990-05-10', data_admissao: '2024-02-01', nome, email, papel: 'usuario', senha: 'Senha1234' });
   assert.equal(r.status, 201, r.texto);
   await ctx.db.q('UPDATE usuarios SET trocar_senha = FALSE WHERE id = $1', [r.json.id]);
   ids[email] = r.json.id;
@@ -126,8 +126,8 @@ const FORM = {
   nome: 'Condomínio Residencial Fictício', cnpj: '11.222.333/0001-81', uf: 'RN', cidade: 'Natal', administradora: 'Administradora Exemplo',
   sindico_nome: 'Síndico Fictício', sindico_cpf: '111.444.777-35', sindico_email: 'sindico@exemplo.com', sindico_telefone: '(84) 90000-0000',
   taxa_adm: 3.5, boleto: 2, desconto_tipo: 'percentual', desconto_valor: 10, garantias: ['Taxa ordinária', 'Taxa extraordinária', 'Água'], taxa_ordinaria: 1840, taxa_extra: 700,
-  cashback: 'nao', inicio_contrato: '2026-12-01', dia_vencimento: 10, periodo_minimo: 12,
-  pedidos: ['foro_capital', 'reembolso_limitar'], pedidos_detalhe: { reembolso_limitar: 'teto de R$ 50 por certidão' }, minucias: 'Primeiro repasse adiantado em 5 dias.',
+  cashback: 'nao', inicio_contrato: '2026-12-01', primeiro_vencimento: '2026-12-10', periodo_minimo: 12,
+  pedidos: ['foro_capital', 'reembolso_limitar'], pedidos_detalhe: { reembolso_limitar: 'teto de R$ 50 por certidão', foro_capital: 'Natal/RN' }, minucias: 'Primeiro repasse adiantado em 5 dias.',
 };
 
 test('enviar: confere o que falta, gera o protocolo, prazo de 72h úteis e avisa quem elabora, a diretoria e o executivo', async () => {
@@ -216,10 +216,12 @@ test('assinatura: o executivo pede, a advogada manda assinar, anexa a via assina
   assert.equal((await exec('PUT', `/api/contratos/${idC}/fechado`, { condicoes: x })).status, 403);
   let r = await adv('PUT', `/api/contratos/${idC}/fechado`, { condicoes: { ...x, taxa_adm: 3.25 } });
   assert.equal(r.status, 200, r.texto);
-  assert.ok(r.json.faltas.every((f) => /Dizer como ficou/.test(f)));
+  // a vigência vem do pedido (a advogada confirma), os honorários são dela; o primeiro vencimento (e o dia dos boletos) vem do executivo
+  assert.deepEqual(r.json.faltas.filter((f) => !/Dizer como ficou/.test(f)), ['Informar os honorários de cobrança extrajudicial.']);
+  assert.deepEqual([x.primeiro_vencimento, x.dia_vencimento, x.inicio_contrato], ['2026-12-10', 10, '2026-12-01']);
   r = await adv('PUT', `/api/contratos/${idC}/fechado`, { condicoes: { ...x, taxa_adm: 3.25 }, concluir: true });
   assert.equal(r.status, 400);
-  const fechado = { ...x, taxa_adm: 3.25, clausulas: x.clausulas.map((k) => ({ ...k, resultado: 'aceito', redacao: 'Redação padrão do Jurídico.' })), observacoes: 'Procuração no mesmo arquivo.' };
+  const fechado = { ...x, taxa_adm: 3.25, honorarios: 15, inicio_contrato: '2026-12-01', dia_vencimento: 5, clausulas: x.clausulas.map((k) => ({ ...k, resultado: 'aceito', redacao: 'Redação padrão do Jurídico.' })), observacoes: 'Procuração no mesmo arquivo.' };
   r = await adv('PUT', `/api/contratos/${idC}/fechado`, { condicoes: fechado, concluir: true });
   assert.equal(r.status, 200, r.texto);
   assert.equal(r.json.implantacao, null); // a advogada só registra: quem solicita a implantação é o executivo
@@ -249,6 +251,21 @@ test('Implantação: o executivo solicita pelo contrato, e ela vem com as condi�
   assert.deepEqual([d.implantacao.formulario.taxa_adm, d.implantacao.formulario.sindico_nome, d.implantacao.formulario.inicio_contrato], [3.25, 'Síndico Fictício', '2026-12-01']);
   assert.match(d.implantacao.formulario.observacoes, /Primeiro repasse adiantado/);
   assert.deepEqual(d.documentos.map((x) => x.tipo).sort(), ['analise_credito', 'contrato', 'convencao']);
+  // o que veio vinculado (convenção, análise, contrato) não se troca nem se remove na implantação
+  assert.ok(d.documentos.every((x) => x.vinculado));
+  const doc = (tipo) => exec('POST', `/api/implantacoes/${idImpC}/documentos`, PDF, { headers: { 'x-tipo': tipo, 'x-nome-arquivo': 'x.pdf' } });
+  assert.equal((await doc('convencao')).status, 409);
+  assert.equal((await doc('ata_eleicao')).status, 201);
+  assert.equal((await exec('DELETE', `/api/implantacoes/${idImpC}/documentos/${d.documentos.find((x) => x.tipo === 'contrato').id}`)).status, 409);
+  // o que vem das condições fechadas (taxa, boleto, honorários…) o executivo não muda na implantação; as garantias ele preenche
+  assert.equal((await exec('PATCH', `/api/implantacoes/${idImpC}`, { formulario: { ...d.implantacao.formulario, garantias: ['Gás'], taxa_adm: 9, boleto: 1, honorarios: 10, consultor_nome: 'Consultor Fictício' } })).status, 200);
+  let fi = (await exec('GET', `/api/implantacoes/${idImpC}`)).json.implantacao.formulario;
+  assert.deepEqual([fi.garantias, fi.taxa_adm, fi.boleto, fi.honorarios, fi.consultor_nome], [['Gás'], 3.25, 2, 15, 'Consultor Fictício']); // o que será garantido o comercial preenche
+  // o primeiro vencimento vem do contrato, mas o comercial ajusta (o síndico mudou); o dia dos boletos acompanha, a vigência não muda
+  assert.equal((await exec('PATCH', `/api/implantacoes/${idImpC}`, { formulario: { ...fi, primeiro_vencimento: '2026-12-15', inicio_contrato: '2027-01-01' } })).status, 200);
+  fi = (await exec('GET', `/api/implantacoes/${idImpC}`)).json.implantacao.formulario;
+  assert.deepEqual([fi.primeiro_vencimento, fi.dia_vencimento, fi.inicio_contrato], ['2026-12-15', 15, '2026-12-01']);
+  assert.equal(d.implantacao.formulario.honorarios, 15); // os honorários das condições fechadas
   assert.equal(d.contrato.fechado.foro, 'Natal/RN');
   assert.deepEqual(d.diferencas.map((x) => x.campo), ['taxa_adm']); // diferente da análise (3,50%)
 });
@@ -294,7 +311,7 @@ test('implantação aberta antes do contrato fechar: passa a mostrar as condiç�
   await anexar(adv, id, 'contrato_assinado');
   assert.equal((await adv('POST', `/api/contratos/${id}/assinado`, {})).status, 200); // a via voltou sem marcar "em assinatura": também vale
   const x = (await adv('GET', `/api/contratos/${id}`)).json.contrato.fechado;
-  const r = await adv('PUT', `/api/contratos/${id}/fechado`, { condicoes: x, concluir: true });
+  const r = await adv('PUT', `/api/contratos/${id}/fechado`, { condicoes: { ...x, honorarios: 12, inicio_contrato: '2026-12-01' }, concluir: true });
   assert.equal(r.status, 200, r.texto);
   assert.equal(r.json.implantacao, imp);
   d = (await exec('GET', `/api/implantacoes/${imp}`)).json;
@@ -410,7 +427,7 @@ test('condomínio de entrega: sem análise, a diretoria aprova taxa e boleto ant
   await anexar(adv, id, 'contrato_assinado');
   assert.equal((await adv('POST', `/api/contratos/${id}/assinado`, {})).status, 200);
   const x = (await adv('GET', `/api/contratos/${id}`)).json.contrato.fechado;
-  const r = await adv('PUT', `/api/contratos/${id}/fechado`, { condicoes: x, concluir: true });
+  const r = await adv('PUT', `/api/contratos/${id}/fechado`, { condicoes: { ...x, honorarios: 12, inicio_contrato: '2026-12-01' }, concluir: true });
   assert.equal(r.status, 200, r.texto);
   const sol = await exec('POST', `/api/contratos/${id}/implantacao`, {});
   assert.equal(sol.status, 201, sol.texto);

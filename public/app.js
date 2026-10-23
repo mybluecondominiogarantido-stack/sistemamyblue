@@ -230,7 +230,7 @@
         (resumoCt && resumoCt.acesso ? '<div class="grupo">Jurídico</div><a href="#/contratos" class="' + (rota.indexOf('#/contratos') === 0 ? 'on' : '') + '">' + IC.documento +
           '<span>Solicitação de Contrato</span><i data-contador="contratos" class="contador" hidden></i></a>' +
           '<a href="#/acompanhamento-contratos" class="' + (rota.indexOf('#/acompanhamento-contratos') === 0 ? 'on' : '') + '">' + IC.historico +
-          '<span>Acompanhamento de Contratos</span><i data-contador="contratos-acomp" class="contador" hidden></i></a>' +
+          '<span>Acompanhamento de demandas Jurídicas</span><i data-contador="contratos-acomp" class="contador" hidden></i></a>' +
           (resumoCt.painel ? '<a href="#/dashboard-juridico" class="' + (rota.indexOf('#/dashboard-juridico') === 0 ? 'on' : '') + '">' + IC.grafico + '<span>Dashboard Jurídico</span></a>' : '') : '') +
         (resumoImp && resumoImp.acesso ? '<div class="grupo">Implantação</div><a href="#/implantacao" class="' + (rota.indexOf('#/implantacao') === 0 ? 'on' : '') + '">' + IC.casa +
           '<span>Implantação</span><i data-contador="implantacao" class="contador" hidden></i></a>' : '');
@@ -588,7 +588,10 @@
         titulo: novo ? 'Novo usuário' : 'Editar usuário', largo: true,
         corpo: '<form id="fU" class="pilha" novalidate><div class="grade-2">' +
           '<div><label class="rot" for="uNome">Nome</label><input class="campo" id="uNome" value="' + esc(u.nome) + '" required></div>' +
-          '<div><label class="rot" for="uEmail">E-mail (login)</label><input class="campo" id="uEmail" type="email" value="' + esc(u.email) + '" required></div></div>' +
+          '<div><label class="rot" for="uEmail">E-mail (login)</label><input class="campo" id="uEmail" type="email" value="' + esc(u.email) + '" required></div>' +
+          '<div><label class="rot" for="uNasc">Data de nascimento</label><input class="campo" id="uNasc" type="date" value="' + esc(u.data_nascimento || '') + '" required></div>' +
+          '<div><label class="rot" for="uAdm">Data de admissão</label><input class="campo" id="uAdm" type="date" value="' + esc(u.data_admissao || '') + '" required></div></div>' +
+          (!novo && (!u.data_nascimento || !u.data_admissao) ? '<div class="msg aviso" style="margin:0">Complete a data de nascimento e a de admissão: são obrigatórias para salvar.</div>' : '') +
           (coord ? '' :
           '<div><label class="rot">Perfil</label><div class="grade-2">' +
           '<label class="opcao-radio"><input type="radio" name="uPapel" value="usuario"' + (u.papel === 'usuario' || !PAPEL[u.papel] ? ' checked' : '') + '><div><b>Usuário</b><span>Abre só as ferramentas marcadas abaixo.</span></div></label>' +
@@ -627,7 +630,7 @@
       papelMudou();
       $('#btSalvarU', m).onclick = async function () {
         var corpo = {
-          nome: $('#uNome', m).value, email: $('#uEmail', m).value,
+          nome: $('#uNome', m).value, email: $('#uEmail', m).value, data_nascimento: $('#uNasc', m).value, data_admissao: $('#uAdm', m).value,
           modulos: $$('input[name=uMod]:checked', m).map(function (i) { return i.value; }),
           setores: $$('input[name=uSetor]:checked', m).map(function (i) { return Number(i.value); }),
         };
@@ -4289,6 +4292,9 @@
     return '<div class="linha" data-linha-parceiro style="flex-wrap:nowrap">' + campo + '<button type="button" class="btn icon ghost" data-tirar-parceiro aria-label="Remover parceiro">' + IC.fechar + '</button></div>';
   }
 
+  // campos da implantação que vêm das condições fechadas no contrato
+  var CAMPOS_CONTRATO_IMP = '#i_taxa_adm, #i_boleto, #i_desconto_tipo, #i_desconto_valor, #i_inicio_contrato, input[name=i_honorarios_op], #i_honorarios_outro, ' +
+    'input[name=i_cashback], #i_cashback_pct, [data-marca=cashback_receitas]';
   function htmlFormImp(i, m, parceiros, difs) {
     var f = i.formulario || {}, ref = i.referencia || {};
     var temRef = ref.taxa_adm != null;
@@ -4330,7 +4336,8 @@
       selImp('desconto_tipo', 'Desconto de pontualidade', f.desconto_tipo || 'nenhum', [['nenhum', 'Não possui'], ['percentual', 'Percentual (%)'], ['valor', 'Valor por unidade (R$)']], { ref: temRef && ref.desconto_tipo ? DESC[ref.desconto_tipo] + (ref.desconto_valor ? ' ' + fmtNumCr(ref.desconto_valor) : '') : null, difs: difs, dif: 'desconto' }) +
       campoImp('desconto_valor', 'Desconto (% ou R$)', fmtNumCr(f.desconto_valor), { se: 'desconto_tipo:percentual,valor' }) +
       campoImp('desconto_ate_dia', 'Desconto vale até o dia', f.desconto_ate_dia, { se: 'desconto_tipo:percentual,valor', ph: '1 a 31' }) +
-      campoImp('inicio_contrato', 'Data de início do contrato', f.inicio_contrato, { tipo: 'date', ajuda: 'Também conta as parcelas restantes da taxa extra.' }) +
+      campoImp('inicio_contrato', 'Data de início do contrato (vigência)', f.inicio_contrato, { tipo: 'date', ajuda: 'Também conta as parcelas restantes da taxa extra.' }) +
+      (f.primeiro_vencimento ? campoImp('primeiro_vencimento', 'Data do primeiro vencimento', f.primeiro_vencimento, { tipo: 'date', ajuda: 'Veio do contrato: se o síndico pedir, ajuste aqui. O boleto é gerado para o dia desta data.' }) : '') +
       radiosImp('honorarios_op', 'Honorários de cobrança extrajudicial', honOutro ? 'outro' : f.honorarios != null ? String(f.honorarios) : '', hon.map(function (h) { return [String(h), fmtNumCr(h) + '%']; }).concat([['outro', 'Outro']]),
         { extra: '<input class="campo" id="i_honorarios_outro" data-se="honorarios_op:outro" style="width:110px" placeholder="%" value="' + esc(honOutro ? fmtNumCr(f.honorarios) : '') + '" aria-label="Outro percentual de honorários">' }) +
       marcasImp('garantias', 'O que será garantido (marque todos)', f.garantias, m.garantias, { extra: '<input class="campo" id="i_garantia_outra" style="max-width:220px" placeholder="Outra (descreva)" value="' + esc(f.garantia_outra || '') + '" aria-label="Outra garantia">' }) +
@@ -4410,7 +4417,7 @@
       sindico_tipo: v('sindico_tipo'), sindico_isencao: v('sindico_isencao'), sindico_isencao_pct: numCr(v('sindico_isencao_pct')), sindico_nome: v('sindico_nome'),
       sindico_cpf: v('sindico_cpf'), sindico_email: v('sindico_email'), sindico_telefone: v('sindico_telefone'),
       taxa_adm: numCr(v('taxa_adm')), boleto: numCr(v('boleto')), taxa_ordinaria: numCr(v('taxa_ordinaria')), desconto_tipo: v('desconto_tipo'),
-      desconto_valor: numCr(v('desconto_valor')), desconto_ate_dia: numCr(v('desconto_ate_dia')), inicio_contrato: v('inicio_contrato'),
+      desconto_valor: numCr(v('desconto_valor')), desconto_ate_dia: numCr(v('desconto_ate_dia')), inicio_contrato: v('inicio_contrato'), primeiro_vencimento: $('#i_primeiro_vencimento') ? v('primeiro_vencimento') : undefined,
       honorarios: hon === 'outro' ? numCr($('#i_honorarios_outro').value) : numCr(hon),
       garantias: marcas('garantias'), garantia_outra: $('#i_garantia_outra').value.trim(),
       taxas_extras: $$('#tbExtrasImp tr').map(function (tr) {
@@ -4451,23 +4458,25 @@
     var vig = d.documentos.filter(function (x) { return !x.substituido_em; });
     function lnk(x) {
       return '<a class="anexo" href="/api/implantacoes/' + i.id + '/documentos/' + x.id + (x.mime === 'application/pdf' ? '?ver=1' : '') + '" target="_blank" rel="noopener">' + IC.documento + '<span>' + esc(x.nome) + '</span><span class="sec">' + tamanho(x.tamanho) + '</span></a>' +
-        (pd.tirar_documentos && x.tipo !== 'analise_credito' ? '<button type="button" class="btn icon ghost" data-tirar-doc-imp="' + x.id + '" aria-label="Remover ' + esc(x.nome) + '">' + IC.fechar + '</button>' : '');
+        (pd.tirar_documentos && !x.vinculado && x.tipo !== 'analise_credito' ? '<button type="button" class="btn icon ghost" data-tirar-doc-imp="' + x.id + '" aria-label="Remover ' + esc(x.nome) + '">' + IC.fechar + '</button>' : '');
     }
     function linha(t) {
       var atual = vig.filter(function (x) { return x.tipo === t.tipo; });
-      var st = atual.length ? etq([t.tipo === 'analise_credito' ? 'vinculada' : 'entregue', 'verde']) : t.obrigatorio ? etq(['falta', 'vermelha']) : t.pendente ? etq(['pendente', 'ambar']) : etq(['opcional', 'cinza']);
+      var vinc = atual.some(function (x) { return x.vinculado; });
+      var st = atual.length ? etq([vinc || t.tipo === 'analise_credito' ? 'vinculada' : 'entregue', 'verde']) : t.obrigatorio ? etq(['falta', 'vermelha']) : t.pendente ? etq(['pendente', 'ambar']) : etq(['opcional', 'cinza']);
       return '<div class="doc-linha"><b style="flex:1 1 260px">' + esc(t.nome) + (t.obrigatorio ? ' <span style="color:var(--red)" aria-label="obrigatório">*</span>' : '') + '</b>' + st + atual.map(lnk).join('') +
-        (pd.documentos && t.tipo !== 'analise_credito' ? '<label class="btn ghost sm">' + IC.enviar + (atual.length ? (t.tipo === 'outro' ? 'Anexar outro' : 'Trocar') : 'Anexar') + '<input type="file" data-doc-imp="' + t.tipo + '" hidden></label>' : '') + '</div>';
+        (pd.documentos && t.tipo !== 'analise_credito' && (!vinc || t.tipo === 'outro') ? '<label class="btn ghost sm">' + IC.enviar + (atual.length ? (t.tipo === 'outro' ? 'Anexar outro' : 'Trocar') : 'Anexar') + '<input type="file" data-doc-imp="' + t.tipo + '" hidden></label>' : '') + '</div>';
     }
     var obrigTipos = d.documentos_obrigatorios || [];
     var obrig = m.documentos.filter(function (t) { return obrigTipos.indexOf(t.tipo) >= 0; }).map(function (t) { return Object.assign({}, t, { obrigatorio: true }); });
-    var depois = m.documentos.filter(function (t) { return (t.pendente || (t.obrigatorio && obrigTipos.indexOf(t.tipo) < 0) || (t.tipo === 'analise_credito' && i.origem !== 'entrega') || t.tipo === 'contrato') && t.tipo !== 'outro'; })
+    // no condomínio de entrega não há análise de crédito
+    var depois = m.documentos.filter(function (t) { return (t.pendente || (t.obrigatorio && obrigTipos.indexOf(t.tipo) < 0) || t.tipo === 'contrato') && t.tipo !== 'outro' && !(t.tipo === 'analise_credito' && i.origem === 'entrega'); })
       .map(function (t) { return Object.assign({}, t, { obrigatorio: false, pendente: ['analise_credito', 'contrato'].indexOf(t.tipo) < 0 }); });
     var outro = m.documentos.filter(function (t) { return t.tipo === 'outro'; });
     var nObrig = obrig.filter(function (t) { return vig.some(function (x) { return x.tipo === t.tipo; }); }).length;
     return '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">7</span>Documentos</h2><span class="espaco"></span>' + (obrig.length ? '<span class="ajuda" style="margin:0">obrigatórios: ' + nObrig + ' de ' + obrig.length + '</span>' : '') + '</div>' +
       (obrig.length ? '<div class="sub-doc" style="border-top:0">Obrigatórios para enviar</div>' + obrig.map(linha).join('') : '') +
-      '<div class="sub-doc"' + (obrig.length ? '' : ' style="border-top:0"') + '>' + (i.origem === 'entrega' ? 'Condomínio de entrega: os documentos podem chegar depois; o que ficar pendente vira alerta para o executivo' : 'Podem chegar depois: o que ficar pendente vira alerta para o executivo') + '</div>' +
+      '<div class="sub-doc"' + (obrig.length ? '' : ' style="border-top:0"') + '>' + (i.origem === 'entrega' ? 'Condomínio de entrega: os documentos podem chegar depois' : 'Outros documentos') + '</div>' +
       depois.map(linha).join('') + outro.map(linha).join('') + '</section>';
   }
   function ligarDocsImp(i, recarregar) {
@@ -4508,8 +4517,9 @@
       '<div class="grade-2"><dl class="info-ticket" style="margin:0">' + par('Taxa administrativa', pctCr(x.taxa_adm)) + par('Boleto', reais(x.boleto)) +
       par('Desconto de pontualidade', esc(desc) + (x.desconto_inicio ? ' · a partir de ' + esc(x.desconto_inicio) : '')) + par('Garantias', esc([].concat(x.garantias || [], x.garantia_outra ? [x.garantia_outra] : []).join(', '))) +
       par('Taxa extra coberta', x.limite_extra ? 'até ' + fmtNumCr(x.limite_extra) + '% da ordinária' : '') + par('Cashback', esc(cb) + ((x.cashback_receitas || []).length ? ' · ' + esc(x.cashback_receitas.join(', ')) : '')) + '</dl>' +
-      '<dl class="info-ticket" style="margin:0">' + par('Início (1ª arrecadação)', dataBr(x.inicio_contrato)) + par('Vencimento', x.dia_vencimento ? 'dia ' + x.dia_vencimento : '') +
+      '<dl class="info-ticket" style="margin:0">' + par('Vigência (início do contrato)', dataBr(x.inicio_contrato)) + par('Primeiro vencimento', x.primeiro_vencimento ? dataBr(x.primeiro_vencimento) + (x.dia_vencimento ? ' (dia ' + x.dia_vencimento + ')' : '') : x.dia_vencimento ? 'dia ' + x.dia_vencimento : '') +
       par('Período mínimo', x.periodo_minimo ? x.periodo_minimo + ' meses' : 'padrão') + par('Cláusula 12ª', x.fidelizacao ? 'com fidelização' : 'sem fidelização') +
+      (x.honorarios ? par('Honorários de cobrança extrajudicial', pctCr(x.honorarios)) : '') +
       par('Foro', esc(x.foro)) + par('Contestação da prestação de contas', x.prazo_contestacao ? x.prazo_contestacao + ' dias' : '') + '</dl></div>' +
       ((x.clausulas || []).length ? '<div class="pilha" style="gap:6px;margin-top:12px;font-size:13px;font-weight:600;color:var(--ink-2)">' + x.clausulas.map(function (k) {
         return '<div><b style="color:var(--ink)">' + esc(k.clausula) + '</b> ' + esc(k.pedido) + ': <b>' + esc(RES[k.resultado] || '—') + '</b>' + (k.redacao ? '. ' + esc(k.redacao) : '') + '</div>';
@@ -4730,6 +4740,19 @@
       $$('[data-tirar-contato]').forEach(function (b) { b.onclick = function () { b.closest('[data-contato]').remove(); }; });
     };
     ligarTirar();
+    // o que vem das condições fechadas no contrato (taxa, boleto, desconto, vigência, honorários e cashback) não se altera aqui;
+    // o que será garantido e o primeiro vencimento o comercial ajusta (o dia de vencimento acompanha a data)
+    if (d.contrato && d.contrato.fechado) {
+      var fImp = $('#formImp');
+      $$(CAMPOS_CONTRATO_IMP, fImp).forEach(function (el) { el.disabled = true; el.title = 'Vem das condições fechadas no contrato'; });
+      var cond = $('#i_taxa_adm', fImp);
+      var sec = cond && cond.closest('section');
+      if (sec) $('.cab-painel', sec).insertAdjacentHTML('beforeend', '<span class="etiqueta azul">do contrato ' + esc(d.contrato.protocolo || '') + ': não pode ser alterado</span>');
+    }
+    // o dia de vencimento acompanha a data do primeiro vencimento
+    if ($('#i_primeiro_vencimento') && $('#i_dia_vencimento')) $('#i_primeiro_vencimento').addEventListener('change', function () {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(this.value)) $('#i_dia_vencimento').value = Number(this.value.slice(8, 10));
+    });
     $('#btExtraImp').onclick = function () { $('#tbExtrasImp').insertAdjacentHTML('beforeend', linhaExtraCr()); ligarTirar(); };
     $('#btParcImp').onclick = function () { $('#parceirosImp').insertAdjacentHTML('beforeend', linhaParceiroImp({}, parceiros.parceiros || [])); ligarTirar(); };
     $('#btContatoImp').onclick = function () { $('#contatosImp').insertAdjacentHTML('beforeend', linhaContatoImp()); ligarTirar(); };
@@ -4757,12 +4780,11 @@
   var SECOES_CT = {
     solicitacao: { titulo: 'Solicitação de Contrato', rota: '#/contratos', abas: [['minhas', 'Minhas solicitações'], ['fila', 'Fila do Jurídico'], ['diretoria', 'Diretoria'], ['equipe', 'Quem elabora']],
       sub: 'O comercial pede a minuta com as condições negociadas e o Jurídico assume e redige em até 72h úteis.' },
-    acompanhamento: { titulo: 'Acompanhamento de Contratos', rota: '#/acompanhamento-contratos', abas: [['assinaturas', 'Assinaturas'], ['controle', 'Controle']],
+    acompanhamento: { titulo: 'Acompanhamento de demandas Jurídicas', rota: '#/acompanhamento-contratos', abas: [['assinaturas', 'Assinaturas'], ['controle', 'Controle']],
       sub: 'A minuta vai e volta até a assinatura, e a advogada registra as condições fechadas. Depois, o executivo solicita a implantação, que vem com essas condições.' },
     painel: { titulo: 'Dashboard Jurídico', rota: '#/dashboard-juridico', abas: [['painel', 'Dashboard Jurídico']],
       sub: 'Contratos solicitados, em alteração, aguardando o executivo, em assinatura e fechados, por mês e por ano.' },
   };
-  var PLATAFORMAS_CT = ['Clicksign', 'D4Sign', 'DocuSign', 'Gov.br', 'Assinatura física'];
   var EVENTO_CT = {
     criada: 'criou a solicitação', formulario: 'alterou o formulário', documento: 'anexou um documento', documento_removido: 'removeu um documento',
     enviada: 'enviou ao Jurídico', reenviada: 'reenviou depois da pendência', assumida: 'assumiu a solicitação', passada: 'passou a solicitação',
@@ -4886,7 +4908,7 @@
       if (meu !== seq) return;
       var k = r.contadores;
       var tile = function (rot, n, alerta) { return '<div class="tile' + (alerta && n ? ' alerta' : '') + '"><span class="rot-tile">' + rot + '</span><b>' + n + '</b></div>'; };
-      $('#tilesCt').innerHTML = tile('Na fila', k.fila) + tile('Em elaboração', k.em_elaboracao) + tile('Com o comercial', k.minuta_enviada + k.pendencia) +
+      $('#tilesCt').innerHTML = tile('Atividades pendentes', k.fila) + tile('Em análise do Jurídico', k.em_elaboracao) + tile('Aguardando retorno do solicitante', k.minuta_enviada + k.pendencia) +
         tile('Pronto para assinatura', k.para_assinar) + tile('Em assinatura', k.em_assinatura) +
         tile('Aguardando condições fechadas', k.conferencia) + tile('Assinados no mês', k.assinados_mes) + tile('Passaram do prazo', k.atrasados, true);
       $('#tbCtc').innerHTML = r.contratos.map(function (c) {
@@ -5071,25 +5093,26 @@
         extra: '<input class="campo" id="c_cashback_receita_outra" style="max-width:220px" placeholder="Outra (descreva)" value="' + esc(f.cashback_receita_outra || '') + '" aria-label="Outra receita">' }) + '</div></section>' +
 
       '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">3</span>Vigência</h2></div><div class="corpo grade-3">' +
-      campoCt('inicio_contrato', 'Início do contrato (primeira arrecadação garantida)', f.inicio_contrato, { tipo: 'date' }) +
-      campoCt('dia_vencimento', 'Dia de vencimento da taxa condominial', f.dia_vencimento, { ref: r(ref.dia_vencimento), dif: difs.dia_vencimento, ph: '1 a 31',
-        ajuda: 'O boleto sai até o 5º dia útil antes; o condomínio envia a composição e o balancete até o dia 20 do mês anterior.' }) +
+      campoCt('inicio_contrato', 'Vigência (início do contrato)', f.inicio_contrato, { tipo: 'date' }) +
+      campoCt('primeiro_vencimento', 'Data do primeiro vencimento', f.primeiro_vencimento, { tipo: 'date', ref: ref.dia_vencimento ? 'dia ' + ref.dia_vencimento : '', dif: difs.dia_vencimento,
+        ajuda: 'O dia desta data é o dia de vencimento dos boletos. O boleto sai até o 5º dia útil antes; o condomínio envia a composição e o balancete até o dia 20 do mês anterior.' }) +
       '<div>' + '<label class="rot" for="c_periodo_minimo">Período mínimo (meses)</label><input class="campo" id="c_periodo_minimo" value="' + esc(f.periodo_minimo == null ? '' : f.periodo_minimo) + '" placeholder="vazio = padrão do contrato">' +
       '<label class="linha" style="margin-top:8px;font-size:13px;font-weight:700;color:var(--ink-2);flex-wrap:nowrap;align-items:flex-start"><input type="checkbox" id="c_fidelizacao"' + (f.fidelizacao ? ' checked' : '') + '> Pedir a versão com fidelização (benefício a mais ou risco alto)</label>' +
       '<div class="ajuda">Na Paraíba, o contrato já é com fidelização.</div></div></div></section>' +
 
-      '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">4</span>Pedidos do síndico</h2><span class="ajuda" style="margin:0">marque o que o síndico pediu para mudar no contrato</span></div><div>' +
-      m.clausulas.negociaveis.map(function (x) {
+      '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">4</span>Objeções e Solicitações de modificação de contrato</h2></div><div>' +
+      m.clausulas.negociaveis.filter(function (x) { return !x.antigo || pedidos.indexOf(x.chave) >= 0; }).map(function (x) {
         var on = pedidos.indexOf(x.chave) >= 0;
         return '<div class="pedido-ct"><input type="checkbox" data-pedido="' + esc(x.chave) + '"' + (on ? ' checked' : '') + ' aria-label="' + esc(x.pedido) + '">' +
           '<span class="t"><small>' + esc(x.clausula) + '</small>' + esc(x.pedido) + (x.diretoria ? ' ' + etq(['diretoria', 'ambar']) : '') + (x.juridico ? ' ' + etq(['exige o Jurídico', 'ambar']) : '') + '</span>' +
-          (x.detalhe ? '<input class="campo" data-pedido-det="' + esc(x.chave) + '" placeholder="' + esc(x.detalhe) + '" value="' + esc(det[x.chave] || '') + '"' + (on ? '' : ' hidden') + ' aria-label="' + esc(x.detalhe) + '">' : '') +
-          '<span class="resp" data-pedido-resp="' + esc(x.chave) + '"' + (on ? '' : ' hidden') + '><b>Resposta do Jurídico:</b> ' + esc(x.resposta) + '</span></div>';
-      }).join('') + '</div><div class="fixas-ct"><b>Não prometa (não muda no contrato):</b><ul>' + m.clausulas.fixas.map(function (x) { return '<li><b>' + esc(x.clausula) + ':</b> ' + esc(x.texto) + '</li>'; }).join('') + '</ul></div></section>' +
+          (x.detalhe ? '<label class="det-ct" data-pedido-det-rot="' + esc(x.chave) + '"' + (on ? '' : ' hidden') + '>' + (x.exemplo ? '<span>' + esc(x.detalhe) + '</span>' : '') +
+            '<input class="campo" data-pedido-det="' + esc(x.chave) + '" placeholder="' + esc(x.exemplo || x.detalhe) + '" value="' + esc(det[x.chave] || '') + '" aria-label="' + esc(x.detalhe) + '">' +
+            (x.ajuda ? '<span class="ajuda" style="margin:0">' + esc(x.ajuda) + '</span>' : '') + '</label>' : '') +
+          (x.semResposta ? '' : '<span class="resp" data-pedido-resp="' + esc(x.chave) + '"' + (on ? '' : ' hidden') + '><b>Resposta do Jurídico:</b> ' + esc(x.resposta) + '</span>') + '</div>';
+      }).join('') + '</div></section>' +
 
-      '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">5</span>Minúcias da negociação</h2></div><div class="corpo">' +
-      campoCt('minucias', 'Toda e qualquer tratativa diferente da habitual (adiantamento de repasse, condições especiais…)', f.minucias, { area: true, linhas: 4,
-        ph: 'Ex.: o síndico pediu o primeiro repasse adiantado em 5 dias. Se não houver nada diferente do habitual, escreva "Nenhuma".', ajuda: 'Qualquer observação sobre a solicitação vai só aqui.' }) + '</div></section>';
+      '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">5</span>Outras solicitações</h2></div><div class="corpo">' +
+      '<textarea class="campo" id="c_minucias" rows="4" aria-label="Outras solicitações">' + esc(f.minucias || '') + '</textarea></div></section>';
   }
   function lerFormCt(raiz) {
     var v = function (k) { return valCt(k, raiz); };
@@ -5102,7 +5125,7 @@
       taxa_adm: numCr(v('taxa_adm')), boleto: numCr(v('boleto')), desconto_tipo: v('desconto_tipo'), desconto_valor: numCr(v('desconto_valor')),
       garantias: marcas('garantias'), garantia_outra: $('#c_garantia_outra', raiz).value.trim(), taxa_ordinaria: numCr(v('taxa_ordinaria')), taxa_extra: numCr(v('taxa_extra')),
       cashback: v('cashback'), cashback_pct: numCr($('#c_cashback_pct', raiz).value), cashback_receitas: marcas('cashback_receitas'), cashback_receita_outra: $('#c_cashback_receita_outra', raiz).value.trim(),
-      inicio_contrato: v('inicio_contrato'), dia_vencimento: numCr(v('dia_vencimento')), periodo_minimo: numCr(v('periodo_minimo')), fidelizacao: $('#c_fidelizacao', raiz).checked,
+      inicio_contrato: v('inicio_contrato'), primeiro_vencimento: v('primeiro_vencimento'), periodo_minimo: numCr(v('periodo_minimo')), fidelizacao: $('#c_fidelizacao', raiz).checked,
       pedidos: $$('[data-pedido]:checked', raiz).map(function (x) { return x.getAttribute('data-pedido'); }), pedidos_detalhe: det, minucias: $('#c_minucias', raiz).value.trim(),
     };
   }
@@ -5117,7 +5140,7 @@
       if (!raiz.hasAttribute('data-leitura')) cnpj.disabled = $('#c_sem_cnpj', raiz).checked;
       $$('[data-pedido]', raiz).forEach(function (cx) {
         var k = cx.getAttribute('data-pedido');
-        $$('[data-pedido-resp="' + k + '"], [data-pedido-det="' + k + '"]', raiz).forEach(function (x) { x.hidden = !cx.checked; });
+        $$('[data-pedido-resp="' + k + '"], [data-pedido-det-rot="' + k + '"]', raiz).forEach(function (x) { x.hidden = !cx.checked; });
       });
       var ord = numCr(valCt('taxa_ordinaria', raiz)), ext = numCr(valCt('taxa_extra', raiz));
       var alvo = $('#pctExtraCt', raiz);
@@ -5242,20 +5265,19 @@
   var corrigindoCt = null; // contrato concluído com as condições fechadas abertas para correção
   function htmlFechadoCt(d, m) {
     var c = d.contrato, x = c.fechado || {}, corrigindo = d.pode.corrigir && corrigindoCt === c.id, edita = d.pode.registrar || corrigindo;
-    var cb = String(x.cashback || '');
     var clausulas = (x.clausulas || []);
+    var hon = x.honorarios == null ? '' : String(x.honorarios);
+    var honOp = ['10', '12', '15', '17.5'].indexOf(hon) >= 0 ? hon : hon ? 'outro' : '';
     var corpo = '<div class="corpo grade-3">' +
       campoCt('f_taxa_adm', 'Taxa administrativa (%)', fmtNumCr(x.taxa_adm)) + campoCt('f_boleto', 'Boleto (R$)', fmtNumCr(x.boleto)) +
       selCt('f_desconto_tipo', 'Desconto de pontualidade', x.desconto_tipo || 'nenhum', [['nenhum', 'Não possui'], ['percentual', 'Percentual (%)'], ['valor', 'Valor por unidade (R$)']]) +
       campoCt('f_desconto_valor', 'Desconto (% ou R$)', fmtNumCr(x.desconto_valor), { se: 'f_desconto_tipo:percentual,valor' }) +
       campoCt('f_desconto_inicio', 'Desconto vale a partir de', x.desconto_inicio, { se: 'f_desconto_tipo:percentual,valor', ph: 'Ex.: janeiro/2027 (vazio = assinatura)' }) +
-      marcasCt('f_garantias', 'O que o contrato garante', x.garantias, m.garantias, { extra: '<input class="campo" id="c_f_garantia_outra" style="max-width:240px" placeholder="Outra" value="' + esc(x.garantia_outra || '') + '" aria-label="Outra garantia">' }) +
-      campoCt('f_limite_extra', 'Taxa extra coberta até (% da ordinária)', fmtNumCr(x.limite_extra), { ajuda: 'O padrão é 40%.' }) +
-      radiosCt('f_cashback', 'Cashback', cb, [['nao', 'Não'], ['5', '5%'], ['10', '10%'], ['outro', 'Outro']],
-        { extra: '<input class="campo" id="c_f_cashback_pct" data-se="f_cashback:outro" style="width:110px" placeholder="%" value="' + esc(fmtNumCr(x.cashback_pct)) + '" aria-label="Percentual do cashback">' }) +
-      marcasCt('f_cashback_receitas', 'Cashback incide sobre', x.cashback_receitas, m.receitas_cashback, { se: 'f_cashback:5,10,outro' }) +
-      campoCt('f_inicio_contrato', 'Início (primeira arrecadação garantida)', x.inicio_contrato, { tipo: 'date' }) +
-      campoCt('f_dia_vencimento', 'Dia de vencimento', x.dia_vencimento) +
+      ((x.garantias || []).indexOf('Taxa extraordinária') >= 0 ? campoCt('f_limite_extra', 'Taxa extra coberta até (% da ordinária)', fmtNumCr(x.limite_extra), { ajuda: 'O padrão é 40%.' }) : '') +
+      campoCt('f_inicio_contrato', 'Vigência (início do contrato)', x.inicio_contrato, { tipo: 'date',
+        ajuda: x.primeiro_vencimento ? 'Primeiro vencimento informado pelo executivo: ' + dataBr(x.primeiro_vencimento) + (x.dia_vencimento ? ' (boletos no dia ' + x.dia_vencimento + ')' : '') + '.' : '' }) +
+      radiosCt('f_honorarios_op', 'Honorários de cobrança extrajudicial', honOp, [['10', '10%'], ['12', '12%'], ['15', '15%'], ['17.5', '17,50%'], ['outro', 'Outro']],
+        { extra: '<input class="campo" id="c_f_honorarios_outro" data-se="f_honorarios_op:outro" style="width:110px" placeholder="%" value="' + esc(honOp === 'outro' ? fmtNumCr(x.honorarios) : '') + '" aria-label="Outro percentual de honorários">' }) +
       campoCt('f_periodo_minimo', 'Período mínimo (meses)', x.periodo_minimo, { ph: 'vazio = padrão' }) +
       selCt('f_fidelizacao', 'Cláusula 12ª', x.fidelizacao ? 'sim' : 'nao', [['nao', 'Sem fidelização'], ['sim', 'Com fidelização']]) +
       campoCt('f_foro', 'Foro', x.foro, { ph: m.foro_padrao }) + campoCt('f_prazo_contestacao', 'Prazo para contestar a prestação de contas (dias)', x.prazo_contestacao) + '</div>' +
@@ -5280,12 +5302,11 @@
   }
   function lerFechadoCt(raiz) {
     var v = function (k) { return valCt(k, raiz); };
-    var marcas = function (nome) { return $$('[data-marca-ct=' + nome + ']:checked', raiz).map(function (x) { return x.value; }); };
     return {
       taxa_adm: numCr(v('f_taxa_adm')), boleto: numCr(v('f_boleto')), desconto_tipo: v('f_desconto_tipo'), desconto_valor: numCr(v('f_desconto_valor')), desconto_inicio: v('f_desconto_inicio'),
-      garantias: marcas('f_garantias'), garantia_outra: $('#c_f_garantia_outra', raiz).value.trim(), limite_extra: numCr(v('f_limite_extra')),
-      cashback: v('f_cashback'), cashback_pct: numCr($('#c_f_cashback_pct', raiz).value), cashback_receitas: marcas('f_cashback_receitas'),
-      inicio_contrato: v('f_inicio_contrato'), dia_vencimento: numCr(v('f_dia_vencimento')), periodo_minimo: numCr(v('f_periodo_minimo')), fidelizacao: v('f_fidelizacao') === 'sim',
+      limite_extra: $('#c_f_limite_extra', raiz) ? numCr(v('f_limite_extra')) : null,
+      honorarios: v('f_honorarios_op') === 'outro' ? numCr($('#c_f_honorarios_outro', raiz).value) : Number(v('f_honorarios_op')) || null,
+      inicio_contrato: v('f_inicio_contrato'), periodo_minimo: numCr(v('f_periodo_minimo')), fidelizacao: v('f_fidelizacao') === 'sim',
       foro: v('f_foro'), prazo_contestacao: numCr(v('f_prazo_contestacao')), observacoes: $('#c_f_observacoes', raiz).value.trim(),
       clausulas: $$('[data-clausula]', raiz).map(function (el) {
         var k = metaFechadoCt[Number(el.getAttribute('data-clausula'))] || {};
@@ -5308,13 +5329,11 @@
   /* ---------- assinatura: o Jurídico manda assinar e anexa a via assinada ---------- */
   function marcarEmAssinaturaCt(c, depois) {
     var mo = modal({ titulo: 'Enviado para assinatura · ' + (c.condominio || ''), corpo: (c.sem_convencao ? '<div class="msg erro" style="margin-bottom:12px">A convenção do condomínio não foi enviada: peça ao executivo antes de mandar assinar.</div>' : '') +
-      '<label class="rot" for="mPlatCt">Como foi para assinatura</label>' +
-      '<input class="campo" id="mPlatCt" list="lPlatCt" placeholder="Ex.: Clicksign"><datalist id="lPlatCt">' + PLATAFORMAS_CT.map(function (x) { return '<option value="' + esc(x) + '">'; }).join('') + '</datalist>' +
-      '<label class="rot" for="mObsAssCt" style="margin-top:12px">Observação (opcional)</label><textarea class="campo" id="mObsAssCt" rows="2" placeholder="Ex.: enviado ao síndico e às testemunhas."></textarea>' +
+      '<label class="rot" for="mObsAssCt">Observação (opcional)</label><textarea class="campo" id="mObsAssCt" rows="2" placeholder="Ex.: enviado ao síndico e às testemunhas."></textarea>' +
       '<div class="ajuda">O executivo é avisado no sino. Quando voltar assinado, clique em <b>Assinado</b>.</div>',
       pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mEmAssOk">Marcar em assinatura</button>' });
     $('#mEmAssOk', mo).onclick = async function () {
-      try { await api('POST', '/api/contratos/' + c.id + '/em-assinatura', { plataforma: $('#mPlatCt', mo).value.trim(), observacao: $('#mObsAssCt', mo).value.trim() }); mo.fechar(); toast('Em assinatura.', 'ok'); depois(); } catch (e) { toast(e.message, 'erro'); }
+      try { await api('POST', '/api/contratos/' + c.id + '/em-assinatura', { observacao: $('#mObsAssCt', mo).value.trim() }); mo.fechar(); toast('Em assinatura.', 'ok'); depois(); } catch (e) { toast(e.message, 'erro'); }
     };
   }
   /* a via assinada: anexa ali mesmo o contrato e a procuração e marca; em seguida, registra as condições fechadas */
@@ -5344,11 +5363,11 @@
     var grupo = function (etapa, titulo, ajuda, desde, botao) {
       var lista = r.contratos.filter(function (c) { return c.etapa === etapa; });
       return '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>' + titulo + '</h2><span class="etiqueta ' + ETAPA_CT[etapa][1] + '">' + lista.length + '</span><span class="ajuda" style="margin:0">' + ajuda + '</span></div>' +
-        (lista.length ? '<div class="tabela-wrap"><table style="min-width:820px"><thead><tr><th>Protocolo</th><th>Condomínio</th><th>Executivo</th><th>Desde</th><th>Com quem</th><th></th></tr></thead><tbody>' +
+        (lista.length ? '<div class="tabela-wrap"><table style="min-width:820px"><thead><tr><th>Protocolo</th><th>Condomínio</th><th>Executivo</th><th>Desde</th><th></th></tr></thead><tbody>' +
           lista.map(function (c) {
             return '<tr class="clicavel" data-id="' + c.id + '"><td style="white-space:nowrap"><b>' + esc(c.protocolo) + '</b></td><td><b>' + esc(c.condominio) + '</b>' + (c.sem_convencao ? ' ' + etq(['sem convenção: peça antes de assinar', 'vermelha']) : '') +
               '<span class="sec">' + esc(c.uf || '') + (c.ajustes ? ' · ' + c.ajustes + ' ajuste(s)' : '') + '</span></td>' +
-              '<td>' + esc(c.executivo_nome || '—') + '</td><td style="white-space:nowrap">' + dataHoraCr(c[desde]) + '</td><td>' + comQuemCt(c) + '</td>' +
+              '<td>' + esc(c.executivo_nome || '—') + '</td><td style="white-space:nowrap">' + dataHoraCr(c[desde]) + '</td>' +
               '<td style="text-align:right"><button class="btn primary sm" data-acao-ass="' + etapa + '" data-c="' + c.id + '">' + botao + '</button></td></tr>';
           }).join('') + '</tbody></table></div>' : '<div class="corpo"><span class="sec">Nenhum.</span></div>') + '</section>';
     };

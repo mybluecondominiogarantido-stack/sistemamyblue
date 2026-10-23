@@ -96,7 +96,7 @@ async function entrar(email, senha) {
 }
 const setor = async (nome) => (await ctx.db.um('SELECT id FROM setores WHERE nome = $1', [nome])).id;
 async function pessoa(nome, email, papel, setores, modulos = []) {
-  const r = await admin('POST', '/api/admin/usuarios', { nome, email, papel, senha: 'Senha1234', setores, modulos });
+  const r = await admin('POST', '/api/admin/usuarios', { data_nascimento: '1990-05-10', data_admissao: '2024-02-01', nome, email, papel, senha: 'Senha1234', setores, modulos });
   assert.equal(r.status, 201, r.texto);
   await ctx.db.q('UPDATE usuarios SET trocar_senha = FALSE WHERE id = $1', [r.json.id]);
   return entrar(email, 'Senha1234');
