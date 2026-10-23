@@ -37,7 +37,7 @@ async function entrar(email, senha) {
 let admin, exec, adv, adv2, diretor, outro;
 const ids = {};
 async function pessoa(nome, email) {
-  const r = await admin('POST', '/api/admin/usuarios', { nome, email, papel: 'usuario', senha: 'Senha1234' });
+  const r = await admin('POST', '/api/admin/usuarios', { data_nascimento: '1990-05-10', data_admissao: '2024-02-01', nome, email, papel: 'usuario', senha: 'Senha1234' });
   assert.equal(r.status, 201, r.texto);
   await ctx.db.q('UPDATE usuarios SET trocar_senha = FALSE WHERE id = $1', [r.json.id]);
   ids[email] = r.json.id;
@@ -216,10 +216,10 @@ test('assinatura: o executivo pede, a advogada manda assinar, anexa a via assina
   assert.equal((await exec('PUT', `/api/contratos/${idC}/fechado`, { condicoes: x })).status, 403);
   let r = await adv('PUT', `/api/contratos/${idC}/fechado`, { condicoes: { ...x, taxa_adm: 3.25 } });
   assert.equal(r.status, 200, r.texto);
-  assert.ok(r.json.faltas.every((f) => /Dizer como ficou/.test(f)));
+  assert.deepEqual(r.json.faltas.filter((f) => !/Dizer como ficou/.test(f)), ['Informar os honorários de cobrança extrajudicial.']);
   r = await adv('PUT', `/api/contratos/${idC}/fechado`, { condicoes: { ...x, taxa_adm: 3.25 }, concluir: true });
   assert.equal(r.status, 400);
-  const fechado = { ...x, taxa_adm: 3.25, clausulas: x.clausulas.map((k) => ({ ...k, resultado: 'aceito', redacao: 'Redação padrão do Jurídico.' })), observacoes: 'Procuração no mesmo arquivo.' };
+  const fechado = { ...x, taxa_adm: 3.25, honorarios: 15, dia_vencimento: 5, clausulas: x.clausulas.map((k) => ({ ...k, resultado: 'aceito', redacao: 'Redação padrão do Jurídico.' })), observacoes: 'Procuração no mesmo arquivo.' };
   r = await adv('PUT', `/api/contratos/${idC}/fechado`, { condicoes: fechado, concluir: true });
   assert.equal(r.status, 200, r.texto);
   assert.equal(r.json.implantacao, null); // a advogada só registra: quem solicita a implantação é o executivo
@@ -249,6 +249,16 @@ test('Implantação: o executivo solicita pelo contrato, e ela vem com as condi�
   assert.deepEqual([d.implantacao.formulario.taxa_adm, d.implantacao.formulario.sindico_nome, d.implantacao.formulario.inicio_contrato], [3.25, 'Síndico Fictício', '2026-12-01']);
   assert.match(d.implantacao.formulario.observacoes, /Primeiro repasse adiantado/);
   assert.deepEqual(d.documentos.map((x) => x.tipo).sort(), ['analise_credito', 'contrato', 'convencao']);
+  // o que veio vinculado (convenção, análise, contrato) não se troca nem se remove na implantação
+  assert.ok(d.documentos.every((x) => x.vinculado));
+  const doc = (tipo) => exec('POST', `/api/implantacoes/${idImpC}/documentos`, PDF, { headers: { 'x-tipo': tipo, 'x-nome-arquivo': 'x.pdf' } });
+  assert.equal((await doc('convencao')).status, 409);
+  assert.equal((await doc('ata_eleicao')).status, 201);
+  assert.equal((await exec('DELETE', `/api/implantacoes/${idImpC}/documentos/${d.documentos.find((x) => x.tipo === 'contrato').id}`)).status, 409);
+  // as garantias vêm do contrato fechado: o executivo não muda
+  assert.equal((await exec('PATCH', `/api/implantacoes/${idImpC}`, { formulario: { ...d.implantacao.formulario, garantias: ['Gás'] } })).status, 200);
+  assert.deepEqual((await exec('GET', `/api/implantacoes/${idImpC}`)).json.implantacao.formulario.garantias, d.implantacao.formulario.garantias);
+  assert.equal(d.implantacao.formulario.honorarios, 15); // os honorários das condições fechadas
   assert.equal(d.contrato.fechado.foro, 'Natal/RN');
   assert.deepEqual(d.diferencas.map((x) => x.campo), ['taxa_adm']); // diferente da análise (3,50%)
 });
@@ -294,7 +304,7 @@ test('implantação aberta antes do contrato fechar: passa a mostrar as condiç�
   await anexar(adv, id, 'contrato_assinado');
   assert.equal((await adv('POST', `/api/contratos/${id}/assinado`, {})).status, 200); // a via voltou sem marcar "em assinatura": também vale
   const x = (await adv('GET', `/api/contratos/${id}`)).json.contrato.fechado;
-  const r = await adv('PUT', `/api/contratos/${id}/fechado`, { condicoes: x, concluir: true });
+  const r = await adv('PUT', `/api/contratos/${id}/fechado`, { condicoes: { ...x, honorarios: 12 }, concluir: true });
   assert.equal(r.status, 200, r.texto);
   assert.equal(r.json.implantacao, imp);
   d = (await exec('GET', `/api/implantacoes/${imp}`)).json;
@@ -410,7 +420,7 @@ test('condomínio de entrega: sem análise, a diretoria aprova taxa e boleto ant
   await anexar(adv, id, 'contrato_assinado');
   assert.equal((await adv('POST', `/api/contratos/${id}/assinado`, {})).status, 200);
   const x = (await adv('GET', `/api/contratos/${id}`)).json.contrato.fechado;
-  const r = await adv('PUT', `/api/contratos/${id}/fechado`, { condicoes: x, concluir: true });
+  const r = await adv('PUT', `/api/contratos/${id}/fechado`, { condicoes: { ...x, honorarios: 12 }, concluir: true });
   assert.equal(r.status, 200, r.texto);
   const sol = await exec('POST', `/api/contratos/${id}/implantacao`, {});
   assert.equal(sol.status, 201, sol.texto);

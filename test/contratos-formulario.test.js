@@ -22,7 +22,7 @@ test('da análise: condomínio, taxa, boleto, desconto e a taxa extra somada vê
 
 test('faltas: o mínimo do antigo formulário, e o condomínio sem CNPJ pede ciência, administradora e a ata da assembleia', () => {
   assert.deepEqual(F.faltas(FORM, { executivoId: 1 }), []);
-  assert.ok(F.faltas({ ...FORM, minucias: '' }, { executivoId: 1 }).some((x) => /minúcias/.test(x)));
+  assert.deepEqual(F.faltas({ ...FORM, minucias: '' }, { executivoId: 1 }), []); // outras solicitações é opcional
   assert.ok(F.faltas({ ...FORM, sindico_cpf: '123.456.789-00' }, { executivoId: 1 }).some((x) => /CPF/.test(x)));
   assert.ok(F.faltas({ ...FORM, cashback: '5' }, { executivoId: 1 }).some((x) => /receitas/.test(x)));
   const semCnpj = F.faltas({ ...FORM, cnpj: '', sem_cnpj: true, administradora: '' }, { executivoId: 1 });
@@ -53,12 +53,19 @@ test('avisos do manual: fundo de obras, sem pontualidade, sem CNPJ, fidelizaçã
 
 test('condições fechadas: partem do pedido (foro na capital, 30 dias), exigem o resultado de cada cláusula e mostram o que mudou', () => {
   const c = { formulario: { ...FORM, uf: 'RN', pedidos: ['foro_capital', 'contestacao_30'] }, diretoria: {} };
+  // o prazo que o cliente pediu vira o ponto de partida da advogada
+  assert.equal(F.fechadoInicial({ formulario: { ...FORM, pedidos: ['contestacao_30'], pedidos_detalhe: { contestacao_30: '45 dias' } }, diretoria: {} }).prazo_contestacao, 45);
+  // retirar a pontualidade é decisão da diretoria; adiar, não
+  assert.equal(F.itensDiretoria({ ...FORM, pedidos: ['pontualidade_retirar', 'pontualidade_adiar'] }, 'analise').length, 1);
   const x = F.fechadoInicial(c);
   assert.deepEqual([x.foro, x.prazo_contestacao, x.limite_extra, x.taxa_adm, x.clausulas.length], ['Natal/RN', 30, 40, 3.5, 2]);
-  assert.ok(F.faltasFechado(x).every((m) => /Dizer como ficou/.test(m)));
-  const fechado = F.normalizarFechado({ ...x, taxa_adm: 3.25, clausulas: x.clausulas.map((k) => ({ ...k, resultado: 'aceito' })), extra: 'ignorado' });
+  assert.deepEqual(F.faltasFechado(x).filter((m) => !/Dizer como ficou/.test(m)), ['Informar os honorários de cobrança extrajudicial.']);
+  const fechado = F.normalizarFechado({ ...x, taxa_adm: 3.25, honorarios: 12, clausulas: x.clausulas.map((k) => ({ ...k, resultado: 'aceito' })), extra: 'ignorado' });
   assert.deepEqual(F.faltasFechado(fechado), []);
   assert.equal(fechado.extra, undefined);
+  // garantias, cashback e vencimento: vale o do pedido do executivo, mesmo que venham diferentes
+  assert.deepEqual(F.comPedido(c, { ...fechado, garantias: ['Água'], dia_vencimento: 5, cashback: '10' }).garantias, x.garantias);
+  assert.equal(F.comPedido(c, { ...fechado, dia_vencimento: 5 }).dia_vencimento, 10);
   assert.deepEqual(F.diferencasFechado(c.formulario, fechado), [{ rotulo: 'Taxa administrativa', pedido: '3,50%', fechado: '3,25%' }]);
   // a diretoria negou o pedido dela: a cláusula já começa como recusada
   const negado = F.fechadoInicial({ formulario: { ...FORM, pedidos: ['reembolso_limitar'] }, diretoria: { itens: ['x'], decidido_em: '2026-10-01', aprovado: false } });
@@ -72,6 +79,6 @@ test('para a Implantação: o fechado vale sobre o pedido e as garantias fora da
   assert.equal(i.taxa_adm, 3.25);
   assert.deepEqual(i.garantias, ['Taxa ordinária']);
   assert.equal(i.garantia_outra, 'Locação de ambientes a condôminos');
-  assert.match(i.observacoes, /CT-2026-10-21-01.*Minúcias: Nenhuma.*Repasse adiantado/);
+  assert.match(i.observacoes, /CT-2026-10-21-01.*Outras solicitações: Nenhuma.*Repasse adiantado/);
   assert.equal(F.paraImplantacao({ ...c, fechado_em: null }).taxa_adm, 3.5);
 });

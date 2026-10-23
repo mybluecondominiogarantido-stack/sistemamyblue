@@ -9,7 +9,7 @@ padrões da Análise de Crédito e da Implantação, no grupo **Jurídico** do m
 | Menu | Endereço | Abas |
 |---|---|---|
 | **Solicitação de Contrato** | `#/contratos` | Minhas solicitações, Fila do Jurídico (assumir), Diretoria, Quem elabora |
-| **Acompanhamento de Contratos** | `#/acompanhamento-contratos` | Assinaturas (quem elabora), Controle (todos os contratos, até os encerrados) |
+| **Acompanhamento de demandas Jurídicas** | `#/acompanhamento-contratos` | Assinaturas (quem elabora), Controle (todos os contratos, até os encerrados) |
 | **Dashboard Jurídico** | `#/dashboard-juridico` | — (quem elabora e a diretoria) |
 
 Os endereços antigos (`#/contratos/assinaturas`, `#/contratos/controle`, `#/contratos/painel`) levam à tela nova.
@@ -20,7 +20,7 @@ Os endereços antigos (`#/contratos/assinaturas`, `#/contratos/controle`, `#/con
 |---|---|
 | Rotas (perfil, quem elabora, análises disponíveis, formulário, documentos, envio, Jurídico, diretoria, ajuste, assinado, condições fechadas, controle) e rotinas | `server/rotas/contratos.js` |
 | Regras do formulário: o que vem da análise, o que falta, os avisos do manual, o que vai à diretoria, as condições fechadas, o que segue para a Implantação e o PDF | `server/contratos/formulario.js` |
-| Cláusulas negociáveis (pedido, posição e resposta padrão do Jurídico) e o que não se promete | `server/contratos/clausulas.js` |
+| Cláusulas negociáveis (pedido, posição e resposta padrão do Jurídico) | `server/contratos/clausulas.js` |
 | Tabelas `contratos`, `contrato_documentos`, `contrato_eventos`, `contrato_protocolos` (e `implantacoes.contrato_id`) | `server/db.js` |
 | Permissão "Elaborar as minutas de contrato" (`contratos.elaborar`) | `server/regras.js` |
 | PDF da solicitação (o gerador do Formulário de Implantação, com outro cabeçalho) | `server/implantacoes/formulario_pdf.py` |
@@ -52,10 +52,13 @@ comercial) e `cancelada`. O pedido de ajuste volta a solicitação para `em_elab
   a solicitação abre com um aviso para conferir as condições.
 - **Formulário:** os 17 campos do Forms (o solicitante é quem está no portal). Vem preenchido com a análise, e o que
   mudar (taxa administrativa, boleto, vencimento, desconto) aparece como diferença. Mais o estado, a administradora,
-  a taxa ordinária e a taxa extra (para o limite de 40%), o período mínimo, o pedido de fidelização e os **pedidos do
-  síndico**: ao marcar uma cláusula negociável, aparece a resposta padrão do Jurídico.
+  a taxa ordinária e a taxa extra (para o limite de 40%), o período mínimo, o pedido de fidelização, as **Objeções e
+  Solicitações de modificação de contrato** (ao marcar uma, aparece a resposta padrão do Jurídico e, quando há, a
+  pergunta: pontualidade em *retirar* ou *adiar*, "para quando?" em texto livre; o prazo de contestação pedido pelo
+  cliente, em dias) e as **Outras solicitações** (opcional). Os pedidos que saíram da lista (out/2026) ficam marcados
+  `antigo` em `clausulas.js`: aparecem nas solicitações que já os tinham.
 - **Obrigatórios para enviar:** os dados do formulário (CPF do síndico válido, e-mail, telefone, taxa, boleto, desconto,
-  garantias, cashback, início, vencimento e as minúcias; sem nada diferente, "Nenhuma"). Sem CNPJ: a ciência dos 90 dias,
+  garantias, cashback, início e vencimento). Sem CNPJ: a ciência dos 90 dias,
   a administradora e a ata da assembleia que autorizou a contratação.
 - **Documentos:** o retorno e a convenção vêm da análise. Os documentos do síndico (atas, cadastros, RG…) **não** são
   pedidos aqui: são da Implantação (os que já tinham sido anexados continuam visíveis e seguem para ela).
@@ -73,14 +76,15 @@ comercial) e `cancelada`. O pedido de ajuste volta a solicitação para `em_elab
   minuta anexada depois do pedido.
 - **Assinatura:** com a minuta aprovada pelo síndico, o comercial clica em *Síndico aprovou: pedir assinatura*. Quem
   elabora vê na aba **Assinaturas** (pronto para assinatura, em assinatura, registrar condições), manda assinar e marca
-  *Enviado para assinatura* (com a plataforma: Clicksign, D4Sign, física…). Quando a via assinada volta, marca
+  *Enviado para assinatura* (com uma observação, se quiser). Quando a via assinada volta, marca
   *Assinado*, anexando ali mesmo o contrato assinado, e registra as condições fechadas (a procuração não é pedida). O comercial é avisado em cada passo.
-- **Condições fechadas:** vêm do pedido (foro na capital do estado se pedido, 30 dias de contestação se pedido, a
-  decisão da diretoria) e a advogada corrige o que mudou: taxa, boleto, desconto e início, garantias, limite da taxa
-  extra, cashback, início, vencimento, período mínimo, fidelização, foro, prazo de contestação e o resultado de cada
-  cláusula pedida (aceito, em parte ou recusado, com a redação). Concluir leva a `assinado` e avisa o executivo para
+- **Condições fechadas:** vêm do pedido (foro na capital do estado se pedido, o prazo de contestação pedido pelo
+  cliente, a decisão da diretoria) e a advogada corrige o que mudou: taxa, boleto, desconto e início, limite da taxa
+  extra, início, período mínimo, fidelização, **honorários de cobrança extrajudicial**, foro, prazo de contestação e o
+  resultado de cada cláusula pedida (aceito, em parte ou recusado, com a redação). Garantias, cashback e vencimento
+  são do executivo: valem sempre os do pedido (`comPedido`), e a advogada não os altera. Concluir leva a `assinado` e avisa o executivo para
   **solicitar a implantação** (veja abaixo). O Jurídico não abre a implantação.
-- **Contratos encerrados:** ficam em Acompanhamento de Contratos → **Controle** (filtro "Assinado" ou busca). As condições ficam travadas; quem
+- **Contratos encerrados:** ficam em Acompanhamento de demandas Jurídicas → **Controle** (filtro "Assinado" ou busca). As condições ficam travadas; quem
   elabora usa **Corrigir condições**, com o motivo obrigatório. O histórico guarda o que mudou (de → para), e o
   executivo e a Implantação (quem conduz, ou a coordenação) são avisados.
 
@@ -120,7 +124,7 @@ todo, datas em Brasília):
 
 ## Manual do Contrato
 
-As cláusulas negociáveis, as respostas padrão e o que não se promete vêm do Manual do Contrato MyBlue (Jurídico) e
+As cláusulas negociáveis e as respostas padrão vêm do Manual do Contrato MyBlue (Jurídico) e
 ficam em `server/contratos/clausulas.js`. Mudou o manual? Atualize esse arquivo (e os avisos em `avisos()` de
 `server/contratos/formulario.js`).
 

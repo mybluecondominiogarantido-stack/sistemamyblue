@@ -23,7 +23,7 @@ const DOCUMENTOS = {
   cadastro_moradores: { nome: 'Cadastro de moradores atualizado (Excel)', obrigatorio: true },
   ata_eleicao: { nome: 'Ata de eleição do síndico', obrigatorio: true },
   ata_orcamento: { nome: 'Ata de previsão orçamentária', obrigatorio: true },
-  analise_credito: { nome: 'Análise de Crédito' },
+  analise_credito: { nome: 'Análise de Crédito', obrigatorio: true }, // vem vinculada da análise (no condomínio de entrega não há)
   documento_sindico: { nome: 'RG/CPF ou CNH do síndico', pendente: true },
   conta_bancaria: { nome: 'Conta bancária', pendente: true },
   comprovante_endereco: { nome: 'Comprovante de endereço do síndico', pendente: true },

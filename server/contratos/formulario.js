@@ -13,7 +13,7 @@
  *   vigência    inicio_contrato (AAAA-MM-DD, primeira arrecadação garantida), dia_vencimento, periodo_minimo (meses),
  *               fidelizacao (true = pedir a versão com fidelização fora da Paraíba)
  *   pedidos     pedidos [chave de server/contratos/clausulas.js], pedidos_detalhe { chave: texto }
- *   minúcias    minucias (toda e qualquer tratativa diferente da habitual: só aqui)
+ *   outras solicitações  minucias (opcional: qualquer outra tratativa ou observação)
  *
  * Condições fechadas (contratos.fechado), registradas pela advogada com o contrato assinado; vão para a Implantação:
  *   taxa_adm, boleto, desconto_tipo, desconto_valor, desconto_inicio, garantias [], garantia_outra, limite_extra (% da
@@ -114,7 +114,6 @@ function faltasCampos(f, { docs = new Set(), executivoId } = {}) {
   exige(/^\d{4}-\d{2}-\d{2}$/.test(texto(f.inicio_contrato)), 'inicio_contrato', 'Informar a data de início do contrato (primeira arrecadação garantida).');
   confere(f.dia_vencimento, num(f.dia_vencimento) >= 1 && num(f.dia_vencimento) <= 31, 'dia_vencimento', 'Informar o dia de vencimento da taxa condominial.', 'Dia de vencimento inválido: de 1 a 31.');
   for (const k of f.pedidos || []) if (!C.porChave.has(k)) l.push({ campo: 'pedidos', msg: 'Pedido de alteração desconhecido: desmarque e marque de novo.' });
-  exige(texto(f.minucias), 'minucias', 'Informar as minúcias da negociação (se não houver nada diferente do habitual, escreva "Nenhuma").');
   exige(executivoId, 'executivo_id', 'Escolher o executivo de negócios.');
   return l;
 }
@@ -186,8 +185,10 @@ function fechadoInicial(c) {
     limite_extra: pedidos.includes('taxa_extra_ampliar') && !negou ? num(String((f.pedidos_detalhe || {}).taxa_extra_ampliar || '').replace(/[^\d,.]/g, '').replace(',', '.')) || LIMITE_EXTRA : LIMITE_EXTRA,
     cashback: String(f.cashback || 'nao'), cashback_pct: num(f.cashback_pct), cashback_receitas: lista(f.cashback_receitas),
     inicio_contrato: texto(f.inicio_contrato), dia_vencimento: num(f.dia_vencimento), periodo_minimo: num(f.periodo_minimo), fidelizacao: comFidelizacao(f),
+    honorarios: num(f.honorarios),
     foro: pedidos.includes('foro_capital') && CAPITAIS[uf] ? `${CAPITAIS[uf]}/${uf}` : FORO_PADRAO,
-    prazo_contestacao: pedidos.includes('contestacao_30') ? 30 : 15,
+    // o prazo que o cliente pediu (a advogada confirma); sem número, os 30 dias que o Jurídico aceita
+    prazo_contestacao: pedidos.includes('contestacao_30') ? Math.round(num(String((f.pedidos_detalhe || {}).contestacao_30 || '').replace(/[^\d]/g, ''))) || 30 : 15,
     clausulas: pedidos.map((k) => C.porChave.get(k)).filter(Boolean).map((x) => ({ chave: x.chave, clausula: x.clausula, pedido: x.pedido,
       resultado: x.diretoria && negou ? 'recusado' : '', redacao: '' })),
     observacoes: '',
@@ -202,7 +203,7 @@ function normalizarFechado(b) {
     desconto_valor: num(b.desconto_valor), desconto_inicio: texto(b.desconto_inicio).slice(0, 60), garantias: lista(b.garantias), garantia_outra: texto(b.garantia_outra).slice(0, 200),
     limite_extra: num(b.limite_extra), cashback: ['nao', '5', '10', 'outro'].includes(String(b.cashback)) ? String(b.cashback) : '', cashback_pct: num(b.cashback_pct),
     cashback_receitas: lista(b.cashback_receitas), inicio_contrato: texto(b.inicio_contrato).slice(0, 10), dia_vencimento: num(b.dia_vencimento),
-    periodo_minimo: num(b.periodo_minimo), fidelizacao: !!b.fidelizacao, foro: texto(b.foro).slice(0, 120), prazo_contestacao: num(b.prazo_contestacao),
+    periodo_minimo: num(b.periodo_minimo), fidelizacao: !!b.fidelizacao, honorarios: num(b.honorarios), foro: texto(b.foro).slice(0, 120), prazo_contestacao: num(b.prazo_contestacao),
     clausulas: (Array.isArray(b.clausulas) ? b.clausulas : []).slice(0, 40).map((x) => ({ chave: texto(x && x.chave).slice(0, 60), clausula: texto(x && x.clausula).slice(0, 60),
       pedido: texto(x && x.pedido).slice(0, 300), resultado: RESULTADO[x && x.resultado] ? x.resultado : '', redacao: texto(x && x.redacao).slice(0, 2000) }))
       .filter((x) => x.clausula || x.pedido || x.redacao),
@@ -210,20 +211,23 @@ function normalizarFechado(b) {
   };
 }
 
-/* o que falta para registrar as condições fechadas e concluir */
+/* o que o executivo informa no pedido e a advogada não altera: vale sempre o do pedido */
+const DO_EXECUTIVO = ['garantias', 'garantia_outra', 'cashback', 'cashback_pct', 'cashback_receitas', 'dia_vencimento'];
+function comPedido(c, x) {
+  const base = fechadoInicial(c);
+  return { ...x, ...Object.fromEntries(DO_EXECUTIVO.map((k) => [k, base[k]])) };
+}
+
+/* o que falta para registrar as condições fechadas e concluir (garantias, cashback e vencimento vêm do pedido) */
 function faltasFechado(x) {
   const l = [];
   const exige = (cond, msg) => { if (!cond) l.push(msg); };
   exige(num(x.taxa_adm) > 0, 'Informar a taxa administrativa fechada.');
   exige(num(x.boleto) > 0, 'Informar o valor do boleto fechado.');
   if (['percentual', 'valor'].includes(x.desconto_tipo)) exige(num(x.desconto_valor) > 0, 'Informar o desconto de pontualidade fechado.');
-  exige((x.garantias || []).length || texto(x.garantia_outra), 'Marcar o que o contrato garante.');
   if ((x.garantias || []).includes('Taxa extraordinária')) exige(num(x.limite_extra) > 0, 'Informar até quantos % da ordinária a taxa extra é coberta.');
-  exige(['nao', '5', '10', 'outro'].includes(String(x.cashback || '')), 'Dizer se o contrato tem cashback.');
-  if (x.cashback === 'outro') exige(num(x.cashback_pct) > 0, 'Informar o percentual do cashback.');
-  if (['5', '10', 'outro'].includes(String(x.cashback))) exige((x.cashback_receitas || []).length, 'Marcar sobre quais receitas incide o cashback.');
   exige(/^\d{4}-\d{2}-\d{2}$/.test(texto(x.inicio_contrato)), 'Informar o início do contrato (primeira arrecadação garantida).');
-  exige(num(x.dia_vencimento) >= 1 && num(x.dia_vencimento) <= 31, 'Informar o dia de vencimento da taxa (1 a 31).');
+  exige(num(x.honorarios) > 0, 'Informar os honorários de cobrança extrajudicial.');
   exige(texto(x.foro), 'Informar o foro.');
   exige(num(x.prazo_contestacao) > 0, 'Informar o prazo para contestar a prestação de contas (dias).');
   (x.clausulas || []).forEach((c) => exige(c.resultado, `Dizer como ficou: ${c.clausula} ${c.pedido}`.trim() + '.'));
@@ -262,6 +266,7 @@ function resumoFechado(x) {
     'Cashback incide sobre': [...(x.cashback_receitas || [])].sort().join(', '),
     'Início do contrato': dataBr(x.inicio_contrato), 'Dia de vencimento': num(x.dia_vencimento) ? String(num(x.dia_vencimento)) : '',
     'Período mínimo': num(x.periodo_minimo) ? `${num(x.periodo_minimo)} meses` : 'padrão', Fidelização: x.fidelizacao ? 'com' : 'sem',
+    'Honorários de cobrança extrajudicial': num(x.honorarios) ? `${fmt(num(x.honorarios))}%` : '',
     Foro: texto(x.foro), 'Prazo de contestação': num(x.prazo_contestacao) ? `${num(x.prazo_contestacao)} dias` : '',
     ...Object.fromEntries((x.clausulas || []).map((k) => [`${k.clausula} ${k.pedido}`.trim(), `${RESULTADO[k.resultado] || '—'}${texto(k.redacao) ? `: ${texto(k.redacao)}` : ''}`])),
     'Observações': texto(x.observacoes),
@@ -285,6 +290,7 @@ function implantacaoDiferente(fi, x) {
   if (fi.desconto_tipo) par('Desconto de pontualidade', desc(fi.desconto_tipo, fi.desconto_valor), desc(x.desconto_tipo, x.desconto_valor));
   par('Início do contrato', texto(fi.inicio_contrato), texto(x.inicio_contrato), dataBr);
   par('Dia de vencimento', n(fi.dia_vencimento), n(x.dia_vencimento));
+  if (x.honorarios) par('Honorários de cobrança extrajudicial', n(fi.honorarios), n(x.honorarios), (v) => (v == null ? '—' : `${fmt(v)}%`));
   return l;
 }
 
@@ -292,18 +298,18 @@ function implantacaoDiferente(fi, x) {
 function paraImplantacao(c) {
   const fechado = c.fechado_em && c.fechado && c.fechado.taxa_adm ? c.fechado : null;
   const f = { ...(c.formulario || {}), ...(fechado ? Object.fromEntries(['taxa_adm', 'boleto', 'desconto_tipo', 'desconto_valor', 'garantias', 'garantia_outra', 'cashback',
-    'cashback_pct', 'cashback_receitas', 'inicio_contrato', 'dia_vencimento'].map((k) => [k, fechado[k]])) : {}) };
+    'cashback_pct', 'cashback_receitas', 'inicio_contrato', 'dia_vencimento', 'honorarios'].map((k) => [k, fechado[k]])) : {}) };
   const v = (x) => x !== undefined && x !== null && x !== '';
   const out = {};
   for (const k of ['nome', 'cnpj', 'uf', 'cidade', 'administradora', 'sindico_nome', 'sindico_cpf', 'sindico_email', 'sindico_telefone', 'taxa_adm', 'boleto',
-    'taxa_ordinaria', 'desconto_tipo', 'desconto_valor', 'cashback', 'cashback_pct', 'inicio_contrato', 'dia_vencimento']) if (v(f[k])) out[k] = f[k];
+    'taxa_ordinaria', 'desconto_tipo', 'desconto_valor', 'cashback', 'cashback_pct', 'inicio_contrato', 'dia_vencimento', 'honorarios']) if (v(f[k])) out[k] = f[k];
   if (f.sem_cnpj) out.sem_cnpj = true;
   const garantias = f.garantias || [];
   out.garantias = garantias.filter((x) => I.GARANTIAS.includes(x));
   const outras = [...garantias.filter((x) => !I.GARANTIAS.includes(x)), texto(f.garantia_outra)].filter(Boolean);
   if (outras.length) out.garantia_outra = outras.join(', ');
   if (temCashback(f)) out.cashback_receitas = (f.cashback_receitas || []).filter((x) => RECEITAS_CASHBACK.includes(x));
-  const notas = [texto(f.minucias) ? `Minúcias: ${texto(f.minucias)}` : '', fechado && texto(fechado.observacoes) ? `Condições fechadas: ${texto(fechado.observacoes)}` : ''].filter(Boolean);
+  const notas = [texto(f.minucias) ? `Outras solicitações: ${texto(f.minucias)}` : '', fechado && texto(fechado.observacoes) ? `Condições fechadas: ${texto(fechado.observacoes)}` : ''].filter(Boolean);
   if (notas.length) out.observacoes = `Contrato ${c.protocolo || ''}. ${notas.join(' ')}`.slice(0, 4000);
   return out;
 }
@@ -339,10 +345,10 @@ function montarPdf(c, { executivo, responsavel, documentos = [], usuario, origem
       ...(temCashback(f) ? [['Incide sobre', [...(f.cashback_receitas || []), f.cashback_receita_outra].filter(Boolean).join(', ')]] : [])] },
     { numero: 3, titulo: 'Vigência', campos: [['Início (1ª arrecadação garantida)', dataBr(f.inicio_contrato)], ['Vencimento da taxa', f.dia_vencimento ? `dia ${f.dia_vencimento}` : ''],
       ['Período mínimo', f.periodo_minimo ? `${f.periodo_minimo} meses` : 'padrão do contrato'], ['Cláusula 12ª', comFidelizacao(f) ? 'com fidelização' : 'sem fidelização']] },
-    { numero: 4, titulo: 'Pedidos do síndico', campos: (f.pedidos || []).length ? [] : [['Alteração de cláusulas', 'Nenhuma pedida']],
+    { numero: 4, titulo: 'Objeções e solicitações de modificação de contrato', campos: (f.pedidos || []).length ? [] : [['Alteração de cláusulas', 'Nenhuma pedida']],
       tabela: (f.pedidos || []).length ? { cab: ['Cláusula', 'Pedido', 'Resposta padrão do Jurídico'], larguras: [0.17, 0.38, 0.45],
         linhas: f.pedidos.map((k) => C.porChave.get(k)).filter(Boolean).map((x) => [x.clausula, x.pedido + (texto(det[x.chave]) ? ` — ${texto(det[x.chave])}` : ''), x.resposta + (x.diretoria ? ' (diretoria)' : '')]) } : null },
-    { numero: 5, titulo: 'Minúcias da negociação', texto_titulo: 'Toda e qualquer tratativa diferente da habitual', texto: f.minucias || '—' },
+    { numero: 5, titulo: 'Outras solicitações', texto_titulo: 'Outras solicitações', texto: f.minucias || '—' },
   ];
   if ((d.itens || []).length) {
     secoes.push({ titulo: 'Diretoria', campos: [['Situação', d.decidido_em ? (d.aprovado ? 'Aprovado' : 'Não aprovado') : 'Aguardando'], ['Por', d.por || ''], ['Em', quando(d.decidido_em)], ['Observação', d.observacao || '']],
@@ -390,4 +396,4 @@ function montarPdf(c, { executivo, responsavel, documentos = [], usuario, origem
 }
 
 module.exports = { DOCUMENTOS, GARANTIAS, RECEITAS_CASHBACK, LIMITE_EXTRA, DOC_IMPLANTACAO, RESULTADO, CAPITAIS, FORO_PADRAO, daAnalise, doPdf, faltas, faltasCampos, itensDiretoria, avisos,
-  AVISO_CONVENCAO, AVISO_CONVENCAO_JURIDICO, diferencas, fechadoInicial, normalizarFechado, faltasFechado, diferencasFechado, mudancasFechado, implantacaoDiferente, paraImplantacao, comFidelizacao, montarPdf, cpfValido: I.cpfValido, cnpjOk: I.cnpjOk };
+  AVISO_CONVENCAO, AVISO_CONVENCAO_JURIDICO, diferencas, fechadoInicial, normalizarFechado, comPedido, faltasFechado, diferencasFechado, mudancasFechado, implantacaoDiferente, paraImplantacao, comFidelizacao, montarPdf, cpfValido: I.cpfValido, cnpjOk: I.cnpjOk };

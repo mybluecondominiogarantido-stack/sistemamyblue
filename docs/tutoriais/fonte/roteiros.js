@@ -218,7 +218,7 @@ async function passosJor(base) {
     },
     async concluirContrato() {
       const d = await lara('GET', `/api/contratos/${j.contrato}`);
-      await ok('concluir contrato', lara('PUT', `/api/contratos/${j.contrato}/fechado`, { condicoes: d.contrato.fechado, concluir: true }));
+      await ok('concluir contrato', lara('PUT', `/api/contratos/${j.contrato}/fechado`, { condicoes: { ...d.contrato.fechado, honorarios: 12 }, concluir: true }));
     },
     async solicitarImplantacao() { j.implantacao = (await ok('solicitar implantação', vera('POST', `/api/contratos/${j.contrato}/implantacao`, {}))).implantacao; },
     async implantacaoId() { j.implantacao = (await vera('GET', `/api/contratos/${j.contrato}`)).implantacao.id; return j.implantacao; },
@@ -253,7 +253,7 @@ module.exports = [
     inicio: 'login',
     async preparar(cen) {
       // pessoa nova, ainda com a senha temporária
-      await cen.admin('POST', '/api/admin/usuarios', { nome: 'Nina Torres', email: 'nina@myblue.com.br', senha: 'Bemvinda1', setores: [cen.S('CS')], modulos: ['renegociacoes'] });
+      await cen.admin('POST', '/api/admin/usuarios', { data_nascimento: '1990-05-10', data_admissao: '2024-02-01', nome: 'Nina Torres', email: 'nina@myblue.com.br', senha: 'Bemvinda1', setores: [cen.S('CS')], modulos: ['renegociacoes'] });
     },
     abertura: ['Do primeiro login até achar as suas ferramentas.', ['Criar a sua senha', 'A tela inicial e o menu', 'Abrir uma ferramenta', 'Avisos e a sua conta']],
     async gravar(t, cen) {
@@ -575,7 +575,7 @@ module.exports = [
     entrar: 'mel@myblue.com.br',
     inicio: '#/links',
     async preparar(cen, base) {
-      await cen.admin('POST', '/api/admin/usuarios', { nome: 'Mel Andrade', email: 'mel@myblue.com.br', senha: 'Senha1234', setores: [cen.S('Marketing')], editor_links: true });
+      await cen.admin('POST', '/api/admin/usuarios', { data_nascimento: '1990-05-10', data_admissao: '2024-02-01', nome: 'Mel Andrade', email: 'mel@myblue.com.br', senha: 'Senha1234', setores: [cen.S('Marketing')], editor_links: true });
       const c = cliente(base);
       await c('POST', '/api/auth/login', { email: 'mel@myblue.com.br', senha: 'Senha1234' });
       await c('POST', '/api/auth/senha', { atual: 'Senha1234', nova: 'Nova12345' });

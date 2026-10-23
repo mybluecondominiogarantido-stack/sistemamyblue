@@ -174,7 +174,7 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
       resultados: F.RESULTADO, foro_padrao: F.FORO_PADRAO,
       executivos: p.admin ? (await db.q('SELECT id, nome, uf FROM executivos WHERE ativo ORDER BY nome')).rows : p.executivo ? [p.executivo] : [],
       documentos: Object.entries(F.DOCUMENTOS).map(([tipo, d]) => ({ tipo, ...d })),
-      garantias: F.GARANTIAS, receitas_cashback: F.RECEITAS_CASHBACK, clausulas: { negociaveis: C.NEGOCIAVEIS, fixas: C.FIXAS },
+      garantias: F.GARANTIAS, receitas_cashback: F.RECEITAS_CASHBACK, clausulas: { negociaveis: C.NEGOCIAVEIS },
       origens: ORIGEM, prazo_dias: DIAS_PRAZO, validade_proposta: p.politica.validade_dias,
       elaboradores: ids.length ? (await db.q('SELECT id, nome FROM usuarios WHERE id = ANY($1::int[]) AND ativo ORDER BY nome', [ids])).rows : [],
     });
@@ -816,7 +816,7 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
     if (!x) return;
     const { c, pd } = x;
     if (!pd.registrar) return erro(res, 403, 'As condições fechadas são registradas por quem elabora, depois que o contrato assinado é anexado.');
-    const fechado = F.normalizarFechado(req.body && req.body.condicoes);
+    const fechado = F.comPedido(c, F.normalizarFechado(req.body && req.body.condicoes));
     const concluir = !!(req.body && req.body.concluir);
     if (concluir) {
       const lista = F.faltasFechado(fechado);
@@ -872,7 +872,7 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
     if (!pd.corrigir) return erro(res, 403, 'As condições fechadas são corrigidas por quem elabora, depois que o contrato foi concluído.');
     const motivo = texto(req.body && req.body.motivo, 1000);
     if (!motivo) return erro(res, 400, 'Diga o motivo da correção.');
-    const fechado = F.normalizarFechado(req.body && req.body.condicoes);
+    const fechado = F.comPedido(c, F.normalizarFechado(req.body && req.body.condicoes));
     const lista = F.faltasFechado(fechado);
     if (lista.length) return erro(res, 400, 'Faltam condições.', { faltas: lista });
     const mudancas = F.mudancasFechado(c.fechado, fechado);

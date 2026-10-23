@@ -96,7 +96,7 @@ async function montarCenario(base, { ferramentas = {} } = {}) {
     ['Lara Mendes', 'lara@myblue.com.br', { setores: [S('Jurídico')] }],
   ];
   const id = {};
-  for (const [nome, email, extra] of pessoas) id[email] = (await a('POST', '/api/admin/usuarios', { nome, email, senha: 'Senha1234', ...extra })).id;
+  for (const [nome, email, extra] of pessoas) id[email] = (await a('POST', '/api/admin/usuarios', { data_nascimento: '1990-05-10', data_admissao: '2024-02-01', nome, email, senha: 'Senha1234', ...extra })).id;
   await a('PUT', `/api/admin/equipes/${S('Cobrança')}/membros`, { membros: [{ usuario_id: id['lia@myblue.com.br'], lider: true }, { usuario_id: id['marcos@myblue.com.br'] }] });
   await a('PUT', `/api/admin/equipes/${S('CS')}/membros`, { membros: [{ usuario_id: id['sara@myblue.com.br'], lider: true }] });
   await a('PUT', `/api/admin/equipes/${S('Crédito')}/membros`, { membros: [{ usuario_id: id['caio@myblue.com.br'], lider: true }, { usuario_id: id['bruna@myblue.com.br'] }, { usuario_id: id['davi@myblue.com.br'] }] });

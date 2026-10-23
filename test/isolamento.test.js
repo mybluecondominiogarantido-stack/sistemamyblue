@@ -124,7 +124,7 @@ test('a chave termina junto com a sessão', async () => {
 });
 
 test('quem só consulta continua sem gravar pela chave; quem perde o acesso também', async () => {
-  const u = await admin('POST', '/api/admin/usuarios', { nome: 'Rita', email: 'rita@teste.com', senha: 'Senha1234' });
+  const u = await admin('POST', '/api/admin/usuarios', { data_nascimento: '1990-05-10', data_admissao: '2024-02-01', nome: 'Rita', email: 'rita@teste.com', senha: 'Senha1234' });
   await ctx.db.q('UPDATE usuarios SET trocar_senha = FALSE WHERE id = $1', [u.json.id]);
   assert.equal((await admin('PUT', '/api/admin/modulos/agenda/acesso', { acessos: [{ usuario_id: u.json.id, somente_leitura: true, papeis: [] }] })).status, 200);
   const rita = cliente();
