@@ -6176,7 +6176,8 @@
     return el.value.trim();
   }
 
-  function htmlFormCt(c, m, difs) {
+  // interno: quem elabora, a diretoria e a administração veem a resposta padrão do Jurídico; o comercial, não
+  function htmlFormCt(c, m, difs, interno) {
     var f = c.formulario || {}, ref = c.origem === 'entrega' ? {} : c.referencia || {};
     var temRef = ref.taxa_adm != null;
     var r = function (v) { return temRef ? v : null; };
@@ -6230,7 +6231,7 @@
           (x.detalhe ? '<label class="det-ct" data-pedido-det-rot="' + esc(x.chave) + '"' + (on ? '' : ' hidden') + '>' + (x.exemplo ? '<span>' + esc(x.detalhe) + '</span>' : '') +
             '<input class="campo" data-pedido-det="' + esc(x.chave) + '" placeholder="' + esc(x.exemplo || x.detalhe) + '" value="' + esc(det[x.chave] || '') + '" aria-label="' + esc(x.detalhe) + '">' +
             (x.ajuda ? '<span class="ajuda" style="margin:0">' + esc(x.ajuda) + '</span>' : '') + '</label>' : '') +
-          (x.semResposta ? '' : '<span class="resp" data-pedido-resp="' + esc(x.chave) + '"' + (on ? '' : ' hidden') + '><b>Resposta do Jurídico:</b> ' + esc(x.resposta) + '</span>') + '</div>';
+          (interno ? '<span class="resp" data-pedido-resp="' + esc(x.chave) + '"' + (on ? '' : ' hidden') + '><b>Resposta do Jurídico:</b> ' + esc(x.resposta) + '</span>' : '') + '</div>';
       }).join('') + '</div></section>' +
 
       '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">5</span>Outras solicitações</h2></div><div class="corpo">' +
@@ -6695,7 +6696,7 @@
     if (c.etapa === 'em_assinatura') html += '<div class="msg info" style="margin-bottom:16px">Em assinatura desde ' + dataHoraCr(c.em_assinatura_em) + (c.assinatura_plataforma ? ' (' + esc(c.assinatura_plataforma) + ')' : '') + '.' + (pd.assinar ? ' Voltou assinado? Clique em <b>Assinado</b> e anexe a via assinada.' : ' O Jurídico avisa quando voltar assinado.') + '</div>';
     var fechadoHtml = ['conferencia', 'assinado'].indexOf(c.etapa) >= 0 ? htmlFechadoCt(d, m) : '';
     metaFechadoCt = (c.fechado && c.fechado.clausulas) || [];
-    var formHtml = '<div id="formCt" class="pilha" style="gap:18px"' + (pd.editar ? '' : ' data-leitura') + '>' + htmlFormCt(c, m, difs) + '</div>';
+    var formHtml = '<div id="formCt" class="pilha" style="gap:18px"' + (pd.editar ? '' : ' data-leitura') + '>' + htmlFormCt(c, m, difs, pd.interno) + '</div>';
     if (!pd.editar) formHtml = '<details class="painel"' + (pd.interno && ['fila', 'em_elaboracao'].indexOf(c.etapa) >= 0 ? ' open' : '') + '><summary class="cab-painel" style="cursor:pointer"><h2 style="display:inline">Solicitação do comercial</h2></summary><div class="corpo">' + formHtml + '</div></details>';
     html += '<div class="pilha" style="gap:18px">' + fechadoHtml + formHtml + htmlDocsCt(d, m) +
       (pd.editar ? '<div class="linha" style="justify-content:flex-end"><span class="ajuda" style="flex:1 1 320px;margin:0">Ao enviar, o portal confere o que falta, gera o protocolo e avisa o Jurídico (72h úteis para a minuta). O que depende da diretoria vai para ela no mesmo momento.</span>' +
@@ -6744,7 +6745,7 @@
       pedirTexto('Enviar a minuta ao comercial', 'Mensagem ao executivo (opcional)', 'Ex.: ajustei o foro e o prazo de contestação, como pedido.', 'Enviar minuta', 'minuta', 'mensagem', 'Minuta enviada ao comercial.', 'Vai a minuta anexada em Documentos. O executivo é avisado no sino e por e-mail.');
     };
     if ($('#btAjusteCt')) $('#btAjusteCt').onclick = function () {
-      pedirTexto('Pedir ajuste na minuta', 'O que o síndico pediu para mudar', 'Ex.: trocar o foro para Natal/RN; prazo de 30 dias para contestar.', 'Pedir ajuste', 'ajuste', 'texto', 'Ajuste pedido ao Jurídico.', 'Volta para quem redigiu, com mais 72h úteis. Mudança em cláusula do manual? Confira a resposta padrão em Pedidos do síndico.');
+      pedirTexto('Pedir ajuste na minuta', 'O que o síndico pediu para mudar', 'Ex.: trocar o foro para Natal/RN; prazo de 30 dias para contestar.', 'Pedir ajuste', 'ajuste', 'texto', 'Ajuste pedido ao Jurídico.', 'Volta para quem redigiu, com mais 72h úteis. Mudança em cláusula do manual? O Jurídico confere a resposta padrão do manual.');
     };
     if ($('#btPedirAssCt')) $('#btPedirAssCt').onclick = function () {
       pedirTexto('Síndico aprovou: pedir assinatura', 'Observação para o Jurídico (opcional)', 'Ex.: o síndico assina pela Clicksign; e-mail dele: sindico@exemplo.com.', 'Pedir assinatura', 'pedir-assinatura', 'observacao', 'Pedido de assinatura enviado ao Jurídico.',

@@ -159,7 +159,7 @@ function avisos(f, { origem, diasAnalise, validadeProposta, semConvencao } = {})
   }
   if (g.length) l.push({ nivel: 'info', texto: 'Só é garantido o que está na convenção e no regimento e foi aprovado em assembleia. Multas por descumprimento do regimento e locação de ambientes a quem não é condômino não entram.' });
   if (f.desconto_tipo === 'nenhum') {
-    l.push({ nivel: 'info', texto: 'Sem desconto de pontualidade: o contrato pede que o condomínio institua 10% em assembleia em até 30 dias da assinatura; senão, a taxa administrativa sobe 1 ponto. Retirar a sanção, não; adiar para o próximo orçamento, sim (marque em Pedidos do síndico).' });
+    l.push({ nivel: 'info', texto: 'Sem desconto de pontualidade: o contrato pede que o condomínio institua 10% em assembleia em até 30 dias da assinatura; senão, a taxa administrativa sobe 1 ponto. Retirar a sanção, não; adiar para o próximo orçamento, sim (marque em Objeções e Solicitações de modificação de contrato).' });
   }
   if (f.sem_cnpj) l.push({ nivel: 'atencao', texto: 'Sem CNPJ: o condomínio tem 90 dias da primeira arrecadação para regularizar, senão o repasse fica retido. Até lá, o repasse vai para a conta da administradora (formalizado por e-mail), nunca para a conta do síndico.' });
   if (temCashback(f)) l.push({ nivel: 'info', texto: 'Cashback e desconto de pontualidade mudam o texto que vai para assinatura: confira se foram mesmo negociados.' });
@@ -364,8 +364,8 @@ function montarPdf(c, { executivo, responsavel, documentos = [], usuario, origem
     { numero: 3, titulo: 'Vigência', campos: [['Primeiro vencimento', dataBr(f.primeiro_vencimento) + (f.dia_vencimento ? ` (boletos no dia ${f.dia_vencimento})` : '')],
       ['Período mínimo', f.periodo_minimo ? `${f.periodo_minimo} meses` : 'padrão do contrato'], ['Cláusula 12ª', comFidelizacao(f) ? 'com fidelização' : 'sem fidelização']] },
     { numero: 4, titulo: 'Objeções e solicitações de modificação de contrato', campos: (f.pedidos || []).length ? [] : [['Alteração de cláusulas', 'Nenhuma pedida']],
-      tabela: (f.pedidos || []).length ? { cab: ['Cláusula', 'Pedido', 'Resposta padrão do Jurídico'], larguras: [0.17, 0.38, 0.45],
-        linhas: f.pedidos.map((k) => C.porChave.get(k)).filter(Boolean).map((x) => [x.clausula, x.pedido + (texto(det[x.chave]) ? ` — ${texto(det[x.chave])}` : ''), x.resposta + (x.diretoria ? ' (diretoria)' : '')]) } : null },
+      tabela: (f.pedidos || []).length ? { cab: ['Cláusula', 'Pedido'], larguras: [0.22, 0.78],
+        linhas: f.pedidos.map((k) => C.porChave.get(k)).filter(Boolean).map((x) => [x.clausula, x.pedido + (texto(det[x.chave]) ? ` — ${texto(det[x.chave])}` : '') + (x.diretoria ? ' (diretoria)' : '')]) } : null },
     { numero: 5, titulo: 'Outras solicitações', texto_titulo: 'Outras solicitações', texto: f.minucias || '—' },
   ];
   if ((d.itens || []).length) {
