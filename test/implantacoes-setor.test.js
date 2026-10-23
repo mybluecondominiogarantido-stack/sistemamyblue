@@ -63,7 +63,7 @@ const FORM = {
 };
 /* implantação enviada, designada para a Ana e assumida por ela */
 let seq = 0;
-async function assumida(nome) {
+async function assumida(nome, extra = {}) {
   seq++;
   const { id: aid } = await ctx.db.um(`INSERT INTO analises (protocolo, etapa, resultado, condominio, cnpj, uf, tipo_contratacao, executivo_id, solicitante_id, formulario,
       taxa_adm, boleto, enviada_em, liberada_em) VALUES ($1, 'enviada', 'aprovada', $2, '11.222.333/0001-81', 'CE', 'nova', $3, $4, $5::jsonb, 3, 2, now(), now()) RETURNING id`,
@@ -74,7 +74,7 @@ async function assumida(nome) {
   const r = await exec('POST', '/api/implantacoes', { origem: 'analise', analise_id: aid });
   assert.equal(r.status, 201, r.texto);
   const id = r.json.id;
-  assert.equal((await exec('PATCH', `/api/implantacoes/${id}`, { formulario: { ...FORM, nome } })).status, 200);
+  assert.equal((await exec('PATCH', `/api/implantacoes/${id}`, { formulario: { ...FORM, nome, ...extra } })).status, 200);
   for (const tipo of ['cadastro_moradores', 'ata_eleicao', 'ata_orcamento']) assert.equal((await anexar(exec, id, tipo)).status, 201);
   { const x = await exec('POST', `/api/implantacoes/${id}/enviar`, {}); assert.equal(x.status, 200, x.texto); }
   assert.equal((await coord('POST', `/api/implantacoes/${id}/designar`, { usuario_id: ids['ana@teste.com'] })).status, 200);
@@ -449,4 +449,54 @@ test('ficha de repasse: prazo de 5 dias úteis da conclusão; lembrete na véspe
   await ctx.db.q("UPDATE implantacao_fichas SET primeiro_envio_em = '2026-11-04T15:00:00Z' WHERE implantacao_id = $1", [id]);
   const j = (await ana('GET', `/api/implantacoes/${id}/ficha`)).json;
   assert.equal(j.ficha.prazo.status, 'cumprido_com_atraso');
+});
+
+/* ===================== antecipação → Controle de Repasses ===================== */
+test('antecipação: a Implantação envia; no Controle de Repasses o Gestor cadastra (com ajuste) ou devolve; atualização com antes e depois', async () => {
+  const id = await assumida('Residencial Fictício Épsilon', { antecipacao: 'sim', antecipacao_valor: 20000, antecipacao_data: '2026-11-05', antecipacao_prazo: '10 parcelas' });
+  const gestor = await pessoa('Gestor de Repasses Fictício', 'rep@teste.com');
+  const leitor = await pessoa('Leitor de Repasses Fictício', 'leitor@teste.com');
+  // sem a ferramenta cadastrada, só a administração abre
+  assert.equal((await gestor('GET', '/api/repasses/antecipacoes')).status, 403);
+  await ctx.db.q(`INSERT INTO modulos (slug, nome, config) VALUES ('repasses', 'Controle de Repasses', $1::jsonb)`, [JSON.stringify({ papeis: [{ id: 'gestor', nome: 'Gestor' }] })]);
+  await ctx.db.q("INSERT INTO permissoes (usuario_id, modulo_slug, papeis) VALUES ($1, 'repasses', ARRAY['gestor']), ($2, 'repasses', ARRAY[]::text[])", [ids['rep@teste.com'], ids['leitor@teste.com']]);
+  // envio pela Implantação: só o setor
+  assert.equal((await exec('POST', `/api/implantacoes/${id}/antecipacao/enviar`, {})).status, 403);
+  const e = await ana('POST', `/api/implantacoes/${id}/antecipacao/enviar`, {});
+  assert.equal(e.status, 200, e.texto);
+  assert.deepEqual(e.json.enviado, { valor: 20000, data: '2026-11-05', dia: 5, prazo: '10 parcelas', fim: '2027-08' });
+  assert.equal((await ana('POST', `/api/implantacoes/${id}/antecipacao/enviar`, {})).status, 409);
+  // a ferramenta lê
+  const l = await leitor('GET', '/api/repasses/antecipacoes');
+  assert.equal(l.status, 200);
+  const it = l.json.itens.find((x) => x.implantacao_id === id);
+  assert.deepEqual([it.tipo, it.condominio.nome, it.condominio.comarca, it.valor, it.dia, it.fim, it.enviado_por, it.na_carteira],
+    ['nova', 'Residencial Fictício Épsilon', 'CE', 20000, 5, '2027-08', 'Ana Fictícia', false]);
+  // só o Gestor decide
+  assert.equal((await leitor('POST', `/api/repasses/antecipacoes/${id}/cadastrar`, { regra_id: 'G1' })).status, 403);
+  const c = await gestor('POST', `/api/repasses/antecipacoes/${id}/cadastrar`, { regra_id: 'G123', valor: 20000, dia: 6, modo: 'exato', fim: '2027-08', obs: 'dia 5 é sábado' });
+  assert.equal(c.status, 200, c.texto);
+  assert.deepEqual(c.json.ajuste, { dia: { de: 5, para: 6 } });
+  const av = await ultimo('ana@teste.com');
+  assert.match(av.titulo, /^Antecipação cadastrada com ajuste · /);
+  assert.match(av.texto, /dia 5 → dia 6/);
+  assert.equal((await gestor('POST', `/api/repasses/antecipacoes/${id}/cadastrar`, { regra_id: 'G123' })).status, 409);
+  assert.ok(!(await gestor('GET', '/api/repasses/antecipacoes')).json.itens.some((x) => x.implantacao_id === id));
+  let linha = (await coord('GET', '/api/implantacoes/acompanhamento')).json.linhas.find((x) => x.id === id);
+  assert.deepEqual([linha.antecipacao_envio.situacao, linha.antecipacao_envio.regra_id, linha.antecipacao_envio.mudou], ['cadastrada', 'G123', false]);
+  // o formulário muda depois do cadastro: aparece como mudou e vai como atualização, com o antes
+  await ctx.db.q(`UPDATE implantacoes SET formulario = formulario || '{"antecipacao_valor": 25000}'::jsonb WHERE id = $1`, [id]);
+  linha = (await coord('GET', '/api/implantacoes/acompanhamento')).json.linhas.find((x) => x.id === id);
+  assert.equal(linha.antecipacao_envio.mudou, true);
+  assert.equal((await ana('POST', `/api/implantacoes/${id}/antecipacao/enviar`, {})).json.atualizacao, true);
+  const at = (await gestor('GET', '/api/repasses/antecipacoes')).json.itens.find((x) => x.implantacao_id === id);
+  assert.deepEqual([at.tipo, at.regra_id, at.valor, at.antes.valor], ['atualizacao', 'G123', 25000, 20000]);
+  // devolução com motivo
+  assert.equal((await gestor('POST', `/api/repasses/antecipacoes/${id}/devolver`, { motivo: '' })).status, 400);
+  assert.equal((await gestor('POST', `/api/repasses/antecipacoes/${id}/devolver`, { motivo: 'O valor novo não foi aprovado pela diretoria' })).status, 200);
+  assert.match((await ultimo('ana@teste.com')).texto, /não foi aprovado/);
+  linha = (await coord('GET', '/api/implantacoes/acompanhamento')).json.linhas.find((x) => x.id === id);
+  assert.deepEqual([linha.antecipacao_envio.situacao, linha.antecipacao_envio.motivo], ['devolvida', 'O valor novo não foi aprovado pela diretoria']);
+  const tipos = (await detalhe(ana, id)).eventos.map((x) => x.tipo);
+  for (const t of ['antecipacao_enviada', 'antecipacao_cadastrada', 'antecipacao_devolvida']) assert.ok(tipos.includes(t), t);
 });

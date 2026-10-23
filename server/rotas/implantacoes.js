@@ -29,6 +29,7 @@ const FC = require('../contratos/formulario');
 const M = require('../implantacoes/metas');
 const { rotasAcompanhamento, lembretesDocumentacao, carregarLinhas, historicoParametros } = require('./implantacoes-acompanhamento');
 const { rotasFicha, criarRotinaFichas } = require('./implantacoes-ficha');
+const { rotasAntecipacoes } = require('./implantacoes-antecipacoes');
 const { rotasSetor, criarRotinaPrazos, prazoConcluir, autorizacaoAtiva, autorizados, pausasDe, prazoOnboarding, ESCOPOS, MOTIVOS_IMPEDIMENTO } = require('./implantacoes-setor');
 const { criarPrazos } = require('../implantacoes/prazos');
 
@@ -178,7 +179,7 @@ async function abrirDoContrato(t, ct, usuarioId) {
 const HORAS_PARA_INICIAR = 8;
 const normal = (s) => semAcento(s).toLowerCase().replace(/[^a-z0-9]/g, '');
 
-function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente, boletosCarteira }) {
+function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente, boletosCarteira, acessos }) {
   const r = express.Router();
   const json = express.json({ limit: '1mb' });
   const corpoDoc = express.raw({ type: () => true, limit: (cfg.limiteCreditoMb || 30) * 1024 * 1024 });
@@ -393,6 +394,7 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
   const fichaRotas = rotasFicha(r, { db, seg, avisos, erro, evento, json, link, perfil, pode, coordenacao, pessoasDoSetor, administradores, historicoParametros,
     autorizacaoAtiva, autorizados, P });
   const aoConcluir = fichaRotas.aoConcluir;
+  rotasAntecipacoes(r, { db, avisos, erro, evento, json, link, coordenacao, carregar, acessos });
 
   /* ===================== listagem ===================== */
   r.get('/api/implantacoes', async (req, res) => {

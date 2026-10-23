@@ -6,6 +6,7 @@
  * Quem vê: setor Implantação, coordenação, diretoria e administração. Parâmetros e a meta de documentação marcada à mão:
  * coordenação e administração. Cobrar documentos (só ao executivo): o setor, a coordenação e a administração.
  */
+const { situacoesAntecipacao } = require('./implantacoes-antecipacoes');
 const M = require('../implantacoes/metas');
 const F = require('../implantacoes/formulario');
 
@@ -61,7 +62,9 @@ function rotasAcompanhamento(r, { db, seg, avisos, perfil, erro, evento, json })
     const hoje = M.diaSP(Date.now());
     const historico = await historicoParametros(db);
     const atual = M.parametrosEm(historico, hoje);
-    const linhas = (await carregarLinhas(db, { hoje, historico })).map(({ _bruto, ...l }) => l);
+    const brutas = await carregarLinhas(db, { hoje, historico });
+    const envioAntecipacao = await situacoesAntecipacao(db, brutas);
+    const linhas = brutas.map(({ _bruto, ...l }) => ({ ...l, antecipacao_envio: envioAntecipacao[l.id] || null }));
     const porIds = [...new Set(linhas.map((l) => l.onboarding.por).filter(Boolean))];
     const nomesPor = new Map(porIds.length ? (await db.q(`SELECT id, nome FROM usuarios WHERE id IN (${porIds.map(Number).join(',')})`)).rows.map((x) => [x.id, x.nome]) : []);
     for (const l of linhas) l.onboarding.por_nome = nomesPor.get(l.onboarding.por) || '';
@@ -79,7 +82,7 @@ function rotasAcompanhamento(r, { db, seg, avisos, perfil, erro, evento, json })
       onboarding: M.resumoOnboarding(linhas, atual.meta_pct), documentacao: M.resumoDocumentacao(linhas, atual.meta_pct),
       analistas: nomes('responsavel_id', 'responsavel_nome'), executivos: nomes('executivo_id', 'executivo_nome'),
       anos: [...new Set([ano, ...linhas.map((l) => Number(l.inicio.slice(0, 4)))])].sort(),
-      pode: { parametros: !!(p.coordenacao || p.admin), marcar: !!(p.coordenacao || p.admin), cobrar: !!(p.equipe || p.coordenacao || p.admin) },
+      pode: { parametros: !!(p.coordenacao || p.admin), marcar: !!(p.coordenacao || p.admin), cobrar: !!(p.equipe || p.coordenacao || p.admin), antecipacao: !!(p.equipe || p.coordenacao || p.admin) },
     });
   });
 

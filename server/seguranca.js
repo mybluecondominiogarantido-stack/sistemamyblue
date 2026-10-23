@@ -227,6 +227,8 @@ function criarSeguranca(db, cfg) {
     if (p === `/api/db/${s}` || p === `/api/db/${s}/trava` || p === `/api/db/${s}/pessoas`) return true;
     if (ler && (/^\/api\/carteira(\/\d+)?$/.test(p) || /^\/api\/usuarios\/\d+\/foto$/.test(p) || p.startsWith('/cdn/'))) return true;
     if (req.method === 'POST' && (p === '/api/tickets' || /^\/api\/tickets\/\d+\/anexos$/.test(p))) return true;
+    // Controle de Repasses: as antecipações vindas da Implantação (a rota confere o papel Gestor)
+    if (s === 'repasses' && (p === '/api/repasses/antecipacoes' || /^\/api\/repasses\/antecipacoes\/\d+\/(cadastrar|devolver)$/.test(p))) return true;
     if (p.startsWith('/api/comissao/')) {
       const m = await db.um('SELECT config FROM modulos WHERE slug = $1', [s]);
       return !!(m && m.config && m.config.relatorios_comissao);
