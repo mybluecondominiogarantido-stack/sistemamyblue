@@ -34,11 +34,17 @@ function nomeArquivo(razaoSocial, protocolo) {
 
 /* ---------- textos da análise ---------- */
 
+// "Convenção incompleta" vira frase ("Convenção incompleta."), para as ressalvas não se emendarem no texto
+const frase = (t) => { const s = String(t || '').trim(); return !s || /[.!?;:]$/.test(s) ? s : `${s}.`; };
+// nomes do relatório em maiúsculas ("MARIA DA SILVA") saem como nome próprio ("Maria da Silva")
+const nomeProprio = (t) => String(t || '').replace(/\b[A-ZÀ-Ý][A-ZÀ-Ý´'.]+(?:\s+[A-ZÀ-Ý][A-ZÀ-Ý´'.]*)+\b/g,
+  (nome) => nome.toLowerCase().replace(/(^|\s)(\S)/g, (m, e, c) => e + c.toUpperCase()).replace(/\s(D[aeo]s?|E)\s/g, (m) => m.toLowerCase()));
+
 function textoDecisao(r) {
   const preco = r.precificacao ? `taxa administrativa de ${fmtPct(r.precificacao.taxa_adm)} e boleto de ${fmtBRL(r.precificacao.boleto)}` : '';
   switch (r.status.codigo) {
     case 'aprovada': return `O condomínio foi <b>aprovado</b>, com ${preco}.`;
-    case 'ressalvas': return `O condomínio foi <b>aprovado com ressalvas</b>, com ${preco}.${r.diretoria ? ' A inadimplência acima de 35% exige a chancela da diretoria (CEO e Diretor Comercial).' : ''} ${r.ressalvas.filter((x) => x.codigo !== 'diretoria').map((x) => esc(x.texto)).join(' ')}`.trim();
+    case 'ressalvas': return `O condomínio foi <b>aprovado com ressalvas</b>, com ${preco}.${r.diretoria ? ' A inadimplência acima de 35% exige a chancela da diretoria (CEO e Diretor Comercial).' : ''} ${r.ressalvas.filter((x) => x.codigo !== 'diretoria').map((x) => esc(frase(x.texto))).join(' ')}`.trim();
     case 'reprovada': return `O condomínio <b>não foi aprovado</b>: ${r.reprovacoes.map((x) => esc(x.texto.replace(/\.$/, ''))).join('; ')}.`;
     default: return `A análise está <b>pendente</b>: ${r.pendencias.map((x) => esc(x.mensagem.replace(/\.$/, ''))).join('; ')}.`;
   }
@@ -165,7 +171,9 @@ function montarDados(r, ctx) {
 }
 
 function motivoExclusao(x) {
-  if (x.motivo === 'espolio') return `Espólio${x.detalhe ? ` (${x.detalhe})` : ''}: fora do escopo, débito acumulado direcionado ao inventário.`;
+  if (x.motivo === 'espolio') return /^confirmado/.test(x.detalhe || '')
+    ? `Espólio ${nomeProprio(x.detalhe)}: fora do escopo, débito acumulado direcionado ao inventário.`
+    : `Espólio${x.detalhe ? ` (${nomeProprio(x.detalhe)})` : ''}: fora do escopo, débito acumulado direcionado ao inventário.`;
   if (x.motivo === 'retomada') return `Unidade retomada${x.detalhe ? ` (${x.detalhe})` : ''}: fora do escopo da garantia.`;
   return `Abandono ou litígio${x.detalhe ? ` (${x.detalhe})` : ''}: fora do escopo da garantia.`;
 }

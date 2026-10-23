@@ -219,7 +219,10 @@ function analisar(entrada, politica = POLITICA_PADRAO, opcoes = {}) {
 
   // taxa ordinária e vencimento: formulário prevalece
   let ordinaria = num(f.taxa_ordinaria);
-  const ordRel = ordinarias.length ? moda(ordinarias.map((l) => l.c)) : null;
+  // a taxa do relatório é a das 3 competências mais recentes (a vigente), não a mais comum de todo o histórico
+  const recentes = [...new Set(ordinarias.map((l) => l.competencia))].sort().slice(-3);
+  const ordRecentes = ordinarias.filter((l) => recentes.includes(l.competencia));
+  const ordRel = ordRecentes.length ? moda(ordRecentes.map((l) => l.c)) : null;
   if (ordinaria !== null && ordRel !== null && Math.abs(cent(ordinaria) - ordRel) > 1) divergir('taxa_ordinaria', { formulario: ordinaria, relatorio: reais(ordRel) }, ordinaria, 'formulario');
   ordinaria = num(ajustar('taxa_ordinaria', ordinaria, 'Valor da taxa ordinária'));
 
@@ -299,7 +302,7 @@ function analisar(entrada, politica = POLITICA_PADRAO, opcoes = {}) {
   const espolioAssertiva = new Set();
   for (const u of unidades) {
     if (consultas[u.id]?.resultado !== 'espolio' || exclusoes.has(u.id)) continue;
-    excluir(u.id, 'espolio', `confirmado na consulta Assertiva${u.titular ? ` (${u.titular})` : ''}`, 'analista');
+    excluir(u.id, 'espolio', `confirmado na consulta Assertiva${u.titular ? ` — titular ${u.titular}` : ''}`, 'analista');
     espolioAssertiva.add(u.id);
   }
   for (const e of an.espolios || []) excluir(String(e.unidade).trim(), 'espolio', e.nome, 'analista');
