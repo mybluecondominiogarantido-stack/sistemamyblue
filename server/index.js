@@ -131,6 +131,9 @@ async function criarApp(cfg) {
   app.use(rotasContratos(ctx));
 
   const publico = path.join(__dirname, '..', 'public');
+  // versão da tela (o ?v= do app.js no index.html): a página aberta compara e avisa que há versão nova para recarregar
+  const versaoTela = (fs.readFileSync(path.join(publico, 'index.html'), 'utf8').match(/app\.js\?v=([\w.-]+)/) || [])[1] || '';
+  app.get('/api/versao', (req, res) => { res.set('Cache-Control', 'no-store'); res.json({ versao: versaoTela }); });
   app.get('/login', (req, res) => res.sendFile(path.join(publico, 'login.html')));
   app.get('/', (req, res) => {
     if (!req.usuario) return res.redirect('/login');
