@@ -12,14 +12,17 @@
  *  - Meta da carteira (90%): atingida com as batidas; em andamento se batidas + as que ainda estão no prazo chegam lá.
  *  - Ano e mês contados pela data de início do contrato; o mês vigente vira no dia virada_dia (25).
  *  - Metas só para envios a partir da data-marco. Os parâmetros valem a partir de uma data (histórico).
+ *  - Prazos em dias úteis (server/implantacoes/prazos.js): concluir em concluir_dias (3) depois de assumir; ficha de
+ *    repasse em ficha_dias (5) da conclusão até o envio ao Crédito.
  */
 const F = require('./formulario');
 
 const PADRAO = Object.freeze({
-  onboarding_dias: 30, documentacao_dias: 60, meta_pct: 90, virada_dia: 25, marco: '2026-07-01',
+  onboarding_dias: 30, documentacao_dias: 60, meta_pct: 90, virada_dia: 25, marco: '2026-07-01', concluir_dias: 3, ficha_dias: 5,
   docs_meta: ['convencao', 'ata_eleicao', 'ata_orcamento', 'procuracao'],
 });
-const LIMITES = { onboarding_dias: [1, 365, 'Prazo do onboarding'], documentacao_dias: [1, 365, 'Prazo da documentação'], meta_pct: [1, 100, 'Meta da carteira'], virada_dia: [1, 28, 'Dia da virada do mês'] };
+const LIMITES = { onboarding_dias: [1, 365, 'Prazo do onboarding'], documentacao_dias: [1, 365, 'Prazo da documentação'], meta_pct: [1, 100, 'Meta da carteira'], virada_dia: [1, 28, 'Dia da virada do mês'],
+  concluir_dias: [1, 30, 'Prazo para concluir (dias úteis)'], ficha_dias: [1, 30, 'Prazo da ficha de repasse (dias úteis)'] };
 const ETAPAS = ['documentacao', 'vouch', 'onboarding', 'boletos', 'envio'];
 const ETAPA_NOME = { documentacao: 'Documentação', vouch: 'Vouch', onboarding: 'Onboarding', boletos: 'Emissão de boletos', envio: 'Envio dos boletos' };
 const DATA = /^\d{4}-\d{2}-\d{2}$/;

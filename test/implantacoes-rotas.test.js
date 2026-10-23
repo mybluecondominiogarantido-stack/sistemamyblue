@@ -273,7 +273,7 @@ test('rotinas: lembrete à coordenação a cada 4h úteis sem designação e avi
 });
 
 test('iniciar, conferências do setor e as 5 etapas', async () => {
-  assert.equal((await coord('POST', `/api/implantacoes/${idI}/iniciar`, {})).status, 403); // só quem foi designado
+  { const x = await coord('POST', `/api/implantacoes/${idI}/iniciar`, {}); assert.equal(x.status, 403, x.texto); } // só quem foi designado
   assert.equal((await equipe('PATCH', `/api/implantacoes/${idI}/etapas`, { etapas: {} })).status, 403); // antes de iniciar
   assert.equal((await equipe('POST', `/api/implantacoes/${idI}/iniciar`, {})).status, 200);
   // cadastro de moradores em CSV: 2 unidades, um CPF inválido na linha 3
@@ -283,11 +283,12 @@ test('iniciar, conferências do setor e as 5 etapas', async () => {
   assert.deepEqual(d.conferencias.cadastro, { unidades: 2, tem_documento: true, documentos_invalidos: [3], sem_documento: 0, unidades_formulario: 24 });
   assert.equal(d.conferencias.cpf_sindico, true);
   assert.deepEqual(d.conferencias.diferencas.map((x) => x.campo), ['taxa_adm']);
-  assert.equal(d.faltas_etapas.length, 6); // as 5 etapas e o 1º vencimento
+  assert.equal(d.faltas_etapas.length, 5); // documentação, Vouch, boletos, 1º vencimento e envio (o onboarding pode ficar para depois)
   assert.equal((await exec('PATCH', `/api/implantacoes/${idI}/etapas`, { etapas: {} })).status, 403);
   let r = await equipe('PATCH', `/api/implantacoes/${idI}/etapas`, { etapas: { documentacao: { feito: true }, vouch: { id: '90001' }, onboarding: { situacao: 'marcado', data: '2026-10-23 15:00' } } });
   assert.equal(r.status, 200, r.texto);
-  assert.equal(r.json.faltas.length, 4);
+  assert.equal(r.json.faltas.length, 3);
+  assert.equal(r.json.onboarding_pendente, true);
   assert.equal(r.json.etapas.onboarding.por, (await ctx.db.um("SELECT id FROM usuarios WHERE email = 'equipe@teste.com'")).id); // quem conduz
   assert.equal((await equipe('POST', `/api/implantacoes/${idI}/concluir`, {})).status, 400);
 });

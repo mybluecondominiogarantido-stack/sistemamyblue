@@ -23,12 +23,14 @@ async function carregarLinhas(db, { id = null, hoje = M.diaSP(Date.now()), histo
   historico = historico || await historicoParametros(db);
   const filtro = id ? ` AND i.id = ${Number(id) || 0}` : '';
   const { rows } = await db.q(`SELECT i.id, i.protocolo, i.condominio, i.uf, i.origem, i.etapa, i.executivo_id, i.responsavel_id, i.solicitante_id,
-      i.formulario, i.etapas, i.enviado_em, i.meta_doc_manual, i.cobranca_doc_em, i.lembrete_doc_em, e.nome AS executivo_nome, u.nome AS responsavel_nome
+      i.formulario, i.etapas, i.enviado_em, i.meta_doc_manual, i.cobranca_doc_em, i.lembrete_doc_em, i.iniciado_em, i.concluido_em, i.designado_em,
+      i.obs_controle, i.onboarding_justificativa, i.aviso_onboarding_em, i.condominio_id, i.cnpj, i.analise_protocolo, i.contrato_id,
+      e.nome AS executivo_nome, u.nome AS responsavel_nome
     FROM implantacoes i LEFT JOIN executivos e ON e.id = i.executivo_id LEFT JOIN usuarios u ON u.id = i.responsavel_id
     WHERE ${ABERTAS}${filtro} ORDER BY i.enviado_em`);
   const datas = {};
   for (const d of (await db.q(`SELECT d.implantacao_id, d.tipo, MIN(d.enviado_em) AS em FROM implantacao_documentos d
-      JOIN implantacoes i ON i.id = d.implantacao_id WHERE ${ABERTAS}${filtro} GROUP BY d.implantacao_id, d.tipo`)).rows) {
+      JOIN implantacoes i ON i.id = d.implantacao_id WHERE ${ABERTAS}${filtro} AND d.desfeito_em IS NULL GROUP BY d.implantacao_id, d.tipo`)).rows) {
     (datas[d.implantacao_id] = datas[d.implantacao_id] || {})[d.tipo] = M.diaSP(d.em);
   }
   return rows.map((i) => ({ ...M.linha(i, datas[i.id], historico, hoje), cobranca_doc_em: i.cobranca_doc_em, _bruto: i }));
@@ -139,4 +141,4 @@ async function lembretesDocumentacao(db, avisos, hoje = M.diaSP(Date.now())) {
   return n;
 }
 
-module.exports = { rotasAcompanhamento, carregarLinhas, lembretesDocumentacao };
+module.exports = { rotasAcompanhamento, carregarLinhas, lembretesDocumentacao, historicoParametros };

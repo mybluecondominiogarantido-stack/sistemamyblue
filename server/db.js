@@ -611,6 +611,86 @@ CREATE TABLE IF NOT EXISTS implantacao_parametros (
   alterado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- quem edita: a designada. Outra pessoa da equipe só com autorização da coordenação (pedida ou dada direto), com escopo e prazo
+CREATE TABLE IF NOT EXISTS implantacao_autorizacoes (
+  id SERIAL PRIMARY KEY,
+  implantacao_id INTEGER NOT NULL REFERENCES implantacoes(id) ON DELETE CASCADE,
+  usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  situacao TEXT NOT NULL DEFAULT 'pedida' CHECK (situacao IN ('pedida','ativa','recusada','revogada')),
+  escopo TEXT NOT NULL DEFAULT 'tudo' CHECK (escopo IN ('tudo','etapas','documentos')),
+  ate DATE,
+  motivo TEXT NOT NULL DEFAULT '',
+  resposta TEXT NOT NULL DEFAULT '',
+  pedida_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  decidida_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  decidida_em TIMESTAMPTZ,
+  revogada_em TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_implantacao_autorizacoes ON implantacao_autorizacoes(implantacao_id, usuario_id);
+
+-- pausas do prazo para concluir: pendência com o comercial (abre e fecha sozinha) ou impedimento marcado pela assistente
+CREATE TABLE IF NOT EXISTS implantacao_pausas (
+  id SERIAL PRIMARY KEY,
+  implantacao_id INTEGER NOT NULL REFERENCES implantacoes(id) ON DELETE CASCADE,
+  tipo TEXT NOT NULL CHECK (tipo IN ('pendencia','impedimento')),
+  motivo TEXT NOT NULL DEFAULT '',
+  detalhe TEXT NOT NULL DEFAULT '',
+  inicio TIMESTAMPTZ NOT NULL DEFAULT now(),
+  fim TIMESTAMPTZ,
+  resolucao TEXT NOT NULL DEFAULT '',
+  por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  encerrada_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  lembrete_em DATE
+);
+CREATE INDEX IF NOT EXISTS idx_implantacao_pausas ON implantacao_pausas(implantacao_id);
+
+-- ficha de repasse: abre na conclusão, a Implantação completa os campos azuis e envia à assistente de crédito
+-- (ou à supervisora de crédito, que escolhe). Cada envio é uma versão (até 3, mais só com a liberação da coordenação)
+CREATE TABLE IF NOT EXISTS implantacao_fichas (
+  implantacao_id INTEGER PRIMARY KEY REFERENCES implantacoes(id) ON DELETE CASCADE,
+  aberta_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  prazo DATE,
+  dados JSONB NOT NULL DEFAULT '{}'::jsonb,
+  situacao TEXT NOT NULL DEFAULT 'a_enviar' CHECK (situacao IN ('a_enviar','enviada','devolvida','recebida')),
+  destino_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  com_supervisao BOOLEAN NOT NULL DEFAULT FALSE,
+  versao INTEGER NOT NULL DEFAULT 0,
+  versoes_extra INTEGER NOT NULL DEFAULT 0,
+  primeiro_envio_em TIMESTAMPTZ,
+  aviso_prazo_em DATE,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS implantacao_ficha_versoes (
+  id SERIAL PRIMARY KEY,
+  implantacao_id INTEGER NOT NULL REFERENCES implantacoes(id) ON DELETE CASCADE,
+  versao INTEGER NOT NULL,
+  conteudo JSONB NOT NULL,
+  motivo TEXT NOT NULL DEFAULT '',
+  enviada_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  enviada_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  para_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  confirmada_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  confirmada_em TIMESTAMPTZ,
+  UNIQUE (implantacao_id, versao)
+);
+
+-- antecipação enviada ao Controle de Repasses: o Gestor de lá cadastra a regra (com ajuste ou não) ou devolve
+CREATE TABLE IF NOT EXISTS implantacao_antecipacoes (
+  implantacao_id INTEGER PRIMARY KEY REFERENCES implantacoes(id) ON DELETE CASCADE,
+  situacao TEXT NOT NULL CHECK (situacao IN ('enviada','cadastrada','devolvida')),
+  atualizacao BOOLEAN NOT NULL DEFAULT FALSE,
+  enviado JSONB NOT NULL,
+  antes JSONB,
+  enviada_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  enviada_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  regra_id TEXT,
+  cadastrado JSONB,
+  ajuste JSONB,
+  decidida_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  decidida_em TIMESTAMPTZ,
+  motivo TEXT NOT NULL DEFAULT ''
+);
+
 -- ===== Solicitação de Contrato (server/rotas/contratos.js) =====
 -- o comercial pede a minuta a partir da análise liberada, quem elabora (Jurídico) redige em até 72h úteis, o comercial
 -- leva ao síndico, pede ajustes e anexa o contrato assinado, a advogada registra as condições fechadas e elas seguem para a Implantação.
@@ -692,6 +772,7 @@ const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 
   'parametros_politica', 'faixas_precificacao', 'executivos', 'analise_protocolos', 'analises', 'analise_documentos', 'analise_unidades',
   'analise_lancamentos', 'analise_exclusoes', 'analise_alertas', 'analise_eventos',
   'implantacao_protocolos', 'implantacoes', 'implantacao_documentos', 'implantacao_eventos', 'implantacao_liberacoes', 'implantacao_parametros',
+  'implantacao_autorizacoes', 'implantacao_pausas', 'implantacao_fichas', 'implantacao_ficha_versoes', 'implantacao_antecipacoes',
   'contrato_protocolos', 'contratos', 'contrato_documentos', 'contrato_eventos'];
 const RLS = TABELAS.map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`).join(';\n');
 
@@ -754,6 +835,16 @@ UPDATE implantacao_documentos SET vinculado = TRUE WHERE tipo = 'analise_credito
 -- e-mail de cada aviso: quando saiu ou por que falhou (para conferir quando alguém diz que não recebeu)
 ALTER TABLE notificacoes ADD COLUMN IF NOT EXISTS email_enviado_em TIMESTAMPTZ;
 ALTER TABLE notificacoes ADD COLUMN IF NOT EXISTS email_erro TEXT;
+-- documento recebido sem arquivo (em papel, já no CPD): a assistente marca, com observação, e desfazer tira da contagem
+ALTER TABLE implantacao_documentos ADD COLUMN IF NOT EXISTS sem_arquivo BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE implantacao_documentos ADD COLUMN IF NOT EXISTS observacao TEXT NOT NULL DEFAULT '';
+ALTER TABLE implantacao_documentos ADD COLUMN IF NOT EXISTS desfeito_em TIMESTAMPTZ;
+ALTER TABLE implantacao_documentos ADD COLUMN IF NOT EXISTS desfeito_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL;
+-- Obs. da aba Controle (escrita pela equipe), justificativa do onboarding fora do prazo e os avisos diários dos prazos
+ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS obs_controle JSONB;
+ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS onboarding_justificativa JSONB;
+ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS aviso_concluir_em DATE;
+ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS aviso_onboarding_em DATE;
 -- Solicitação de Contrato: o executivo pede a assinatura e a advogada envia para assinar (etapas para_assinar e em_assinatura)
 ALTER TABLE contratos DROP CONSTRAINT IF EXISTS contratos_etapa_check;
 ALTER TABLE contratos ADD CONSTRAINT contratos_etapa_check CHECK (etapa IN ('rascunho','fila','em_elaboracao','pendencia','minuta_enviada','para_assinar','em_assinatura','conferencia','assinado','cancelada'));

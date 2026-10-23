@@ -197,6 +197,13 @@ function faltasEtapas(e) {
   return l;
 }
 
+/* o que falta para concluir: dá para concluir com o onboarding ainda a marcar ou marcado (ele continua pendente,
+   com alerta, e é registrado depois); feito, precisa da data */
+function faltasConcluir(e) {
+  return faltasEtapas(e).filter((x) => !/^Fazer o onboarding/.test(x));
+}
+const onboardingFeito = (e) => ['realizado', 'sindico_myblue'].includes(normalizarEtapas(e).onboarding.situacao);
+
 /* cadastro de moradores (Excel ou CSV): unidades e CPF/CNPJ de cada linha, para conferir com o formulário */
 function conferirCadastro(linhas) {
   const norm = (s) => texto(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -238,4 +245,4 @@ function doPdf(r) {
 }
 
 module.exports = { DOCUMENTOS, GARANTIAS, RECEITAS_CASHBACK, ONBOARDING, ENVIO, ENVIO_CARTEIRA, cpfValido, cnpjOk, daAnalise, doPdf, faltas, faltasEntrega, pendencias, diferencas, docsObrigatorios,
-  normalizarEtapas, faltasEtapas, conferirCadastro };
+  normalizarEtapas, faltasEtapas, faltasConcluir, onboardingFeito, conferirCadastro };

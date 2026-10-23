@@ -76,6 +76,12 @@ function criarExpediente(cfg = lerExpediente()) {
     return somarHorasUteis(de, dias * cfg.horasDia);
   }
 
+  /* um dia (AAAA-MM-DD) é útil? (dia da semana do expediente e fora dos feriados) — prazos contados em dias úteis */
+  function ehDiaUtil(dia) {
+    const [a, m, d] = String(dia).split('-').map(Number);
+    return cfg.dias.includes(new Date(Date.UTC(a, m - 1, d)).getUTCDay()) && !cfg.feriados.has(String(dia));
+  }
+
   /* o dia (AAAA-MM-DD no fuso), se é dia útil e se o expediente já começou: rotinas que rodam uma vez por dia útil */
   function momento(d = new Date()) {
     const l = local(new Date(d));
@@ -83,7 +89,7 @@ function criarExpediente(cfg = lerExpediente()) {
     return { dia: chaveDia(l), util, noExpediente: util && l.hora >= cfg.inicio && l.hora < cfg.fim };
   }
 
-  return { somarHorasUteis, somarDiasUteis, fimDoDiaUtil, momento, config: { inicio: cfg.inicio, fim: cfg.fim, dias: cfg.dias, horasDia: cfg.horasDia, fuso: cfg.fuso } };
+  return { somarHorasUteis, somarDiasUteis, fimDoDiaUtil, momento, ehDiaUtil, config: { inicio: cfg.inicio, fim: cfg.fim, dias: cfg.dias, horasDia: cfg.horasDia, fuso: cfg.fuso } };
 }
 
 module.exports = { criarExpediente, lerExpediente };
