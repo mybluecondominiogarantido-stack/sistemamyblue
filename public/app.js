@@ -5623,7 +5623,7 @@
       pedirTexto('Enviar a minuta ao comercial', 'Mensagem ao executivo (opcional)', 'Ex.: ajustei o foro e o prazo de contestação, como pedido.', 'Enviar minuta', 'minuta', 'mensagem', 'Minuta enviada ao comercial.', 'Vai a minuta anexada em Documentos. O executivo é avisado no sino e por e-mail.');
     };
     if ($('#btAjusteCt')) $('#btAjusteCt').onclick = function () {
-      pedirTexto('Pedir ajuste na minuta', 'O que o síndico pediu para mudar', 'Ex.: trocar o foro para Natal/RN; prazo de 30 dias para contestar.', 'Pedir ajuste', 'ajuste', 'texto', 'Ajuste pedido ao Jurídico.', 'Volta para quem redigiu, com mais 72h úteis. Mudança em cláusula do manual? Confira a resposta padrão em Pedidos do síndico.');
+      pedirTexto('Pedir ajuste na minuta', 'O que o síndico pediu para mudar', 'Ex.: trocar o foro para Natal/RN; prazo de 30 dias para contestar.', 'Pedir ajuste', 'ajuste', 'texto', 'Ajuste pedido ao Jurídico.', 'Volta para quem redigiu, com mais 72h úteis. Mudança em cláusula do manual? O Jurídico confere a resposta padrão do manual.');
     };
     if ($('#btPedirAssCt')) $('#btPedirAssCt').onclick = function () {
       pedirTexto('Síndico aprovou: pedir assinatura', 'Observação para o Jurídico (opcional)', 'Ex.: o síndico assina pela Clicksign; e-mail dele: sindico@exemplo.com.', 'Pedir assinatura', 'pedir-assinatura', 'observacao', 'Pedido de assinatura enviado ao Jurídico.',

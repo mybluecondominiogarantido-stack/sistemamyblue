@@ -159,7 +159,7 @@ function avisos(f, { origem, diasAnalise, validadeProposta, semConvencao } = {})
   }
   if (g.length) l.push({ nivel: 'info', texto: 'Só é garantido o que está na convenção e no regimento e foi aprovado em assembleia. Multas por descumprimento do regimento e locação de ambientes a quem não é condômino não entram.' });
   if (f.desconto_tipo === 'nenhum') {
-    l.push({ nivel: 'info', texto: 'Sem desconto de pontualidade: o contrato pede que o condomínio institua 10% em assembleia em até 30 dias da assinatura; senão, a taxa administrativa sobe 1 ponto. Retirar a sanção, não; adiar para o próximo orçamento, sim (marque em Pedidos do síndico).' });
+    l.push({ nivel: 'info', texto: 'Sem desconto de pontualidade: o contrato pede que o condomínio institua 10% em assembleia em até 30 dias da assinatura; senão, a taxa administrativa sobe 1 ponto. Retirar a sanção, não; adiar para o próximo orçamento, sim (marque em Objeções e Solicitações de modificação de contrato).' });
   }
   if (f.sem_cnpj) l.push({ nivel: 'atencao', texto: 'Sem CNPJ: o condomínio tem 90 dias da primeira arrecadação para regularizar, senão o repasse fica retido. Até lá, o repasse vai para a conta da administradora (formalizado por e-mail), nunca para a conta do síndico.' });
   if (temCashback(f)) l.push({ nivel: 'info', texto: 'Cashback e desconto de pontualidade mudam o texto que vai para assinatura: confira se foram mesmo negociados.' });
