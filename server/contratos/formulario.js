@@ -294,11 +294,15 @@ function implantacaoDiferente(fi, x) {
   return l;
 }
 
+/* campos da implantação que vêm das condições fechadas: travados lá (vale o do contrato) */
+const CAMPOS_FECHADOS = ['taxa_adm', 'boleto', 'desconto_tipo', 'desconto_valor', 'garantias', 'garantia_outra', 'cashback', 'cashback_pct', 'cashback_receitas',
+  'inicio_contrato', 'dia_vencimento', 'honorarios'];
+const CAMPOS_FECHADOS_IMPLANTACAO = CAMPOS_FECHADOS;
+
 /* dados do contrato que seguem para o formulário de Implantação (o fechado vale sobre o pedido) */
 function paraImplantacao(c) {
   const fechado = c.fechado_em && c.fechado && c.fechado.taxa_adm ? c.fechado : null;
-  const f = { ...(c.formulario || {}), ...(fechado ? Object.fromEntries(['taxa_adm', 'boleto', 'desconto_tipo', 'desconto_valor', 'garantias', 'garantia_outra', 'cashback',
-    'cashback_pct', 'cashback_receitas', 'inicio_contrato', 'dia_vencimento', 'honorarios'].map((k) => [k, fechado[k]])) : {}) };
+  const f = { ...(c.formulario || {}), ...(fechado ? Object.fromEntries(CAMPOS_FECHADOS.map((k) => [k, fechado[k]])) : {}) };
   const v = (x) => x !== undefined && x !== null && x !== '';
   const out = {};
   for (const k of ['nome', 'cnpj', 'uf', 'cidade', 'administradora', 'sindico_nome', 'sindico_cpf', 'sindico_email', 'sindico_telefone', 'taxa_adm', 'boleto',
@@ -395,5 +399,5 @@ function montarPdf(c, { executivo, responsavel, documentos = [], usuario, origem
   };
 }
 
-module.exports = { DOCUMENTOS, GARANTIAS, RECEITAS_CASHBACK, LIMITE_EXTRA, DOC_IMPLANTACAO, RESULTADO, CAPITAIS, FORO_PADRAO, daAnalise, doPdf, faltas, faltasCampos, itensDiretoria, avisos,
+module.exports = { CAMPOS_FECHADOS_IMPLANTACAO, DOCUMENTOS, GARANTIAS, RECEITAS_CASHBACK, LIMITE_EXTRA, DOC_IMPLANTACAO, RESULTADO, CAPITAIS, FORO_PADRAO, daAnalise, doPdf, faltas, faltasCampos, itensDiretoria, avisos,
   AVISO_CONVENCAO, AVISO_CONVENCAO_JURIDICO, diferencas, fechadoInicial, normalizarFechado, comPedido, faltasFechado, diferencasFechado, mudancasFechado, implantacaoDiferente, paraImplantacao, comFidelizacao, montarPdf, cpfValido: I.cpfValido, cnpjOk: I.cnpjOk };

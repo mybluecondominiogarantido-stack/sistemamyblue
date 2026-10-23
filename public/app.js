@@ -4292,6 +4292,9 @@
     return '<div class="linha" data-linha-parceiro style="flex-wrap:nowrap">' + campo + '<button type="button" class="btn icon ghost" data-tirar-parceiro aria-label="Remover parceiro">' + IC.fechar + '</button></div>';
   }
 
+  // campos da implantação que vêm das condições fechadas no contrato
+  var CAMPOS_CONTRATO_IMP = '#i_taxa_adm, #i_boleto, #i_desconto_tipo, #i_desconto_valor, #i_inicio_contrato, #i_dia_vencimento, input[name=i_honorarios_op], #i_honorarios_outro, ' +
+    '[data-marca=garantias], #i_garantia_outra, input[name=i_cashback], #i_cashback_pct, [data-marca=cashback_receitas]';
   function htmlFormImp(i, m, parceiros, difs) {
     var f = i.formulario || {}, ref = i.referencia || {};
     var temRef = ref.taxa_adm != null;
@@ -4736,11 +4739,13 @@
       $$('[data-tirar-contato]').forEach(function (b) { b.onclick = function () { b.closest('[data-contato]').remove(); }; });
     };
     ligarTirar();
-    // o que será garantido vem do contrato fechado: não se altera aqui
+    // o que vem das condições fechadas no contrato (taxa, boleto, desconto, início, vencimento, honorários, garantias e cashback) não se altera aqui
     if (d.contrato && d.contrato.fechado) {
-      $$('[data-marca=garantias], #i_garantia_outra', $('#formImp')).forEach(function (el) { el.disabled = true; });
-      var fsG = $('[data-marca=garantias]', $('#formImp'));
-      if (fsG) fsG.closest('fieldset').insertAdjacentHTML('beforeend', '<div class="ajuda">Vem das condições fechadas no contrato ' + esc(d.contrato.protocolo || '') + ': não pode ser alterado aqui.</div>');
+      var fImp = $('#formImp');
+      $$(CAMPOS_CONTRATO_IMP, fImp).forEach(function (el) { el.disabled = true; el.title = 'Vem das condições fechadas no contrato'; });
+      var cond = $('#i_taxa_adm', fImp);
+      var sec = cond && cond.closest('section');
+      if (sec) $('.cab-painel', sec).insertAdjacentHTML('beforeend', '<span class="etiqueta azul">do contrato ' + esc(d.contrato.protocolo || '') + ': não pode ser alterado</span>');
     }
     $('#btExtraImp').onclick = function () { $('#tbExtrasImp').insertAdjacentHTML('beforeend', linhaExtraCr()); ligarTirar(); };
     $('#btParcImp').onclick = function () { $('#parceirosImp').insertAdjacentHTML('beforeend', linhaParceiroImp({}, parceiros.parceiros || [])); ligarTirar(); };

@@ -500,12 +500,11 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
       if (!ex) return erro(res, 400, 'Executivo não encontrado.');
       executivoId = ex.id;
     }
-    // o que será garantido vem do contrato fechado: vale o do contrato
+    // o que vem das condições fechadas no contrato não se altera na implantação: vale o do contrato
     const ct = i.contrato_id ? await db.um('SELECT * FROM contratos WHERE id = $1 AND fechado_em IS NOT NULL', [i.contrato_id]) : null;
     if (ct) {
       const doContrato = FC.paraImplantacao(ct);
-      f.garantias = doContrato.garantias || [];
-      if (doContrato.garantia_outra) f.garantia_outra = doContrato.garantia_outra; else delete f.garantia_outra;
+      for (const k of FC.CAMPOS_FECHADOS_IMPLANTACAO) { if (doContrato[k] !== undefined) f[k] = doContrato[k]; else delete f[k]; }
     }
     await db.tx(async (t) => {
       await t.q(`UPDATE implantacoes SET formulario = $2::jsonb, condominio = $3, cnpj = $4, uf = $5, executivo_id = $6, atualizado_em = now() WHERE id = $1`,

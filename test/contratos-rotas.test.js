@@ -255,9 +255,10 @@ test('Implantação: o executivo solicita pelo contrato, e ela vem com as condi�
   assert.equal((await doc('convencao')).status, 409);
   assert.equal((await doc('ata_eleicao')).status, 201);
   assert.equal((await exec('DELETE', `/api/implantacoes/${idImpC}/documentos/${d.documentos.find((x) => x.tipo === 'contrato').id}`)).status, 409);
-  // as garantias vêm do contrato fechado: o executivo não muda
-  assert.equal((await exec('PATCH', `/api/implantacoes/${idImpC}`, { formulario: { ...d.implantacao.formulario, garantias: ['Gás'] } })).status, 200);
-  assert.deepEqual((await exec('GET', `/api/implantacoes/${idImpC}`)).json.implantacao.formulario.garantias, d.implantacao.formulario.garantias);
+  // o que vem das condições fechadas (taxa, boleto, honorários, garantias…) o executivo não muda na implantação
+  assert.equal((await exec('PATCH', `/api/implantacoes/${idImpC}`, { formulario: { ...d.implantacao.formulario, garantias: ['Gás'], taxa_adm: 9, boleto: 1, honorarios: 10, consultor_nome: 'Consultor Fictício' } })).status, 200);
+  const fi = (await exec('GET', `/api/implantacoes/${idImpC}`)).json.implantacao.formulario;
+  assert.deepEqual([fi.garantias, fi.taxa_adm, fi.boleto, fi.honorarios, fi.consultor_nome], [d.implantacao.formulario.garantias, 3.25, 2, 15, 'Consultor Fictício']);
   assert.equal(d.implantacao.formulario.honorarios, 15); // os honorários das condições fechadas
   assert.equal(d.contrato.fechado.foro, 'Natal/RN');
   assert.deepEqual(d.diferencas.map((x) => x.campo), ['taxa_adm']); // diferente da análise (3,50%)
