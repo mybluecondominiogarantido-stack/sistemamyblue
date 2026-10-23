@@ -96,3 +96,11 @@ test('complemento das observações entra depois do texto automático da página
   const d = R.montarDados(r, { ...ctx, ajustesTexto: { complemento_status: 'Unidades 108 e 207 recorrentes.' } });
   assert.match(d.observacoes_status, /aprovado.*Unidades 108 e 207 recorrentes\.$/s);
 });
+
+test('ressalvas viram frases na página 1 e o espólio da Assertiva sai com o nome do titular', () => {
+  const { r, ctx } = caso({ ressalvas: [{ texto: 'Convenção incompleta', justificativa: 'falta a página da multa' }, { texto: 'Ata de contratação exigida', justificativa: 'art. 13' }],
+    assertiva: { 'A-101': { resultado: 'espolio', em: '2026-07-20' } } });
+  const d = R.montarDados(r, ctx);
+  assert.match(d.observacoes_status, /Convenção incompleta\. Ata de contratação exigida\./);
+  assert.ok(JSON.stringify(d).includes('Espólio confirmado na consulta Assertiva — titular Titular Fictício 1: fora do escopo'));
+});
