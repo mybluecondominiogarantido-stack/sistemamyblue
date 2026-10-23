@@ -534,3 +534,92 @@ tr.sel-ct td{background:var(--surface-2)}
 .vazio-ct{text-align:center;padding:28px 16px;color:var(--faint);border:1.5px dashed var(--border-2);border-radius:var(--r);font-weight:700}
 @media(max-width:1000px){.kpis-ct{grid-template-columns:repeat(2,1fr)}.dois-ct{grid-template-columns:1fr}}
 @media(max-width:560px){.kpis-ct,.sit-ct{grid-template-columns:1fr}}
+/* ficha de repasse: o que vem do portal em preto, o que a Implantação preenche em azul */
+:root{--man:#1D5FC2;--man-bg:#f5f9ff;--man-borda:#9fc1ee}
+.ficha-dados{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 22px;margin:0;padding:6px 18px 12px}
+.ficha-dados>div{display:grid;grid-template-columns:minmax(120px,42%) 1fr;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)}
+.ficha-dados dt{font-size:12.5px;font-weight:700;color:var(--muted)}
+.ficha-dados dd{margin:0;font-size:14px;font-weight:700;color:var(--ink);overflow-wrap:anywhere}
+.ficha-dados dd.man,.ficha-tab td.man,.ficha-texto.man{color:var(--man)}
+.campo.man{color:var(--man);border-color:var(--man-borda);background:var(--man-bg);font-weight:700}
+.ficha-tab{width:100%;border-collapse:collapse;font-size:13.5px}
+.ficha-tab th{text-align:left;font-size:11.5px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;padding:8px 10px;background:var(--surface-2);border-top:1px solid var(--border)}
+.ficha-tab td{padding:6px 10px;border-top:1px solid var(--border);font-weight:600;color:var(--ink-2);vertical-align:middle}
+.ficha-tab td .campo{min-width:90px}
+.ficha-tab tr.grupo td{background:var(--surface-2);font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.ficha-tab .sit-ok{color:var(--green);font-weight:800}
+.ficha-tab .sit-pend{color:var(--amber);font-weight:800}
+.ficha-nota{font-size:12.5px;color:var(--muted);font-weight:600}
+.ficha-texto{white-space:pre-wrap;font-size:14px;font-weight:600;padding:12px 18px 16px;margin:0}
+.ficha-marcas{display:flex;flex-wrap:wrap;gap:8px;padding:6px 18px 16px}
+.ficha-marcas label{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:999px;padding:6px 12px;font-size:13.5px;font-weight:700;color:var(--ink-2);background:var(--surface)}
+.ficha-marcas label.on{border-color:var(--man-borda);background:var(--man-bg);color:var(--man)}
+.ficha-marcas input{accent-color:var(--man)}
+@media (max-width:760px){.ficha-dados{grid-template-columns:1fr}.ficha-dados>div{grid-template-columns:1fr;gap:2px}}
+/* Acompanhamento: cabeçalho, filtros lembrados, abas com ícones e contadores, cartões clicáveis */
+.cab-acomp{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:16px}
+.tit-acomp{border-left:3px solid var(--border-2);padding-left:16px}
+.tit-acomp h1{margin:0 0 4px}
+.status-acomp{display:inline-flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:5px 6px 5px 16px;box-shadow:var(--shadow-sm);font-size:13px;font-weight:700;color:var(--ink-2)}
+.status-acomp i{width:8px;height:8px;border-radius:999px;background:var(--green)}
+.status-acomp b{color:var(--green);padding-right:10px;border-right:1px solid var(--border)}
+.status-acomp .btn.icon{width:30px;height:30px}
+.aviso-acomp{margin-bottom:16px;font-weight:600;line-height:1.5}
+.filtros-acomp{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:12px}
+.filtros-acomp .rot-ano{font-size:12px;font-weight:800;color:var(--muted);letter-spacing:.5px;text-transform:uppercase}
+.pilula-acomp{font:inherit;font-weight:800;font-size:14px;border:1px solid var(--border);background:var(--surface);color:var(--ink-2);border-radius:999px;padding:9px 18px;cursor:pointer;box-shadow:var(--shadow-sm)}
+.pilula-acomp.on{background:var(--teal);border-color:var(--teal);color:#fff}
+.pilula-acomp .n{font-size:12px;opacity:.8;margin-left:4px}
+.sel-acomp{width:auto;border-radius:999px;font-weight:700;padding-right:34px}
+.sel-acomp.on{border-color:var(--teal);color:var(--teal-d)}
+.lembra-acomp{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:var(--muted)}
+.lembra-acomp svg{width:14px;height:14px}
+.lembra-acomp .link-acomp{text-decoration:underline;color:var(--teal-d)}
+.busca-acomp{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:0 14px;min-width:min(340px,100%);box-shadow:var(--shadow-sm)}
+.busca-acomp svg{width:16px;height:16px;color:var(--muted);flex-shrink:0}
+.busca-acomp input{border:0;outline:0;background:transparent;font:inherit;font-size:14px;padding:11px 0;width:100%;color:var(--ink)}
+.abas-acomp a{display:inline-flex;align-items:center;gap:7px}
+.abas-acomp a svg{width:17px;height:17px}
+.cont-acomp{font-size:11.5px;font-weight:800;background:var(--amber-bg);color:#9a6512;border-radius:999px;padding:1px 7px;margin-left:2px}
+.cards-acomp{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;margin-bottom:16px}
+.card-acomp{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:6px;min-width:0}
+.card-acomp .rot-card{font-size:12px;font-weight:800;color:var(--ink-2);text-transform:uppercase;letter-spacing:.6px}
+.card-acomp b{font-family:var(--display);font-size:28px;font-weight:700;color:var(--ink);line-height:1.1;overflow-wrap:anywhere}
+.card-acomp .sec{font-size:13px;font-weight:600;color:var(--muted)}
+.card-acomp:first-child{background:linear-gradient(135deg,#1aa0b4,#0b6aa6);border-color:transparent;box-shadow:var(--shadow)}
+.card-acomp:first-child .rot-card,.card-acomp:first-child b,.card-acomp:first-child .sec{color:#fff}
+.card-acomp.clicavel{cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.card-acomp.clicavel:hover{border-color:var(--teal)}
+.card-acomp.on{border:2px solid var(--teal-d);padding:17px}
+.card-acomp:first-child.on{box-shadow:0 0 0 3px var(--teal-bg),var(--shadow)}
+.card-acomp .filtrando{font-size:12px;font-weight:800;color:var(--teal-d)}
+.card-acomp:first-child .filtrando{color:#fff}
+.barra-card{display:block;height:6px;border-radius:999px;background:var(--surface-2);overflow:hidden;margin-top:4px}
+.barra-card i{display:block;height:100%;background:var(--teal);border-radius:999px}
+.pct-acomp{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.pct-acomp i{display:inline-block;width:44px;height:5px;border-radius:999px;background:var(--surface-2);overflow:hidden}
+.pct-acomp em{display:block;height:100%;background:var(--teal);border-radius:999px}
+.sub-link{display:block;margin-top:4px;color:var(--teal-d);text-decoration:underline;font-size:13px;font-weight:700}
+/* Controle: cabeçalho e as duas primeiras colunas fixos ao rolar */
+.ctrl-wrap{max-height:70vh;overflow:auto}
+.ctrl-acomp{border-collapse:separate;border-spacing:0;min-width:2300px;font-size:13.5px}
+.ctrl-acomp th,.ctrl-acomp td{white-space:nowrap;border-bottom:1px solid var(--border);padding:8px 10px;background:var(--surface)}
+.ctrl-acomp thead th{position:sticky;top:0;z-index:2;background:var(--surface-2);cursor:pointer;font-size:11.5px}
+.ctrl-acomp thead tr.grupos th{cursor:default;text-align:center;color:var(--teal-d);font-size:11px;letter-spacing:.6px;text-transform:uppercase;height:28px}
+.ctrl-acomp thead tr:nth-child(2) th{top:29px}
+.ctrl-acomp .fixa{position:sticky;z-index:1}
+.ctrl-acomp .f0{left:0;min-width:150px}
+.ctrl-acomp .f1{left:150px;min-width:250px;border-right:2px solid var(--border-2)}
+.ctrl-acomp thead .fixa{z-index:3}
+.ctrl-acomp tfoot td{background:var(--surface-2);position:sticky;bottom:0}
+.ctrl-acomp tbody tr:hover td{background:var(--surface-2)}
+.chip-ctrl{display:inline-block;min-width:54px;text-align:center;font-size:11px;font-weight:800;border-radius:6px;padding:3px 8px;background:var(--surface-2);color:var(--faint)}
+.chip-ctrl.ok{background:var(--green-bg);color:var(--green)}
+.chip-ctrl.azul{background:var(--teal-bg);color:var(--teal-d)}
+.obs-ctrl{font:inherit;font-size:13.5px;border:0;border-bottom:1px dashed var(--border-2);background:transparent;color:var(--ink-2);min-width:180px;padding:3px 0}
+.obs-ctrl:focus{outline:0;border-bottom-color:var(--teal)}
+@media (max-width:1100px){.cards-acomp{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:640px){.cards-acomp{grid-template-columns:1fr 1fr}.busca-acomp{min-width:100%}.ctrl-acomp .f1{left:0}.ctrl-acomp .f0{position:static}}
+.abas-acomp{gap:0}
+.abas-acomp a{padding:10px 11px;font-size:14px}
+.card-acomp b.longo{font-size:22px}

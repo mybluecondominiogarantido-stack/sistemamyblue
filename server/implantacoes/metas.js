@@ -12,14 +12,17 @@
  *  - Meta da carteira (90%): atingida com as batidas; em andamento se batidas + as que ainda estão no prazo chegam lá.
  *  - Ano e mês contados pela data de início do contrato; o mês vigente vira no dia virada_dia (25).
  *  - Metas só para envios a partir da data-marco. Os parâmetros valem a partir de uma data (histórico).
+ *  - Prazos em dias úteis (server/implantacoes/prazos.js): concluir em concluir_dias (3) depois de assumir; ficha de
+ *    repasse em ficha_dias (5) da conclusão até o envio ao Crédito.
  */
 const F = require('./formulario');
 
 const PADRAO = Object.freeze({
-  onboarding_dias: 30, documentacao_dias: 60, meta_pct: 90, virada_dia: 25, marco: '2026-07-01',
+  onboarding_dias: 30, documentacao_dias: 60, meta_pct: 90, virada_dia: 25, marco: '2026-07-01', concluir_dias: 3, ficha_dias: 5,
   docs_meta: ['convencao', 'ata_eleicao', 'ata_orcamento', 'procuracao'],
 });
-const LIMITES = { onboarding_dias: [1, 365, 'Prazo do onboarding'], documentacao_dias: [1, 365, 'Prazo da documentação'], meta_pct: [1, 100, 'Meta da carteira'], virada_dia: [1, 28, 'Dia da virada do mês'] };
+const LIMITES = { onboarding_dias: [1, 365, 'Prazo do onboarding'], documentacao_dias: [1, 365, 'Prazo da documentação'], meta_pct: [1, 100, 'Meta da carteira'], virada_dia: [1, 28, 'Dia da virada do mês'],
+  concluir_dias: [1, 30, 'Prazo para concluir (dias úteis)'], ficha_dias: [1, 30, 'Prazo da ficha de repasse (dias úteis)'] };
 const ETAPAS = ['documentacao', 'vouch', 'onboarding', 'boletos', 'envio'];
 const ETAPA_NOME = { documentacao: 'Documentação', vouch: 'Vouch', onboarding: 'Onboarding', boletos: 'Emissão de boletos', envio: 'Envio dos boletos' };
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
@@ -107,7 +110,8 @@ function statusOnboarding(i, vencimento, enviado, p, hoje, anoRef) {
   const data = dataOnboarding(o.data, anoRef);
   let status;
   if (o.situacao === 'sindico_myblue') status = 'batida';
-  else if (o.situacao === 'realizado') status = !data ? 'sem_data' : data <= limite ? 'batida' : 'nao_batida';
+  // importada das planilhas com "REALIZADO" sem data: conta como batida (o Controle não registrava a data)
+  else if (o.situacao === 'realizado') status = !data ? (i.importacao_id ? 'batida' : 'sem_data') : data <= limite ? 'batida' : 'nao_batida';
   else if (hoje > limite) status = 'nao_batida';
   else if (o.situacao === 'marcado') status = data && data > limite ? 'apos_prazo' : 'agendado';
   else status = 'a_marcar';
@@ -149,6 +153,7 @@ function linha(i, datas, historico, hoje) {
   const naMeta = enviado >= p.marco;
   return {
     id: i.id, protocolo: i.protocolo, condominio: f.nome || i.condominio || '', uf: f.uf || i.uf || '', origem: i.origem, etapa: i.etapa,
+    importada: !!i.importacao_id, numero: i.numero_planilha || null,
     executivo_id: i.executivo_id, executivo_nome: i.executivo_nome || '', responsavel_id: i.responsavel_id, responsavel_nome: i.responsavel_nome || '',
     enviado, inicio, mes: inicio.slice(0, 7), dia_vencimento: Number(f.dia_vencimento) || null, primeiro_vencimento: vencimento, vencimento_previsto: !informado && !doFormulario, uh_total: Number(f.uh_total) || null,
     feitas, pct, faixa: faixa(pct, feitas), na_meta: naMeta,

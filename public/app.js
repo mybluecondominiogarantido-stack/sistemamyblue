@@ -306,7 +306,7 @@
     if (partes[0] === 'carteira') return paginaCarteira(partes[1]);
     if (partes[0] === 'credito') return /^\d+$/.test(partes[1] || '') ? paginaAnaliseCredito(Number(partes[1])) : paginaCredito(partes[1]);
     if (partes[0] === 'acompanhamento' && resumoImp && resumoImp.acompanhamento) return paginaAcompanhamentoImp(partes[1]);
-    if (partes[0] === 'implantacao') return /^\d+$/.test(partes[1] || '') ? paginaImplantacaoDetalhe(Number(partes[1])) : paginaImplantacao(partes[1]);
+    if (partes[0] === 'implantacao') return /^\d+$/.test(partes[1] || '') ? (partes[2] === 'ficha' ? paginaFichaImp(Number(partes[1])) : paginaImplantacaoDetalhe(Number(partes[1]))) : paginaImplantacao(partes[1]);
     if (partes[0] === 'contratos') {
       if (/^\d+$/.test(partes[1] || '')) return paginaContratoDetalhe(Number(partes[1]));
       // endereços antigos (abas que mudaram de lugar)
@@ -4039,6 +4039,9 @@
     designada: 'designou', iniciada: 'iniciou a implantação', etapas: 'atualizou as etapas', pendencia: 'devolveu com pendência',
     concluida: 'concluiu a implantação', parceiros: 'levou o condomínio à base de Parceiros', carteira: 'confirmou a entrada na Carteira', contrato: 'recebeu as condições fechadas do contrato', contrato_corrigido: 'recebeu a correção das condições do contrato',
     diretoria_pedida: 'pediu a aprovação da diretoria', diretoria_aprovou: 'aprovou taxa e boleto', diretoria_recusou: 'não aprovou taxa e boleto',
+    autorizacao_pedida: 'pediu autorização para editar', autorizacao: 'autorizou', autorizacao_recusada: 'não autorizou o pedido para editar', autorizacao_revogada: 'revogou uma autorização para editar',
+    impedimento: 'marcou impedimento (prazo pausado)', retomada: 'retomou o prazo', onboarding_justificado: 'justificou o onboarding fora do prazo',
+    documento_marcado: 'marcou recebido sem arquivo', documento_desmarcado: 'desfez a marcação de recebido', cobranca_prazo: 'cobrou o prazo', meta_documentacao: 'marcou a meta de documentação à mão', cobranca_documentos: 'cobrou documentos do executivo',
   };
   var ETAPA_SETOR_IMP = [['documentacao', 'Documentação', 'Obrigatórios conferidos; os pendentes seguem com alerta ao executivo.'], ['vouch', 'Cadastro no sistema (Vouch)', 'O ID vai direto para a Carteira.'],
     ['onboarding', 'Onboarding', 'Reunião de boas-vindas com o síndico.'], ['boletos', 'Emissão de boletos', 'Primeira emissão pelo novo contrato. Informe o 1º vencimento: o prazo do onboarding conta dele.'], ['envio', 'Envio dos boletos', 'Vai para a Carteira como forma de envio.']];
@@ -4108,10 +4111,12 @@
       try { r = await api('GET', '/api/implantacoes?vis=' + aba + (q ? '&q=' + encodeURIComponent(q) : '')); } catch (e) { toast(e.message, 'erro'); return; }
       if (meu !== seq) return;
       $('#tbImp').innerHTML = r.implantacoes.map(function (i) {
-        return '<tr class="clicavel" data-id="' + i.id + '"><td style="white-space:nowrap"><b>' + esc(i.protocolo || 'Rascunho') + '</b><span class="sec">' + dataHoraCr(i.enviado_em || i.criado_em) + '</span></td>' +
+        return '<tr class="clicavel" data-id="' + i.id + '"><td style="white-space:nowrap"><b>' + esc(i.protocolo || (i.numero_planilha ? 'Nº ' + i.numero_planilha : 'Rascunho')) + '</b>' + (i.importacao_id ? ' <span class="etiqueta cinza">planilha</span>' : '') + '<span class="sec">' + dataHoraCr(i.enviado_em || i.criado_em) + '</span></td>' +
           '<td><b>' + esc(i.condominio || 'Sem nome') + '</b><span class="sec">' + esc([i.uf, i.uh_total ? i.uh_total + ' unidades' : ''].filter(Boolean).join(' · ')) + '</span></td>' +
           '<td style="white-space:nowrap">' + esc(origemImp(i)) + '</td><td>' + esc(i.executivo_nome || '—') + '</td><td>' + etqCr(ETAPA_IMP, i.etapa) + '</td>' +
-          '<td>' + esc(i.responsavel_nome || (i.etapa === 'fila' ? 'aguardando designação' : '—')) +
+          // 🔒: a equipe vê, mas só quem conduz edita (outra pessoa, só com autorização da coordenação)
+          '<td>' + (p.equipe && !p.coordenacao && i.responsavel_id && i.responsavel_id !== eu.id && ['em_implantacao', 'pendencia', 'concluida'].indexOf(i.etapa) >= 0 ? '<span title="Com outra pessoa: você consulta; para editar, peça autorização à coordenação">🔒 </span>' : '') +
+          esc(i.responsavel_nome || (i.etapa === 'fila' ? 'aguardando designação' : '—')) +
           (i.etapa === 'em_implantacao' && i.prazo_inicio ? (i.iniciado_em ? '<span class="sec">iniciada</span>' : '<span class="sec">' + prazoCr(i.prazo_inicio, i.etapa).replace('Até ', 'iniciar até ').replace('Venceu ', 'prazo para iniciar venceu ') + '</span>') : '') + '</td>' +
           '<td>' + (i.pendentes.length ? '<span class="etiqueta ambar" title="' + esc(i.pendentes.join('; ')) + '">' + i.pendentes.length + ' pendente(s)</span>' : '<span class="sec">—</span>') + '</td></tr>';
       }).join('') || '<tr><td colspan="7"><div class="vazio" style="border:0;padding:34px">' + (aba === 'minhas' ? 'Você ainda não pediu implantações.' : 'Nada por aqui.') + '</div></td></tr>';
@@ -4459,15 +4464,22 @@
     var i = d.implantacao, pd = d.pode;
     var vig = d.documentos.filter(function (x) { return !x.substituido_em; });
     function lnk(x) {
+      // recebido sem arquivo (em papel, no CPD): conta como recebido na data da marcação
+      if (x.sem_arquivo) {
+        return '<span class="anexo" title="' + esc(x.observacao || '') + '">' + IC.documento + '<span>Sem arquivo</span><span class="sec">' + esc(x.observacao || '') + ' · ' + esc(x.enviado_por_nome || '') + ' em ' + dataHoraCr(x.enviado_em) + '</span></span>' +
+          (pd.marcar_documentos ? '<button type="button" class="btn ghost sm" data-desfazer-doc-imp="' + x.id + '">Desfazer</button>' : '');
+      }
       return '<a class="anexo" href="/api/implantacoes/' + i.id + '/documentos/' + x.id + (x.mime === 'application/pdf' ? '?ver=1' : '') + '" target="_blank" rel="noopener">' + IC.documento + '<span>' + esc(x.nome) + '</span><span class="sec">' + tamanho(x.tamanho) + '</span></a>' +
         (pd.tirar_documentos && !x.vinculado && x.tipo !== 'analise_credito' ? '<button type="button" class="btn icon ghost" data-tirar-doc-imp="' + x.id + '" aria-label="Remover ' + esc(x.nome) + '">' + IC.fechar + '</button>' : '');
     }
     function linha(t) {
       var atual = vig.filter(function (x) { return x.tipo === t.tipo; });
       var vinc = atual.some(function (x) { return x.vinculado; });
-      var st = atual.length ? etq([vinc || t.tipo === 'analise_credito' ? 'vinculada' : 'entregue', 'verde']) : t.obrigatorio ? etq(['falta', 'vermelha']) : t.setor ? etq(['com a Implantação', 'azul']) : t.pendente ? etq(['pendente', 'ambar']) : etq(['opcional', 'cinza']);
+      var semArq = atual.length && atual.every(function (x) { return x.sem_arquivo; });
+      var st = atual.length ? etq([vinc || t.tipo === 'analise_credito' ? 'vinculada' : semArq ? 'recebido sem arquivo' : 'entregue', 'verde']) : t.obrigatorio ? etq(['falta', 'vermelha']) : t.setor ? etq(['com a Implantação', 'azul']) : t.pendente ? etq(['pendente', 'ambar']) : etq(['opcional', 'cinza']);
       return '<div class="doc-linha"><b style="flex:1 1 260px">' + esc(t.nome) + (t.obrigatorio ? ' <span style="color:var(--red)" aria-label="obrigatório">*</span>' : '') + '</b>' + st + atual.map(lnk).join('') +
-        (pd.documentos && t.tipo !== 'analise_credito' && (!vinc || t.tipo === 'outro') ? '<label class="btn ghost sm">' + IC.enviar + (atual.length ? (t.tipo === 'outro' ? 'Anexar outro' : 'Trocar') : 'Anexar') + '<input type="file" data-doc-imp="' + t.tipo + '" hidden></label>' : '') + '</div>';
+        (pd.documentos && t.tipo !== 'analise_credito' && (!vinc || t.tipo === 'outro') ? '<label class="btn ghost sm">' + IC.enviar + (atual.length ? (t.tipo === 'outro' ? 'Anexar outro' : semArq ? 'Anexar o arquivo' : 'Trocar') : 'Anexar') + '<input type="file" data-doc-imp="' + t.tipo + '" hidden></label>' : '') +
+        (pd.marcar_documentos && !atual.length && ['analise_credito', 'outro'].indexOf(t.tipo) < 0 ? '<button type="button" class="btn ghost sm" data-marcar-doc-imp="' + t.tipo + '" data-nome="' + esc(t.nome) + '">Marcar recebido</button>' : '') + '</div>';
     }
     var obrigTipos = d.documentos_obrigatorios || [];
     var obrig = m.documentos.filter(function (t) { return obrigTipos.indexOf(t.tipo) >= 0; }).map(function (t) { return Object.assign({}, t, { obrigatorio: true }); });
@@ -4488,6 +4500,22 @@
       inp.onchange = async function () {
         if (!inp.files[0]) return;
         try { await enviarDocImp(i.id, inp.getAttribute('data-doc-imp'), inp.files[0]); toast('Documento anexado.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+      };
+    });
+    $$('[data-marcar-doc-imp]').forEach(function (b) {
+      b.onclick = function () {
+        var mo = modal({ titulo: 'Marcar recebido · ' + b.getAttribute('data-nome'), corpo: '<p class="ajuda" style="margin-top:0">Para documento recebido sem arquivo (em papel, já arquivado). Conta como recebido hoje, também na meta de documentação.</p>' +
+          '<label class="rot" for="mDocObs">Observação (obrigatória)</label><textarea class="campo" id="mDocObs" rows="2" placeholder="Ex.: original em papel, arquivado no CPD."></textarea>',
+          pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mDocOk">Marcar recebido</button>' });
+        $('#mDocOk', mo).onclick = async function () {
+          try { await api('POST', '/api/implantacoes/' + i.id + '/documentos/marcar', { tipo: b.getAttribute('data-marcar-doc-imp'), observacao: $('#mDocObs', mo).value }); mo.fechar(); toast('Marcado como recebido.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+        };
+      };
+    });
+    $$('[data-desfazer-doc-imp]').forEach(function (b) {
+      b.onclick = async function () {
+        if (!(await confirmar('Desfazer recebido', 'O documento volta a ficar pendente.', 'Desfazer', true))) return;
+        try { await api('POST', '/api/implantacoes/' + i.id + '/documentos/' + b.getAttribute('data-desfazer-doc-imp') + '/desfazer', {}); recarregar(); } catch (e) { toast(e.message, 'erro'); }
       };
     });
     $$('[data-tirar-doc-imp]').forEach(function (b) {
@@ -4610,6 +4638,177 @@
       boletos: { feito: $('#e_bol').checked, primeiro_vencimento: $('#e_bol_venc').value }, envio: { forma: env ? env.value : '' } };
   }
 
+  /* ---------- setor no dia a dia: quem edita, prazo para concluir (pausas) e onboarding depois de concluir ---------- */
+  var ESCOPO_CURTO_IMP = { tudo: 'tudo', etapas: 'só as etapas', documentos: 'só documentos e ficha' };
+  function diasUteisImp(n) { return n === 1 ? '1 dia útil' : n + ' dias úteis'; }
+  function prazoConcluirImp(s) {
+    if (!s) return null;
+    var v = s.vence ? dataBr(s.vence) : '';
+    if (s.status === 'no_prazo') return ['Concluir até ' + v + ' · faltam ' + diasUteisImp(s.faltam), 'azul'];
+    if (s.status === 'vence_amanha') return ['Concluir até ' + v + ' · vence no próximo dia útil', 'ambar'];
+    if (s.status === 'vence_hoje') return ['Concluir hoje (' + v + ')', 'ambar'];
+    if (s.status === 'atrasado') return ['Atrasada · ' + diasUteisImp(s.atraso) + ' (venceu ' + v + ')', 'vermelha'];
+    if (s.status === 'pausado') return ['Prazo pausado desde ' + dataBr(s.desde) + (s.atraso ? ' · ' + diasUteisImp(s.atraso) + ' de atraso' : ' · faltam ' + diasUteisImp(s.faltam)), 'cinza'];
+    if (s.status === 'cumprido') return ['Concluída no prazo (' + dataBr(s.em) + ')', 'verde'];
+    return ['Concluída com ' + diasUteisImp(s.atraso) + ' de atraso (' + dataBr(s.em) + ')', 'ambar'];
+  }
+  function htmlDiaADiaImp(d) {
+    var i = d.implantacao, pd = d.pode, st = d.setor;
+    if (i.importacao_id) {
+      var im = i.importacao || {};
+      return '<div class="msg info" style="margin-bottom:16px"><div><b>Importada do histórico das planilhas</b> (Nº ' + esc(i.numero_planilha || '—') + ', ' + (im.fonte === 'controle' ? 'Controle Implantações' : 'Formulário de implantação') + ').' +
+        ' É histórico: não gera avisos, prazos, cobranças nem ficha de repasse.' + (i.etapa === 'em_implantacao' && pd.etapas ? ' Ficou em andamento: dá para atualizar as etapas e concluir.' : '') +
+        ((im.avisos || []).length ? '<br><span class="ajuda" style="margin:0">Conferência: ' + esc(im.avisos.join('; ')) + '</span>' : '') + '</div></div>';
+    }
+    if (!st) return '';
+    var html = '';
+    var meusPedidos = st.autorizacoes.filter(function (a) { return eu && a.usuario_id === eu.id && a.situacao === 'pedida'; });
+    // quem edita
+    if (st.autorizacao) {
+      html += '<div class="msg info" style="margin-bottom:16px">🔓 <b>Você pode editar esta implantação</b> (' + esc(ESCOPO_CURTO_IMP[st.autorizacao.escopo]) + ')' + (st.autorizacao.ate ? ' até ' + dataBr(st.autorizacao.ate) : '') +
+        ', com autorização da coordenação. Ela continua com ' + esc(i.responsavel_nome || 'quem conduz') + '.</div>';
+    } else if (i.responsavel_id && !pd.editar_setor && (pd.pedir_autorizacao || meusPedidos.length)) {
+      html += '<div class="msg aviso" style="margin-bottom:16px"><div class="linha"><span style="flex:1 1 320px">🔒 <b>Esta implantação está com ' + esc(i.responsavel_nome || 'outra pessoa') + '.</b> Você consulta tudo; para editar, a coordenação precisa autorizar.' +
+        (meusPedidos.length ? ' Seu pedido de ' + dataHoraCr(meusPedidos[0].pedida_em) + ' está com a coordenação.' : '') + '</span>' +
+        (pd.pedir_autorizacao && !meusPedidos.length ? '<button class="btn ghost sm" id="btPedirAutImp">Pedir autorização</button>' : '') + '</div></div>';
+    }
+    var recusada = st.autorizacoes.filter(function (a) { return eu && a.usuario_id === eu.id && a.situacao === 'recusada'; })[0];
+    if (recusada && !st.autorizacao && !meusPedidos.length) html += '<div class="msg erro" style="margin-bottom:16px">A coordenação não autorizou seu pedido de ' + dataHoraCr(recusada.pedida_em) + (recusada.resposta ? ': "' + esc(recusada.resposta) + '"' : '.') + '</div>';
+    if (pd.autorizar) {
+      var pedidos = st.autorizacoes.filter(function (a) { return a.situacao === 'pedida'; });
+      var ativas = st.autorizacoes.filter(function (a) { return a.situacao === 'ativa' && !a.vencida; });
+      if (pedidos.length || ativas.length) {
+        html += '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Quem edita além de ' + esc(i.responsavel_nome || 'quem conduz') + '</h2><span class="espaco"></span><button class="btn ghost sm" data-autorizar-imp="">Autorizar outra pessoa</button></div>' +
+          pedidos.map(function (a) {
+            return '<div class="doc-linha">' + etq(['pedido', 'ambar']) + '<span style="flex:1 1 280px"><b>' + esc(a.usuario_nome) + '</b> pede para editar: "' + esc(a.motivo || '') + '"<span class="sec" style="display:block">' + dataHoraCr(a.pedida_em) + '</span></span>' +
+              '<button class="btn ghost sm" data-recusar-aut-imp="' + a.id + '">Recusar</button><button class="btn primary sm" data-autorizar-imp="' + a.id + '">Autorizar</button></div>';
+          }).join('') +
+          ativas.map(function (a) {
+            return '<div class="doc-linha">' + etq(['autorizada', 'verde']) + '<span style="flex:1 1 280px"><b>' + esc(a.usuario_nome) + '</b> · ' + esc(ESCOPO_CURTO_IMP[a.escopo]) + (a.ate ? ' · até ' + dataBr(a.ate) : ' · sem prazo') +
+              '<span class="sec" style="display:block">' + esc(a.decidida_por_nome ? 'por ' + a.decidida_por_nome + ' em ' + dataHoraCr(a.decidida_em) : '') + (a.motivo ? ' · "' + esc(a.motivo) + '"' : '') + '</span></span>' +
+              '<button class="btn ghost sm" data-revogar-aut-imp="' + a.id + '">Revogar</button></div>';
+          }).join('') + '</section>';
+      }
+    }
+    // prazo para concluir
+    var s = st.prazo_concluir, chip = prazoConcluirImp(s);
+    var aberta = st.pausas.filter(function (p) { return !p.fim; })[0];
+    if (chip) {
+      var acoes = '';
+      if (pd.impedimento && !aberta) acoes += '<button class="btn ghost sm" id="btImpedImp">Marcar impedimento</button>';
+      if (pd.impedimento && aberta && aberta.tipo === 'impedimento') acoes += '<button class="btn primary sm" id="btRetomarImp">Resolvido: retomar o prazo</button>';
+      if (pd.autorizar && s.status === 'atrasado') acoes += '<button class="btn ghost sm" data-cobrar-imp="concluir">Cobrar</button>';
+      html += '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Prazo para concluir</h2>' + etq(chip) + '<span class="espaco"></span>' + acoes + '</div><div class="corpo pilha" style="gap:8px">' +
+        '<span class="ajuda" style="margin:0">' + diasUteisImp(s.dias) + ' depois de assumir (' + dataBr(s.assumida) + '). Pausa enquanto há pendência com o comercial ou um impedimento marcado, e continua de onde parou.</span>' +
+        (aberta ? '<div class="msg aviso" style="margin:0">' + (aberta.tipo === 'pendencia' ? '<b>Pausado: pendência com o comercial.</b> Volta a contar quando o comercial reenviar.'
+          : '<b>Pausado: ' + esc(aberta.motivo) + '.</b> "' + esc(aberta.detalhe || '') + '" · ' + esc(aberta.por_nome || '') + ' em ' + dataHoraCr(aberta.inicio) + '. A coordenação foi avisada.') + '</div>' : '') +
+        (st.pausas.some(function (p) { return p.fim; }) ? '<details><summary class="ajuda" style="cursor:pointer;margin:0">Pausas anteriores</summary><div class="pilha" style="gap:4px;margin-top:6px;font-size:13px;color:var(--ink-2)">' +
+          st.pausas.filter(function (p) { return p.fim; }).map(function (p) {
+            return '<div>' + dataHoraCr(p.inicio) + ' → ' + dataHoraCr(p.fim) + ' · ' + (p.tipo === 'pendencia' ? 'pendência com o comercial' : esc(p.motivo) + (p.detalhe ? ': "' + esc(p.detalhe) + '"' : '')) +
+              (p.resolucao ? ' · resolvido: "' + esc(p.resolucao) + '" (' + esc(p.encerrada_por_nome || '') + ')' : '') + '</div>';
+          }).join('') + '</div></details>' : '') + '</div></section>';
+    }
+    // ficha de repasse (abre na conclusão)
+    if (['concluida', 'na_carteira'].indexOf(i.etapa) >= 0) {
+      var fc = st.ficha, fchip = fc && prazoFichaImp(fc.prazo);
+      html += '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Ficha de repasse</h2>' + (fc ? etq(SIT_FICHA[fc.situacao]) + (fc.versao ? etq(['versão ' + fc.versao, 'cinza']) : '') + (fchip ? etq(fchip) : '') : etq(['não aberta', 'cinza'])) +
+        '<span class="espaco"></span><a class="btn ' + (fc && fc.situacao === 'a_enviar' || (fc && fc.situacao === 'devolvida') ? 'primary' : 'ghost') + ' sm" href="#/implantacao/' + i.id + '/ficha">' + (fc ? 'Abrir a ficha' : 'Ver') + '</a></div>' +
+        '<div class="corpo"><span class="ajuda" style="margin:0">Vem preenchida com o que o portal sabe; quem conduziu completa os campos em azul e envia à assistente de crédito em até ' + (fc && fc.prazo ? fc.prazo.dias : 5) + ' dias úteis da conclusão.</span></div></section>';
+    }
+    // onboarding depois de concluir
+    var o = st.onboarding;
+    if (d.onboarding_pendente && ['concluida', 'na_carteira'].indexOf(i.etapa) >= 0) {
+      html += '<div class="msg ' + (o && o.vencido ? 'erro' : 'aviso') + '" style="margin-bottom:16px"><div class="linha" style="gap:10px"><span style="flex:1 1 320px"><b>Onboarding pendente.</b> ' +
+        (o && o.limite ? (o.vencido ? 'O prazo venceu em ' + dataBr(o.limite) + ': a meta do onboarding fica como não batida.' : 'Prazo até ' + dataBr(o.limite) + '.') : 'Registre quando for feito.') + '</span>' +
+        (pd.onboarding ? '<button class="btn primary sm" id="btOnbDepoisImp">Registrar onboarding</button>' : '') + '</div>' +
+        (o && o.vencido ? (o.justificativa ? '<div style="margin-top:8px"><b>Justificativa</b> (' + esc(o.justificativa.por_nome || '') + ', ' + dataHoraCr(o.justificativa.em) + '): "' + esc(o.justificativa.texto) + '". A meta continua não batida.</div>'
+          : pd.justificar_onboarding ? '<label class="rot" for="mJustOnb" style="margin-top:10px">Justificativa: por que o onboarding não foi feito no prazo (obrigatória)</label><textarea class="campo" id="mJustOnb" rows="2"></textarea>' +
+            '<div class="linha" style="justify-content:flex-end;margin-top:8px"><button class="btn primary sm" id="btJustOnbImp">Salvar justificativa</button></div>' : '<div style="margin-top:6px">Aguardando a justificativa de quem conduz.</div>') : '') + '</div>';
+    } else if (o && o.justificativa) {
+      html += '<div class="msg info" style="margin-bottom:16px"><b>Onboarding fora do prazo, justificado</b> por ' + esc(o.justificativa.por_nome || '') + ': "' + esc(o.justificativa.texto) + '". A meta fica como não batida.</div>';
+    }
+    return html;
+  }
+  function ligarDiaADiaImp(d, m, recarregar) {
+    var i = d.implantacao, st = d.setor;
+    if (!st) return;
+    var post = async function (url, corpo, ok, mo) {
+      try { await api('POST', '/api/implantacoes/' + i.id + url, corpo || {}); if (mo) mo.fechar(); toast(ok, 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+    };
+    if ($('#btPedirAutImp')) $('#btPedirAutImp').onclick = function () {
+      var mo = modal({ titulo: 'Pedir autorização para editar', corpo: '<p class="ajuda" style="margin-top:0">A implantação está com ' + esc(i.responsavel_nome || 'outra pessoa') + '. A coordenação recebe o pedido no portal e por e-mail.</p>' +
+        '<label class="rot" for="mAutMot">Por que precisa editar (obrigatório)</label><textarea class="campo" id="mAutMot" rows="3" placeholder="Ex.: a responsável está de férias e o síndico enviou a conta bancária."></textarea>',
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mAutOk">Pedir</button>' });
+      $('#mAutOk', mo).onclick = function () { post('/autorizacoes/pedir', { motivo: $('#mAutMot', mo).value }, 'Pedido enviado à coordenação.', mo); };
+    };
+    $$('[data-autorizar-imp]').forEach(function (b) {
+      b.onclick = function () {
+        var pid = b.getAttribute('data-autorizar-imp');
+        var pedido = pid ? st.autorizacoes.filter(function (a) { return String(a.id) === pid; })[0] : null;
+        var gente = (m.equipe || []).filter(function (x) { return x.id !== i.responsavel_id; });
+        var mo = modal({ titulo: pedido ? 'Autorizar ' + pedido.usuario_nome : 'Autorizar outra pessoa a editar',
+          corpo: (pedido ? '<p class="ajuda" style="margin-top:0">Pedido: "' + esc(pedido.motivo || '') + '"</p>' : selCr('mAutQuem', 'Quem', gente.length ? gente[0].id : '', gente.map(function (x) { return [x.id, x.nome]; }))) +
+            '<span class="rot">O que pode editar</span><div class="pilha" style="gap:6px;margin-bottom:12px">' + Object.keys(st.escopos).map(function (k, n) {
+              return '<label class="opcao-radio"><input type="radio" name="mAutEsc" value="' + k + '"' + (n === 0 ? ' checked' : '') + '><div><b>' + esc(st.escopos[k].charAt(0).toUpperCase() + st.escopos[k].slice(1)) + '</b></div></label>';
+            }).join('') + '</div>' +
+            '<div class="grade-2"><div><label class="rot" for="mAutAte">Até (opcional)</label><input class="campo" type="date" id="mAutAte"></div>' +
+            (pedido ? '' : '<div><label class="rot" for="mAutMotC">Motivo</label><input class="campo" id="mAutMotC" placeholder="Ex.: cobrir as férias"></div>') + '</div>' +
+            '<div class="ajuda">A implantação continua com ' + esc(i.responsavel_nome || 'quem conduz') + '. Você revoga quando quiser.</div>',
+          pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mAutDar">Autorizar</button>' });
+        $('#mAutDar', mo).onclick = function () {
+          var corpo = { escopo: $('input[name=mAutEsc]:checked', mo).value, ate: $('#mAutAte', mo).value };
+          if (pedido) corpo.pedido_id = pedido.id; else { corpo.usuario_id = Number($('#mAutQuem', mo).value); corpo.motivo = $('#mAutMotC', mo).value; }
+          post('/autorizacoes', corpo, 'Autorizado; a pessoa foi avisada.', mo);
+        };
+      };
+    });
+    $$('[data-recusar-aut-imp]').forEach(function (b) {
+      b.onclick = function () {
+        var mo = modal({ titulo: 'Recusar o pedido', corpo: '<label class="rot" for="mAutResp">Resposta (opcional)</label><textarea class="campo" id="mAutResp" rows="2"></textarea>',
+          pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn danger" id="mAutRec">Recusar</button>' });
+        $('#mAutRec', mo).onclick = function () { post('/autorizacoes/' + b.getAttribute('data-recusar-aut-imp') + '/recusar', { resposta: $('#mAutResp', mo).value }, 'Pedido recusado.', mo); };
+      };
+    });
+    $$('[data-revogar-aut-imp]').forEach(function (b) {
+      b.onclick = async function () {
+        if (!(await confirmar('Revogar autorização', 'A pessoa deixa de editar esta implantação e é avisada.', 'Revogar', true))) return;
+        post('/autorizacoes/' + b.getAttribute('data-revogar-aut-imp') + '/revogar', {}, 'Autorização revogada.');
+      };
+    });
+    if ($('#btImpedImp')) $('#btImpedImp').onclick = function () {
+      var mo = modal({ titulo: 'Marcar impedimento', corpo: '<p class="ajuda" style="margin-top:0">O prazo para concluir pausa agora. A coordenação é avisada com o motivo (não precisa aprovar).</p>' +
+        selCr('mImpMot', 'O que impede concluir', '', [['', 'Escolha']].concat(Object.keys(st.motivos_impedimento).map(function (k) { return [k, st.motivos_impedimento[k]]; }))) +
+        '<label class="rot" for="mImpDet" style="margin-top:12px">Descreva (obrigatório)</label><textarea class="campo" id="mImpDet" rows="3" placeholder="Ex.: o síndico ainda não enviou a conta bancária."></textarea>',
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mImpOk">Pausar o prazo</button>' });
+      $('#mImpOk', mo).onclick = function () { post('/impedimento', { motivo: $('#mImpMot', mo).value, detalhe: $('#mImpDet', mo).value }, 'Prazo pausado; a coordenação foi avisada.', mo); };
+    };
+    if ($('#btRetomarImp')) $('#btRetomarImp').onclick = function () {
+      var mo = modal({ titulo: 'Resolvido: retomar o prazo', corpo: '<p class="ajuda" style="margin-top:0">O prazo continua de onde parou. A coordenação é avisada.</p>' +
+        '<label class="rot" for="mRetRes">O que foi resolvido (obrigatório)</label><textarea class="campo" id="mRetRes" rows="3" placeholder="Ex.: conta bancária recebida por e-mail."></textarea>',
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mRetOk">Retomar o prazo</button>' });
+      $('#mRetOk', mo).onclick = function () { post('/impedimento/retomar', { resolucao: $('#mRetRes', mo).value }, 'Prazo retomado.', mo); };
+    };
+    $$('[data-cobrar-imp]').forEach(function (b) {
+      b.onclick = async function () {
+        var ficha = b.getAttribute('data-cobrar-imp') === 'ficha';
+        if (!(await confirmar('Cobrar ' + (ficha ? 'a ficha de repasse' : 'a conclusão'), esc(i.responsavel_nome || 'Quem conduz') + ' recebe a cobrança no portal e por e-mail.', 'Cobrar'))) return;
+        post('/cobrar', { qual: ficha ? 'ficha' : 'concluir' }, 'Cobrança enviada.');
+      };
+    });
+    if ($('#btOnbDepoisImp')) $('#btOnbDepoisImp').onclick = function () {
+      var o = i.etapas.onboarding;
+      var mo = modal({ titulo: 'Registrar o onboarding', corpo: selCr('mOnbSit', 'Situação', ['marcado', 'realizado', 'sindico_myblue'].indexOf(o.situacao) >= 0 ? o.situacao : 'realizado', Object.keys(m.onboarding).map(function (k) { return [k, m.onboarding[k]]; })) +
+        '<div class="grade-2" style="margin-top:12px"><div><label class="rot" for="mOnbData">Data</label><input class="campo" type="date" id="mOnbData" value="' + (/^\d{4}-\d{2}-\d{2}$/.test(o.data) ? esc(o.data) : '') + '"></div>' +
+        '<div><label class="rot" for="mOnbHora">Hora</label><input class="campo" type="time" id="mOnbHora" value="' + esc(o.hora || '') + '"></div></div>' +
+        selCr('mOnbPor', 'Feito por', o.por || i.responsavel_id || '', (m.equipe || []).map(function (x) { return [x.id, x.nome]; })),
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mOnbOk">Salvar</button>' });
+      $('#mOnbOk', mo).onclick = function () {
+        post('/onboarding', { onboarding: { situacao: $('#mOnbSit', mo).value, data: $('#mOnbData', mo).value, hora: $('#mOnbHora', mo).value, por: Number($('#mOnbPor', mo).value) || null } }, 'Onboarding registrado.', mo);
+      };
+    };
+    if ($('#btJustOnbImp')) $('#btJustOnbImp').onclick = function () { post('/onboarding-justificativa', { texto: $('#mJustOnb').value }, 'Justificativa salva.'); };
+  }
+
   async function confirmarCarteiraImp(i, recarregar) {
     var j;
     try { j = await api('GET', '/api/implantacoes/' + i.id + '/carteira'); } catch (e) { toast(e.message, 'erro'); return; }
@@ -4633,13 +4832,43 @@
     };
   }
 
-  /* ---------- acompanhamento: painel, mês vigente, metas, antecipações e parâmetros (regras em server/implantacoes/metas.js) ---------- */
-  var ABAS_ACOMP = [['painel', 'Painel'], ['mes', 'Mês vigente'], ['onboarding', 'Onboarding'], ['documentacao', 'Documentação'], ['antecipacoes', 'Antecipações'], ['parametros', 'Parâmetros']];
+  /* ---------- acompanhamento: painel, mês vigente, controle, metas, antecipações, fichas e parâmetros (regras em server/implantacoes/metas.js) ---------- */
+  var ABAS_ACOMP = [['painel', 'Painel', 'grafico'], ['mes', 'Mês vigente', 'calendario'], ['controle', 'Controle', 'camadas'], ['onboarding', 'Onboarding', 'pessoas'],
+    ['documentacao', 'Documentação', 'documento'], ['antecipacoes', 'Antecipações', 'banco'], ['fichas', 'Fichas de repasse', 'pasta'], ['parametros', 'Parâmetros', 'lapis']];
+  var AVISO_ACOMP = {
+    painel: 'Contratos contados pela <b>data de início</b>; implantações canceladas ficam fora. Os números se atualizam a cada formulário e etapa registrados no portal (antes vinham da planilha).',
+    mes: 'Implantações cujo contrato começa no mês, na ordem do 1º vencimento. A partir do dia da virada (Parâmetros), a tela mostra o mês seguinte.',
+    controle: 'As mesmas colunas da planilha <b>Controle Implantações</b>, uma linha por implantação, preenchidas sozinhas pelo formulário, pelo contrato e pelas etapas do setor. A <b>Obs.</b> quem conduz escreve direto na célula. O botão <b>Excel</b> baixa esta tabela, com os filtros aplicados.',
+    onboarding: 'Meta de onboarding: até o prazo depois do 1º vencimento, na carteira de cada analista. Onboarding fora do prazo, mesmo justificado, fica como não batido.',
+    documentacao: 'Meta de documentação: os documentos da meta em até o prazo contado do <b>envio do formulário</b>. A data de cada documento é a do primeiro anexo (ou da marcação de recebido sem arquivo). Clique num documento que falta para anexar ou marcar recebido.',
+    antecipacoes: 'Vem do bloco "Cashback e antecipação" do formulário. <b>Marque</b> e envie ao <b>Controle de Repasses</b>: o Gestor confirma e a antecipação vira regra lá.',
+    fichas: 'Cada ficha deve ser enviada ao Crédito em até <b>5 dias úteis</b> da conclusão da implantação. Lembrete 1 dia útil antes e no dia; passou do prazo, ela e a <b>coordenação</b> recebem um alerta por dia útil até o envio. A assistente de crédito vem da Carteira; sem ela, a <b>supervisão de Crédito</b> escolhe.',
+    parametros: 'Cada mudança vale a partir da data escolhida: os envios anteriores continuam calculados com a regra da época.',
+  };
   var MESES_ACOMP = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   var MESES_LONGO = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
   var FAIXA_ACOMP = { concluida: ['concluída', 'verde'], so_onboarding: ['só falta o onboarding', 'azul'], alta: ['60% a 99%', 'azul'], media: ['40% a 59%', 'ambar'], baixa: ['abaixo de 40%', 'vermelha'] };
   var SIT_META_ACOMP = { atingida: ['Meta atingida', 'verde'], andamento: ['Em andamento', 'azul'], abaixo: ['Abaixo da meta', 'ambar'] };
-  var filtroAcomp = { ano: '', mes: '', analista: '', executivo: '', mesVig: '', onb: '', docSit: '', antMes: '' };
+  var PADRAO_FILTRO_ACOMP = { ano: '', mes: '', analista: '', executivo: '', busca: '', card: '', docSit: '', onb: '', fichaSit: 'aguardando' };
+  var filtroAcomp = null;
+  var exportarAcomp = null; // a aba aberta diz o que o botão Excel baixa: { nome, abas: [{ titulo, cab, linhas }] }
+  // filtros lembrados por pessoa (neste navegador)
+  function chaveFiltroAcomp() { return 'acomp.filtros.' + (eu ? eu.id : 0); }
+  function carregarFiltroAcomp() { if (!filtroAcomp) filtroAcomp = Object.assign({}, PADRAO_FILTRO_ACOMP, lembrar(chaveFiltroAcomp(), {})); return filtroAcomp; }
+  function salvarFiltroAcomp() { try { localStorage.setItem('portal.' + chaveFiltroAcomp(), JSON.stringify(filtroAcomp)); } catch (e) { /* sem armazenamento */ } }
+  function filtrosMudadosAcomp() { var f = filtroAcomp; return ['mes', 'analista', 'executivo', 'busca', 'card', 'docSit'].some(function (k) { return f[k]; }) || (f.ano && String(f.ano) !== String(new Date().getFullYear())); }
+  function semAcentoAcomp(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+  /* os filtros de cima (ano e mês pelo início do contrato, analista, executivo e a busca) */
+  function passaAcomp(l, o) {
+    var f = filtroAcomp;
+    o = o || {};
+    if (!o.semAno && f.ano && String(l.inicio || '').slice(0, 4) !== String(f.ano)) return false;
+    if (!o.semMes && f.mes && Number(String(l.inicio || '').slice(5, 7)) !== Number(f.mes)) return false;
+    if (!o.semAnalista && f.analista && String(l.responsavel_id) !== String(f.analista)) return false;
+    if (!o.semExecutivo && f.executivo && String(l.executivo_id) !== String(f.executivo)) return false;
+    if (f.busca && semAcentoAcomp((l.condominio || '') + ' ' + (l.protocolo || '')).indexOf(semAcentoAcomp(f.busca)) < 0) return false;
+    return true;
+  }
   function faltamAcomp(n) { return n > 1 ? 'faltam ' + n + ' dias' : n === 1 ? 'falta 1 dia' : 'vence hoje'; }
   function statusOnbAcomp(o) {
     if (o.status === 'batida') return etq(['BATIDA', 'verde']);
@@ -4659,77 +4888,158 @@
     var m = { a_marcar: 'A marcar', marcado: 'Marcado', realizado: 'Realizado', sindico_myblue: 'Síndico MyBlue' }[o.situacao] || '';
     return esc(m) + (o.data ? '<span class="sec">' + dataBr(o.data) + (o.hora ? ' às ' + esc(o.hora) : '') + (o.por_nome ? ' · ' + esc(o.por_nome) : '') + '</span>' : '');
   }
+  function irImpAcomp(raiz) {
+    $$('[data-imp]', raiz).forEach(function (tr) { tr.onclick = function (e) { if (e.target.closest('a, button, input, label, select')) return; location.hash = '#/implantacao/' + tr.getAttribute('data-imp'); }; });
+  }
+  /* contadores das abas: o que pede atenção */
+  function contadoresAcomp(j) {
+    return {
+      onboarding: j.linhas.filter(function (l) { return l.na_meta && l.onboarding.status === 'a_marcar'; }).length,
+      documentacao: j.linhas.filter(function (l) { return l.na_meta && l.documentacao.status === 'pendente'; }).length,
+      antecipacoes: j.linhas.filter(function (l) { return l.antecipacao_envio && (l.antecipacao_envio.situacao === 'devolvida' || l.antecipacao_envio.mudou); }).length,
+      fichas: j.fichas.filter(function (x) { return x.situacao === 'devolvida' || (!x.primeiro_envio_em && x.prazo && x.prazo.status === 'atrasado'); }).length,
+    };
+  }
+  var TITULO_CONTADOR_ACOMP = { onboarding: 'onboardings a marcar', documentacao: 'contratos com documento pendente', antecipacoes: 'devolvidas ou com o formulário mudado', fichas: 'fichas atrasadas ou devolvidas' };
 
   async function paginaAcompanhamentoImp(aba) {
+    carregarFiltroAcomp();
     if (!ABAS_ACOMP.some(function (a) { return a[0] === aba; })) aba = lembrar('acomp.aba', 'painel');
+    if (!ABAS_ACOMP.some(function (a) { return a[0] === aba; })) aba = 'painel';
     try { localStorage.setItem('portal.acomp.aba', JSON.stringify(aba)); } catch (e) { /* sem armazenamento */ }
-    definirBarra('<span class="setor">Implantação</span><span class="sep">/</span><span class="nome">Acompanhamento · ' + esc(ABAS_ACOMP.find(function (a) { return a[0] === aba; })[1]) + '</span>');
-    $('#conteudo').innerHTML = '<div class="pagina" style="max-width:1320px"><h1>Acompanhamento da implantação</h1>' +
-      '<p class="sub" style="margin-bottom:16px">O que a planilha calculava, agora direto dos formulários e das etapas no portal. Contratos contados pela data de início; canceladas ficam fora.</p>' +
-      '<nav class="abas">' + ABAS_ACOMP.map(function (a) { return '<a href="#/acompanhamento/' + a[0] + '" class="' + (a[0] === aba ? 'on' : '') + '">' + esc(a[1]) + '</a>'; }).join('') + '</nav>' +
-      '<div id="corpoAcomp"><div class="vazio">Carregando…</div></div></div>';
+    var info = ABAS_ACOMP.find(function (a) { return a[0] === aba; });
+    definirBarra('<span class="setor">Implantação</span><span class="sep">/</span><span class="nome">Acompanhamento · ' + esc(info[1]) + '</span>');
     var f = filtroAcomp;
     var j;
+    if (!$('#corpoAcomp')) $('#conteudo').innerHTML = '<div class="pagina" style="max-width:1400px"><div class="vazio">Carregando…</div></div>';
     try {
       j = await api('GET', '/api/implantacoes/acompanhamento?ano=' + encodeURIComponent(f.ano) + '&mes=' + encodeURIComponent(f.mes) + '&analista=' + encodeURIComponent(f.analista) + '&executivo=' + encodeURIComponent(f.executivo));
-    } catch (e) { $('#corpoAcomp').innerHTML = '<div class="vazio">' + esc(e.message) + '</div>'; return; }
-    if (!$('#corpoAcomp')) return;
-    var corpo = { painel: painelAcomp, mes: mesAcomp, onboarding: onboardingAcomp, documentacao: documentacaoAcomp, antecipacoes: antecipacoesAcomp, parametros: parametrosAcomp }[aba];
-    corpo(j, $('#corpoAcomp'), function () { paginaAcompanhamentoImp(aba); });
+    } catch (e) { $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">' + esc(e.message) + '</div></div>'; return; }
+    if (!f.ano) f.ano = String(j.ano);
+    var cont = contadoresAcomp(j);
+    var agora = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    var mesesSel = [['', 'Todos os meses']].concat(MESES_LONGO.map(function (m, k) { return [k + 1, m]; }));
+    $('#conteudo').innerHTML = '<div class="pagina" style="max-width:1400px">' +
+      '<div class="cab-acomp"><div class="tit-acomp"><h1>Acompanhamento da implantação</h1><p class="sub" style="margin:0">Contratos, etapas, metas e antecipações · Implantação · Coordenação · Diretoria</p></div><span class="espaco"></span>' +
+      '<div class="status-acomp"><i></i><b>Dados do portal</b><span>' + esc(agora) + '</span><button class="btn icon ghost" id="acRecarregar" aria-label="Atualizar">' + IC.recarregar + '</button></div>' +
+      '<button class="btn ghost" id="acExcel">' + IC.baixar + 'Excel</button></div>' +
+      '<div class="msg info aviso-acomp"><div>' + AVISO_ACOMP[aba] + '</div></div>' +
+      (aba === 'parametros' ? '' : '<div class="filtros-acomp"><span class="rot-ano">Ano</span>' + j.anos.map(function (a) { return '<button class="pilula-acomp' + (String(a) === String(f.ano) ? ' on' : '') + '" data-ano="' + a + '">' + a + '</button>'; }).join('') +
+        selFiltroAcomp('acMes', 'Mês', f.mes, mesesSel) +
+        selFiltroAcomp('acAn', 'Analista', f.analista, [['', 'Todas as analistas']].concat(j.analistas.map(function (x) { return [x.id, x.nome]; }))) +
+        selFiltroAcomp('acEx', 'Executivo', f.executivo, [['', 'Todos os executivos']].concat(j.executivos.map(function (x) { return [x.id, x.nome]; }))) +
+        (filtrosMudadosAcomp() ? '<span class="lembra-acomp">' + IC.historico + 'filtros da sua última visita · <button class="link-acomp" id="acLimpar">Limpar filtros</button></span>' : '') +
+        '<span class="espaco"></span><label class="busca-acomp">' + IC.busca + '<input type="search" id="acBusca" placeholder="Buscar condomínio ou protocolo…" value="' + esc(f.busca) + '" aria-label="Buscar condomínio ou protocolo"></label></div>') +
+      '<nav class="abas abas-acomp">' + ABAS_ACOMP.map(function (a) {
+        var n = cont[a[0]];
+        return '<a href="#/acompanhamento/' + a[0] + '" class="' + (a[0] === aba ? 'on' : '') + '">' + (IC[a[2]] || '') + esc(a[1]) + (n ? '<span class="cont-acomp" title="' + n + ' ' + esc(TITULO_CONTADOR_ACOMP[a[0]]) + '">' + n + '</span>' : '') + '</a>';
+      }).join('') + '</nav><div id="corpoAcomp"></div></div>';
+    var recarregar = function () { salvarFiltroAcomp(); paginaAcompanhamentoImp(aba); };
+    var corpo = { painel: painelAcomp, mes: mesAcomp, controle: controleAcomp, onboarding: onboardingAcomp, documentacao: documentacaoAcomp, antecipacoes: antecipacoesAcomp, fichas: fichasAcomp, parametros: parametrosAcomp }[aba];
+    exportarAcomp = null;
+    var desenhar = function () { salvarFiltroAcomp(); corpo(j, $('#corpoAcomp'), recarregar); };
+    $('#acRecarregar').onclick = recarregar;
+    $('#acExcel').onclick = async function () {
+      if (!exportarAcomp) { toast('Nada para exportar nesta aba.', 'erro'); return; }
+      try {
+        var r = await fetch('/api/implantacoes/acompanhamento/excel', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(exportarAcomp) });
+        if (!r.ok) { var e = {}; try { e = await r.json(); } catch (x) { /* sem JSON */ } throw new Error(e.erro || 'Erro ' + r.status); }
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(await r.blob());
+        a.download = exportarAcomp.nome + '.xlsx';
+        document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      } catch (e) { toast(e.message, 'erro'); }
+    };
+    if (aba !== 'parametros') {
+      $$('[data-ano]').forEach(function (b) { b.onclick = function () { f.ano = b.getAttribute('data-ano'); recarregar(); }; });
+      $('#acMes').onchange = function () { f.mes = this.value; recarregar(); };
+      $('#acAn').onchange = function () { f.analista = this.value; recarregar(); };
+      $('#acEx').onchange = function () { f.executivo = this.value; recarregar(); };
+      if ($('#acLimpar')) $('#acLimpar').onclick = function () { filtroAcomp = Object.assign({}, PADRAO_FILTRO_ACOMP, { ano: String(j.ano) }); recarregar(); };
+      var espera;
+      $('#acBusca').oninput = function () { var v = this.value; clearTimeout(espera); espera = setTimeout(function () { f.busca = v; desenhar(); }, 250); };
+    }
+    desenhar();
+  }
+  function selFiltroAcomp(id, rot, valor, opcoes) {
+    return '<select class="campo sel-acomp' + (valor ? ' on' : '') + '" id="' + id + '" aria-label="' + esc(rot) + '">' + opcoes.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(o[0]) === String(valor) ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select>';
   }
   function selAcomp(id, rot, valor, opcoes) {
     return '<label class="filtro-acomp" for="' + id + '">' + esc(rot) + '<select class="campo" id="' + id + '">' + opcoes.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(o[0]) === String(valor) ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select></label>';
   }
-  function tileAcomp(rot, valor, sec) { return '<div class="tile"><span class="rot-tile">' + esc(rot) + '</span><b>' + valor + '</b>' + (sec ? '<span class="sec">' + sec + '</span>' : '') + '</div>'; }
+  /* cartão do topo: { rot, valor, sec, card (filtra a lista ao clicar), on, barra (%), cor } */
+  function tileAcomp(rot, valor, sec, o) {
+    o = o || {};
+    return '<div class="card-acomp' + (o.card != null ? ' clicavel' : '') + (o.on ? ' on' : '') + '"' + (o.card != null ? ' data-card="' + esc(o.card) + '" role="button" tabindex="0"' : '') + '>' +
+      '<span class="rot-card">' + esc(rot) + '</span><b' + (String(valor).length > 9 ? ' class="longo"' : '') + (o.cor ? ' style="color:var(--' + o.cor + ')"' : '') + '>' + valor + '</b>' + (sec ? '<span class="sec">' + sec + '</span>' : '') +
+      (o.barra != null ? '<span class="barra-card"><i style="width:' + Math.max(0, Math.min(100, o.barra)) + '%"></i></span>' : '') + (o.on ? '<span class="filtrando">✓ filtrando a lista</span>' : '') + '</div>';
+  }
+  function ligarCardsAcomp(raiz, aoMudar) {
+    $$('[data-card]', raiz).forEach(function (c) {
+      var ir = function () { var k = c.getAttribute('data-card'); filtroAcomp.card = filtroAcomp.card === k ? '' : k; aoMudar(); };
+      c.onclick = ir;
+      c.onkeydown = function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ir(); } };
+    });
+  }
   function pontosAcomp(feitas) {
     var n = ['documentacao', 'vouch', 'onboarding', 'boletos', 'envio'].filter(function (k) { return feitas[k]; }).length;
     return '<span class="pontos-acomp" title="documentação, Vouch, onboarding, boletos e envio" aria-label="' + n + ' de 5 etapas">' + ['documentacao', 'vouch', 'onboarding', 'boletos', 'envio'].map(function (k) { return '<i' + (feitas[k] ? ' class="f"' : '') + '></i>'; }).join('') + '</span>';
   }
+  function pctAcomp(p) { return '<span class="pct-acomp"><b>' + p + '%</b><i><em style="width:' + p + '%"></em></i></span>'; }
 
-  function painelAcomp(j, raiz, recarregar) {
+  function painelAcomp(j, raiz) {
     var p = j.painel, f = filtroAcomp;
     var max = Math.max.apply(null, p.mensal.map(function (x) { return x.contratos; }).concat([1]));
     var tabela = function (titulo, cab, linhas) {
       return '<section class="painel" style="flex:1 1 300px"><div class="cab-painel"><h2>' + esc(titulo) + '</h2></div><div class="tabela-wrap"><table><thead><tr><th>' + esc(cab) + '</th><th class="num">Contratos</th><th class="num">% médio</th></tr></thead><tbody>' +
         (linhas.map(function (x) { return '<tr><td>' + esc(x.nome) + '</td><td class="num">' + x.contratos + '</td><td class="num">' + x.pct_medio + '%</td></tr>'; }).join('') || '<tr><td colspan="3" class="sec">Nada no período.</td></tr>') + '</tbody></table></div></section>';
     };
-    raiz.innerHTML = '<div class="linha" style="gap:12px;align-items:flex-end;margin-bottom:16px">' +
-      selAcomp('fAcAno', 'Ano', j.ano, j.anos.map(function (a) { return [a, a]; })) +
-      selAcomp('fAcMes', 'Mês', f.mes, [['', 'Todos']].concat(MESES_LONGO.map(function (m, k) { return [k + 1, m]; }))) +
-      selAcomp('fAcAn', 'Analista', f.analista, [['', 'Todas as pessoas']].concat(j.analistas.map(function (x) { return [x.id, x.nome]; }))) +
-      selAcomp('fAcEx', 'Executivo', f.executivo, [['', 'Todos']].concat(j.executivos.map(function (x) { return [x.id, x.nome]; }))) + '</div>' +
-      '<div class="tiles" style="margin-bottom:16px">' + tileAcomp('Contratos', p.total, 'em ' + (f.mes ? MESES_LONGO[f.mes - 1].toLowerCase() + ' de ' : '') + j.ano) + tileAcomp('% médio de conclusão', p.pct_medio + '%', 'etapas feitas ÷ 5') +
-      tileAcomp('Concluídos', p.concluidos, p.total ? Math.round(p.concluidos * 100 / p.total) + '% dos contratos' : '') + tileAcomp('Em andamento', p.andamento, 'entre 1% e 99%') + tileAcomp('Não iniciados', p.nao_iniciados, '0%: na fila ou sem etapa feita') + '</div>' +
-      '<div class="linha" style="gap:16px;align-items:stretch;margin-bottom:16px">' +
-      '<section class="painel" style="flex:1 1 420px"><div class="cab-painel"><h2>Progresso por etapa</h2><span class="espaco"></span>' + (p.gargalo && p.total ? etq(['Principal gargalo: ' + p.gargalo.nome, 'ambar']) : '') + '</div><div style="padding:8px 0">' +
-      p.por_etapa.map(function (x) {
-        return '<div class="barra-acomp"><span>' + esc(x.nome) + '</span><span class="trilho-acomp"><i style="width:' + x.pct + '%' + (p.gargalo && x.etapa === p.gargalo.etapa && p.total ? ';background:var(--amber)' : '') + '"></i></span><b>' + x.pct + '%</b></div>';
-      }).join('') + '</div><p class="ajuda" style="margin:0;padding:8px 16px 14px">% de contratos com a etapa feita. O gargalo é a etapa com o menor percentual.</p></section>' +
-      '<section class="painel" style="flex:2 1 560px"><div class="cab-painel"><h2>Contratos e concluídos por mês · ' + j.ano + '</h2><span class="espaco"></span>' +
-      '<span class="legenda-acomp"><i style="background:#0b76ba"></i>Contratos</span><span class="legenda-acomp"><i style="background:#d98a1b"></i>Concluídos</span></div>' +
-      '<div class="grafico-acomp" role="img" aria-label="Contratos e concluídos por mês em ' + j.ano + (p.mes_mais ? '. Mês com mais contratos: ' + MESES_LONGO[p.mes_mais.mes - 1] + ', ' + p.mes_mais.contratos : '') + '">' +
-      p.mensal.map(function (x) {
-        var h = function (v) { return Math.round(v * 180 / max); };
-        return '<div class="mes-acomp"><div class="bs"><i style="height:' + h(x.contratos) + 'px;background:#0b76ba" title="' + MESES_LONGO[x.mes - 1] + ': ' + x.contratos + ' contrato(s)"></i><i style="height:' + h(x.concluidos) + 'px;background:#d98a1b" title="' + MESES_LONGO[x.mes - 1] + ': ' + x.concluidos + ' concluído(s)"></i></div>' +
-          '<span class="m">' + MESES_ACOMP[x.mes - 1] + '</span><span class="v">' + (x.contratos ? x.contratos + ' · ' + x.concluidos : '—') + '</span></div>';
-      }).join('') + '</div><p class="ajuda" style="margin:0;padding:8px 16px 14px">Embaixo de cada mês: contratos · concluídos.' + (p.mes_mais ? ' ' + MESES_LONGO[p.mes_mais.mes - 1] + ' foi o mês com mais contratos (' + p.mes_mais.contratos + ').' : '') + ' O filtro de mês não muda o gráfico.</p></section></div>' +
-      '<div class="linha" style="gap:16px;align-items:flex-start;margin-bottom:16px">' + tabela('Por estado', 'UF', p.por_uf) + tabela('Por executivo', 'Executivo', p.por_executivo) + tabela('Por analista', 'Analista', p.por_analista) + '</div>' +
-      '<section class="painel"><div class="cab-painel"><h2>Contratos em aberto</h2><span class="ajuda" style="margin:0">do menor % para o maior · até 30</span></div><div class="tabela-wrap"><table style="min-width:860px"><thead><tr><th>Condomínio</th><th>Início do contrato</th><th>Analista</th><th>Etapas</th><th class="num">%</th><th>Faixa</th></tr></thead><tbody>' +
-      (p.abertos.map(function (x) {
-        return '<tr class="clicavel" data-imp="' + x.id + '"><td><b>' + esc(x.condominio) + '</b></td><td>' + dataBr(x.inicio) + '</td><td>' + (x.responsavel_nome ? esc(x.responsavel_nome) : etq([x.etapa === 'fila' ? 'na fila, sem analista' : 'sem analista', 'cinza'])) + '</td>' +
-          '<td>' + pontosAcomp(x.feitas) + '</td><td class="num"><b>' + x.pct + '%</b></td><td>' + etq(FAIXA_ACOMP[x.faixa]) + '</td></tr>';
-      }).join('') || '<tr><td colspan="6"><div class="vazio" style="border:0;padding:24px">Nenhum contrato em aberto no período.</div></td></tr>') + '</tbody></table></div>' +
-      '<p class="ajuda" style="margin:0;padding:8px 16px 14px">Os pontos seguem a ordem das etapas: documentação, Vouch, onboarding, boletos e envio.</p></section>';
-    var mudar = function (k, id) { $('#' + id, raiz).onchange = function () { f[k] = this.value; if (k === 'ano') f.ano = this.value; recarregar(); }; };
-    mudar('ano', 'fAcAno'); mudar('mes', 'fAcMes'); mudar('analista', 'fAcAn'); mudar('executivo', 'fAcEx');
-    $$('[data-imp]', raiz).forEach(function (tr) { tr.onclick = function () { location.hash = '#/implantacao/' + tr.getAttribute('data-imp'); }; });
+    function desenhar() {
+      var CARD = { todos: function () { return true; }, concluidos: function (l) { return l.pct === 100; }, andamento: function (l) { return l.pct > 0 && l.pct < 100; }, nao_iniciados: function (l) { return l.pct === 0; } };
+      var sel = CARD[f.card] ? f.card : '';
+      var lista = j.linhas.filter(function (l) { return passaAcomp(l) && (!sel || CARD[sel](l)); }).sort(function (a, b) { return a.pct - b.pct || a.inicio.localeCompare(b.inicio); });
+      var periodo = (f.mes ? MESES_LONGO[f.mes - 1].toLowerCase() + ' de ' : '') + j.ano;
+      raiz.innerHTML = '<div class="cards-acomp">' +
+        tileAcomp('Contratos ' + (f.mes ? MESES_ACOMP[f.mes - 1] + '/' : '') + j.ano, p.total, p.mes_mais && !f.mes ? p.mes_mais.contratos + ' em ' + MESES_LONGO[p.mes_mais.mes - 1].toLowerCase() + ', o maior mês' : 'em ' + periodo, { card: 'todos', on: sel === 'todos' }) +
+        tileAcomp('% médio de conclusão', p.pct_medio + '%', 'etapas feitas ÷ 5', { barra: p.pct_medio }) +
+        tileAcomp('Concluídos', p.concluidos, p.total ? Math.round(p.concluidos * 100 / p.total) + '% dos contratos' : '', { card: 'concluidos', on: sel === 'concluidos', barra: p.total ? p.concluidos * 100 / p.total : 0 }) +
+        tileAcomp('Em andamento', p.andamento, 'entre 1% e 99%', { card: 'andamento', on: sel === 'andamento' }) +
+        tileAcomp('Não iniciados', p.nao_iniciados, 'na fila ou sem etapa feita', { card: 'nao_iniciados', on: sel === 'nao_iniciados', cor: p.nao_iniciados ? 'red' : '' }) + '</div>' +
+        '<div class="linha" style="gap:16px;align-items:stretch;margin-bottom:16px">' +
+        '<section class="painel" style="flex:1 1 420px"><div class="cab-painel"><h2>Progresso por etapa</h2><span class="espaco"></span>' + (p.gargalo && p.total ? etq(['Principal gargalo: ' + p.gargalo.nome, 'ambar']) : '') + '</div><div style="padding:8px 0">' +
+        p.por_etapa.map(function (x) {
+          return '<div class="barra-acomp"><span>' + esc(x.nome) + '</span><span class="trilho-acomp"><i style="width:' + x.pct + '%' + (p.gargalo && x.etapa === p.gargalo.etapa && p.total ? ';background:var(--amber)' : '') + '"></i></span><b>' + x.pct + '%</b></div>';
+        }).join('') + '</div><p class="ajuda" style="margin:0;padding:8px 16px 14px">% de contratos com a etapa feita. O gargalo é a etapa com o menor percentual.</p></section>' +
+        '<section class="painel" style="flex:2 1 560px"><div class="cab-painel"><h2>Contratos e concluídos por mês · ' + j.ano + '</h2><span class="espaco"></span>' +
+        '<span class="legenda-acomp"><i style="background:#0b76ba"></i>Contratos</span><span class="legenda-acomp"><i style="background:#d98a1b"></i>Concluídos</span></div>' +
+        '<div class="grafico-acomp" role="img" aria-label="Contratos e concluídos por mês em ' + j.ano + (p.mes_mais ? '. Mês com mais contratos: ' + MESES_LONGO[p.mes_mais.mes - 1] + ', ' + p.mes_mais.contratos : '') + '">' +
+        p.mensal.map(function (x) {
+          var h = function (v) { return Math.round(v * 180 / max); };
+          return '<div class="mes-acomp"><div class="bs"><i style="height:' + h(x.contratos) + 'px;background:#0b76ba" title="' + MESES_LONGO[x.mes - 1] + ': ' + x.contratos + ' contrato(s)"></i><i style="height:' + h(x.concluidos) + 'px;background:#d98a1b" title="' + MESES_LONGO[x.mes - 1] + ': ' + x.concluidos + ' concluído(s)"></i></div>' +
+            '<span class="m">' + MESES_ACOMP[x.mes - 1] + '</span><span class="v">' + (x.contratos ? x.contratos + ' · ' + x.concluidos : '—') + '</span></div>';
+        }).join('') + '</div><p class="ajuda" style="margin:0;padding:8px 16px 14px">Embaixo de cada mês: contratos · concluídos. O filtro de mês não muda o gráfico.</p></section></div>' +
+        '<div class="linha" style="gap:16px;align-items:flex-start;margin-bottom:16px">' + tabela('Por estado', 'UF', p.por_uf) + tabela('Por executivo', 'Executivo', p.por_executivo) + tabela('Por analista', 'Analista', p.por_analista) + '</div>' +
+        '<section class="painel"><div class="cab-painel"><h2>' + (sel === 'concluidos' ? 'Contratos concluídos' : sel === 'andamento' ? 'Contratos em andamento' : sel === 'nao_iniciados' ? 'Contratos não iniciados' : 'Contratos do período') + '</h2><span class="ajuda" style="margin:0">' + lista.length + ' · do menor % para o maior · clique num cartão acima para filtrar</span></div>' +
+        '<div class="tabela-wrap"><table style="min-width:860px"><thead><tr><th>Condomínio</th><th>Início do contrato</th><th>Analista</th><th>Etapas</th><th class="num">%</th><th>Faixa</th></tr></thead><tbody>' +
+        (lista.slice(0, 200).map(function (x) {
+          return '<tr class="clicavel" data-imp="' + x.id + '"><td><b>' + esc(x.condominio) + '</b>' + (x.importada ? ' <span class="etiqueta cinza">planilha</span>' : '') + '<span class="sec">' + esc(x.protocolo || (x.numero ? 'Nº ' + x.numero : '')) + '</span></td><td>' + dataBr(x.inicio) + '</td><td>' + (x.responsavel_nome ? esc(x.responsavel_nome) : etq([x.etapa === 'fila' ? 'na fila, sem analista' : 'sem analista', 'cinza'])) + '</td>' +
+            '<td>' + pontosAcomp(x.feitas) + '</td><td class="num"><b>' + x.pct + '%</b></td><td>' + etq(FAIXA_ACOMP[x.faixa]) + '</td></tr>';
+        }).join('') || '<tr><td colspan="6"><div class="vazio" style="border:0;padding:24px">Nenhum contrato com esses filtros.</div></td></tr>') + '</tbody></table></div>' +
+        '<p class="ajuda" style="margin:0;padding:8px 16px 14px">Os pontos seguem a ordem das etapas: documentação, Vouch, onboarding, boletos e envio.</p></section>';
+      ligarCardsAcomp(raiz, desenhar);
+      irImpAcomp(raiz);
+      exportarAcomp = { nome: 'Acompanhamento ' + periodo, abas: [{ titulo: 'Contratos', cab: ['Protocolo', 'Condomínio', 'UF', 'Início do contrato', 'Analista', 'Executivo', '% concluído', 'Faixa'],
+        linhas: lista.map(function (x) { return [x.protocolo || (x.numero ? 'Nº ' + x.numero : ''), x.condominio, x.uf, dataBr(x.inicio), x.responsavel_nome || '', x.executivo_nome || '', x.pct, FAIXA_ACOMP[x.faixa][0]]; }) },
+      { titulo: 'Por mês', cab: ['Mês', 'Contratos', 'Concluídos'], linhas: p.mensal.map(function (x) { return [MESES_LONGO[x.mes - 1], x.contratos, x.concluidos]; }) }] };
+    }
+    desenhar();
   }
 
   function mesAcomp(j, raiz) {
     var f = filtroAcomp;
     if (!f.mesVig) f.mesVig = j.mes_vigente;
     function desenhar() {
-      var lista = j.linhas.filter(function (l) { return l.mes === f.mesVig && (!f.analista || String(l.responsavel_id) === String(f.analista)); })
+      var lista = j.linhas.filter(function (l) { return l.mes === f.mesVig && passaAcomp(l, { semAno: true, semMes: true }); })
         .sort(function (a, b) { return a.primeiro_vencimento.localeCompare(b.primeiro_vencimento) || a.condominio.localeCompare(b.condominio); });
       var conta = function (fx) { return lista.filter(function (l) { return l.faixa === fx; }).length; };
       var a = Number(f.mesVig.slice(0, 4)), m = Number(f.mesVig.slice(5, 7));
@@ -4737,10 +5047,9 @@
       raiz.innerHTML = '<div class="linha" style="gap:12px;margin-bottom:16px;align-items:center">' +
         '<button class="btn ghost" id="mvAnt" aria-label="Mês anterior" style="min-width:44px;justify-content:center">‹</button><h2 style="margin:0;font-family:var(--display);font-size:22px">' + MESES_LONGO[m - 1] + ' de ' + a + '</h2><button class="btn ghost" id="mvProx" aria-label="Próximo mês" style="min-width:44px;justify-content:center">›</button>' +
         (f.mesVig === j.mes_vigente && j.mes_vigente !== j.hoje.slice(0, 7) ? etq(['hoje é ' + dataBr(j.hoje) + ': do dia ' + j.parametros.virada_dia + ' em diante, já vale o mês seguinte', 'azul']) : '') +
-        (f.mesVig !== j.mes_vigente ? '<button class="btn ghost sm" id="mvHoje">Voltar ao mês vigente</button>' : '') + '<span class="espaco"></span>' +
-        selAcomp('mvAn', 'Analista', f.analista, [['', 'Todas as pessoas']].concat(j.analistas.map(function (x) { return [x.id, x.nome]; }))) + '</div>' +
-        '<div class="tiles" style="margin-bottom:16px">' + tileAcomp('Implantações do mês', lista.length) + tileAcomp('Concluídas (100%)', conta('concluida')) + tileAcomp('Só falta o onboarding', conta('so_onboarding')) +
-        tileAcomp('Entre 40% e 99%', conta('alta') + conta('media')) + tileAcomp('Abaixo de 40%', conta('baixa')) + '</div>' +
+        (f.mesVig !== j.mes_vigente ? '<button class="btn ghost sm" id="mvHoje">Voltar ao mês vigente</button>' : '') + '</div>' +
+        '<div class="cards-acomp">' + tileAcomp('Implantações do mês', lista.length, MESES_LONGO[m - 1].toLowerCase() + ' de ' + a) + tileAcomp('Concluídas (100%)', conta('concluida'), '', { barra: lista.length ? conta('concluida') * 100 / lista.length : 0 }) + tileAcomp('Só falta o onboarding', conta('so_onboarding')) +
+        tileAcomp('Entre 40% e 99%', conta('alta') + conta('media')) + tileAcomp('Abaixo de 40%', conta('baixa'), '', { cor: conta('baixa') ? 'red' : '' }) + '</div>' +
         '<section class="painel"><div class="tabela-wrap"><table style="min-width:1040px"><thead><tr><th>1º vencimento</th><th>Condomínio</th><th>Analista</th><th class="centro">Documentação</th><th class="centro">Vouch</th><th class="centro">Onboarding</th><th class="centro">Boletos</th><th class="centro">Envio</th><th class="num">%</th><th>Faixa</th></tr></thead><tbody>' +
         (lista.map(function (l) {
           var o = l.onboarding;
@@ -4749,13 +5058,86 @@
             etapa(l, 'onboarding', 'Onboarding', o.situacao === 'sindico_myblue' ? 'síndico MyBlue' : o.data ? dataBr(o.data).slice(0, 5) + (o.hora ? ' ' + esc(o.hora) : '') : o.situacao === 'a_marcar' ? 'a marcar' : '') +
             etapa(l, 'boletos', 'Boletos') + etapa(l, 'envio', 'Envio') + '<td class="num"><b>' + l.pct + '%</b></td><td>' + etq(FAIXA_ACOMP[l.faixa]) + '</td></tr>';
         }).join('') || '<tr><td colspan="10"><div class="vazio" style="border:0;padding:30px">Nenhuma implantação com contrato começando neste mês.</div></td></tr>') + '</tbody></table></div></section>' +
-        '<p class="ajuda">Implantações cujo contrato começa no mês, na ordem do 1º vencimento ("previsto" enquanto o setor não informa na etapa Emissão de boletos). O dia da virada (' + j.parametros.virada_dia + ') é um parâmetro.</p>';
+        '<p class="ajuda">"Previsto": o 1º vencimento ainda não foi informado na etapa Emissão de boletos. O dia da virada (' + j.parametros.virada_dia + ') é um parâmetro.</p>';
       var anda = function (n) { var mm = m + n, aa = a; if (mm < 1) { mm = 12; aa--; } if (mm > 12) { mm = 1; aa++; } f.mesVig = aa + '-' + ('0' + mm).slice(-2); desenhar(); };
       $('#mvAnt', raiz).onclick = function () { anda(-1); };
       $('#mvProx', raiz).onclick = function () { anda(1); };
       if ($('#mvHoje', raiz)) $('#mvHoje', raiz).onclick = function () { f.mesVig = j.mes_vigente; desenhar(); };
-      $('#mvAn', raiz).onchange = function () { f.analista = this.value; desenhar(); };
-      $$('[data-imp]', raiz).forEach(function (tr) { tr.onclick = function () { location.hash = '#/implantacao/' + tr.getAttribute('data-imp'); }; });
+      irImpAcomp(raiz);
+      exportarAcomp = { nome: 'Mes vigente ' + f.mesVig, abas: [{ titulo: MESES_LONGO[m - 1] + ' ' + a, cab: ['1º vencimento', 'Condomínio', 'Analista', 'Documentação', 'Vouch', 'Onboarding', 'Boletos', 'Envio', '%', 'Faixa'],
+        linhas: lista.map(function (l) { var s = function (k) { return l.feitas[k] ? 'SIM' : ''; }; return [dataBr(l.primeiro_vencimento), l.condominio, l.responsavel_nome || '', s('documentacao'), s('vouch'), s('onboarding'), s('boletos'), s('envio'), l.pct, FAIXA_ACOMP[l.faixa][0]]; }) }] };
+    }
+    desenhar();
+  }
+
+  /* Controle: as colunas da planilha Controle Implantações, com o protocolo do portal no lugar do Nº */
+  var ONB_CTRL = { a_marcar: ['A MARCAR', 'ambar'], marcado: ['MARCADO', 'azul'], realizado: ['REALIZADO', 'verde'], sindico_myblue: ['SÍNDICO MYBLUE', 'verde'] };
+  var ENVIO_CTRL = { email: 'DIGITAL', fisico: 'FÍSICO', ambos: 'AMBOS' };
+  function controleAcomp(j, raiz) {
+    var f = filtroAcomp;
+    var ordem = lembrar('acomp.ctrl.ordem', { k: 'protocolo', d: -1 });
+    var COLS = [
+      ['protocolo', 'Protocolo', 'fixa'], ['condominio', 'Condomínio', 'fixa'],
+      ['cnpj', 'CNPJ', 'Condomínio'], ['uf', 'UF'], ['dia', 'Dia venc.'], ['venc', '1º venc.'], ['adm', 'Adm.'], ['executivo', 'Executivo'], ['sindico', 'Síndico'],
+      ['contrato', 'Contrato', 'Contrato e documentação'], ['data_contrato', 'Data contrato'], ['doc', 'Doc.'], ['data_doc', 'Data doc.'],
+      ['vouch', 'Vouch', 'Etapas do setor'], ['onboarding', 'Onboarding'], ['data_onb', 'Data onboarding'], ['boletos', 'Emissão de boletos'], ['envio', 'Envio'],
+      ['por', 'Implantado por', 'Controle'], ['obs', 'Obs.'], ['mes', 'Mês'], ['pct', '% concluído'],
+    ];
+    var valor = function (l, k) {
+      var c = l.controle;
+      return { protocolo: l.protocolo || (l.numero ? 'Nº ' + l.numero : ''), condominio: l.condominio, cnpj: c.cnpj, uf: l.uf, dia: l.dia_vencimento || '', venc: l.primeiro_vencimento, adm: c.administradora, executivo: l.executivo_nome, sindico: c.sindico,
+        contrato: c.contrato, data_contrato: c.data_contrato, doc: c.doc, data_doc: c.data_doc, vouch: c.vouch, onboarding: c.onboarding, data_onb: c.data_onboarding, boletos: c.boletos, envio: c.envio,
+        por: l.responsavel_nome || '', obs: c.obs, mes: l.mes, pct: l.pct }[k];
+    };
+    var sim = function (ok) { return ok ? '<span class="chip-ctrl ok">SIM</span>' : '<span class="chip-ctrl">—</span>'; };
+    var mesCurto = function (m) { return m ? MESES_ACOMP[Number(m.slice(5, 7)) - 1] + '/' + m.slice(2, 4) : ''; };
+    function desenhar() {
+      var lista = j.linhas.filter(function (l) { return passaAcomp(l); }).sort(function (a, b) {
+        var x = valor(a, ordem.k), y = valor(b, ordem.k);
+        if (typeof x === 'boolean') { x = x ? 1 : 0; y = y ? 1 : 0; }
+        return (typeof x === 'number' ? x - y : String(x || '').localeCompare(String(y || ''))) * ordem.d;
+      });
+      var grupos = [];
+      COLS.forEach(function (c, n) { if (c[2] && c[2] !== 'fixa') grupos.push([c[2], 1]); else if (c[2] === 'fixa') grupos.push(['', 1, 'f' + n]); else grupos[grupos.length - 1][1]++; });
+      var feitosOnb = lista.filter(function (l) { return ['realizado', 'sindico_myblue'].indexOf(l.controle.onboarding) >= 0; }).length;
+      var media = lista.length ? Math.round(lista.reduce(function (s, l) { return s + l.pct; }, 0) / lista.length) : 0;
+      raiz.innerHTML = '<section class="painel"><div class="cab-painel"><h2>Controle de implantações · ' + esc(f.ano) + (f.mes ? ' · ' + MESES_LONGO[f.mes - 1] : '') + '</h2><span class="espaco"></span><span class="ajuda" style="margin:0">clique no título da coluna para ordenar</span></div>' +
+        '<div class="tabela-wrap ctrl-wrap"><table class="ctrl-acomp"><thead><tr class="grupos">' + grupos.map(function (g) { return '<th colspan="' + g[1] + '"' + (g[2] ? ' class="fixa ' + g[2] + '"' : '') + '>' + esc(g[0]) + '</th>'; }).join('') + '</tr><tr>' +
+        COLS.map(function (c, n) { return '<th data-ord="' + c[0] + '"' + (n < 2 ? ' class="fixa f' + n + '"' : '') + ' aria-sort="' + (ordem.k === c[0] ? (ordem.d > 0 ? 'ascending' : 'descending') : 'none') + '">' + esc(c[1]) + (ordem.k === c[0] ? (ordem.d > 0 ? ' ▲' : ' ▼') : '') + '</th>'; }).join('') + '</tr></thead><tbody>' +
+        (lista.map(function (l) {
+          var c = l.controle;
+          return '<tr data-imp="' + l.id + '"><td class="fixa f0"><b>' + esc(l.protocolo || (l.numero ? 'Nº ' + l.numero : '—')) + '</b></td><td class="fixa f1"><a href="#/implantacao/' + l.id + '"><b>' + esc(l.condominio) + '</b></a>' + (l.importada ? ' <span class="etiqueta cinza" title="Importada do histórico das planilhas">planilha</span>' : '') + '</td>' +
+            '<td>' + esc(c.cnpj) + '</td><td>' + esc(l.uf) + '</td><td class="centro">' + esc(l.dia_vencimento || '') + '</td><td>' + dataBr(l.primeiro_vencimento).slice(0, 5) + '</td><td>' + esc(c.administradora) + '</td><td>' + esc(l.executivo_nome) + '</td><td>' + esc(c.sindico) + '</td>' +
+            '<td class="centro">' + sim(c.contrato) + '</td><td>' + dataBr(c.data_contrato) + '</td><td class="centro">' + sim(c.doc) + '</td><td>' + dataBr(c.data_doc) + '</td>' +
+            '<td class="centro">' + sim(!!c.vouch) + '</td><td class="centro">' + (ONB_CTRL[c.onboarding] ? '<span class="etiqueta ' + ONB_CTRL[c.onboarding][1] + '">' + ONB_CTRL[c.onboarding][0] + '</span>' : '—') + '</td><td>' + (c.data_onboarding ? dataBr(c.data_onboarding) : '') + '</td>' +
+            '<td class="centro">' + sim(c.boletos) + '</td><td class="centro">' + (ENVIO_CTRL[c.envio] ? '<span class="chip-ctrl azul">' + ENVIO_CTRL[c.envio] + '</span>' : '<span class="chip-ctrl">—</span>') + '</td>' +
+            '<td>' + (l.responsavel_nome ? esc(l.responsavel_nome) : '<span class="chip-ctrl">na fila</span>') + '</td>' +
+            '<td>' + (c.pode_obs ? '<input class="obs-ctrl" data-obs="' + l.id + '" value="' + esc(c.obs) + '" maxlength="300" aria-label="Obs. de ' + esc(l.condominio) + '"' + (c.obs_por ? ' title="por ' + esc(c.obs_por) + '"' : '') + '>' : esc(c.obs)) + '</td>' +
+            '<td>' + mesCurto(l.mes) + '</td><td>' + pctAcomp(l.pct) + '</td></tr>';
+        }).join('') || '<tr><td colspan="' + COLS.length + '"><div class="vazio" style="border:0;padding:30px">Nenhuma implantação com esses filtros.</div></td></tr>') + '</tbody>' +
+        '<tfoot><tr><td class="fixa f0"></td><td class="fixa f1"><b>' + lista.length + ' implantaç' + (lista.length === 1 ? 'ão' : 'ões') + '</b></td>' + COLS.slice(2).map(function (c) { return '<td' + (c[0] === 'onboarding' ? ' class="centro"' : '') + '>' + (c[0] === 'onboarding' ? '<b>' + feitosOnb + ' feitos</b>' : c[0] === 'pct' ? '<b>' + media + '% médio</b>' : '') + '</td>'; }).join('') + '</tr></tfoot></table></div>' +
+        '<p class="ajuda" style="margin:0;padding:8px 16px 14px">Cabeçalho e as duas primeiras colunas ficam fixos ao rolar. <b>Obs.</b>: quem conduz a implantação (e a coordenação) escreve direto na célula; ela também vai para a ficha de repasse. O resto vem do portal e muda quando a implantação muda.</p></section>';
+      $$('[data-ord]', raiz).forEach(function (th) {
+        th.onclick = function () { var k = th.getAttribute('data-ord'); ordem = { k: k, d: ordem.k === k ? -ordem.d : 1 }; try { localStorage.setItem('portal.acomp.ctrl.ordem', JSON.stringify(ordem)); } catch (e) { /* sem armazenamento */ } desenhar(); };
+      });
+      $$('[data-obs]', raiz).forEach(function (inp) {
+        inp.onchange = async function () {
+          var id = inp.getAttribute('data-obs');
+          try {
+            var r = await api('POST', '/api/implantacoes/' + id + '/obs-controle', { texto: inp.value });
+            var l = j.linhas.find(function (x) { return String(x.id) === id; });
+            l.controle.obs = r.obs ? r.obs.texto : ''; l.controle.obs_por = r.obs ? r.obs.por_nome : '';
+            toast('Obs. salva.', 'ok');
+          } catch (e) { toast(e.message, 'erro'); }
+        };
+      });
+      exportarAcomp = { nome: 'Controle Implantacoes ' + f.ano + (f.mes ? '-' + ('0' + f.mes).slice(-2) : ''), abas: [{ titulo: 'Controle ' + f.ano, cab: COLS.map(function (c) { return c[1]; }),
+        linhas: lista.map(function (l) {
+          var c = l.controle;
+          return [l.protocolo || (l.numero ? 'Nº ' + l.numero : ''), l.condominio, c.cnpj, l.uf, l.dia_vencimento || '', dataBr(l.primeiro_vencimento), c.administradora, l.executivo_nome || '', c.sindico,
+            c.contrato ? 'SIM' : '', dataBr(c.data_contrato), c.doc ? 'SIM' : '', dataBr(c.data_doc), c.vouch ? 'SIM' : '', ONB_CTRL[c.onboarding] ? ONB_CTRL[c.onboarding][0] : '', c.data_onboarding ? dataBr(c.data_onboarding) : '',
+            c.boletos ? 'SIM' : '', ENVIO_CTRL[c.envio] || '', l.responsavel_nome || '', c.obs, mesCurto(l.mes), l.pct];
+        }) }] };
     }
     desenhar();
   }
@@ -4766,7 +5148,7 @@
     if (!an.some(function (a) { return String(a.id) === String(f.onb); })) f.onb = an.some(function (a) { return eu && a.id === eu.id; }) ? eu.id : an.length ? an[0].id : '';
     function desenhar() {
       var sel = an.find(function (a) { return String(a.id) === String(f.onb); });
-      var lista = j.linhas.filter(function (l) { return l.na_meta && String(l.responsavel_id) === String(f.onb); }).sort(function (a, b) { return a.onboarding.limite.localeCompare(b.onboarding.limite); });
+      var lista = j.linhas.filter(function (l) { return l.na_meta && String(l.responsavel_id) === String(f.onb) && passaAcomp(l, { semAno: true, semMes: true, semAnalista: true }); }).sort(function (a, b) { return a.onboarding.limite.localeCompare(b.onboarding.limite); });
       raiz.innerHTML = '<p style="margin:0 0 16px;color:var(--ink-2);font-size:14.5px"><b>Regra:</b> o onboarding precisa acontecer em até <b>' + p.onboarding_dias + ' dias</b> depois do 1º vencimento. A meta é <b>' + p.meta_pct + '%</b> da carteira de cada analista. "Síndico MyBlue" conta como batida; "A marcar" entra com o prazo correndo. Contam os envios a partir de ' + dataBr(p.marco) + '.</p>' +
         (an.length ? '<div class="linha" style="gap:16px;align-items:stretch;margin-bottom:16px">' + an.map(function (a) {
           return '<section class="painel cartao-acomp' + (String(a.id) === String(f.onb) ? ' on' : '') + '" style="flex:1 1 340px"><div class="cab-painel"><h2><button class="link-acomp" data-an="' + a.id + '">' + esc(a.nome) + '</button></h2><span class="espaco"></span>' + (a.situacao ? etq(SIT_META_ACOMP[a.situacao]) : '') + '</div>' +
@@ -4775,14 +5157,16 @@
             '<p class="ajuda" style="margin:0;padding:8px 16px 14px"><b>' + a.pct + '%</b> batidas · <b>' + a.pct_com_prazo + '%</b> com as que estão no prazo · meta ' + p.meta_pct + '% (traço)' + (a.prazo_medio != null ? ' · onboarding em média <b>' + Math.abs(a.prazo_medio) + ' dia' + (Math.abs(a.prazo_medio) === 1 ? '' : 's') + (a.prazo_medio < 0 ? ' antes' : ' depois') + '</b> do 1º vencimento' : '') + '</p></section>';
         }).join('') + '</div>' : '<div class="vazio" style="margin-bottom:16px">Ninguém com implantação designada desde ' + dataBr(p.marco) + '.</div>') +
         (sel ? '<section class="painel"><div class="cab-painel"><h2>Carteira de ' + esc(sel.nome) + '</h2></div><div class="tabela-wrap"><table style="min-width:920px"><thead><tr><th>Condomínio</th><th>1º vencimento</th><th>Limite (' + p.onboarding_dias + ' dias)</th><th>Onboarding</th><th>Status</th></tr></thead><tbody>' +
-          lista.map(function (l) {
+          (lista.map(function (l) {
             var o = l.onboarding;
             return '<tr class="clicavel" data-imp="' + l.id + '"><td><b>' + esc(l.condominio) + '</b><span class="sec">' + esc(l.executivo_nome || '') + '</span></td><td>' + dataBr(l.primeiro_vencimento) + (l.vencimento_previsto ? '<span class="sec">previsto</span>' : '') + '</td><td>' + dataBr(o.limite) + '</td>' +
               '<td>' + onbTexto(o) + '</td><td>' + statusOnbAcomp(o) + '</td></tr>';
-          }).join('') + '</tbody></table></div>' +
+          }).join('') || '<tr><td colspan="5" class="sec">Nada com essa busca.</td></tr>') + '</tbody></table></div>' +
           '<p class="ajuda" style="margin:0;padding:8px 16px 14px"><b>Meta atingida</b>: as batidas chegam a ' + p.meta_pct + '% da carteira. <b>Em andamento</b>: batidas + as que ainda estão no prazo chegam lá. Senão, <b>abaixo da meta</b>. O onboarding conta na carteira de quem é responsável pela implantação, mesmo quando outra pessoa faz.</p></section>' : '');
-      $$('[data-an]', raiz).forEach(function (b) { b.onclick = function () { f.onb = b.getAttribute('data-an'); desenhar(); }; });
-      $$('[data-imp]', raiz).forEach(function (tr) { tr.onclick = function () { location.hash = '#/implantacao/' + tr.getAttribute('data-imp'); }; });
+      $$('[data-an]', raiz).forEach(function (b) { b.onclick = function () { f.onb = b.getAttribute('data-an'); salvarFiltroAcomp(); desenhar(); }; });
+      irImpAcomp(raiz);
+      exportarAcomp = { nome: 'Onboarding ' + (sel ? sel.nome : ''), abas: [{ titulo: 'Onboarding', cab: ['Condomínio', 'Executivo', '1º vencimento', 'Limite', 'Onboarding', 'Data', 'Status'],
+        linhas: lista.map(function (l) { var o = l.onboarding; return [l.condominio, l.executivo_nome || '', dataBr(l.primeiro_vencimento), dataBr(o.limite), o.situacao, o.data ? dataBr(o.data) : '', o.status]; }) }] };
     }
     desenhar();
   }
@@ -4794,28 +5178,52 @@
     var curto = { convencao: 'Convenção', ata_eleicao: 'Ata de eleição', ata_orcamento: 'Ata da taxa ordinária', cadastro_moradores: 'Cadastro de moradores', documento_sindico: 'Documento do síndico', conta_bancaria: 'Conta bancária', comprovante_endereco: 'Comprovante de endereço', modelo_boleto: 'Boleto anterior', procuracao: 'Procuração' };
     function desenhar() {
       var ordem = { pendente: 0, nao_batida: 1, batida: 2 };
-      var lista = j.linhas.filter(function (l) { return l.na_meta && (!f.docSit || l.documentacao.status === f.docSit) && (!f.analista || String(l.responsavel_id) === String(f.analista)); })
+      var base = j.linhas.filter(function (l) { return l.na_meta && passaAcomp(l, { semAno: true, semMes: true }); });
+      var lista = base.filter(function (l) { return !f.docSit || l.documentacao.status === f.docSit; })
         .sort(function (a, b) { return ordem[a.documentacao.status] - ordem[b.documentacao.status] || a.documentacao.limite.localeCompare(b.documentacao.limite); });
-      raiz.innerHTML = '<p style="margin:0 0 16px;color:var(--ink-2);font-size:14.5px"><b>Regra:</b> os documentos da meta (' + esc(p.docs_meta.map(function (t) { return nomeDoc[t] || t; }).join(', ')) + ') precisam chegar em até <b>' + p.documentacao_dias + ' dias</b> da data da documentação (envio do formulário de implantação). A meta é <b>' + p.meta_pct + '%</b> dos contratos no prazo. A data de cada documento é a do primeiro envio no portal.</p>' +
-        '<div class="tiles" style="margin-bottom:16px">' + tileAcomp('Contratos desde o marco', r.total) + tileAcomp('Batidas', r.batidas, r.pct + '% · meta ' + p.meta_pct + '%') + tileAcomp('Pendentes no prazo', r.pendentes) +
-        tileAcomp('Não batidas', r.nao_batidas) + tileAcomp('Documentos recebidos', r.recebidos_pct + '%', r.mais_pendentes.length ? 'mais pendente: ' + esc(r.mais_pendentes[0].nome) + ' (' + r.mais_pendentes[0].n + ')' : '') + '</div>' +
-        '<section class="painel"><div class="cab-painel"><h2>Contratos e documentos da meta</h2>' + (r.situacao ? etq([SIT_META_ACOMP[r.situacao][0] + ': ' + r.pct + '%', SIT_META_ACOMP[r.situacao][1]]) : '') + '<span class="espaco"></span>' +
-        selAcomp('dcSit', 'Situação', f.docSit, [['', 'Todas'], ['pendente', 'Pendentes'], ['nao_batida', 'Não batidas'], ['batida', 'Batidas']]) +
-        selAcomp('dcAn', 'Analista', f.analista, [['', 'Todas as pessoas']].concat(j.analistas.map(function (x) { return [x.id, x.nome]; }))) + '</div>' +
+      var conta = function (s) { return base.filter(function (l) { return l.documentacao.status === s; }).length; };
+      raiz.innerHTML = '<p style="margin:0 0 16px;color:var(--ink-2);font-size:14.5px"><b>Regra:</b> os documentos da meta (' + esc(p.docs_meta.map(function (t) { return nomeDoc[t] || t; }).join(', ')) + ') precisam chegar em até <b>' + p.documentacao_dias + ' dias</b> do envio do formulário de implantação. A meta é <b>' + p.meta_pct + '%</b> dos contratos no prazo.</p>' +
+        '<div class="cards-acomp">' + tileAcomp('Contratos desde o marco', r.total, r.situacao ? SIT_META_ACOMP[r.situacao][0] + ' · ' + r.pct + '%' : '') +
+        tileAcomp('Batidas', r.batidas, r.pct + '% · meta ' + p.meta_pct + '%', { card: 'batida', on: f.docSit === 'batida', barra: r.pct }) + tileAcomp('Pendentes no prazo', conta('pendente'), 'documentos ainda chegando', { card: 'pendente', on: f.docSit === 'pendente' }) +
+        tileAcomp('Não batidas', conta('nao_batida'), 'passaram do prazo', { card: 'nao_batida', on: f.docSit === 'nao_batida', cor: conta('nao_batida') ? 'red' : '' }) +
+        tileAcomp('Documentos recebidos', r.recebidos_pct + '%', r.mais_pendentes.length ? 'mais pendente: ' + esc(r.mais_pendentes[0].nome) + ' (' + r.mais_pendentes[0].n + ')' : '') + '</div>' +
+        '<section class="painel"><div class="cab-painel"><h2>Contratos e documentos da meta</h2><span class="espaco"></span><span class="ajuda" style="margin:0">' + lista.length + ' contrato(s) · clique num documento que falta para anexar ou marcar recebido</span></div>' +
         '<div class="tabela-wrap"><table style="min-width:900px"><thead><tr><th>Condomínio</th><th>Prazo</th>' + p.docs_meta.map(function (t) { return '<th class="centro" title="' + esc(nomeDoc[t] || t) + '">' + esc(curto[t] || nomeDoc[t] || t) + '</th>'; }).join('') + '<th>Status</th></tr></thead><tbody>' +
         (lista.map(function (l) {
           var d = l.documentacao;
           return '<tr><td style="min-width:190px"><a href="#/implantacao/' + l.id + '"><b>' + esc(l.condominio) + '</b></a><span class="sec">' + esc([l.responsavel_nome || 'na fila', l.executivo_nome].filter(Boolean).join(' · ')) + (l.origem === 'entrega' ? ' · entrega' : '') + '</span></td>' +
             '<td style="white-space:nowrap">até <b>' + dataBr(d.limite) + '</b><span class="sec">enviado ' + dataBr(l.enviado) + '</span></td>' +
-            d.docs.map(function (x) { return '<td class="centro">' + marcaAcomp(!!x.em, x.nome + (x.em ? ': recebido' : ': pendente')) + (x.em ? '<span class="sec">' + dataBr(x.em).slice(0, 5) + '</span>' : '') + '</td>'; }).join('') +
+            d.docs.map(function (x) {
+              return '<td class="centro">' + (x.em ? marcaAcomp(true, x.nome + ': recebido') + '<span class="sec">' + dataBr(x.em).slice(0, 5) + '</span>'
+                : j.pode.cobrar ? '<button class="link-acomp" data-doc-acomp="' + l.id + '" data-tipo="' + esc(x.tipo) + '" data-nome="' + esc(x.nome) + '" title="Anexar ou marcar recebido: ' + esc(x.nome) + '">' + marcaAcomp(false, x.nome + ': pendente') + '</button>' : marcaAcomp(false, x.nome + ': pendente')) + '</td>';
+            }).join('') +
             '<td style="min-width:230px">' + statusDocAcomp(d) + (d.manual ? '<span class="sec" title="' + esc(d.manual.motivo) + '">"' + esc(d.manual.motivo.length > 60 ? d.manual.motivo.slice(0, 60) + '…' : d.manual.motivo) + '" · ' + esc(d.manual.por_nome || '') + '</span>' : '') +
             (l.cobranca_doc_em ? '<span class="sec">cobrado em ' + dataHoraCr(l.cobranca_doc_em) + '</span>' : '') +
             '<span class="acoes-acomp">' + (j.pode.cobrar && d.falta_executivo.length && !d.manual ? '<button class="link-acomp" data-cobrar="' + l.id + '">Cobrar</button>' : '') +
             (j.pode.marcar && (d.status !== 'batida' || d.manual) ? '<button class="link-acomp" data-marcar="' + l.id + '">Marcar à mão</button>' : '') + '</span></td></tr>';
         }).join('') || '<tr><td colspan="' + (3 + p.docs_meta.length) + '"><div class="vazio" style="border:0;padding:30px">Nada por aqui.</div></td></tr>') + '</tbody></table></div>' +
-        '<p class="ajuda" style="margin:0;padding:8px 16px 14px">A procuração é providenciada pela equipe de Implantação. "Cobrar" envia ao executivo, no portal e por e-mail, o que é dele; faltando ' + 3 + ' dias para o limite, o portal lembra sozinho. "Marcar à mão" é da coordenação e substitui o cálculo naquele condomínio, com motivo.</p></section>';
-      $('#dcSit', raiz).onchange = function () { f.docSit = this.value; desenhar(); };
-      $('#dcAn', raiz).onchange = function () { f.analista = this.value; desenhar(); };
+        '<p class="ajuda" style="margin:0;padding:8px 16px 14px">A procuração é providenciada pela equipe de Implantação. "Cobrar" envia ao executivo, no portal e por e-mail, o que é dele; faltando 3 dias para o limite, o portal lembra sozinho. "Marcar à mão" é da coordenação e substitui o cálculo naquele condomínio, com motivo.</p></section>';
+      $$('[data-card]', raiz).forEach(function (c) {
+        var ir = function () { var k = c.getAttribute('data-card'); f.docSit = f.docSit === k ? '' : k; salvarFiltroAcomp(); desenhar(); };
+        c.onclick = ir;
+        c.onkeydown = function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ir(); } };
+      });
+      $$('[data-doc-acomp]', raiz).forEach(function (b) {
+        b.onclick = function () {
+          var id = b.getAttribute('data-doc-acomp'), tipo = b.getAttribute('data-tipo');
+          var mo = modal({ titulo: b.getAttribute('data-nome'), corpo: '<p class="ajuda" style="margin-top:0">Anexe o arquivo ou, se o documento chegou em papel, marque como recebido com uma observação. A data de hoje passa a contar na meta.</p>' +
+            '<label class="btn ghost" style="margin-bottom:14px">' + IC.enviar + 'Anexar arquivo<input type="file" id="mDocArq" hidden></label>' +
+            '<label class="rot" for="mDocObs2">Ou marcar recebido sem arquivo · observação</label><textarea class="campo" id="mDocObs2" rows="2" placeholder="Ex.: original em papel, arquivado no CPD."></textarea>',
+          pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mDocMarcar">Marcar recebido</button>' });
+          $('#mDocArq', mo).onchange = async function () {
+            if (!this.files[0]) return;
+            try { await enviarDocImp(id, tipo, this.files[0]); mo.fechar(); toast('Documento anexado.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+          };
+          $('#mDocMarcar', mo).onclick = async function () {
+            try { await api('POST', '/api/implantacoes/' + id + '/documentos/marcar', { tipo: tipo, observacao: $('#mDocObs2', mo).value }); mo.fechar(); toast('Marcado como recebido.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+          };
+        };
+      });
       $$('[data-cobrar]', raiz).forEach(function (b) {
         b.onclick = async function () {
           var l = j.linhas.find(function (x) { return String(x.id) === b.getAttribute('data-cobrar'); });
@@ -4843,40 +5251,131 @@
           if ($('#mMetaCalc', mo)) $('#mMetaCalc', mo).onclick = function () { salvar(null); };
         };
       });
+      exportarAcomp = { nome: 'Documentacao', abas: [{ titulo: 'Documentação', cab: ['Condomínio', 'Analista', 'Executivo', 'Enviado', 'Prazo'].concat(p.docs_meta.map(function (t) { return curto[t] || nomeDoc[t] || t; })).concat(['Status']),
+        linhas: lista.map(function (l) { var d = l.documentacao; return [l.condominio, l.responsavel_nome || '', l.executivo_nome || '', dataBr(l.enviado), dataBr(d.limite)].concat(d.docs.map(function (x) { return x.em ? dataBr(x.em) : ''; })).concat([d.status]); }) }] };
     }
     desenhar();
   }
 
-  function antecipacoesAcomp(j, raiz) {
+  /* antecipações: marcar e enviar ao Controle de Repasses; a situação volta de lá */
+  function situacaoAntAcomp(l) {
+    var e = l.antecipacao_envio;
+    if (!e) return '<span class="sec" style="display:inline">ainda não enviada</span>';
+    var quando = function (d) { return d ? dataBr(String(d).slice(0, 10)).slice(0, 5) : ''; };
+    var fim = function (v) { return v ? String(v).slice(5, 7) + '/' + String(v).slice(0, 4) : 'sem prazo final'; };
+    if (e.situacao === 'cadastrada') {
+      var aj = e.ajuste ? Object.keys(e.ajuste).map(function (k) { var x = e.ajuste[k]; return k === 'valor' ? 'valor ' + reais(x.de) + ' → ' + reais(x.para) : k === 'dia' ? 'dia ' + x.de + ' → ' + x.para : 'fim ' + fim(x.de) + ' → ' + fim(x.para); }).join('; ') : '';
+      return etq([e.ajuste ? 'CADASTRADA COM AJUSTE' : 'CADASTRADA', 'verde']) + '<span class="sec">' + quando(e.decidida_em) + (e.decidida_por_nome ? ' por ' + esc(e.decidida_por_nome) : '') + (e.regra_id ? ' · regra ' + esc(e.regra_id) : '') + '</span>' +
+        (aj ? '<span class="sec" style="color:var(--amber)">ajuste: ' + esc(aj) + '</span>' : '') + (e.mudou ? '<span class="sec" style="color:var(--amber)">o formulário mudou depois do cadastro</span>' : '');
+    }
+    if (e.situacao === 'devolvida') return etq(['DEVOLVIDA', 'vermelha']) + '<span class="sec">' + quando(e.decidida_em) + (e.decidida_por_nome ? ' por ' + esc(e.decidida_por_nome) : '') + ': "' + esc(e.motivo) + '"</span>';
+    return etq([e.atualizacao ? 'ATUALIZAÇÃO ENVIADA' : 'ENVIADA', e.atualizacao ? 'ambar' : 'azul']) + '<span class="sec">' + quando(e.enviada_em) + ' · aguardando o Gestor' + (l.etapa !== 'na_carteira' ? ' (aparece no Controle de Repasses quando entrar na Carteira)' : '') + '</span>' +
+      (e.atualizacao && e.antes ? '<span class="sec">antes: ' + reais(e.antes.valor) + ', dia ' + esc(e.antes.dia) + ', ' + fim(e.antes.fim) + '</span>' : '') + (e.mudou ? '<span class="sec" style="color:var(--amber)">o formulário mudou depois do envio</span>' : '');
+  }
+  function antecipacoesAcomp(j, raiz, recarregar) {
     var f = filtroAcomp;
-    var ano = String(f.ano || j.ano);
+    var marcadas = {};
     function desenhar() {
-      var lista = j.linhas.filter(function (l) { return l.antecipacao && l.inicio.slice(0, 4) === ano && (!f.antMes || Number(l.inicio.slice(5, 7)) === Number(f.antMes)); })
-        .sort(function (a, b) { return a.inicio.localeCompare(b.inicio) || a.condominio.localeCompare(b.condominio); });
+      var lista = j.linhas.filter(function (l) { return l.antecipacao && passaAcomp(l); }).sort(function (a, b) { return a.inicio.localeCompare(b.inicio) || a.condominio.localeCompare(b.condominio); });
       var total = lista.reduce(function (s, l) { return s + l.antecipacao.valor; }, 0);
-      raiz.innerHTML = '<div class="linha" style="gap:12px;align-items:flex-end;margin-bottom:16px">' +
-        selAcomp('anAno', 'Ano', ano, j.anos.map(function (a) { return [a, a]; })) + selAcomp('anMes', 'Mês de início do contrato', f.antMes, [['', 'Todos']].concat(MESES_LONGO.map(function (m, k) { return [k + 1, m]; }))) +
-        '<span class="espaco"></span><button class="btn ghost" id="anCsv"' + (lista.length ? '' : ' disabled') + '>' + IC.baixar + 'Baixar planilha (.csv)</button></div>' +
-        '<div class="tiles" style="margin-bottom:16px">' + tileAcomp('Antecipações', lista.length) + tileAcomp('Valor total', reais(total)) + '</div>' +
-        '<section class="painel"><div class="tabela-wrap"><table style="min-width:960px"><thead><tr><th>Condomínio</th><th>Executivo</th><th>Início do contrato</th><th class="num">Valor</th><th>Data da antecipação</th><th>Prazo</th><th>Implantação</th></tr></thead><tbody>' +
+      var sit = function (s) { return lista.filter(function (l) { return l.antecipacao_envio && l.antecipacao_envio.situacao === s; }); };
+      var cad = sit('cadastrada'), agu = sit('enviada'), dev = sit('devolvida');
+      var podeEnviar = function (l) { var e = l.antecipacao_envio; return j.pode.antecipacao && !l.importada && (!e || e.situacao === 'devolvida' || e.mudou); };
+      var nMarc = lista.filter(function (l) { return marcadas[l.id] && podeEnviar(l); }).length;
+      var periodo = f.mes ? MESES_LONGO[f.mes - 1].toLowerCase() : f.ano;
+      raiz.innerHTML = '<div class="cards-acomp">' + tileAcomp('Antecipações em ' + periodo, lista.length, 'contratos com início ' + (f.mes ? 'no mês' : 'no ano')) +
+        tileAcomp('Valor ' + (f.mes ? 'no mês' : 'no ano'), reais(total), lista.length ? 'média de ' + reais(total / lista.length) : '') +
+        tileAcomp('Cadastradas no Controle de Repasses', cad.length, cad.filter(function (l) { return l.antecipacao_envio.ajuste; }).length + ' com ajuste do Gestor') +
+        tileAcomp('Aguardando', agu.length, agu.length ? 'com o Gestor' + (agu.filter(function (l) { return l.etapa !== 'na_carteira'; }).length ? ' · ' + agu.filter(function (l) { return l.etapa !== 'na_carteira'; }).length + ' à espera da Carteira' : '') : '') +
+        tileAcomp('Devolvidas', dev.length, dev.length ? 'corrigir e reenviar' : '', { cor: dev.length ? 'red' : '' }) + '</div>' +
+        '<section class="painel"><div class="cab-painel"><h2>Antecipações · ' + esc(periodo) + '</h2><span class="espaco"></span>' +
+        (j.pode.antecipacao ? '<span class="ajuda" style="margin:0">' + nMarc + ' marcada(s)</span><button class="btn primary sm" id="anEnviar"' + (nMarc ? '' : ' disabled') + '>Enviar marcadas ao Controle de Repasses (' + nMarc + ')</button>' : '') + '</div>' +
+        '<div class="tabela-wrap"><table style="min-width:1240px"><thead><tr>' + (j.pode.antecipacao ? '<th>Enviar</th>' : '') + '<th>Condomínio</th><th>Executivo</th><th>Início do contrato</th><th class="num">Valor</th><th>Data da antecipação</th><th>Prazo</th><th>Implantação</th><th>Controle de Repasses</th></tr></thead><tbody>' +
         (lista.map(function (l) {
-          return '<tr class="clicavel" data-imp="' + l.id + '"><td><b>' + esc(l.condominio) + '</b><span class="sec">' + esc([l.uf, l.uh_total ? l.uh_total + ' unidades' : ''].filter(Boolean).join(' · ')) + '</span></td><td style="white-space:nowrap">' + esc(l.executivo_nome || '—') + '</td><td>' + dataBr(l.inicio) + '</td>' +
-            '<td class="num"><b>' + reais(l.antecipacao.valor) + '</b></td><td>' + (l.antecipacao.data ? dataBr(l.antecipacao.data) : '—') + '</td><td>' + esc(l.antecipacao.prazo || '—') + '</td><td>' + etq(l.pct === 100 ? ['concluída', 'verde'] : ['em implantação · ' + l.pct + '%', 'azul']) + '</td></tr>';
-        }).join('') || '<tr><td colspan="7"><div class="vazio" style="border:0;padding:30px">Nenhuma antecipação negociada no período.</div></td></tr>') + '</tbody></table></div></section>' +
-        '<p class="ajuda">Vem do bloco "Cashback e antecipação" do formulário: Sim ou Não, com valor, data e prazo obrigatórios quando é Sim.</p>';
-      $('#anAno', raiz).onchange = function () { ano = this.value; desenhar(); };
-      $('#anMes', raiz).onchange = function () { f.antMes = this.value; desenhar(); };
-      $$('[data-imp]', raiz).forEach(function (tr) { tr.onclick = function () { location.hash = '#/implantacao/' + tr.getAttribute('data-imp'); }; });
-      $('#anCsv', raiz).onclick = function () {
-        var q = function (v) { v = String(v == null ? '' : v); return /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
-        var linhas = [['Condomínio', 'UF', 'Executivo', 'Início do contrato', 'Valor', 'Data da antecipação', 'Prazo', '% concluído']].concat(lista.map(function (l) {
-          return [l.condominio, l.uf, l.executivo_nome, dataBr(l.inicio), l.antecipacao.valor.toFixed(2).replace('.', ','), l.antecipacao.data ? dataBr(l.antecipacao.data) : '', l.antecipacao.prazo, l.pct + '%'];
-        }));
-        var a = document.createElement('a');
-        a.href = URL.createObjectURL(new Blob(['﻿' + linhas.map(function (x) { return x.map(q).join(';'); }).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
-        a.download = 'antecipacoes-' + ano + (f.antMes ? '-' + ('0' + f.antMes).slice(-2) : '') + '.csv';
-        document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+          var e = l.antecipacao_envio;
+          return '<tr data-imp="' + l.id + '">' + (j.pode.antecipacao ? '<td class="centro">' + (podeEnviar(l) ? '<input type="checkbox" data-marca-ant="' + l.id + '"' + (marcadas[l.id] ? ' checked' : '') + ' aria-label="Marcar ' + esc(l.condominio) + ' para enviar">' : '') + '</td>' : '') +
+            '<td style="min-width:210px"><a href="#/implantacao/' + l.id + '"><b>' + esc(l.condominio) + '</b></a><span class="sec">' + esc([l.protocolo, l.uf].filter(Boolean).join(' · ')) + '</span></td><td style="white-space:nowrap">' + esc(l.executivo_nome || '—') + '</td><td>' + dataBr(l.inicio) + '</td>' +
+            '<td class="num"><b>' + reais(l.antecipacao.valor) + '</b></td><td>' + (l.antecipacao.data ? dataBr(l.antecipacao.data) : '—') + '</td><td>' + esc(l.antecipacao.prazo || '—') + '</td>' +
+            '<td>' + etq(l.pct === 100 ? ['concluída', 'verde'] : l.etapa === 'fila' ? ['na fila · ' + l.pct + '%', 'cinza'] : ['em implantação · ' + l.pct + '%', 'azul']) + '</td>' +
+            '<td style="min-width:240px">' + situacaoAntAcomp(l) + (j.pode.antecipacao && e && e.situacao === 'enviada' ? '<button class="link-acomp sub-link" data-desfazer-ant="' + l.id + '">Desfazer envio</button>' : '') +
+            (j.pode.antecipacao && e && (e.situacao === 'devolvida' || e.mudou) ? '<button class="link-acomp sub-link" data-reenviar-ant="' + l.id + '">' + (e.situacao === 'devolvida' ? 'Corrigir e reenviar' : 'Enviar atualização') + '</button>' : '') +
+            (!e && podeEnviar(l) && marcadas[l.id] ? '<span class="sec">marcada · não enviada</span>' : '') + '</td></tr>';
+        }).join('') || '<tr><td colspan="9"><div class="vazio" style="border:0;padding:30px">Nenhuma antecipação negociada no período.</div></td></tr>') + '</tbody></table></div>' +
+        '<p class="ajuda" style="margin:0;padding:8px 16px 14px">A equipe de Implantação marca e envia; o <b>Gestor confirma no Controle de Repasses</b> (Regras de repasse → Vindas da Implantação), onde a antecipação vira uma regra. Se o Gestor mudar algo, aparece aqui como <b>ajuste</b>; se o formulário mudar depois do cadastro, a antecipação volta para lá como <b>atualização</b>. "Corrigir e reenviar": ajuste o formulário pela implantação (com o comercial) e reenvie.</p></section>';
+      $$('[data-marca-ant]', raiz).forEach(function (c) { c.onchange = function () { marcadas[c.getAttribute('data-marca-ant')] = c.checked; desenhar(); }; });
+      var enviar = async function (ids) {
+        var ok = 0;
+        for (var n = 0; n < ids.length; n++) {
+          try { await api('POST', '/api/implantacoes/' + ids[n] + '/antecipacao/enviar', {}); ok++; } catch (e) {
+            var l = j.linhas.find(function (x) { return String(x.id) === String(ids[n]); });
+            toast((l ? l.condominio + ': ' : '') + e.message, 'erro');
+          }
+        }
+        if (ok) { toast(ok === 1 ? 'Enviada ao Controle de Repasses.' : ok + ' enviadas ao Controle de Repasses.', 'ok'); recarregar(); }
       };
+      if ($('#anEnviar', raiz)) $('#anEnviar', raiz).onclick = function () { enviar(lista.filter(function (l) { return marcadas[l.id] && podeEnviar(l); }).map(function (l) { return l.id; })); };
+      $$('[data-reenviar-ant]', raiz).forEach(function (b) { b.onclick = function () { enviar([b.getAttribute('data-reenviar-ant')]); }; });
+      $$('[data-desfazer-ant]', raiz).forEach(function (b) {
+        b.onclick = async function () {
+          if (!(await confirmar('Desfazer o envio', 'A antecipação sai da lista do Controle de Repasses (uma atualização volta ao que estava cadastrado).', 'Desfazer', true))) return;
+          try { await api('POST', '/api/implantacoes/' + b.getAttribute('data-desfazer-ant') + '/antecipacao/desfazer', {}); toast('Envio desfeito.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+        };
+      });
+      exportarAcomp = { nome: 'Antecipacoes ' + f.ano + (f.mes ? '-' + ('0' + f.mes).slice(-2) : ''), abas: [{ titulo: 'Antecipações', cab: ['Protocolo', 'Condomínio', 'UF', 'Executivo', 'Início do contrato', 'Valor', 'Data da antecipação', 'Prazo', '% concluído', 'Controle de Repasses'],
+        linhas: lista.map(function (l) { var e = l.antecipacao_envio; return [l.protocolo || '', l.condominio, l.uf, l.executivo_nome || '', dataBr(l.inicio), l.antecipacao.valor, l.antecipacao.data ? dataBr(l.antecipacao.data) : '', l.antecipacao.prazo, l.pct, e ? e.situacao : 'não enviada']; }) }] };
+    }
+    desenhar();
+  }
+
+  /* fichas de repasse: prazo de 5 dias úteis da conclusão até o envio ao Crédito */
+  var SIT_FICHAS_ACOMP = [['aguardando', 'A enviar e aguardando'], ['atrasadas', 'Atrasadas'], ['devolvidas', 'Devolvidas'], ['recebidas', 'Recebidas'], ['todas', 'Todas']];
+  function fichasAcomp(j, raiz, recarregar) {
+    var f = filtroAcomp;
+    var coord = j.pode.parametros;
+    function desenhar() {
+      var base = j.fichas.filter(function (x) { return (!f.analista || String(x.responsavel_id) === String(f.analista)) && (!f.busca || semAcentoAcomp(x.condominio + ' ' + x.protocolo).indexOf(semAcentoAcomp(f.busca)) >= 0); });
+      var atrasada = function (x) { return !x.primeiro_envio_em && x.prazo && x.prazo.status === 'atrasado'; };
+      var FILTRO = { aguardando: function (x) { return ['a_enviar', 'enviada'].indexOf(x.situacao) >= 0; }, atrasadas: atrasada, devolvidas: function (x) { return x.situacao === 'devolvida'; },
+        recebidas: function (x) { return x.situacao === 'recebida'; }, todas: function () { return true; } };
+      if (!FILTRO[f.fichaSit]) f.fichaSit = 'aguardando';
+      var lista = base.filter(FILTRO[f.fichaSit]);
+      var mesAtual = j.hoje.slice(0, 7);
+      var doMes = base.filter(function (x) { return x.primeiro_envio_em && String(x.prazo && x.prazo.em || '').slice(0, 7) === mesAtual; });
+      var noPrazo = doMes.filter(function (x) { return x.prazo.status === 'cumprido'; }).length;
+      var vencem = base.filter(function (x) { return !x.primeiro_envio_em && x.prazo && ['vence_hoje', 'vence_amanha'].indexOf(x.prazo.status) >= 0; }).length;
+      raiz.innerHTML = '<div class="linha" style="gap:8px;margin-bottom:14px">' + SIT_FICHAS_ACOMP.map(function (s) {
+        var n = base.filter(FILTRO[s[0]]).length;
+        return '<button class="pilula-acomp' + (f.fichaSit === s[0] ? ' on' : '') + '" data-fsit="' + s[0] + '">' + esc(s[1]) + ' <span class="n">' + n + '</span></button>';
+      }).join('') + '</div>' +
+        '<div class="cards-acomp">' + tileAcomp('Fichas a enviar', base.filter(function (x) { return x.situacao === 'a_enviar'; }).length, 'implantações concluídas') +
+        tileAcomp('Vencem em até 1 dia útil', vencem, 'lembrete já enviado') + tileAcomp('Atrasadas', base.filter(atrasada).length, 'passaram do prazo', { cor: base.filter(atrasada).length ? 'red' : '' }) +
+        tileAcomp('Enviadas no prazo no mês', doMes.length ? Math.round(noPrazo * 100 / doMes.length) + '%' : '—', doMes.length ? noPrazo + ' de ' + doMes.length : 'nenhum envio no mês', { barra: doMes.length ? noPrazo * 100 / doMes.length : 0 }) +
+        tileAcomp('Devolvidas com pergunta', base.filter(function (x) { return x.situacao === 'devolvida'; }).length, 'responder ou enviar nova versão') + '</div>' +
+        '<section class="painel"><div class="cab-painel"><h2>Fichas de repasse</h2><span class="espaco"></span><span class="ajuda" style="margin:0">prazo: ' + (j.parametros.ficha_dias || 5) + ' dias úteis da conclusão da implantação até o envio ao Crédito</span></div>' +
+        '<div class="tabela-wrap"><table style="min-width:1100px"><thead><tr><th>Condomínio</th><th>Conduzida por</th><th>Assistente de crédito</th><th>Versão</th><th>Situação</th><th>Prazo (' + (j.parametros.ficha_dias || 5) + ' dias úteis)</th></tr></thead><tbody>' +
+        (lista.map(function (x) {
+          var s = x.prazo || {};
+          var prazo = !x.primeiro_envio_em ? (s.status === 'atrasado' ? etq(['ATRASADA · ' + diasUteisImp(s.atraso), 'vermelha']) + '<span class="sec">prazo era ' + dataBr(s.vence) + ' · alerta à assistente e à coordenação</span>' + (coord ? '<button class="link-acomp sub-link" data-cobrar-ficha="' + x.id + '">Cobrar</button>' : '')
+            : s.status === 'vence_hoje' ? etq(['VENCE HOJE · ' + dataBr(s.vence).slice(0, 5), 'ambar']) : s.status === 'vence_amanha' ? etq(['VENCE NO PRÓXIMO DIA ÚTIL · ' + dataBr(s.vence).slice(0, 5), 'ambar']) : etq(['NO PRAZO · até ' + dataBr(s.vence).slice(0, 5), 'azul']))
+            : etq(s.status === 'cumprido' ? ['ENVIADA NO PRAZO', 'verde'] : ['ENVIADA COM ATRASO · ' + diasUteisImp(s.atraso), 'ambar']) + '<span class="sec">1º envio ' + dataBr(s.em).slice(0, 5) + ' · prazo ' + dataBr(s.vence).slice(0, 5) + '</span>';
+          var sit = x.situacao === 'a_enviar' ? etq(['A ENVIAR', 'ambar']) + (x.faltas ? '<span class="sec">faltam campos em azul (' + x.faltas + ')</span>' : '<span class="sec">pronta para enviar</span>')
+            : x.situacao === 'devolvida' ? etq(['DEVOLVIDA COM PERGUNTA', 'vermelha']) + '<span class="sec">' + (x.devolvida_em ? dataBr(String(x.devolvida_em).slice(0, 10)).slice(0, 5) : '') + (x.devolvida_por ? ' por ' + esc(x.devolvida_por) : '') + ' · responder</span>'
+              : x.situacao === 'recebida' ? etq(['RECEBIDA', 'verde']) + '<span class="sec">versão ' + x.versao + ' confirmada</span>' : etq(['ENVIADA', 'azul']) + '<span class="sec">aguardando confirmação</span>';
+          return '<tr class="clicavel" data-ficha="' + x.id + '"><td><a href="#/implantacao/' + x.id + '/ficha"><b>' + esc(x.condominio) + '</b></a><span class="sec">' + esc([x.protocolo, x.uf, x.concluido_em ? 'concluída ' + dataBr(String(x.concluido_em).slice(0, 10)).slice(0, 5) : ''].filter(Boolean).join(' · ')) + (x.na_carteira ? '' : ' · ainda não está na Carteira') + '</span></td>' +
+            '<td>' + esc(x.responsavel_nome || '—') + '</td><td>' + (x.destino_nome ? esc(x.destino_nome) : x.versao ? '<span class="sec" style="display:inline">a supervisão escolhe</span>' : '—') + '</td>' +
+            '<td>' + (x.versao ? 'v' + x.versao + (x.versao >= x.limite ? ' de ' + x.limite : '') : '—') + '</td><td>' + sit + '</td><td>' + prazo + '</td></tr>';
+        }).join('') || '<tr><td colspan="6"><div class="vazio" style="border:0;padding:30px">Nenhuma ficha aqui.</div></td></tr>') + '</tbody></table></div>' +
+        '<p class="ajuda" style="margin:0;padding:8px 16px 14px">O prazo conta da conclusão da implantação até o <b>primeiro envio</b> ao Crédito, em dias úteis (fins de semana e feriados não contam). Devolução e nova versão não reabrem o prazo. Até 3 versões por ficha; depois, só com a liberação da coordenação de Implantação.</p></section>';
+      $$('[data-fsit]', raiz).forEach(function (b) { b.onclick = function () { f.fichaSit = b.getAttribute('data-fsit'); salvarFiltroAcomp(); desenhar(); }; });
+      $$('[data-ficha]', raiz).forEach(function (tr) { tr.onclick = function (e) { if (e.target.closest('a, button')) return; location.hash = '#/implantacao/' + tr.getAttribute('data-ficha') + '/ficha'; }; });
+      $$('[data-cobrar-ficha]', raiz).forEach(function (b) {
+        b.onclick = async function () {
+          if (!(await confirmar('Cobrar a ficha de repasse', 'Quem conduz recebe a cobrança no portal e por e-mail.', 'Cobrar'))) return;
+          try { await api('POST', '/api/implantacoes/' + b.getAttribute('data-cobrar-ficha') + '/cobrar', { qual: 'ficha' }); toast('Cobrança enviada.', 'ok'); } catch (e) { toast(e.message, 'erro'); }
+        };
+      });
+      exportarAcomp = { nome: 'Fichas de repasse', abas: [{ titulo: 'Fichas de repasse', cab: ['Protocolo', 'Condomínio', 'UF', 'Concluída em', 'Conduzida por', 'Assistente de crédito', 'Versão', 'Situação', 'Prazo', '1º envio'],
+        linhas: lista.map(function (x) { return [x.protocolo, x.condominio, x.uf, x.concluido_em ? dataBr(String(x.concluido_em).slice(0, 10)) : '', x.responsavel_nome || '', x.destino_nome || '', x.versao || '', x.situacao, x.prazo && x.prazo.vence ? dataBr(x.prazo.vence) : '', x.prazo && x.prazo.em ? dataBr(x.prazo.em) : '']; }) }] };
     }
     desenhar();
   }
@@ -4887,11 +5386,11 @@
     var vigente = j.historico.find(function (h) { return h.vale_desde <= j.hoje; });
     var nomeDoc = {};
     j.documentos.forEach(function (d) { nomeDoc[d.tipo] = d.nome; });
-    raiz.innerHTML = '<p style="margin:0 0 16px;color:var(--ink-2);font-size:14.5px">' + (pode ? 'Só a coordenação do setor Implantação e a administração alteram. ' : 'Quem altera é a coordenação do setor Implantação. ') +
-      'Cada mudança vale a partir da data escolhida: os envios anteriores continuam calculados com a regra da época.</p>' +
+    raiz.innerHTML = '<p style="margin:0 0 16px;color:var(--ink-2);font-size:14.5px">' + (pode ? 'Só a coordenação do setor Implantação e a administração alteram. ' : 'Quem altera é a coordenação do setor Implantação. ') + '</p>' +
       '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Regras em vigor</h2><span class="espaco"></span>' + etq([vigente ? 'valem desde ' + dataBr(vigente.vale_desde) : 'as da planilha (ninguém alterou ainda)', vigente ? 'verde' : 'cinza']) + '</div>' +
       '<div class="corpo grade-3">' + campo('pmOnb', 'Prazo do onboarding (dias)', p.onboarding_dias, 'contados do 1º vencimento') + campo('pmDoc', 'Prazo da documentação (dias)', p.documentacao_dias, 'contados do envio do formulário de implantação') +
       campo('pmMeta', 'Meta da carteira (%)', p.meta_pct, 'onboarding e documentação') + campo('pmVir', 'Dia da virada do mês vigente', p.virada_dia, 'a partir dele, a tela mostra o mês seguinte') +
+      campo('pmConc', 'Prazo para concluir (dias úteis)', p.concluir_dias, 'depois de assumir; pausa com pendência ou impedimento') + campo('pmFicha', 'Prazo da ficha de repasse (dias úteis)', p.ficha_dias, 'da conclusão até o 1º envio ao Crédito') +
       '<div><label class="rot" for="pmMarco">Data-marco das metas</label><input class="campo" id="pmMarco" type="date" value="' + esc(p.marco) + '"' + dis + '><div class="ajuda">envios anteriores ficam fora das metas</div></div></div>' +
       '<div class="corpo" style="padding-top:0"><span class="rot">Documentos que contam na meta de documentação</span><div class="marcas">' +
       j.documentos.map(function (d) { return '<label class="marca"><input type="checkbox" data-docmeta value="' + esc(d.tipo) + '"' + (p.docs_meta.indexOf(d.tipo) >= 0 ? ' checked' : '') + dis + '> ' + esc(d.nome) + '</label>'; }).join('') + '</div></div>' +
@@ -4900,14 +5399,298 @@
       '<section class="painel"><div class="cab-painel"><h2>Histórico</h2></div><div class="tabela-wrap"><table style="min-width:820px"><thead><tr><th>Vale a partir de</th><th>Regras</th><th>Quem alterou</th><th>Quando</th></tr></thead><tbody>' +
       (j.historico.map(function (h) {
         var v = h.valores;
-        return '<tr><td><b>' + dataBr(h.vale_desde) + '</b></td><td>Onboarding ' + v.onboarding_dias + ' dias · documentação ' + v.documentacao_dias + ' dias · meta ' + v.meta_pct + '% · virada no dia ' + v.virada_dia + ' · marco ' + dataBr(v.marco) +
+        return '<tr><td><b>' + dataBr(h.vale_desde) + '</b></td><td>Onboarding ' + v.onboarding_dias + ' dias · documentação ' + v.documentacao_dias + ' dias · meta ' + v.meta_pct + '% · virada no dia ' + v.virada_dia + ' · concluir em ' + v.concluir_dias + ' dias úteis · ficha em ' + v.ficha_dias + ' dias úteis · marco ' + dataBr(v.marco) +
           '<span class="sec">' + esc(v.docs_meta.map(function (t) { return nomeDoc[t] || t; }).join(', ')) + '</span></td><td>' + esc(h.alterado_por_nome || '—') + '</td><td>' + dataHoraCr(h.alterado_em) + '</td></tr>';
-      }).join('') || '<tr><td colspan="4" class="sec">Ainda sem alteração: valem as regras da planilha (onboarding 30 dias, documentação 60 dias, meta 90%, virada no dia 25).</td></tr>') + '</tbody></table></div></section>';
+      }).join('') || '<tr><td colspan="4" class="sec">Ainda sem alteração: valem as regras da planilha (onboarding 30 dias, documentação 60 dias, meta 90%, virada no dia 25), concluir em 3 dias úteis e ficha em 5 dias úteis.</td></tr>') + '</tbody></table></div></section>' +
+      (pode ? '<div id="impHist" style="margin-top:16px"></div>' : '');
+    exportarAcomp = { nome: 'Parametros', abas: [{ titulo: 'Histórico', cab: ['Vale a partir de', 'Onboarding (dias)', 'Documentação (dias)', 'Meta (%)', 'Virada', 'Concluir (dias úteis)', 'Ficha (dias úteis)', 'Marco', 'Quem alterou'],
+      linhas: j.historico.map(function (h) { var v = h.valores; return [dataBr(h.vale_desde), v.onboarding_dias, v.documentacao_dias, v.meta_pct, v.virada_dia, v.concluir_dias, v.ficha_dias, dataBr(v.marco), h.alterado_por_nome || '']; }) }] };
     if (!pode) return;
+    importacaoAcomp($('#impHist', raiz), recarregar);
     $('#pmSalvar', raiz).onclick = async function () {
       var valores = { onboarding_dias: Number($('#pmOnb', raiz).value), documentacao_dias: Number($('#pmDoc', raiz).value), meta_pct: Number($('#pmMeta', raiz).value), virada_dia: Number($('#pmVir', raiz).value),
+        concluir_dias: Number($('#pmConc', raiz).value), ficha_dias: Number($('#pmFicha', raiz).value),
         marco: $('#pmMarco', raiz).value, docs_meta: $$('[data-docmeta]:checked', raiz).map(function (c) { return c.value; }) };
       try { await api('POST', '/api/implantacoes/acompanhamento/parametros', { valores: valores, vale_desde: $('#pmVale', raiz).value }); toast('Regras salvas.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+    };
+  }
+
+  /* ---------- importar o histórico das planilhas (Formulário + Controle): conferir, importar, desfazer ---------- */
+  var SIT_IMP = { pronta: ['Pronta', 'verde'], aviso: ['Com aviso', 'ambar'], decisao: ['Precisa de decisão', 'vermelha'], fora: ['Fica de fora', 'cinza'] };
+  function lerBase64Imp(arquivo) {
+    return new Promise(function (ok, falha) {
+      var r = new FileReader();
+      r.onload = function () { ok(String(r.result).split(',')[1] || ''); };
+      r.onerror = function () { falha(new Error('Não consegui ler ' + arquivo.name + '.')); };
+      r.readAsDataURL(arquivo);
+    });
+  }
+  async function importacaoAcomp(caixa, recarregar) {
+    var lotes = [];
+    try { lotes = (await api('GET', '/api/implantacoes/importacao')).lotes; } catch (e) { /* sem acesso */ }
+    var ativo = lotes.find(function (l) { return !l.desfeita_em; });
+    var estado = { previa: null, arquivos: null, sit: 'todas', pular: {}, incluir: {} };
+    function desenhar() {
+      var p = estado.previa;
+      var html = '<section class="painel"><div class="cab-painel"><h2>Importar o histórico das planilhas</h2><span class="espaco"></span><span class="ajuda" style="margin:0">Formulário de implantação (todas as respostas) + Controle Implantações</span></div><div class="corpo pilha" style="gap:14px">' +
+        '<p class="ajuda" style="margin:0">O portal confere tudo antes de gravar, com as regras das fórmulas da planilha: a linha do Controle aponta a resposta pela "Nº FORM (Ref.)"; Obs. com teste ou desconsiderar fica de fora; o mesmo condomínio repetido no ano vale pelo envio mais recente. As importadas são histórico: não geram avisos, prazos, cobranças nem ficha, e não entram nas filas.</p>' +
+        (ativo ? '<div class="msg aviso"><div>Já existe uma importação de ' + dataHoraCr(ativo.criado_em) + ' (' + ativo.ativas + ' implantações). Para importar de novo, desfaça a anterior.</div></div>' : '') +
+        '<div class="grade-2"><div><label class="rot" for="impForm">Formulário de implantação (.csv ou .xlsx)</label><input class="campo" type="file" id="impForm" accept=".csv,.xlsx"></div>' +
+        '<div><label class="rot" for="impCtrl">Controle Implantações (.csv ou .xlsx)</label><input class="campo" type="file" id="impCtrl" accept=".csv,.xlsx"></div></div>' +
+        '<div class="linha" style="justify-content:flex-end"><button class="btn primary" id="impConferir">Conferir</button></div>';
+      if (p) {
+        var r = p.resumo;
+        var itens = p.itens.filter(function (x) { return estado.sit === 'todas' || x.situacao === estado.sit; });
+        var entra = p.itens.filter(function (x) { return !estado.pular[x.chave] && (x.situacao === 'pronta' || x.situacao === 'aviso' || (x.situacao === 'decisao' && estado.incluir[x.chave])); }).length;
+        html += '<div class="cards-acomp">' + tileAcomp('Vão entrar', entra, r.controle + ' do Controle · ' + r.historico + ' do histórico') + tileAcomp('Prontas', r.pronta, 'tudo conferido') + tileAcomp('Com aviso', r.aviso, 'entram, com o que foi ajustado') +
+          tileAcomp('Precisam de decisão', r.decisao, 'só entram se você marcar') + tileAcomp('Ficam de fora', r.fora, r.desconsideradas + ' desconsideradas · ' + r.substituidas + ' substituídas · ' + r.ja_no_portal + ' já no portal') + '</div>' +
+          '<div class="linha" style="gap:16px;align-items:flex-start"><div style="flex:1 1 320px;min-width:0"><b>Controle por mês</b> <span class="ajuda" style="margin:0">confira com a planilha</span><div class="tabela-wrap"><table><thead><tr><th>Mês</th><th class="num">Contratos</th><th class="num">100%</th><th class="num">% médio</th></tr></thead><tbody>' +
+          r.por_mes.map(function (m) { return '<tr><td>' + esc(m.mes) + '</td><td class="num">' + m.contratos + '</td><td class="num">' + m.concluidos + '</td><td class="num">' + m.pct_medio + '%</td></tr>'; }).join('') + '</tbody></table></div></div>' +
+          '<div style="flex:1 1 220px"><b>Histórico (só no Formulário)</b><div class="tabela-wrap"><table><thead><tr><th>Ano do contrato</th><th class="num">Implantações</th></tr></thead><tbody>' +
+          Object.keys(r.anos_historico).map(function (a) { return '<tr><td>' + esc(a) + '</td><td class="num">' + r.anos_historico[a] + '</td></tr>'; }).join('') + '</tbody></table></div><p class="ajuda">Entram como concluídas, só para ter os dados dos outros anos.</p></div></div>' +
+          '<div class="linha" style="gap:8px">' + [['todas', 'Todas'], ['pronta', 'Prontas'], ['aviso', 'Com aviso'], ['decisao', 'Decisão'], ['fora', 'De fora']].map(function (s) {
+            return '<button class="pilula-acomp' + (estado.sit === s[0] ? ' on' : '') + '" data-imp-sit="' + s[0] + '">' + esc(s[1]) + ' <span class="n">' + (s[0] === 'todas' ? p.itens.length : r[s[0]]) + '</span></button>';
+          }).join('') + '</div>' +
+          '<div class="tabela-wrap" style="max-height:60vh;overflow:auto"><table style="min-width:1100px"><thead><tr><th>Entra</th><th>Nº</th><th>Condomínio</th><th>Origem</th><th>Início</th><th class="num">%</th><th>Executivo</th><th>Implantado por</th><th>Carteira</th><th>Situação</th></tr></thead><tbody>' +
+          itens.map(function (x) {
+            var marca = x.situacao === 'fora' ? '' : x.situacao === 'decisao' ? '<input type="checkbox" data-imp-incluir="' + esc(x.chave) + '"' + (estado.incluir[x.chave] ? ' checked' : '') + ' aria-label="Incluir">'
+              : '<input type="checkbox" data-imp-pular="' + esc(x.chave) + '"' + (estado.pular[x.chave] ? '' : ' checked') + ' aria-label="Importar">';
+            return '<tr><td class="centro">' + marca + '</td><td>' + esc(x.numero || '') + '</td><td><b>' + esc(x.condominio || '—') + '</b><span class="sec">' + esc([x.cnpj, x.uf].filter(Boolean).join(' · ')) + '</span></td>' +
+              '<td>' + (x.fonte === 'controle' ? 'Controle ' + esc(x.ano || '') : 'Formulário') + '<span class="sec">linha ' + esc(x.linha_forms || '—') + ' do Forms</span></td><td>' + (x.inicio ? dataBr(x.inicio) : '—') + '</td>' +
+              '<td class="num">' + (x.pct == null ? '—' : x.pct + '%') + '</td><td>' + esc(x.executivo || '—') + (x.executivo && !x.executivo_achado ? '<span class="sec">não cadastrado</span>' : '') + '</td>' +
+              '<td>' + esc(x.responsavel || '—') + (x.responsavel && !x.responsavel_achado ? '<span class="sec">fora da equipe</span>' : '') + '</td><td>' + (x.carteira ? 'ID ' + esc(x.carteira) : '—') + '</td>' +
+              '<td style="min-width:240px">' + etq(SIT_IMP[x.situacao]) + (x.motivo ? '<span class="sec">' + esc(x.motivo) + '</span>' : '') + (x.avisos.length ? '<span class="sec" style="color:var(--amber)">' + esc(x.avisos.join('; ')) + '</span>' : '') + '</td></tr>';
+          }).join('') + '</tbody></table></div>' +
+          '<div class="linha" style="justify-content:flex-end"><button class="btn ghost" id="impExcel">' + IC.baixar + 'Baixar a conferência</button><button class="btn primary" id="impOk"' + (ativo || !entra ? ' disabled' : '') + '>Importar ' + entra + ' implantações</button></div>';
+      }
+      if (lotes.length) {
+        html += '<div><b>Importações</b><div class="tabela-wrap"><table><thead><tr><th>Quando</th><th>Quem</th><th class="num">Importadas</th><th class="num">De fora</th><th>Situação</th></tr></thead><tbody>' +
+          lotes.map(function (l) {
+            return '<tr><td>' + dataHoraCr(l.criado_em) + '</td><td>' + esc(l.criado_por_nome || '') + '</td><td class="num">' + esc(l.resumo.importadas || 0) + '</td><td class="num">' + (l.fora || []).length + '</td><td>' +
+              (l.desfeita_em ? etq(['desfeita em ' + dataHoraCr(l.desfeita_em), 'cinza']) + (l.ativas ? '<span class="sec">' + l.ativas + ' ficaram (editadas depois)</span>' : '') : etq(['ativa · ' + l.ativas + ' implantações', 'verde']) + '<button class="link-acomp sub-link" data-desfazer-lote="' + l.id + '">Desfazer importação</button>') + '</td></tr>';
+          }).join('') + '</tbody></table></div></div>';
+      }
+      caixa.innerHTML = html + '</div></section>';
+      $('#impConferir', caixa).onclick = async function () {
+        var fa = $('#impForm', caixa).files[0], ct = $('#impCtrl', caixa).files[0];
+        if (!fa) { toast('Escolha o arquivo do Formulário de implantação.', 'erro'); return; }
+        try {
+          estado.arquivos = { formulario: await lerBase64Imp(fa), controle: ct ? await lerBase64Imp(ct) : null };
+          estado.previa = await api('POST', '/api/implantacoes/importacao/previa', estado.arquivos);
+          estado.pular = {}; estado.incluir = {};
+          desenhar();
+        } catch (e) { toast(e.message, 'erro'); }
+      };
+      $$('[data-imp-sit]', caixa).forEach(function (b) { b.onclick = function () { estado.sit = b.getAttribute('data-imp-sit'); desenhar(); }; });
+      $$('[data-imp-pular]', caixa).forEach(function (c) { c.onchange = function () { estado.pular[c.getAttribute('data-imp-pular')] = !c.checked; desenhar(); }; });
+      $$('[data-imp-incluir]', caixa).forEach(function (c) { c.onchange = function () { estado.incluir[c.getAttribute('data-imp-incluir')] = c.checked; desenhar(); }; });
+      if ($('#impExcel', caixa)) $('#impExcel', caixa).onclick = async function () {
+        var linhas = estado.previa.itens.map(function (x) {
+          return [x.numero || '', x.linha_forms || '', x.fonte, x.ano || '', x.condominio, x.cnpj, x.uf, x.inicio ? dataBr(x.inicio) : '', x.pct == null ? '' : x.pct, x.executivo, x.responsavel, x.carteira,
+            SIT_IMP[x.situacao][0], x.motivo, x.avisos.join('; ')];
+        });
+        exportarAcomp = { nome: 'Conferencia importacao', abas: [{ titulo: 'Conferência', cab: ['Nº', 'Linha do Forms', 'Origem', 'Ano', 'Condomínio', 'CNPJ', 'UF', 'Início', '%', 'Executivo', 'Implantado por', 'Carteira', 'Situação', 'Motivo', 'Avisos'], linhas: linhas },
+          { titulo: 'Por mês', cab: ['Mês', 'Contratos', '100%', '% médio'], linhas: estado.previa.resumo.por_mes.map(function (m) { return [m.mes, m.contratos, m.concluidos, m.pct_medio]; }) }] };
+        $('#acExcel').click();
+      };
+      if ($('#impOk', caixa)) $('#impOk', caixa).onclick = async function () {
+        var entra = estado.previa.itens.filter(function (x) { return !estado.pular[x.chave] && (x.situacao === 'pronta' || x.situacao === 'aviso' || (x.situacao === 'decisao' && estado.incluir[x.chave])); }).length;
+        if (!(await confirmar('Importar o histórico', entra + ' implantações entram como histórico, sem avisos nem prazos. Dá para desfazer depois.', 'Importar'))) return;
+        try {
+          var r = await api('POST', '/api/implantacoes/importacao', Object.assign({}, estado.arquivos, { pular: Object.keys(estado.pular).filter(function (k) { return estado.pular[k]; }), incluir: Object.keys(estado.incluir).filter(function (k) { return estado.incluir[k]; }) }));
+          toast(r.importadas + ' implantações importadas.', 'ok'); recarregar();
+        } catch (e) { toast(e.message, 'erro'); }
+      };
+      $$('[data-desfazer-lote]', caixa).forEach(function (b) {
+        b.onclick = async function () {
+          if (!(await confirmar('Desfazer a importação', 'Apaga as implantações dessa importação que ninguém editou no portal. As editadas ficam.', 'Desfazer', true))) return;
+          try { var r = await api('POST', '/api/implantacoes/importacao/' + b.getAttribute('data-desfazer-lote') + '/desfazer', {}); toast(r.apagadas + ' apagadas' + (r.mantidas.length ? ', ' + r.mantidas.length + ' ficaram (editadas).' : '.'), 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+        };
+      });
+    }
+    desenhar();
+  }
+
+  /* ---------- ficha de repasse ---------- */
+  var SIT_FICHA = { a_enviar: ['A enviar', 'ambar'], enviada: ['Enviada · aguardando confirmação', 'azul'], devolvida: ['Devolvida com pergunta', 'vermelha'], recebida: ['Recebida', 'verde'] };
+  var EVENTO_FICHA = { ficha_aberta: 'abriu a ficha', ficha_enviada: 'enviou', ficha_destino: 'encaminhou', ficha_devolvida: 'devolveu com pergunta', ficha_resposta: 'respondeu',
+    ficha_recebida: 'confirmou o recebimento', ficha_liberada: 'liberou mais uma versão' };
+  function prazoFichaImp(s) {
+    if (!s) return null;
+    var v = s.vence ? dataBr(s.vence) : '';
+    if (s.status === 'no_prazo') return ['Enviar até ' + v + ' · faltam ' + diasUteisImp(s.faltam), 'azul'];
+    if (s.status === 'vence_amanha') return ['Enviar até ' + v + ' · vence no próximo dia útil', 'ambar'];
+    if (s.status === 'vence_hoje') return ['Enviar hoje (' + v + ')', 'ambar'];
+    if (s.status === 'atrasado') return ['Atrasada · ' + diasUteisImp(s.atraso) + ' (prazo era ' + v + ')', 'vermelha'];
+    if (s.status === 'cumprido') return ['Enviada no prazo (' + dataBr(s.em) + ')', 'verde'];
+    return ['Enviada com ' + diasUteisImp(s.atraso) + ' de atraso (' + dataBr(s.em) + ')', 'ambar'];
+  }
+  /* um valor da ficha: do portal (texto) ou da Implantação ({ v, k }: campo em azul, editável por quem pode) */
+  function celulaFicha(c, ed) {
+    if (!c || typeof c !== 'object') {
+      var t = String(c == null ? '' : c);
+      return t.indexOf('✓ ') === 0 ? '<span class="sit-ok">' + esc(t) + '</span>' : t.indexOf('! ') === 0 ? '<span class="sit-pend">' + esc(t) + '</span>' : esc(t || '—');
+    }
+    if (!ed || !c.k) return '<span style="color:var(--man)">' + esc(c.v || '—') + '</span>';
+    if (c.op) return '<select class="campo man" data-k="' + esc(c.k) + '"><option value=""></option>' + c.op.map(function (o) { return '<option' + (o === c.v ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select>';
+    return '<input class="campo man" data-k="' + esc(c.k) + '" value="' + esc(c.v) + '">';
+  }
+  function htmlConteudoFicha(cont, ed) {
+    return cont.secoes.map(function (s) {
+      var h = '<section class="painel"><div class="cab-painel"><span class="passo">' + esc(s.numero) + '</span><h2>' + esc(s.titulo) + '</h2><span class="espaco"></span>' + (s.origem ? '<span class="ficha-nota">' + esc(s.origem) + '</span>' : '') + '</div>';
+      if ((s.campos || []).length) h += '<dl class="ficha-dados">' + s.campos.map(function (p) { return '<div><dt>' + esc(p[0]) + '</dt><dd' + (p[1] && typeof p[1] === 'object' ? ' class="man"' : '') + '>' + celulaFicha(p[1], ed) + '</dd></div>'; }).join('') + '</dl>';
+      if (s.multi) {
+        h += '<div class="ficha-nota" style="padding:4px 18px 0">' + esc(s.multi.titulo) + '</div><div class="ficha-marcas">' + s.multi.op.map(function (o) {
+          var on = s.multi.v.indexOf(o) >= 0;
+          return '<label class="' + (on ? 'on' : '') + '"><input type="checkbox" data-multi="' + esc(s.multi.k) + '" value="' + esc(o) + '"' + (on ? ' checked' : '') + (ed ? '' : ' disabled') + '> ' + esc(o) + '</label>';
+        }).join('') + '</div>';
+      } else if (s.tabela) {
+        var tb = s.tabela;
+        h += (tb.titulo ? '<div class="ficha-nota" style="padding:8px 18px 4px">' + esc(tb.titulo) + '</div>' : '') + '<div class="tabela-wrap"><table class="ficha-tab"><thead><tr>' + tb.cab.map(function (x) { return '<th>' + esc(x) + '</th>'; }).join('') + (ed && tb.add ? '<th></th>' : '') + '</tr></thead><tbody>' +
+          (tb.linhas.map(function (l, n) {
+            if (!Array.isArray(l)) return '<tr class="grupo"><td colspan="' + tb.cab.length + '">' + esc(l.grupo) + '</td></tr>';
+            return '<tr>' + l.map(function (c) { return '<td' + (c && typeof c === 'object' ? ' class="man"' : '') + '>' + celulaFicha(c, ed) + '</td>'; }).join('') +
+              (ed && tb.add ? '<td style="width:1%"><button type="button" class="btn icon ghost" data-tirar-linha="' + esc(tb.add) + '" data-n="' + n + '" aria-label="Tirar a linha">' + IC.fechar + '</button></td>' : '') + '</tr>';
+          }).join('') || '<tr><td colspan="' + (tb.cab.length + (ed && tb.add ? 1 : 0)) + '" class="ficha-nota">' + esc(tb.vazio || '—') + '</td></tr>') + '</tbody></table></div>' +
+          (ed && tb.add ? '<div class="doc-linha"><button type="button" class="btn ghost sm" data-add-linha="' + esc(tb.add) + '">' + IC.mais + (tb.add === 'receitas' ? 'Adicionar reserva ou receita' : 'Adicionar unidade não garantida') + '</button></div>' : '');
+      }
+      if (s.texto !== undefined && s.texto !== '') {
+        var tx = s.texto;
+        h += (s.texto_titulo ? '<div class="ficha-nota" style="padding:10px 18px 0">' + esc(s.texto_titulo) + '</div>' : '') +
+          (tx && typeof tx === 'object' ? (ed ? '<div style="padding:8px 18px 16px"><textarea class="campo man" rows="4" data-k="' + esc(tx.k) + '">' + esc(tx.v) + '</textarea></div>' : '<p class="ficha-texto man">' + esc(tx.v || '—') + '</p>')
+            : '<p class="ficha-texto">' + esc(tx) + '</p>');
+      }
+      return h + '</section>';
+    }).join('');
+  }
+  async function paginaFichaImp(id) {
+    definirBarra('<span class="setor">Implantação</span><span class="sep">/</span><span class="nome">Ficha de repasse</span>');
+    $('#conteudo').innerHTML = carregandoHtml();
+    var j;
+    try { j = await api('GET', '/api/implantacoes/' + id + '/ficha'); } catch (e) {
+      $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">' + esc(e.message) + '</div></div>';
+      return;
+    }
+    var i = j.implantacao, f = j.ficha, pf = j.pode;
+    var recarregar = function () { paginaFichaImp(id); };
+    var voltar = pf.ver_implantacao ? '<a class="btn ghost sm" href="#/implantacao/' + i.id + '">Implantação</a>' : '';
+    if (!f) {
+      definirBarra('<span class="setor">Implantação</span><span class="sep">/</span><span class="nome">' + esc(i.protocolo || '') + ' · Ficha de repasse</span>', voltar);
+      $('#conteudo').innerHTML = '<div class="pagina"><h1>' + esc(i.condominio) + '</h1><div class="vazio">A ficha de repasse abre quando a implantação é concluída.' +
+        (pf.abrir ? '<br><button class="btn primary" id="btAbrirFicha" style="margin-top:14px">Abrir a ficha de repasse</button>' : '') + '</div></div>';
+      if ($('#btAbrirFicha')) $('#btAbrirFicha').onclick = async function () { try { await api('POST', '/api/implantacoes/' + i.id + '/ficha/abrir', {}); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
+      return;
+    }
+    var ed = pf.editar;
+    var proxima = f.versao + 1;
+    var acoes = voltar + '<a class="btn ghost sm" href="/api/implantacoes/' + i.id + '/ficha.pdf' + (ed || !f.versao ? '' : '?versao=' + f.versao) + '" target="_blank" rel="noopener">' + IC.documento + 'PDF</a>';
+    if (ed) acoes += '<button class="btn ghost sm" id="btSalvarFicha">Salvar</button>';
+    if (pf.enviar && f.situacao !== 'devolvida') acoes += '<button class="btn primary sm" id="btEnviarFicha">' + (f.versao ? 'Enviar nova versão (' + proxima + ' de ' + f.limite + ')' : 'Enviar à assistente de crédito') + '</button>';
+    if (pf.liberar) acoes += '<button class="btn ghost sm" id="btLiberarFicha">Liberar nova versão</button>';
+    if (pf.cobrar && f.prazo && f.prazo.status === 'atrasado') acoes += '<button class="btn ghost sm" data-cobrar-imp="ficha">Cobrar</button>';
+    if (pf.escolher) acoes += '<button class="btn primary sm" id="btDestinoFicha">Escolher a assistente de crédito</button>';
+    if (pf.devolver) acoes += '<button class="btn ghost sm" id="btDevolverFicha">Devolver com pergunta</button>';
+    if (pf.confirmar) acoes += '<button class="btn primary sm" id="btConfirmarFicha">Confirmar recebimento</button>';
+    definirBarra('<span class="setor">Implantação</span><span class="sep">/</span><span class="nome">' + esc(i.protocolo || '') + ' · Ficha de repasse</span>', acoes);
+    var chip = prazoFichaImp(f.prazo);
+    var html = '<div class="pagina"><div class="linha" style="margin-bottom:6px">' + etq(SIT_FICHA[f.situacao]) + (f.versao ? etq(['versão ' + f.versao + ' de ' + f.limite, 'cinza']) : '') + (chip ? etq(chip) : '') + '</div>' +
+      '<h1>' + esc(i.condominio) + '</h1><p class="sub" style="margin:0 0 16px">' + esc([i.responsavel_nome ? 'Assistente de implantação: ' + i.responsavel_nome : '', f.destino ? 'Assistente de crédito: ' + f.destino.nome : f.versao ? 'aguardando a supervisão de Crédito escolher a assistente' : ''].filter(Boolean).join(' · ')) + '</p>';
+    if (f.devolucao) {
+      html += '<div class="msg erro" style="margin-bottom:16px"><b>' + esc(f.devolucao.usuario_nome || 'A assistente de crédito') + ' devolveu a versão ' + esc(f.devolucao.detalhe.versao) + ' em ' + dataHoraCr(f.devolucao.criado_em) + ':</b> "' + esc(f.devolucao.detalhe.pergunta) + '"' +
+        (pf.responder ? '<label class="rot" for="fResp" style="margin-top:10px">Sua resposta</label><textarea class="campo" id="fResp" rows="2"></textarea><div class="linha" style="justify-content:flex-end;margin-top:8px">' +
+          '<button class="btn ghost sm" id="btResponderFicha">Responder sem mudar a ficha</button>' + (pf.enviar ? '<button class="btn primary sm" id="btResponderVersao">Responder e enviar nova versão (' + proxima + ' de ' + f.limite + ')</button>' : '') + '</div>' : '') + '</div>';
+    }
+    if (ed && !f.versao && chip) html += '<div class="msg aviso" style="margin-bottom:16px"><div>Envie a ficha ao Crédito <b>até ' + dataBr(f.prazo.vence) + '</b> (' + f.prazo.dias + ' dias úteis da conclusão). Você recebe um lembrete 1 dia útil antes e no dia; passou do prazo, um alerta por dia útil, também para a coordenação.</div></div>';
+    if (ed) html += '<p class="ajuda" style="margin:0 0 14px">Revise e complete os <b style="color:var(--man)">campos em azul</b>; o resto vem do portal. Um dado errado se corrige no formulário ou na etapa, e a ficha acompanha.' +
+      (f.versao && f.mudou.length ? ' <b>Mudou desde a versão ' + f.versao + ':</b> ' + esc(f.mudou.join('; ')) + '.' : '') + '</p>';
+    if (ed && j.faltas.length) html += '<div class="msg aviso" style="margin-bottom:16px"><b>Para enviar, falta:</b> ' + esc(j.faltas.join(' ')) + '</div>';
+    if (j.conteudo.diferencas.length) html += '<div class="msg aviso" style="margin-bottom:16px"><b>' + esc(j.conteudo.rotulo_diferencas) + ':</b> ' + esc(j.conteudo.diferencas.join('; ')) + '.</div>';
+    html += '<div class="pilha" style="gap:16px" id="fichaCorpo">' + htmlConteudoFicha(j.conteudo, ed) + '</div>';
+    html += '<section class="painel" style="margin-top:16px"><div class="cab-painel"><h2>Versões e registro</h2></div><div class="corpo pilha" style="gap:8px;font-size:13px;font-weight:600;color:var(--ink-2)">' +
+      (j.versoes.map(function (v) {
+        return '<div><b style="color:var(--ink)">Versão ' + v.versao + '</b> · ' + dataHoraCr(v.enviada_em) + ' por ' + esc(v.enviada_por_nome || '') + (v.para_nome ? ' para ' + esc(v.para_nome) : '') + (v.motivo ? ' · "' + esc(v.motivo) + '"' : '') +
+          (v.confirmada_em ? ' · ' + etq(['recebida por ' + (v.confirmada_por_nome || '') + ' em ' + dataHoraCr(v.confirmada_em), 'verde']) : '') +
+          ' · <a href="/api/implantacoes/' + i.id + '/ficha.pdf?versao=' + v.versao + '" target="_blank" rel="noopener">PDF v' + v.versao + '</a></div>';
+      }).join('') || '<div class="ficha-nota">Ainda não enviada.</div>') +
+      j.eventos.filter(function (e) { return ['ficha_devolvida', 'ficha_resposta', 'ficha_destino', 'ficha_liberada'].indexOf(e.tipo) >= 0; }).map(function (e) {
+        var x = e.detalhe || {};
+        return '<div><b style="color:var(--ink)">' + dataHoraCr(e.criado_em) + '</b> · ' + esc(e.usuario_nome || '') + ' ' + esc(EVENTO_FICHA[e.tipo] || e.tipo) +
+          (x.pergunta ? ': "' + esc(x.pergunta) + '"' : x.resposta ? ': "' + esc(x.resposta) + '"' : x.para ? ' para ' + esc(x.para) : x.motivo ? ': "' + esc(x.motivo) + '"' : '') + '</div>';
+      }).join('') + '<div class="ficha-nota">' + esc(j.conteudo.nota_final) + ' Até ' + f.limite + ' versões; depois, só com a liberação da coordenação de Implantação.</div></div></section></div>';
+    $('#conteudo').innerHTML = html;
+
+    // ler o que está na tela para dados (k = caminho em dados, ex.: consumo.0.tipo)
+    function ler() {
+      var d = JSON.parse(JSON.stringify(j.dados || {}));
+      $$('#fichaCorpo [data-k]').forEach(function (el) {
+        var p = el.getAttribute('data-k').split('.'), o = d;
+        for (var n = 0; n < p.length - 1; n++) { var k = /^\d+$/.test(p[n]) ? Number(p[n]) : p[n]; if (o[k] == null) o[k] = /^\d+$/.test(p[n + 1]) ? [] : {}; o = o[k]; }
+        o[/^\d+$/.test(p[p.length - 1]) ? Number(p[p.length - 1]) : p[p.length - 1]] = el.value;
+      });
+      var multi = {};
+      $$('#fichaCorpo [data-multi]').forEach(function (c) { var k = c.getAttribute('data-multi'); multi[k] = multi[k] || []; if (c.checked) multi[k].push(c.value); });
+      Object.keys(multi).forEach(function (k) { d[k] = multi[k]; });
+      return d;
+    }
+    var salvar = async function (d) { return api('PUT', '/api/implantacoes/' + i.id + '/ficha', { dados: d || ler() }); };
+    $$('#fichaCorpo [data-multi]').forEach(function (c) { c.onchange = function () { c.closest('label').classList.toggle('on', c.checked); }; });
+    $$('[data-add-linha]').forEach(function (b) {
+      b.onclick = async function () {
+        var d = ler(), k = b.getAttribute('data-add-linha');
+        d[k] = (d[k] || []).concat([k === 'receitas' ? { tipo: 'Outra receita' } : { unidade: '', por_que: 'Espólio' }]);
+        try { await salvar(d); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+      };
+    });
+    $$('[data-tirar-linha]').forEach(function (b) {
+      b.onclick = async function () {
+        var d = ler(), k = b.getAttribute('data-tirar-linha');
+        d[k].splice(Number(b.getAttribute('data-n')), 1);
+        try { await salvar(d); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+      };
+    });
+    if ($('#btSalvarFicha')) $('#btSalvarFicha').onclick = async function () { try { var r = await salvar(); toast(r.faltas.length ? 'Ficha salva. Para enviar, falta: ' + r.faltas.length + '.' : 'Ficha salva: pronta para enviar.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
+    var enviar = function (resposta) {
+      var mo = modal({ titulo: f.versao ? 'Enviar a versão ' + proxima + ' de ' + f.limite : 'Enviar à assistente de crédito',
+        corpo: '<p class="ajuda" style="margin-top:0">' + (f.destino ? 'Vai para ' + esc(f.destino.nome) + ', que confirma o recebimento no portal.' : 'Vai para a assistente de crédito do condomínio na Carteira; sem ela, a supervisão de Crédito escolhe.') +
+          ' A versão enviada fica guardada como está, com o PDF para o CPD.</p>' +
+          (f.versao ? '<label class="rot" for="mFichaMot">O que mudou nesta versão (obrigatório)</label><textarea class="campo" id="mFichaMot" rows="2"></textarea>' : ''),
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mFichaOk">Enviar</button>' });
+      $('#mFichaOk', mo).onclick = async function () {
+        try {
+          var r = await api('POST', '/api/implantacoes/' + i.id + '/ficha/enviar', { dados: ler(), motivo: f.versao ? $('#mFichaMot', mo).value : '', resposta: resposta || '' });
+          mo.fechar(); toast(r.para ? 'Enviada para ' + r.para + '.' : 'Enviada: a supervisão de Crédito escolhe a assistente.', 'ok'); recarregar();
+        } catch (e) { toast(e.message + (e.dados && e.dados.faltas ? ' ' + e.dados.faltas.join(' ') : ''), 'erro'); }
+      };
+    };
+    if ($('#btEnviarFicha')) $('#btEnviarFicha').onclick = function () { enviar(''); };
+    if ($('#btResponderVersao')) $('#btResponderVersao').onclick = function () { if (!$('#fResp').value.trim()) { toast('Escreva a resposta.', 'erro'); return; } enviar($('#fResp').value); };
+    if ($('#btResponderFicha')) $('#btResponderFicha').onclick = async function () {
+      try { await api('POST', '/api/implantacoes/' + i.id + '/ficha/responder', { resposta: $('#fResp').value }); toast('Resposta enviada.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+    };
+    if ($('#btLiberarFicha')) $('#btLiberarFicha').onclick = function () {
+      var mo = modal({ titulo: 'Liberar mais uma versão', corpo: '<p class="ajuda" style="margin-top:0">A ficha já teve ' + f.versao + ' versões (o limite é ' + f.limite + '). A liberação fica no registro.</p><label class="rot" for="mLibMot">Motivo (obrigatório)</label><textarea class="campo" id="mLibMot" rows="2"></textarea>',
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mLibOk">Liberar</button>' });
+      $('#mLibOk', mo).onclick = async function () { try { await api('POST', '/api/implantacoes/' + i.id + '/ficha/liberar', { motivo: $('#mLibMot', mo).value }); mo.fechar(); toast('Nova versão liberada.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
+    };
+    $$('[data-cobrar-imp]').forEach(function (b) {
+      b.onclick = async function () {
+        if (!(await confirmar('Cobrar a ficha de repasse', esc(i.responsavel_nome || 'Quem conduz') + ' recebe a cobrança no portal e por e-mail.', 'Cobrar'))) return;
+        try { await api('POST', '/api/implantacoes/' + i.id + '/cobrar', { qual: 'ficha' }); toast('Cobrança enviada.', 'ok'); } catch (e) { toast(e.message, 'erro'); }
+      };
+    });
+    if ($('#btDestinoFicha')) $('#btDestinoFicha').onclick = function () {
+      var mo = modal({ titulo: 'Escolher a assistente de crédito', corpo: selCr('mFichaDest', 'Assistente de crédito', j.credito.length ? j.credito[0].id : '', j.credito.map(function (x) { return [x.id, x.nome]; })) +
+        '<div class="ajuda">A assistente é avisada no portal e por e-mail. Quando o condomínio estiver na Carteira, ela fica como a assistente de crédito dele.</div>',
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mFichaDestOk">Encaminhar</button>' });
+      $('#mFichaDestOk', mo).onclick = async function () { try { await api('POST', '/api/implantacoes/' + i.id + '/ficha/destino', { usuario_id: Number($('#mFichaDest', mo).value) }); mo.fechar(); toast('Encaminhada.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
+    };
+    if ($('#btConfirmarFicha')) $('#btConfirmarFicha').onclick = async function () {
+      try { await api('POST', '/api/implantacoes/' + i.id + '/ficha/confirmar', {}); toast('Recebimento confirmado.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+    };
+    if ($('#btDevolverFicha')) $('#btDevolverFicha').onclick = function () {
+      var mo = modal({ titulo: 'Devolver com pergunta', corpo: '<label class="rot" for="mFichaPerg">Pergunta para a assistente de implantação</label><textarea class="campo" id="mFichaPerg" rows="3"></textarea><div class="ajuda">Ela responde sem mudar a ficha ou envia uma nova versão. Tudo fica no registro.</div>',
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mFichaPergOk">Devolver</button>' });
+      $('#mFichaPergOk', mo).onclick = async function () { try { await api('POST', '/api/implantacoes/' + i.id + '/ficha/devolver', { pergunta: $('#mFichaPerg', mo).value }); mo.fechar(); toast('Devolvida com a pergunta.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
     };
   }
 
@@ -4935,7 +5718,7 @@
     if (pd.pendencia) acoes += '<button class="btn ghost sm" id="btPendImp">Devolver com pendência</button>';
     if (pd.concluir) acoes += '<button class="btn primary sm" id="btConclImp"' + (d.faltas_etapas.length ? ' disabled title="' + esc(d.faltas_etapas.join(' ')) + '"' : '') + '>Concluir implantação</button>';
     if (pd.carteira) acoes += '<button class="btn primary sm" id="btCartImp">Confirmar na Carteira</button>';
-    definirBarra('<span class="setor">Implantação</span><span class="sep">/</span><span class="nome">' + esc(i.protocolo || 'Rascunho') + '</span>', acoes);
+    definirBarra('<span class="setor">Implantação</span><span class="sep">/</span><span class="nome">' + esc(i.protocolo || (i.numero_planilha ? 'Nº ' + i.numero_planilha : 'Rascunho')) + '</span>', acoes);
     var difs = {};
     d.diferencas.forEach(function (x) { difs[x.campo] = x; });
     var fmtDif = function (x) {
@@ -4960,6 +5743,7 @@
     if (!pd.editar && ['rascunho', 'diretoria'].indexOf(i.etapa) < 0 && d.pendencias.length) html += '<div class="msg aviso" style="margin-bottom:16px"><b>Pendente:</b> ' + esc(d.pendencias.join('; ')) + '. O executivo recebe um lembrete por e-mail a cada dia útil até chegar.</div>';
     var ultimaPend = d.eventos.filter(function (e) { return e.tipo === 'pendencia'; }).pop();
     if (i.etapa === 'pendencia' && ultimaPend) html += '<div class="msg aviso" style="margin-bottom:16px;white-space:pre-wrap">' + esc(ultimaPend.detalhe.mensagem || '') + '</div>';
+    html += htmlDiaADiaImp(d);
     var setorHtml = pd.interno ? htmlSetorImp(d, m) : '';
     var formHtml = '<div id="formImp" class="pilha" style="gap:18px"' + (pd.editar ? '' : ' data-leitura') + '>' + htmlFormImp(i, m, parceiros, difs) + '</div>';
     // para o setor, o formulário fica recolhido depois das etapas
@@ -4972,13 +5756,18 @@
         var x = e.detalhe || {};
         var extra = e.tipo === 'documento' || e.tipo === 'documento_removido' ? ': ' + esc(x.nome) : e.tipo === 'enviada' ? ' (' + esc(x.protocolo) + ')' : e.tipo === 'criada' && x.analise ? ' a partir da análise ' + esc(x.analise)
           : e.tipo === 'designada' ? ' para ' + esc(x.para) : e.tipo === 'pendencia' ? ': ' + esc((x.itens || []).join('; ')) : e.tipo === 'carteira' ? ' (ID ' + esc(x.codigo) + ')'
-            : e.tipo === 'parceiros' ? (x.criado ? ': ' + esc(x.criado) : x.ja_existia ? ': já existia ' + esc(x.ja_existia) : ': parceiro sem cadastro') : '';
+            : e.tipo === 'parceiros' ? (x.criado ? ': ' + esc(x.criado) : x.ja_existia ? ': já existia ' + esc(x.ja_existia) : ': parceiro sem cadastro')
+              : e.tipo === 'autorizacao' ? ' ' + esc(x.para) + ' a editar (' + esc(ESCOPO_CURTO_IMP[x.escopo] || x.escopo) + (x.ate ? ' até ' + dataBr(x.ate) : '') + ')'
+                : e.tipo === 'autorizacao_pedida' ? ': "' + esc(x.motivo) + '"' : e.tipo === 'impedimento' ? ': ' + esc(x.motivo) + ' · "' + esc(x.detalhe) + '"' : e.tipo === 'retomada' ? ': "' + esc(x.resolucao) + '"'
+                  : e.tipo === 'documento_marcado' ? ': ' + esc(x.nome) + ' · "' + esc(x.observacao) + '"' : e.tipo === 'documento_desmarcado' ? ': ' + esc(x.nome)
+                    : e.tipo === 'cobranca_prazo' ? (x.qual === 'ficha' ? ' da ficha de repasse' : ' para concluir') : e.tipo === 'concluida' && x.onboarding_pendente ? ' (com o onboarding pendente)' : '';
         return '<div><b style="color:var(--ink)">' + dataHoraCr(e.criado_em) + '</b> · ' + esc(e.usuario_nome || 'Sistema') + ' ' + (EVENTO_IMP[e.tipo] || esc(e.tipo)) + extra + '</div>';
       }).join('') + '</div></section></div>';
     $('#conteudo').innerHTML = html;
     var raiz = $('#formImp');
     ligarCondicoesImp(raiz);
     ligarDocsImp(i, recarregar);
+    ligarDiaADiaImp(d, m, recarregar);
     if ($('#btCancImp')) $('#btCancImp').onclick = async function () {
       if (!(await confirmar('Cancelar implantação', 'A implantação fica no histórico como cancelada' + (i.analise_id ? ' e a análise volta a ficar disponível' : '') + '.', 'Cancelar implantação', true))) return;
       try { await api('POST', '/api/implantacoes/' + i.id + '/cancelar', {}); location.hash = '#/implantacao'; } catch (e) { toast(e.message, 'erro'); }
@@ -5013,7 +5802,8 @@
     };
     if ($('#btConclImp')) $('#btConclImp').onclick = async function () {
       var parc = (i.formulario.parceria === 'sim' && (i.formulario.parceiros || []).length) ? ' Como há parceria, o setor Parceiros é avisado e o condomínio entra na Prestação de Contas ligado ao parceiro (comissão a definir).' : '';
-      if (!(await confirmar('Concluir a implantação', 'A coordenação é avisada para confirmar a entrada na Carteira.' + parc, 'Concluir'))) return;
+      var onb = d.onboarding_pendente ? '<br><br><b>O onboarding ainda não foi feito.</b> Dá para concluir: o alerta continua na implantação até registrar o onboarding' + (d.setor && d.setor.onboarding && d.setor.onboarding.limite ? ' (prazo até ' + dataBr(d.setor.onboarding.limite) + ')' : '') + '; se o prazo vencer, é preciso justificar.' : '';
+      if (!(await confirmar('Concluir a implantação', 'A coordenação é avisada para confirmar a entrada na Carteira.' + parc + onb, 'Concluir'))) return;
       try { await api('POST', '/api/implantacoes/' + i.id + '/concluir', {}); toast('Implantação concluída.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
     };
     if ($('#btCartImp')) $('#btCartImp').onclick = function () { confirmarCarteiraImp(i, recarregar); };

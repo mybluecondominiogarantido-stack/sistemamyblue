@@ -3,7 +3,11 @@
 Formulário de Implantação (e Solicitação de Contrato) em PDF (A4 retrato), no visual do Retorno de Análise de Crédito:
 logo, canto azul, rodapé com os contatos e o número da página.
 
-  python3 formulario_pdf.py <dados.json> <saida.pdf> <logo.png>
+  python3 formulario_pdf.py <dados.json> <saida.pdf> <logo.png> [timbrado.png]
+
+Com o papel timbrado (4º argumento: a página A4 inteira em imagem), o logo e os contatos vêm dele e o título fica à direita.
+Também gera a Ficha de repasse (server/implantacoes/ficha.js): valor {"v": texto} sai em azul (preenchido pela Implantação),
+linha {"grupo": título} separa grupos numa tabela e "legenda" explica as cores.
 
 O conteúdo vem pronto do portal (server/implantacoes/formulario-pdf.js e server/contratos/formulario.js): cabeçalho
 (cabecalho, titulo_pdf e nota_final mudam o documento; o padrão é o da implantação), faixa do condomínio,
@@ -38,21 +42,38 @@ with open(sys.argv[1], encoding="utf-8") as f:
     DADOS = json.load(f)
 SAIDA = sys.argv[2]
 LOGO = sys.argv[3] if len(sys.argv) > 3 else ""
+# papel timbrado da MyBlue (página A4 inteira: logo no alto, contatos e QR Code no rodapé)
+TIMBRADO = sys.argv[4] if len(sys.argv) > 4 and os.path.exists(sys.argv[4]) else ""
 
 E = lambda s: escape(str(s if s is not None else ""))
 estilo = lambda nome, **k: ParagraphStyle(nome, fontName=k.pop("fonte", "Helvetica"), textColor=k.pop("cor", COR_TEXTO), **k)
 S_ROT = estilo("rot", fontSize=8, leading=10, cor=COR_LEVE)
 S_VAL = estilo("val", fonte="Helvetica-Bold", fontSize=9, leading=11.5)
 S_TXT = estilo("txt", fontSize=9, leading=12)
+S_TXT_MAN = estilo("txtm", fontSize=9, leading=12, cor=HexColor("#1D5FC2"))
+S_MAN = estilo("man", fonte="Helvetica-Bold", fontSize=9, leading=11.5, cor=HexColor("#1D5FC2"))
 S_PEQ = estilo("peq", fontSize=8, leading=10.5, cor=COR_LEVE)
 S_SEC = estilo("sec", fonte="Helvetica-Bold", fontSize=9.5, leading=12, cor=COR_ESCURA)
 S_TAB_CAB = estilo("tcab", fonte="Helvetica-Bold", fontSize=8, leading=10, cor=COR_ESCURA)
 S_TAB = estilo("tab", fontSize=8.5, leading=10.5)
+S_GRUPO = estilo("grupo", fonte="Helvetica-Bold", fontSize=7.5, leading=10, cor=COR_LEVE)
+S_TAB_MAN = estilo("tabm", fontSize=8.5, leading=10.5, cor=HexColor("#1D5FC2"))
 
 
 def decorar(c, doc):
     c.saveState()
     # canto azul (como no retorno da análise)
+    if TIMBRADO:
+        c.drawImage(TIMBRADO, 0, 0, width=PAGE_W, height=PAGE_H)
+        c.setFillColor(COR_PRIMARIA); c.setFont("Helvetica-Bold", 8)
+        c.drawRightString(PAGE_W - MARG, PAGE_H - 40, DADOS.get("cabecalho") or "FORMULÁRIO DE IMPLANTAÇÃO")
+        c.setFillColor(COR_ESCURA); c.setFont("Helvetica-Bold", 13)
+        c.drawRightString(PAGE_W - MARG, PAGE_H - 55, DADOS.get("protocolo") or "Rascunho")
+        c.setFillColor(COR_LEVE); c.setFont("Helvetica", 7.5)
+        c.drawRightString(PAGE_W - MARG, PAGE_H - 66, DADOS.get("emitido", ""))
+        c.drawRightString(PAGE_W - MARG, 80, f"Página {doc.page}")
+        c.restoreState()
+        return
     c.setFillColor(COR_CLARA)
     p = c.beginPath()
     p.moveTo(PAGE_W - 70, PAGE_H); p.lineTo(PAGE_W, PAGE_H); p.lineTo(PAGE_W, PAGE_H - 70); p.close()
@@ -88,7 +109,9 @@ def pares(campos):
     """rótulo/valor em duas colunas"""
     linhas, atual = [], []
     for rot, val in campos:
-        atual += [Paragraph(E(rot), S_ROT), Paragraph(E(val) if val not in (None, "") else "—", S_VAL)]
+        man = isinstance(val, dict)  # {"v": texto} = preenchido pela Implantação (azul)
+        val = val.get("v") if man else val
+        atual += [Paragraph(E(rot), S_ROT), Paragraph(E(val) if val not in (None, "") else "—", S_MAN if man else S_VAL)]
         if len(atual) == 4:
             linhas.append(atual); atual = []
     if atual:
@@ -101,16 +124,43 @@ def pares(campos):
     return t
 
 
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+DEJAVU = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+if os.path.exists(DEJAVU):
+    pdfmetrics.registerFont(TTFont("DejaVuB", DEJAVU))
+COR_GRUPO = HexColor("#F3F8FA")
+
+
+def icone(txt):
+    """'✓ entregue' / '! pendente': o sinal sai numa fonte que tem o glifo"""
+    if txt[:2] in ("✓ ", "! ") and os.path.exists(DEJAVU):
+        return f'<font name="DejaVuB">{txt[0]}</font>{txt[1:]}'
+    return txt
+
+
 def tabela(cab, linhas, larguras=None, cores=None):
     corpo = [[Paragraph(E(c), S_TAB_CAB) for c in cab]]
-    for lin in linhas:
-        corpo.append([Paragraph(E(c), S_TAB) for c in lin])
+    cor_de = {(lin, col): cor for (lin, col, cor) in (cores or [])}
+    grupos = []
+    for i, lin in enumerate(linhas):
+        if isinstance(lin, dict) and "grupo" in lin:
+            grupos.append(i + 1)
+            corpo.append([Paragraph(E(lin["grupo"]).upper(), S_GRUPO)] + [""] * (len(cab) - 1))
+            continue
+        linha = []
+        for j, c in enumerate(lin):
+            txt = icone(E(c.get("v") if isinstance(c, dict) else c))
+            if (i, j) in cor_de and not isinstance(c, dict):
+                txt = f'<font color="{cor_de[(i, j)]}"><b>{txt}</b></font>'
+            linha.append(Paragraph(txt, S_TAB_MAN if isinstance(c, dict) else S_TAB))
+        corpo.append(linha)
     n = len(cab)
     t = Table(corpo, colWidths=[LARG * w for w in (larguras or [1.0 / n] * n)], repeatRows=1)
     st = [("BACKGROUND", (0, 0), (-1, 0), COR_CLARA), ("GRID", (0, 0), (-1, -1), 0.5, COR_BORDA), ("VALIGN", (0, 0), (-1, -1), "TOP"),
           ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3)]
-    for (lin, col, cor) in (cores or []):
-        st.append(("TEXTCOLOR", (col, lin + 1), (col, lin + 1), HexColor(cor)))
+    for g in grupos:
+        st += [("SPAN", (0, g), (-1, g)), ("BACKGROUND", (0, g), (-1, g), COR_GRUPO)]
     t.setStyle(TableStyle(st))
     return t
 
@@ -128,6 +178,8 @@ faixa = Table([[Paragraph(f'<font color="#FFFFFF" size="15"><b>{E(DADOS.get("con
 faixa.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), COR_ESCURA), ("LEFTPADDING", (0, 0), (-1, -1), 10),
                            ("TOPPADDING", (0, 0), (0, 0), 8), ("BOTTOMPADDING", (0, -1), (-1, -1), 8)]))
 historia += [faixa, Spacer(1, 8)]
+if DADOS.get("legenda"):
+    historia += [Paragraph(DADOS["legenda"], S_PEQ), Spacer(1, 6)]
 if DADOS.get("diferencas"):
     historia += [caixa(f'<font color="#9A5B05"><b>{E(DADOS.get("rotulo_diferencas", "Diferente da análise"))}:</b></font> ' + E("; ".join(DADOS["diferencas"])) + ".", COR_LARANJA, COR_LARANJA_BG), Spacer(1, 8)]
 
@@ -142,12 +194,14 @@ for s in DADOS.get("secoes", []):
             bloco += [Spacer(1, 4), Paragraph(E(tb["titulo"]), S_PEQ)]
         bloco += [Spacer(1, 2), tabela(tb["cab"], tb["linhas"], tb.get("larguras"), tb.get("cores"))]
     if s.get("texto"):
-        bloco += [Spacer(1, 4), Paragraph(E(s.get("texto_titulo", "")), S_PEQ), Paragraph(E(s["texto"]).replace("\n", "<br/>"), S_TXT)]
-    historia += [KeepTogether(bloco[:3]), *bloco[3:], Spacer(1, 10)]
+        tx = s["texto"]
+        bloco += [Spacer(1, 4), Paragraph(E(s.get("texto_titulo", "")), S_PEQ),
+                  Paragraph(E(tx.get("v") if isinstance(tx, dict) else tx).replace("\n", "<br/>"), S_TXT_MAN if isinstance(tx, dict) else S_TXT)]
+    historia += [KeepTogether(bloco), Spacer(1, 6 if TIMBRADO else 10)]
 
 historia.append(Paragraph(E(DADOS.get("nota_final") or "Documento gerado pelo portal MyBlue com os dados da implantação na data de emissão."), S_PEQ))
 
-doc = SimpleDocTemplate(SAIDA, pagesize=A4, leftMargin=MARG, rightMargin=MARG, topMargin=MARG + 42, bottomMargin=MARG + 8,
+doc = SimpleDocTemplate(SAIDA, pagesize=A4, leftMargin=MARG, rightMargin=MARG, topMargin=(90 if TIMBRADO else MARG + 42), bottomMargin=(92 if TIMBRADO else MARG + 8),
                         title=DADOS.get("titulo_pdf") or f"Formulário de Implantação {DADOS.get('protocolo') or ''}", author="MyBlue")
 doc.build(historia, onFirstPage=decorar, onLaterPages=decorar)
 print(json.dumps({"paginas": doc.page}))

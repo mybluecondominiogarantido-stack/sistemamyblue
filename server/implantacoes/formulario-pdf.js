@@ -11,6 +11,8 @@ const F = require('./formulario');
 
 const GERADOR = path.join(__dirname, 'formulario_pdf.py');
 const LOGO = path.join(__dirname, '..', '..', 'public', 'img', 'logo.png');
+// papel timbrado da MyBlue (formulário de implantação e ficha de repasse)
+const TIMBRADO = path.join(__dirname, 'timbrado.png');
 
 const num = (v) => (v === null || v === undefined || v === '' ? null : Number(v));
 const pct = (v) => (num(v) == null ? '' : `${num(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`);
@@ -88,13 +90,13 @@ function montarDados(i, { executivo, responsavel, documentos = [], diferencas = 
   };
 }
 
-function gerarPdf(dados, { python = process.env.PYTHON || 'python3' } = {}) {
+function gerarPdf(dados, { python = process.env.PYTHON || 'python3', timbrado = false } = {}) {
   const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'implantacao-'));
   const entrada = path.join(pasta, 'dados.json');
   const saida = path.join(pasta, 'formulario.pdf');
   fs.writeFileSync(entrada, JSON.stringify(dados));
   return new Promise((ok, falha) => {
-    execFile(python, [GERADOR, entrada, saida, LOGO], { timeout: 60000 }, (erro, stdout, stderr) => {
+    execFile(python, [GERADOR, entrada, saida, LOGO, ...(timbrado ? [TIMBRADO] : [])], { timeout: 60000 }, (erro, stdout, stderr) => {
       try {
         if (erro) return falha(new Error(`Gerador do PDF falhou: ${(stderr || erro.message).trim().split('\n').pop()}`));
         ok(fs.readFileSync(saida));
@@ -103,4 +105,4 @@ function gerarPdf(dados, { python = process.env.PYTHON || 'python3' } = {}) {
   });
 }
 
-module.exports = { montarDados, gerarPdf };
+module.exports = { montarDados, gerarPdf, fmt: { num, pct, reais, dataBr, quando, simNao }, ISENCAO, SINDICO, DESCONTO };
