@@ -28,7 +28,8 @@ const formularioPdf = require('../implantacoes/formulario-pdf');
 const FC = require('../contratos/formulario');
 const M = require('../implantacoes/metas');
 const { rotasAcompanhamento, lembretesDocumentacao, carregarLinhas, historicoParametros } = require('./implantacoes-acompanhamento');
-const { rotasSetor, criarRotinaPrazos, prazoConcluir, autorizacaoAtiva, pausasDe, prazoOnboarding, ESCOPOS, MOTIVOS_IMPEDIMENTO } = require('./implantacoes-setor');
+const { rotasFicha, criarRotinaFichas } = require('./implantacoes-ficha');
+const { rotasSetor, criarRotinaPrazos, prazoConcluir, autorizacaoAtiva, autorizados, pausasDe, prazoOnboarding, ESCOPOS, MOTIVOS_IMPEDIMENTO } = require('./implantacoes-setor');
 const { criarPrazos } = require('../implantacoes/prazos');
 
 const SETOR = 'Implantação';
@@ -77,10 +78,11 @@ function criarRotinasImplantacao({ db, seg, avisos, expediente }) {
     return s.gestores.length ? s.gestores : administradores(db);
   }
   const rotinaPrazos = criarRotinaPrazos({ db, avisos, expediente, coordenacao, link: (id) => `#/implantacao/${id}`, carregarLinhas, historicoParametros });
+  const rotinaFichas = criarRotinaFichas({ db, avisos, expediente, coordenacao, historicoParametros, autorizados, P: criarPrazos((d) => expediente.ehDiaUtil(d)) });
   async function executar(agora = new Date()) {
     const m = expediente.momento(agora);
     const feito = { documentos: 0, sem_designacao: 0, prazos: 0, meta_documentos: 0 };
-    feito.prazos_dias_uteis = await rotinaPrazos(agora);
+    feito.prazos_dias_uteis = { ...await rotinaPrazos(agora), ...await rotinaFichas(agora) };
     for (const i of (await db.q("SELECT id, protocolo, condominio, enviado_em, lembrete_fila_em FROM implantacoes WHERE etapa = 'fila'")).rows) {
       if (expediente.somarHorasUteis(i.lembrete_fila_em || i.enviado_em, HORAS_LEMBRETE_FILA) > agora) continue;
       await avisos.notificar(await coordenacao(), { link: `#/implantacao/${i.id}`, tipo: 'implantacao', email: true,
@@ -387,7 +389,10 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
 
   rotasAcompanhamento(r, { db, seg, avisos, perfil, erro, evento, json });
   rotasSetor(r, { db, avisos, erro, evento, json, link, coordenacao, carregar, historicoParametros, expediente });
-  let aoConcluir = null; // a ficha de repasse abre na conclusão (ligada abaixo)
+  // a ficha de repasse abre na conclusão
+  const fichaRotas = rotasFicha(r, { db, seg, avisos, erro, evento, json, link, perfil, pode, coordenacao, pessoasDoSetor, administradores, historicoParametros,
+    autorizacaoAtiva, autorizados, P });
+  const aoConcluir = fichaRotas.aoConcluir;
 
   /* ===================== listagem ===================== */
   r.get('/api/implantacoes', async (req, res) => {
@@ -504,6 +509,10 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
         prazo_concluir: prazoConcluir(i, pausas, params, P, M.diaSP(Date.now())),
         onboarding: linha ? { ...prazoOnboarding(linha), justificativa: i.onboarding_justificativa || null, na_meta: linha.na_meta } : null,
         obs_controle: i.obs_controle || null,
+        ficha: await (async () => {
+          const f = await db.um('SELECT situacao, versao, aberta_em, primeiro_envio_em FROM implantacao_fichas WHERE implantacao_id = $1', [i.id]);
+          return f ? { situacao: f.situacao, versao: f.versao, prazo: await fichaRotas.prazoFicha(f) } : null;
+        })(),
       };
     }
     res.json({
@@ -531,7 +540,7 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     let pdf;
     try {
       pdf = await formularioPdf.gerarPdf(formularioPdf.montarDados(i, { executivo: info.executivo_nome, responsavel: info.responsavel_nome, documentos,
-        diferencas: F.diferencas(i.formulario, i.referencia), usuario: req.usuario.nome, origemTexto }));
+        diferencas: F.diferencas(i.formulario, i.referencia), usuario: req.usuario.nome, origemTexto }), { timbrado: true });
     } catch (e) { return erro(res, 500, e.message); }
     const nome = `Formulario_Implantacao_${String(i.condominio || 'condominio').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '')}_${i.protocolo || 'rascunho'}.pdf`;
     res.set('Content-Type', 'application/pdf');
@@ -1005,6 +1014,9 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
       const { id: novo } = await t.um(`INSERT INTO condominios (${cols.join(', ')}, atualizado_por) VALUES (${cols.map((_, k) => '$' + (k + 1)).join(', ')}, $${cols.length + 1}) RETURNING id`,
         [...cols.map((k) => d[k]), req.usuario.id]);
       await t.q("UPDATE implantacoes SET etapa = 'na_carteira', condominio_id = $2, atualizado_em = now() WHERE id = $1", [i.id, novo]);
+      // a assistente de crédito que recebeu a ficha de repasse fica na Carteira
+      await t.q(`UPDATE condominios c SET assistente_credito = u.nome FROM implantacao_fichas f JOIN usuarios u ON u.id = f.destino_id
+        WHERE c.id = $2 AND f.implantacao_id = $1 AND c.assistente_credito = ''`, [i.id, novo]);
       await evento(t, i.id, req.usuario.id, 'carteira', { condominio_id: novo, codigo: d.codigo, nome: d.nome });
       return novo;
     });

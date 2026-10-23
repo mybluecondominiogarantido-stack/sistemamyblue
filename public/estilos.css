@@ -534,3 +534,25 @@ tr.sel-ct td{background:var(--surface-2)}
 .vazio-ct{text-align:center;padding:28px 16px;color:var(--faint);border:1.5px dashed var(--border-2);border-radius:var(--r);font-weight:700}
 @media(max-width:1000px){.kpis-ct{grid-template-columns:repeat(2,1fr)}.dois-ct{grid-template-columns:1fr}}
 @media(max-width:560px){.kpis-ct,.sit-ct{grid-template-columns:1fr}}
+/* ficha de repasse: o que vem do portal em preto, o que a Implantação preenche em azul */
+:root{--man:#1D5FC2;--man-bg:#f5f9ff;--man-borda:#9fc1ee}
+.ficha-dados{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 22px;margin:0;padding:6px 18px 12px}
+.ficha-dados>div{display:grid;grid-template-columns:minmax(120px,42%) 1fr;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)}
+.ficha-dados dt{font-size:12.5px;font-weight:700;color:var(--muted)}
+.ficha-dados dd{margin:0;font-size:14px;font-weight:700;color:var(--ink);overflow-wrap:anywhere}
+.ficha-dados dd.man,.ficha-tab td.man,.ficha-texto.man{color:var(--man)}
+.campo.man{color:var(--man);border-color:var(--man-borda);background:var(--man-bg);font-weight:700}
+.ficha-tab{width:100%;border-collapse:collapse;font-size:13.5px}
+.ficha-tab th{text-align:left;font-size:11.5px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;padding:8px 10px;background:var(--surface-2);border-top:1px solid var(--border)}
+.ficha-tab td{padding:6px 10px;border-top:1px solid var(--border);font-weight:600;color:var(--ink-2);vertical-align:middle}
+.ficha-tab td .campo{min-width:90px}
+.ficha-tab tr.grupo td{background:var(--surface-2);font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.ficha-tab .sit-ok{color:var(--green);font-weight:800}
+.ficha-tab .sit-pend{color:var(--amber);font-weight:800}
+.ficha-nota{font-size:12.5px;color:var(--muted);font-weight:600}
+.ficha-texto{white-space:pre-wrap;font-size:14px;font-weight:600;padding:12px 18px 16px;margin:0}
+.ficha-marcas{display:flex;flex-wrap:wrap;gap:8px;padding:6px 18px 16px}
+.ficha-marcas label{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:999px;padding:6px 12px;font-size:13.5px;font-weight:700;color:var(--ink-2);background:var(--surface)}
+.ficha-marcas label.on{border-color:var(--man-borda);background:var(--man-bg);color:var(--man)}
+.ficha-marcas input{accent-color:var(--man)}
+@media (max-width:760px){.ficha-dados{grid-template-columns:1fr}.ficha-dados>div{grid-template-columns:1fr;gap:2px}}

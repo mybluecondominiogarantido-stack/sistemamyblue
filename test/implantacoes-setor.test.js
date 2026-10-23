@@ -20,6 +20,7 @@ function cliente() {
     const r = await fetch(base + url, { method: metodo, headers, body, redirect: 'manual' });
     const sc = r.headers.get('set-cookie');
     if (sc) cookie = sc.split(';')[0].endsWith('=') ? '' : sc.split(';')[0];
+    if (opts.bruto) return { status: r.status, headers: r.headers, buffer: Buffer.from(await r.arrayBuffer()) };
     const texto = await r.text();
     let json = null;
     try { json = JSON.parse(texto); } catch { /* não é JSON */ }
@@ -289,6 +290,7 @@ test('rotina dos prazos: lembrete na véspera e no dia, atraso uma vez por dia �
   await ctx.db.q("UPDATE implantacoes SET iniciado_em = '2026-10-26T13:00:00Z' WHERE id = $1", [id]);
   // as outras implantações deste arquivo não entram na conta
   await ctx.db.q("UPDATE implantacoes SET aviso_concluir_em = '2099-01-01' WHERE id <> $1", [id]);
+  await ctx.db.q("UPDATE implantacao_fichas SET aviso_prazo_em = '2099-01-01'");
   const titulos = async (email) => (await avisosDe(email)).map((x) => x.titulo);
   const ex = (dia) => ctx.rotinasImplantacao.executar(sp(dia));
   assert.equal((await ex('2026-10-27')).prazos_dias_uteis.concluir, 0);
@@ -315,4 +317,136 @@ test('rotina dos prazos: lembrete na véspera e no dia, atraso uma vez por dia �
   assert.equal(t.length, n0 + 1);
   assert.match(t.pop(), /^Ainda está impedida\? · /);
   assert.equal((await ex('2026-11-05')).prazos_dias_uteis.impedimento, 0);
+});
+
+/* ===================== ficha de repasse ===================== */
+const temReportlab = (() => { try { require('child_process').execFileSync('python3', ['-c', 'import reportlab']); return true; } catch { return false; } })();
+let sup, rita;
+const DADOS_FICHA = { taxa_condominial: 'Fixa', balancete: 'Não', subsindico: 'Subsíndica Fictícia',
+  consumo: [{ incide: 'Sim', tipo: 'Variável', valor: 'R$ 4.200,00/mês', obs: 'Leitura pela administradora' }, { incide: 'Não' }, { incide: 'Não' }],
+  receitas: [{ tipo: 'Outra receita', descricao: 'Aluguel de antena', valor: 'R$ 900,00' }],
+  nao_garantidas: [{ unidade: 'Apto 101', o_que: 'Todas as taxas', por_que: 'Espólio', obs: 'Inventário' }],
+  conferidos: { ata_taxa_extra: 'Não se aplica', ata_receita: 'Conferida' }, particularidades: '1º boleto com prazo curto.' };
+
+test('ficha de repasse: abre na conclusão já preenchida (Obs. do Controle na seção 8) e só quem conduz edita', async () => {
+  sup = await pessoa('Supervisora de Crédito Fictícia', 'sup@teste.com');
+  rita = await pessoa('Rita Fictícia', 'rita@teste.com');
+  await noSetor('Crédito', 'sup@teste.com', true);
+  await noSetor('Crédito', 'rita@teste.com', false);
+  const j = (await ana('GET', `/api/implantacoes/${idA}/ficha`)).json;
+  assert.equal(j.ficha.situacao, 'a_enviar');
+  assert.equal(j.ficha.prazo.dias, 5);
+  assert.ok(['no_prazo', 'vence_amanha', 'vence_hoje'].includes(j.ficha.prazo.status), j.ficha.prazo.status);
+  assert.deepEqual(j.conteudo.secoes.map((s) => s.numero), [1, 2, '2.1', '2.2', '2.3', '2.4', 3, 4, 5, 6, 7, 8]);
+  assert.equal(j.dados.outras_observacoes, 'Síndico pediu boleto separado');
+  assert.ok(j.pode.editar && j.pode.enviar);
+  assert.ok(j.faltas.length);
+  // a equipe vê; sem autorização não edita; o Crédito só vê depois de receber
+  const b = (await bia('GET', `/api/implantacoes/${idA}/ficha`)).json;
+  assert.equal(b.pode.editar, false);
+  assert.equal((await bia('PUT', `/api/implantacoes/${idA}/ficha`, { dados: DADOS_FICHA })).status, 403);
+  assert.equal((await rita('GET', `/api/implantacoes/${idA}/ficha`)).status, 404);
+  const e = await ana('POST', `/api/implantacoes/${idA}/ficha/enviar`, {});
+  assert.equal(e.status, 400);
+  assert.ok(e.json.faltas.some((x) => /Balancete/.test(x)));
+  const s = await ana('PUT', `/api/implantacoes/${idA}/ficha`, { dados: DADOS_FICHA });
+  assert.deepEqual([s.status, s.json.faltas], [200, []]);
+  const k = (await ana('GET', `/api/implantacoes/${idA}/ficha`)).json.conteudo;
+  assert.deepEqual(k.secoes.find((x) => x.numero === '2.4').tabela.linhas[0].map((c) => c.v), ['Outra receita', 'Aluguel de antena', 'R$ 900,00', '']);
+});
+
+test('ficha de repasse: sem assistente na Carteira vai à supervisão, que escolhe; devolução com pergunta, resposta e versões (até 3)', async () => {
+  const r1 = await ana('POST', `/api/implantacoes/${idA}/ficha/enviar`, {});
+  assert.equal(r1.status, 200, r1.texto);
+  assert.deepEqual([r1.json.versao, r1.json.para], [1, null]);
+  assert.match((await ultimo('sup@teste.com')).titulo, /^Ficha de repasse para distribuir · /);
+  let j = (await sup('GET', `/api/implantacoes/${idA}/ficha`)).json;
+  assert.ok(j.pode.escolher);
+  assert.ok(j.credito.some((x) => x.nome === 'Rita Fictícia'));
+  assert.equal((await ana('POST', `/api/implantacoes/${idA}/ficha/destino`, { usuario_id: ids['rita@teste.com'] })).status, 403);
+  assert.equal((await sup('POST', `/api/implantacoes/${idA}/ficha/destino`, { usuario_id: ids['ana@teste.com'] })).status, 400);
+  assert.equal((await sup('POST', `/api/implantacoes/${idA}/ficha/destino`, { usuario_id: ids['rita@teste.com'] })).status, 200);
+  assert.match((await ultimo('rita@teste.com')).texto, /fica com você/);
+  // a assistente de crédito vê a versão enviada e devolve com pergunta
+  j = (await rita('GET', `/api/implantacoes/${idA}/ficha`)).json;
+  assert.deepEqual([j.ficha.destino.nome, j.ficha.situacao, j.pode.confirmar, j.pode.devolver, j.pode.editar, j.dados], ['Rita Fictícia', 'enviada', true, true, false, null]);
+  assert.match(j.conteudo.subtitulo, /Assistente de crédito: Rita Fictícia|Assistente de implantação: Ana Fictícia/);
+  assert.equal((await rita('POST', `/api/implantacoes/${idA}/ficha/devolver`, { pergunta: '' })).status, 400);
+  assert.equal((await rita('POST', `/api/implantacoes/${idA}/ficha/devolver`, { pergunta: 'O 1º repasse vai para qual conta?' })).status, 200);
+  const dv = await ultimo('ana@teste.com');
+  assert.match(dv.titulo, /^Ficha de repasse devolvida com pergunta/);
+  assert.match(dv.texto, /qual conta/);
+  j = (await ana('GET', `/api/implantacoes/${idA}/ficha`)).json;
+  assert.deepEqual([j.ficha.situacao, j.ficha.devolucao.detalhe.pergunta, j.pode.responder], ['devolvida', 'O 1º repasse vai para qual conta?', true]);
+  assert.equal((await ana('POST', `/api/implantacoes/${idA}/ficha/responder`, { resposta: 'Para a conta do contrato.' })).status, 200);
+  assert.match((await ultimo('rita@teste.com')).titulo, /^Resposta sobre a ficha/);
+  // nova versão: pede o motivo; a assistente de crédito é avisada e confirma
+  assert.equal((await ana('POST', `/api/implantacoes/${idA}/ficha/enviar`, { dados: { ...DADOS_FICHA, repasse_obs: 'Conta do contrato até a nova chegar' } })).status, 400);
+  const r2 = await ana('POST', `/api/implantacoes/${idA}/ficha/enviar`, { motivo: 'esclarecida a conta do primeiro repasse' });
+  assert.deepEqual([r2.status, r2.json.versao, r2.json.para], [200, 2, 'Rita Fictícia']);
+  assert.match((await ultimo('rita@teste.com')).titulo, /^Ficha de repasse \(versão 2\)/);
+  assert.equal((await ana('POST', `/api/implantacoes/${idA}/ficha/confirmar`, {})).status, 403);
+  assert.equal((await rita('POST', `/api/implantacoes/${idA}/ficha/confirmar`, {})).status, 200);
+  assert.match((await ultimo('ana@teste.com')).titulo, /^Ficha de repasse recebida/);
+  j = (await ana('GET', `/api/implantacoes/${idA}/ficha`)).json;
+  assert.equal(j.ficha.situacao, 'recebida');
+  assert.deepEqual(j.versoes.map((v) => [v.versao, v.para_nome, !!v.confirmada_em]), [[1, 'Rita Fictícia', false], [2, 'Rita Fictícia', true]]);
+  // 3ª versão; a 4ª só com a liberação da coordenação
+  assert.equal((await ana('POST', `/api/implantacoes/${idA}/ficha/enviar`, { motivo: 'conta bancária recebida' })).status, 200);
+  const r4 = await ana('POST', `/api/implantacoes/${idA}/ficha/enviar`, { motivo: 'mais uma correção' });
+  assert.equal(r4.status, 409);
+  assert.equal((await ana('POST', `/api/implantacoes/${idA}/ficha/liberar`, { motivo: 'Erro no valor da água' })).status, 403);
+  assert.equal((await coord('POST', `/api/implantacoes/${idA}/ficha/liberar`, { motivo: 'Erro no valor da água' })).status, 200);
+  assert.equal((await ana('POST', `/api/implantacoes/${idA}/ficha/enviar`, { motivo: 'valor da água corrigido' })).status, 200);
+  const tipos = (await detalhe(ana, idA)).eventos.map((e) => e.tipo);
+  for (const t of ['ficha_enviada', 'ficha_destino', 'ficha_devolvida', 'ficha_resposta', 'ficha_recebida', 'ficha_liberada']) assert.ok(tipos.includes(t), t);
+  // a versão enviada não muda depois
+  const v1 = await ctx.db.um('SELECT conteudo FROM implantacao_ficha_versoes WHERE implantacao_id = $1 AND versao = 1', [idA]);
+  assert.equal(v1.conteudo.secoes.find((x) => x.numero === 4).campos.find((c) => c[0] === 'Considerações')[1].v, '');
+});
+
+test('ficha de repasse: PDF de cada versão (-v1, -v2) no papel timbrado', { skip: !temReportlab && 'reportlab não instalado' }, async () => {
+  const r = await rita('GET', `/api/implantacoes/${idA}/ficha.pdf?versao=2`, undefined, { bruto: true });
+  assert.equal(r.status, 200);
+  assert.equal(r.headers.get('content-type'), 'application/pdf');
+  assert.match(decodeURIComponent(r.headers.get('content-disposition')), /Ficha_de_repasse_.*-v2\.pdf/);
+  assert.equal(r.buffer.subarray(0, 4).toString(), '%PDF');
+  assert.equal((await rita('GET', `/api/implantacoes/${idA}/ficha.pdf?versao=9`, undefined, { bruto: true })).status, 404);
+});
+
+test('ficha de repasse: na Carteira, a assistente de crédito que recebeu a ficha fica no condomínio', async () => {
+  const p = (await coord('GET', `/api/implantacoes/${idA}/carteira`)).json;
+  const r = await coord('POST', `/api/implantacoes/${idA}/carteira`, { dados: { ...p.dados, codigo: '90101' } });
+  assert.equal(r.status, 201, r.texto);
+  assert.equal((await ctx.db.um('SELECT assistente_credito FROM condominios WHERE id = $1', [r.json.condominio_id])).assistente_credito, 'Rita Fictícia');
+});
+
+test('ficha de repasse: prazo de 5 dias úteis da conclusão; lembrete na véspera e no dia, atraso à assistente e à coordenação', async () => {
+  const id = await assumida('Residencial Fictício Delta');
+  const etapas = { documentacao: { feito: true }, vouch: { id: '90404' }, onboarding: { situacao: 'realizado', data: '2026-10-22', hora: '09:00' }, boletos: { feito: true, primeiro_vencimento: '2026-11-10' }, envio: { forma: 'email' } };
+  assert.equal((await ana('PATCH', `/api/implantacoes/${id}/etapas`, { etapas })).status, 200);
+  assert.equal((await ana('POST', `/api/implantacoes/${id}/concluir`, {})).status, 200);
+  assert.match((await ultimo('ana@teste.com')).titulo, /^Ficha de repasse aberta · /);
+  // aberta numa segunda (26/10/2026) → 5 dias úteis: vence 02/11 (sem feriados no teste)
+  await ctx.db.q("UPDATE implantacao_fichas SET aberta_em = '2026-10-26T13:00:00Z', aviso_prazo_em = NULL WHERE implantacao_id = $1", [id]);
+  await ctx.db.q("UPDATE implantacao_fichas SET aviso_prazo_em = '2099-01-01' WHERE implantacao_id <> $1", [id]);
+  await ctx.db.q("UPDATE implantacoes SET aviso_concluir_em = '2099-01-01', aviso_onboarding_em = '2099-01-01'");
+  const ex = async (dia) => (await ctx.rotinasImplantacao.executar(sp(dia))).prazos_dias_uteis.ficha;
+  assert.equal(await ex('2026-10-29'), 0);
+  assert.equal(await ex('2026-10-30'), 1);
+  assert.match((await ultimo('ana@teste.com')).titulo, /^Ficha de repasse vence amanhã · /);
+  assert.equal(await ex('2026-10-30'), 0);
+  await ex('2026-11-02');
+  assert.match((await ultimo('ana@teste.com')).titulo, /^Ficha de repasse vence hoje · /);
+  await ex('2026-11-03');
+  assert.match((await ultimo('ana@teste.com')).titulo, /^Ficha de repasse atrasada · 1 dia útil · /);
+  assert.match((await ultimo('coord@teste.com')).titulo, /^Ficha de repasse atrasada de Ana Fictícia · 1 dia útil/);
+  assert.equal((await coord('POST', `/api/implantacoes/${id}/cobrar`, { qual: 'ficha' })).status, 200);
+  assert.match((await ultimo('ana@teste.com')).texto, /cobrando a ficha de repasse/);
+  // enviada, a rotina para
+  assert.equal((await ana('POST', `/api/implantacoes/${id}/ficha/enviar`, { dados: DADOS_FICHA })).status, 200);
+  assert.equal(await ex('2026-11-04'), 0);
+  await ctx.db.q("UPDATE implantacao_fichas SET primeiro_envio_em = '2026-11-04T15:00:00Z' WHERE implantacao_id = $1", [id]);
+  const j = (await ana('GET', `/api/implantacoes/${id}/ficha`)).json;
+  assert.equal(j.ficha.prazo.status, 'cumprido_com_atraso');
 });

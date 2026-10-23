@@ -306,7 +306,7 @@
     if (partes[0] === 'carteira') return paginaCarteira(partes[1]);
     if (partes[0] === 'credito') return /^\d+$/.test(partes[1] || '') ? paginaAnaliseCredito(Number(partes[1])) : paginaCredito(partes[1]);
     if (partes[0] === 'acompanhamento' && resumoImp && resumoImp.acompanhamento) return paginaAcompanhamentoImp(partes[1]);
-    if (partes[0] === 'implantacao') return /^\d+$/.test(partes[1] || '') ? paginaImplantacaoDetalhe(Number(partes[1])) : paginaImplantacao(partes[1]);
+    if (partes[0] === 'implantacao') return /^\d+$/.test(partes[1] || '') ? (partes[2] === 'ficha' ? paginaFichaImp(Number(partes[1])) : paginaImplantacaoDetalhe(Number(partes[1]))) : paginaImplantacao(partes[1]);
     if (partes[0] === 'contratos') {
       if (/^\d+$/.test(partes[1] || '')) return paginaContratoDetalhe(Number(partes[1]));
       // endereços antigos (abas que mudaram de lugar)
@@ -4702,6 +4702,13 @@
               (p.resolucao ? ' · resolvido: "' + esc(p.resolucao) + '" (' + esc(p.encerrada_por_nome || '') + ')' : '') + '</div>';
           }).join('') + '</div></details>' : '') + '</div></section>';
     }
+    // ficha de repasse (abre na conclusão)
+    if (['concluida', 'na_carteira'].indexOf(i.etapa) >= 0) {
+      var fc = st.ficha, fchip = fc && prazoFichaImp(fc.prazo);
+      html += '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Ficha de repasse</h2>' + (fc ? etq(SIT_FICHA[fc.situacao]) + (fc.versao ? etq(['versão ' + fc.versao, 'cinza']) : '') + (fchip ? etq(fchip) : '') : etq(['não aberta', 'cinza'])) +
+        '<span class="espaco"></span><a class="btn ' + (fc && fc.situacao === 'a_enviar' || (fc && fc.situacao === 'devolvida') ? 'primary' : 'ghost') + ' sm" href="#/implantacao/' + i.id + '/ficha">' + (fc ? 'Abrir a ficha' : 'Ver') + '</a></div>' +
+        '<div class="corpo"><span class="ajuda" style="margin:0">Vem preenchida com o que o portal sabe; quem conduziu completa os campos em azul e envia à assistente de crédito em até ' + (fc && fc.prazo ? fc.prazo.dias : 5) + ' dias úteis da conclusão.</span></div></section>';
+    }
     // onboarding depois de concluir
     var o = st.onboarding;
     if (d.onboarding_pendente && ['concluida', 'na_carteira'].indexOf(i.etapa) >= 0) {
@@ -5094,6 +5101,189 @@
       var valores = { onboarding_dias: Number($('#pmOnb', raiz).value), documentacao_dias: Number($('#pmDoc', raiz).value), meta_pct: Number($('#pmMeta', raiz).value), virada_dia: Number($('#pmVir', raiz).value),
         marco: $('#pmMarco', raiz).value, docs_meta: $$('[data-docmeta]:checked', raiz).map(function (c) { return c.value; }) };
       try { await api('POST', '/api/implantacoes/acompanhamento/parametros', { valores: valores, vale_desde: $('#pmVale', raiz).value }); toast('Regras salvas.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+    };
+  }
+
+  /* ---------- ficha de repasse ---------- */
+  var SIT_FICHA = { a_enviar: ['A enviar', 'ambar'], enviada: ['Enviada · aguardando confirmação', 'azul'], devolvida: ['Devolvida com pergunta', 'vermelha'], recebida: ['Recebida', 'verde'] };
+  var EVENTO_FICHA = { ficha_aberta: 'abriu a ficha', ficha_enviada: 'enviou', ficha_destino: 'encaminhou', ficha_devolvida: 'devolveu com pergunta', ficha_resposta: 'respondeu',
+    ficha_recebida: 'confirmou o recebimento', ficha_liberada: 'liberou mais uma versão' };
+  function prazoFichaImp(s) {
+    if (!s) return null;
+    var v = s.vence ? dataBr(s.vence) : '';
+    if (s.status === 'no_prazo') return ['Enviar até ' + v + ' · faltam ' + diasUteisImp(s.faltam), 'azul'];
+    if (s.status === 'vence_amanha') return ['Enviar até ' + v + ' · vence no próximo dia útil', 'ambar'];
+    if (s.status === 'vence_hoje') return ['Enviar hoje (' + v + ')', 'ambar'];
+    if (s.status === 'atrasado') return ['Atrasada · ' + diasUteisImp(s.atraso) + ' (prazo era ' + v + ')', 'vermelha'];
+    if (s.status === 'cumprido') return ['Enviada no prazo (' + dataBr(s.em) + ')', 'verde'];
+    return ['Enviada com ' + diasUteisImp(s.atraso) + ' de atraso (' + dataBr(s.em) + ')', 'ambar'];
+  }
+  /* um valor da ficha: do portal (texto) ou da Implantação ({ v, k }: campo em azul, editável por quem pode) */
+  function celulaFicha(c, ed) {
+    if (!c || typeof c !== 'object') {
+      var t = String(c == null ? '' : c);
+      return t.indexOf('✓ ') === 0 ? '<span class="sit-ok">' + esc(t) + '</span>' : t.indexOf('! ') === 0 ? '<span class="sit-pend">' + esc(t) + '</span>' : esc(t || '—');
+    }
+    if (!ed || !c.k) return '<span style="color:var(--man)">' + esc(c.v || '—') + '</span>';
+    if (c.op) return '<select class="campo man" data-k="' + esc(c.k) + '"><option value=""></option>' + c.op.map(function (o) { return '<option' + (o === c.v ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select>';
+    return '<input class="campo man" data-k="' + esc(c.k) + '" value="' + esc(c.v) + '">';
+  }
+  function htmlConteudoFicha(cont, ed) {
+    return cont.secoes.map(function (s) {
+      var h = '<section class="painel"><div class="cab-painel"><span class="passo">' + esc(s.numero) + '</span><h2>' + esc(s.titulo) + '</h2><span class="espaco"></span>' + (s.origem ? '<span class="ficha-nota">' + esc(s.origem) + '</span>' : '') + '</div>';
+      if ((s.campos || []).length) h += '<dl class="ficha-dados">' + s.campos.map(function (p) { return '<div><dt>' + esc(p[0]) + '</dt><dd' + (p[1] && typeof p[1] === 'object' ? ' class="man"' : '') + '>' + celulaFicha(p[1], ed) + '</dd></div>'; }).join('') + '</dl>';
+      if (s.multi) {
+        h += '<div class="ficha-nota" style="padding:4px 18px 0">' + esc(s.multi.titulo) + '</div><div class="ficha-marcas">' + s.multi.op.map(function (o) {
+          var on = s.multi.v.indexOf(o) >= 0;
+          return '<label class="' + (on ? 'on' : '') + '"><input type="checkbox" data-multi="' + esc(s.multi.k) + '" value="' + esc(o) + '"' + (on ? ' checked' : '') + (ed ? '' : ' disabled') + '> ' + esc(o) + '</label>';
+        }).join('') + '</div>';
+      } else if (s.tabela) {
+        var tb = s.tabela;
+        h += (tb.titulo ? '<div class="ficha-nota" style="padding:8px 18px 4px">' + esc(tb.titulo) + '</div>' : '') + '<div class="tabela-wrap"><table class="ficha-tab"><thead><tr>' + tb.cab.map(function (x) { return '<th>' + esc(x) + '</th>'; }).join('') + (ed && tb.add ? '<th></th>' : '') + '</tr></thead><tbody>' +
+          (tb.linhas.map(function (l, n) {
+            if (!Array.isArray(l)) return '<tr class="grupo"><td colspan="' + tb.cab.length + '">' + esc(l.grupo) + '</td></tr>';
+            return '<tr>' + l.map(function (c) { return '<td' + (c && typeof c === 'object' ? ' class="man"' : '') + '>' + celulaFicha(c, ed) + '</td>'; }).join('') +
+              (ed && tb.add ? '<td style="width:1%"><button type="button" class="btn icon ghost" data-tirar-linha="' + esc(tb.add) + '" data-n="' + n + '" aria-label="Tirar a linha">' + IC.fechar + '</button></td>' : '') + '</tr>';
+          }).join('') || '<tr><td colspan="' + (tb.cab.length + (ed && tb.add ? 1 : 0)) + '" class="ficha-nota">' + esc(tb.vazio || '—') + '</td></tr>') + '</tbody></table></div>' +
+          (ed && tb.add ? '<div class="doc-linha"><button type="button" class="btn ghost sm" data-add-linha="' + esc(tb.add) + '">' + IC.mais + (tb.add === 'receitas' ? 'Adicionar reserva ou receita' : 'Adicionar unidade não garantida') + '</button></div>' : '');
+      }
+      if (s.texto !== undefined && s.texto !== '') {
+        var tx = s.texto;
+        h += (s.texto_titulo ? '<div class="ficha-nota" style="padding:10px 18px 0">' + esc(s.texto_titulo) + '</div>' : '') +
+          (tx && typeof tx === 'object' ? (ed ? '<div style="padding:8px 18px 16px"><textarea class="campo man" rows="4" data-k="' + esc(tx.k) + '">' + esc(tx.v) + '</textarea></div>' : '<p class="ficha-texto man">' + esc(tx.v || '—') + '</p>')
+            : '<p class="ficha-texto">' + esc(tx) + '</p>');
+      }
+      return h + '</section>';
+    }).join('');
+  }
+  async function paginaFichaImp(id) {
+    definirBarra('<span class="setor">Implantação</span><span class="sep">/</span><span class="nome">Ficha de repasse</span>');
+    $('#conteudo').innerHTML = carregandoHtml();
+    var j;
+    try { j = await api('GET', '/api/implantacoes/' + id + '/ficha'); } catch (e) {
+      $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">' + esc(e.message) + '</div></div>';
+      return;
+    }
+    var i = j.implantacao, f = j.ficha, pf = j.pode;
+    var recarregar = function () { paginaFichaImp(id); };
+    var voltar = pf.ver_implantacao ? '<a class="btn ghost sm" href="#/implantacao/' + i.id + '">Implantação</a>' : '';
+    if (!f) {
+      definirBarra('<span class="setor">Implantação</span><span class="sep">/</span><span class="nome">' + esc(i.protocolo || '') + ' · Ficha de repasse</span>', voltar);
+      $('#conteudo').innerHTML = '<div class="pagina"><h1>' + esc(i.condominio) + '</h1><div class="vazio">A ficha de repasse abre quando a implantação é concluída.' +
+        (pf.abrir ? '<br><button class="btn primary" id="btAbrirFicha" style="margin-top:14px">Abrir a ficha de repasse</button>' : '') + '</div></div>';
+      if ($('#btAbrirFicha')) $('#btAbrirFicha').onclick = async function () { try { await api('POST', '/api/implantacoes/' + i.id + '/ficha/abrir', {}); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
+      return;
+    }
+    var ed = pf.editar;
+    var proxima = f.versao + 1;
+    var acoes = voltar + '<a class="btn ghost sm" href="/api/implantacoes/' + i.id + '/ficha.pdf' + (ed || !f.versao ? '' : '?versao=' + f.versao) + '" target="_blank" rel="noopener">' + IC.documento + 'PDF</a>';
+    if (ed) acoes += '<button class="btn ghost sm" id="btSalvarFicha">Salvar</button>';
+    if (pf.enviar && f.situacao !== 'devolvida') acoes += '<button class="btn primary sm" id="btEnviarFicha">' + (f.versao ? 'Enviar nova versão (' + proxima + ' de ' + f.limite + ')' : 'Enviar à assistente de crédito') + '</button>';
+    if (pf.liberar) acoes += '<button class="btn ghost sm" id="btLiberarFicha">Liberar nova versão</button>';
+    if (pf.cobrar && f.prazo && f.prazo.status === 'atrasado') acoes += '<button class="btn ghost sm" data-cobrar-imp="ficha">Cobrar</button>';
+    if (pf.escolher) acoes += '<button class="btn primary sm" id="btDestinoFicha">Escolher a assistente de crédito</button>';
+    if (pf.devolver) acoes += '<button class="btn ghost sm" id="btDevolverFicha">Devolver com pergunta</button>';
+    if (pf.confirmar) acoes += '<button class="btn primary sm" id="btConfirmarFicha">Confirmar recebimento</button>';
+    definirBarra('<span class="setor">Implantação</span><span class="sep">/</span><span class="nome">' + esc(i.protocolo || '') + ' · Ficha de repasse</span>', acoes);
+    var chip = prazoFichaImp(f.prazo);
+    var html = '<div class="pagina"><div class="linha" style="margin-bottom:6px">' + etq(SIT_FICHA[f.situacao]) + (f.versao ? etq(['versão ' + f.versao + ' de ' + f.limite, 'cinza']) : '') + (chip ? etq(chip) : '') + '</div>' +
+      '<h1>' + esc(i.condominio) + '</h1><p class="sub" style="margin:0 0 16px">' + esc([i.responsavel_nome ? 'Assistente de implantação: ' + i.responsavel_nome : '', f.destino ? 'Assistente de crédito: ' + f.destino.nome : f.versao ? 'aguardando a supervisão de Crédito escolher a assistente' : ''].filter(Boolean).join(' · ')) + '</p>';
+    if (f.devolucao) {
+      html += '<div class="msg erro" style="margin-bottom:16px"><b>' + esc(f.devolucao.usuario_nome || 'A assistente de crédito') + ' devolveu a versão ' + esc(f.devolucao.detalhe.versao) + ' em ' + dataHoraCr(f.devolucao.criado_em) + ':</b> "' + esc(f.devolucao.detalhe.pergunta) + '"' +
+        (pf.responder ? '<label class="rot" for="fResp" style="margin-top:10px">Sua resposta</label><textarea class="campo" id="fResp" rows="2"></textarea><div class="linha" style="justify-content:flex-end;margin-top:8px">' +
+          '<button class="btn ghost sm" id="btResponderFicha">Responder sem mudar a ficha</button>' + (pf.enviar ? '<button class="btn primary sm" id="btResponderVersao">Responder e enviar nova versão (' + proxima + ' de ' + f.limite + ')</button>' : '') + '</div>' : '') + '</div>';
+    }
+    if (ed && !f.versao && chip) html += '<div class="msg aviso" style="margin-bottom:16px"><div>Envie a ficha ao Crédito <b>até ' + dataBr(f.prazo.vence) + '</b> (' + f.prazo.dias + ' dias úteis da conclusão). Você recebe um lembrete 1 dia útil antes e no dia; passou do prazo, um alerta por dia útil, também para a coordenação.</div></div>';
+    if (ed) html += '<p class="ajuda" style="margin:0 0 14px">Revise e complete os <b style="color:var(--man)">campos em azul</b>; o resto vem do portal. Um dado errado se corrige no formulário ou na etapa, e a ficha acompanha.' +
+      (f.versao && f.mudou.length ? ' <b>Mudou desde a versão ' + f.versao + ':</b> ' + esc(f.mudou.join('; ')) + '.' : '') + '</p>';
+    if (ed && j.faltas.length) html += '<div class="msg aviso" style="margin-bottom:16px"><b>Para enviar, falta:</b> ' + esc(j.faltas.join(' ')) + '</div>';
+    if (j.conteudo.diferencas.length) html += '<div class="msg aviso" style="margin-bottom:16px"><b>' + esc(j.conteudo.rotulo_diferencas) + ':</b> ' + esc(j.conteudo.diferencas.join('; ')) + '.</div>';
+    html += '<div class="pilha" style="gap:16px" id="fichaCorpo">' + htmlConteudoFicha(j.conteudo, ed) + '</div>';
+    html += '<section class="painel" style="margin-top:16px"><div class="cab-painel"><h2>Versões e registro</h2></div><div class="corpo pilha" style="gap:8px;font-size:13px;font-weight:600;color:var(--ink-2)">' +
+      (j.versoes.map(function (v) {
+        return '<div><b style="color:var(--ink)">Versão ' + v.versao + '</b> · ' + dataHoraCr(v.enviada_em) + ' por ' + esc(v.enviada_por_nome || '') + (v.para_nome ? ' para ' + esc(v.para_nome) : '') + (v.motivo ? ' · "' + esc(v.motivo) + '"' : '') +
+          (v.confirmada_em ? ' · ' + etq(['recebida por ' + (v.confirmada_por_nome || '') + ' em ' + dataHoraCr(v.confirmada_em), 'verde']) : '') +
+          ' · <a href="/api/implantacoes/' + i.id + '/ficha.pdf?versao=' + v.versao + '" target="_blank" rel="noopener">PDF v' + v.versao + '</a></div>';
+      }).join('') || '<div class="ficha-nota">Ainda não enviada.</div>') +
+      j.eventos.filter(function (e) { return ['ficha_devolvida', 'ficha_resposta', 'ficha_destino', 'ficha_liberada'].indexOf(e.tipo) >= 0; }).map(function (e) {
+        var x = e.detalhe || {};
+        return '<div><b style="color:var(--ink)">' + dataHoraCr(e.criado_em) + '</b> · ' + esc(e.usuario_nome || '') + ' ' + esc(EVENTO_FICHA[e.tipo] || e.tipo) +
+          (x.pergunta ? ': "' + esc(x.pergunta) + '"' : x.resposta ? ': "' + esc(x.resposta) + '"' : x.para ? ' para ' + esc(x.para) : x.motivo ? ': "' + esc(x.motivo) + '"' : '') + '</div>';
+      }).join('') + '<div class="ficha-nota">' + esc(j.conteudo.nota_final) + ' Até ' + f.limite + ' versões; depois, só com a liberação da coordenação de Implantação.</div></div></section></div>';
+    $('#conteudo').innerHTML = html;
+
+    // ler o que está na tela para dados (k = caminho em dados, ex.: consumo.0.tipo)
+    function ler() {
+      var d = JSON.parse(JSON.stringify(j.dados || {}));
+      $$('#fichaCorpo [data-k]').forEach(function (el) {
+        var p = el.getAttribute('data-k').split('.'), o = d;
+        for (var n = 0; n < p.length - 1; n++) { var k = /^\d+$/.test(p[n]) ? Number(p[n]) : p[n]; if (o[k] == null) o[k] = /^\d+$/.test(p[n + 1]) ? [] : {}; o = o[k]; }
+        o[/^\d+$/.test(p[p.length - 1]) ? Number(p[p.length - 1]) : p[p.length - 1]] = el.value;
+      });
+      var multi = {};
+      $$('#fichaCorpo [data-multi]').forEach(function (c) { var k = c.getAttribute('data-multi'); multi[k] = multi[k] || []; if (c.checked) multi[k].push(c.value); });
+      Object.keys(multi).forEach(function (k) { d[k] = multi[k]; });
+      return d;
+    }
+    var salvar = async function (d) { return api('PUT', '/api/implantacoes/' + i.id + '/ficha', { dados: d || ler() }); };
+    $$('#fichaCorpo [data-multi]').forEach(function (c) { c.onchange = function () { c.closest('label').classList.toggle('on', c.checked); }; });
+    $$('[data-add-linha]').forEach(function (b) {
+      b.onclick = async function () {
+        var d = ler(), k = b.getAttribute('data-add-linha');
+        d[k] = (d[k] || []).concat([k === 'receitas' ? { tipo: 'Outra receita' } : { unidade: '', por_que: 'Espólio' }]);
+        try { await salvar(d); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+      };
+    });
+    $$('[data-tirar-linha]').forEach(function (b) {
+      b.onclick = async function () {
+        var d = ler(), k = b.getAttribute('data-tirar-linha');
+        d[k].splice(Number(b.getAttribute('data-n')), 1);
+        try { await salvar(d); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+      };
+    });
+    if ($('#btSalvarFicha')) $('#btSalvarFicha').onclick = async function () { try { var r = await salvar(); toast(r.faltas.length ? 'Ficha salva. Para enviar, falta: ' + r.faltas.length + '.' : 'Ficha salva: pronta para enviar.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
+    var enviar = function (resposta) {
+      var mo = modal({ titulo: f.versao ? 'Enviar a versão ' + proxima + ' de ' + f.limite : 'Enviar à assistente de crédito',
+        corpo: '<p class="ajuda" style="margin-top:0">' + (f.destino ? 'Vai para ' + esc(f.destino.nome) + ', que confirma o recebimento no portal.' : 'Vai para a assistente de crédito do condomínio na Carteira; sem ela, a supervisão de Crédito escolhe.') +
+          ' A versão enviada fica guardada como está, com o PDF para o CPD.</p>' +
+          (f.versao ? '<label class="rot" for="mFichaMot">O que mudou nesta versão (obrigatório)</label><textarea class="campo" id="mFichaMot" rows="2"></textarea>' : ''),
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mFichaOk">Enviar</button>' });
+      $('#mFichaOk', mo).onclick = async function () {
+        try {
+          var r = await api('POST', '/api/implantacoes/' + i.id + '/ficha/enviar', { dados: ler(), motivo: f.versao ? $('#mFichaMot', mo).value : '', resposta: resposta || '' });
+          mo.fechar(); toast(r.para ? 'Enviada para ' + r.para + '.' : 'Enviada: a supervisão de Crédito escolhe a assistente.', 'ok'); recarregar();
+        } catch (e) { toast(e.message + (e.dados && e.dados.faltas ? ' ' + e.dados.faltas.join(' ') : ''), 'erro'); }
+      };
+    };
+    if ($('#btEnviarFicha')) $('#btEnviarFicha').onclick = function () { enviar(''); };
+    if ($('#btResponderVersao')) $('#btResponderVersao').onclick = function () { if (!$('#fResp').value.trim()) { toast('Escreva a resposta.', 'erro'); return; } enviar($('#fResp').value); };
+    if ($('#btResponderFicha')) $('#btResponderFicha').onclick = async function () {
+      try { await api('POST', '/api/implantacoes/' + i.id + '/ficha/responder', { resposta: $('#fResp').value }); toast('Resposta enviada.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+    };
+    if ($('#btLiberarFicha')) $('#btLiberarFicha').onclick = function () {
+      var mo = modal({ titulo: 'Liberar mais uma versão', corpo: '<p class="ajuda" style="margin-top:0">A ficha já teve ' + f.versao + ' versões (o limite é ' + f.limite + '). A liberação fica no registro.</p><label class="rot" for="mLibMot">Motivo (obrigatório)</label><textarea class="campo" id="mLibMot" rows="2"></textarea>',
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mLibOk">Liberar</button>' });
+      $('#mLibOk', mo).onclick = async function () { try { await api('POST', '/api/implantacoes/' + i.id + '/ficha/liberar', { motivo: $('#mLibMot', mo).value }); mo.fechar(); toast('Nova versão liberada.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
+    };
+    $$('[data-cobrar-imp]').forEach(function (b) {
+      b.onclick = async function () {
+        if (!(await confirmar('Cobrar a ficha de repasse', esc(i.responsavel_nome || 'Quem conduz') + ' recebe a cobrança no portal e por e-mail.', 'Cobrar'))) return;
+        try { await api('POST', '/api/implantacoes/' + i.id + '/cobrar', { qual: 'ficha' }); toast('Cobrança enviada.', 'ok'); } catch (e) { toast(e.message, 'erro'); }
+      };
+    });
+    if ($('#btDestinoFicha')) $('#btDestinoFicha').onclick = function () {
+      var mo = modal({ titulo: 'Escolher a assistente de crédito', corpo: selCr('mFichaDest', 'Assistente de crédito', j.credito.length ? j.credito[0].id : '', j.credito.map(function (x) { return [x.id, x.nome]; })) +
+        '<div class="ajuda">A assistente é avisada no portal e por e-mail. Quando o condomínio estiver na Carteira, ela fica como a assistente de crédito dele.</div>',
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mFichaDestOk">Encaminhar</button>' });
+      $('#mFichaDestOk', mo).onclick = async function () { try { await api('POST', '/api/implantacoes/' + i.id + '/ficha/destino', { usuario_id: Number($('#mFichaDest', mo).value) }); mo.fechar(); toast('Encaminhada.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
+    };
+    if ($('#btConfirmarFicha')) $('#btConfirmarFicha').onclick = async function () {
+      try { await api('POST', '/api/implantacoes/' + i.id + '/ficha/confirmar', {}); toast('Recebimento confirmado.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+    };
+    if ($('#btDevolverFicha')) $('#btDevolverFicha').onclick = function () {
+      var mo = modal({ titulo: 'Devolver com pergunta', corpo: '<label class="rot" for="mFichaPerg">Pergunta para a assistente de implantação</label><textarea class="campo" id="mFichaPerg" rows="3"></textarea><div class="ajuda">Ela responde sem mudar a ficha ou envia uma nova versão. Tudo fica no registro.</div>',
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mFichaPergOk">Devolver</button>' });
+      $('#mFichaPergOk', mo).onclick = async function () { try { await api('POST', '/api/implantacoes/' + i.id + '/ficha/devolver', { pergunta: $('#mFichaPerg', mo).value }); mo.fechar(); toast('Devolvida com a pergunta.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
     };
   }
 
