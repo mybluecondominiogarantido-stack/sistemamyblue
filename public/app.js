@@ -5111,7 +5111,7 @@
     todas: function () { return true; }, andamento: function (l) { return l.pct < 100; },
     so_onboarding: function (l) { return l.faixa === 'so_onboarding'; }, concluidas: function (l) { return l.pct >= 100; },
   };
-  function controleAcomp(j, raiz) {
+  function controleAcomp(j, raiz, recarregar) {
     var f = filtroAcomp;
     var ordem = lembrar('acomp.ctrl.ordem2', { k: 'mes', d: -1 });
     var visao = lembrar('acomp.ctrl.visao', 'resumida');
@@ -5158,6 +5158,62 @@
         selo(l.feitas.envio && ENVIO_CTRL[c.envio] ? ENVIO_CTRL[c.envio].charAt(0) + ENVIO_CTRL[c.envio].slice(1).toLowerCase() : 'Envio', l.feitas.envio, l.feitas.envio ? 'Envio: ' + (ENVIO_CTRL[c.envio] || '').toLowerCase() : 'Envio pendente') +
         '</span>';
     };
+    var botaoEtapas = function (l) {
+      return l.controle.pode_etapas ? ' <button class="btn ghost sm edita-ctrl" data-etapas="' + l.id + '" aria-label="Editar as etapas de ' + esc(l.condominio) + '" title="Editar as etapas e concluir">' + IC.lapis + 'Editar</button>' : '';
+    };
+    // editar as etapas e concluir direto do Controle (em andamento; as importadas concluem sem avisos)
+    function editarEtapas(l) {
+      var e = l.controle.etapas, o = e.onboarding, imp = l.importada;
+      var marca = function (id, rot, ok) { return '<label class="marca"><input type="checkbox" id="' + id + '"' + (ok ? ' checked' : '') + '> ' + esc(rot) + '</label>'; };
+      var mo = modal({
+        titulo: 'Etapas · ' + l.condominio, largo: true,
+        corpo: '<p class="ajuda" style="margin:0 0 14px">' + esc(protocolo(l)) + (imp ? ' · importada do histórico das planilhas: conclui sem avisos e sem ficha de repasse. ' + (l.controle.ligada_carteira
+            ? '<b>Já está na Carteira</b> (ligada ao cadastro na importação): ao concluir, nada é criado lá.'
+            : '<b>Ainda não achada na Carteira</b>: ao concluir, o portal procura de novo pelo ID Vouch, CNPJ e nome; se não achar, abre a implantação para a coordenação confirmar a entrada (ele recusa ID ou CNPJ repetido).')
+            : ' · ao concluir, a coordenação é avisada para conferir e confirmar a entrada na Carteira.') + '</p>' +
+          '<div class="pilha">' +
+          '<div class="grade-2"><div><span class="rot">1 · Documentação</span>' + marca('mEtDoc', 'Documentação conferida', e.documentacao.feito) + '</div>' + campoCr('mEtVouch', '2 · ID Vouch', e.vouch.id, { ph: 'ex.: 90012', ajuda: /^planilha-/.test(e.vouch.id) ? '"' + esc(e.vouch.id) + '" é provisório (a planilha só dizia que o Vouch foi feito): troque pelo ID do Vouch.' : '' }) + '</div>' +
+          '<div class="grade-2">' + selCr('mEtOnb', '3 · Onboarding', o.situacao, [['a_marcar', 'A marcar'], ['marcado', 'Marcado'], ['realizado', 'Realizado'], ['sindico_myblue', 'Síndico MyBlue']]) +
+          campoCr('mEtOnbData', 'Data do onboarding' + (imp ? ' (opcional)' : ''), /^\d{4}-\d{2}-\d{2}$/.test(o.data) ? o.data : '', { tipo: 'date' }) + '</div>' +
+          '<div class="grade-2"><div><span class="rot">4 · Emissão de boletos</span>' + marca('mEtBol', 'Boletos emitidos', e.boletos.feito) + '</div>' + campoCr('mEtVenc', '1º vencimento', e.boletos.primeiro_vencimento, { tipo: 'date' }) + '</div>' +
+          '<div class="grade-2">' + selCr('mEtEnvio', '5 · Envio dos boletos', e.envio.forma, [['', 'Escolha…'], ['email', 'Digital (e-mail)'], ['fisico', 'Físico'], ['ambos', 'Ambos']]) + '<div></div></div>' +
+          '<div id="mEtFaltas"></div></div>',
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn ghost" id="mEtSalvar">Salvar</button><button class="btn primary" id="mEtConcluir">Salvar e concluir</button>',
+      });
+      var ler = function () {
+        return {
+          documentacao: { feito: $('#mEtDoc', mo).checked }, vouch: { id: $('#mEtVouch', mo).value.trim() },
+          onboarding: { situacao: $('#mEtOnb', mo).value, data: $('#mEtOnbData', mo).value, hora: o.hora, por: o.por },
+          boletos: { feito: $('#mEtBol', mo).checked, primeiro_vencimento: $('#mEtVenc', mo).value }, envio: { forma: $('#mEtEnvio', mo).value },
+        };
+      };
+      var botoes = function (on) { ['#mEtSalvar', '#mEtConcluir'].forEach(function (b) { $(b, mo).disabled = !on; }); };
+      var salvar = async function (concluir) {
+        botoes(false);
+        try {
+          var r = await api('PATCH', '/api/implantacoes/' + l.id + '/etapas', { etapas: ler() });
+          if (concluir) {
+            var faltas = (r.faltas || []).filter(function (x) { return !(imp && /^Informar a data em que o onboarding/.test(x)); });
+            if (faltas.length) {
+              $('#mEtFaltas', mo).innerHTML = '<div class="msg aviso"><div><b>Salvo, mas ainda não dá para concluir.</b> Falta:<ul style="margin:6px 0 0;padding-left:18px">' + faltas.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div></div>';
+              botoes(true); return;
+            }
+            var rc = await api('POST', '/api/implantacoes/' + l.id + '/concluir', {});
+            if (rc.carteira === 'confirmar') {
+              mo.fechar();
+              toast('Concluída. Não está na Carteira: confirme a entrada.', 'ok');
+              location.hash = '#/implantacao/' + l.id;
+              return;
+            }
+            toast(imp ? 'Concluída (já estava na Carteira: nada foi criado lá).' : 'Concluída: a coordenação foi avisada para confirmar a Carteira.', 'ok');
+          } else toast('Etapas salvas.', 'ok');
+          mo.fechar();
+          if (recarregar) recarregar();
+        } catch (x) { botoes(true); toast(x.message, 'erro'); }
+      };
+      $('#mEtSalvar', mo).onclick = function () { salvar(false); };
+      $('#mEtConcluir', mo).onclick = function () { salvar(true); };
+    }
     function desenhar() {
       if (!FILTRO_SIT_CTRL[sit]) sit = 'todas';
       var base = j.linhas.filter(function (l) { return passaAcomp(l); });
@@ -5168,7 +5224,14 @@
       var COLS = resumida ? RESUMIDA : COMPLETA;
       var feitosOnb = lista.filter(function (l) { return l.feitas.onboarding; }).length;
       var mediaDe = function (ls) { return ls.length ? Math.round(ls.reduce(function (s, l) { return s + l.pct; }, 0) / ls.length) : 0; };
-      var cab = '<div class="ctrl-topo"><div class="linha" style="gap:8px">' + SIT_CTRL.map(function (s) {
+      var doAno = j.linhas.filter(function (l) { return passaAcomp(l, { semMes: true }); });
+      var meses = '<div class="meses-ctrl" role="group" aria-label="Mês do contrato"><span>Mês do contrato</span>' +
+        '<button class="mes-ctrl' + (!f.mes ? ' on' : '') + '" data-mes="">Todos <b>' + doAno.length + '</b></button>' +
+        MESES_ACOMP.map(function (m, k) {
+          var n = doAno.filter(function (l) { return Number(String(l.inicio || '').slice(5, 7)) === k + 1; }).length;
+          return '<button class="mes-ctrl' + (Number(f.mes) === k + 1 ? ' on' : '') + '" data-mes="' + (k + 1) + '"' + (n ? '' : ' disabled') + ' title="' + MESES_LONGO[k] + ': ' + n + '">' + m + ' <b>' + n + '</b></button>';
+        }).join('') + '</div>';
+      var cab = meses + '<div class="ctrl-topo"><div class="linha" style="gap:8px">' + SIT_CTRL.map(function (s) {
         return '<button class="pilula-acomp' + (sit === s[0] ? ' on' : '') + '" data-sit="' + s[0] + '">' + esc(s[1]) + ' <span class="n">' + base.filter(FILTRO_SIT_CTRL[s[0]]).length + '</span></button>';
       }).join('') + '</div><span class="espaco"></span><div class="seg-ctrl" role="group" aria-label="Visão da tabela">' +
         [['resumida', 'Resumida'], ['completa', 'Planilha completa']].map(function (v) { return '<button data-visao="' + v[0] + '" aria-pressed="' + (visao === v[0] || (v[0] === 'resumida' && resumida)) + '">' + v[1] + '</button>'; }).join('') + '</div></div>';
@@ -5182,7 +5245,7 @@
           var c = l.controle, onb = ONB_CTRL[c.onboarding];
           return '<tr data-imp="' + l.id + '" class="' + (l.pct >= 100 ? 'feita' : 'aberta') + '"><td class="prot-ctrl"><b>' + esc(protocolo(l)) + '</b></td>' +
             '<td class="cond-ctrl"><a href="#/implantacao/' + l.id + '"><b>' + esc(l.condominio) + '</b></a><span class="sub-ctrl">' + esc([l.uf, l.executivo_nome, l.primeiro_vencimento ? '1º venc. ' + dataBr(l.primeiro_vencimento).slice(0, 5) + (l.vencimento_previsto ? ' (previsto)' : '') : ''].filter(Boolean).join(' · ')) + (l.importada ? ' · <span title="Importada do histórico das planilhas">planilha</span>' : '') + '</span></td>' +
-            '<td>' + pctAcomp(l.pct) + '</td><td>' + etapasCelula(l) + '</td>' +
+            '<td>' + pctAcomp(l.pct) + '</td><td>' + etapasCelula(l) + botaoEtapas(l) + '</td>' +
             '<td>' + (onb ? '<span class="etiqueta ' + onb[1] + '">' + onb[0] + '</span>' : '—') + (c.data_onboarding ? '<span class="sub-ctrl">' + dataBr(c.data_onboarding) + '</span>' : '') + '</td>' +
             '<td class="por-ctrl"' + (l.responsavel_nome ? ' title="' + esc(l.responsavel_nome) + '"' : '') + '>' + (l.responsavel_nome ? esc(curto(l.responsavel_nome)) : '<span class="chip-ctrl">na fila</span>') + '</td>' +
             '<td class="obs-td">' + obsCelula(l) + '</td></tr>';
@@ -5213,7 +5276,7 @@
               '<td class="centro">' + sim(!!c.vouch) + '</td><td class="centro">' + (ONB_CTRL[c.onboarding] ? '<span class="etiqueta ' + ONB_CTRL[c.onboarding][1] + '">' + ONB_CTRL[c.onboarding][0] + '</span>' : '—') + '</td><td>' + (c.data_onboarding ? dataBr(c.data_onboarding) : '') + '</td>' +
               '<td class="centro">' + sim(c.boletos) + '</td><td class="centro">' + (ENVIO_CTRL[c.envio] ? '<span class="chip-ctrl azul">' + ENVIO_CTRL[c.envio] + '</span>' : '<span class="chip-ctrl">—</span>') + '</td>' +
               '<td>' + (l.responsavel_nome ? esc(l.responsavel_nome) : '<span class="chip-ctrl">na fila</span>') + '</td>' +
-              '<td class="obs-td">' + obsCelula(l) + '</td><td>' + mesCurto(l.mes) + '</td><td>' + pctAcomp(l.pct) + '</td></tr>';
+              '<td class="obs-td">' + obsCelula(l) + '</td><td>' + mesCurto(l.mes) + '</td><td>' + pctAcomp(l.pct) + botaoEtapas(l) + '</td></tr>';
           }).join('') || vazio) + '</tbody>' +
           '<tfoot><tr><td class="fixa f0"></td><td class="fixa f1"><b>' + lista.length + ' implantaç' + (lista.length === 1 ? 'ão' : 'ões') + '</b></td>' + COLS.slice(2).map(function (c) { return '<td' + (c[0] === 'onboarding' ? ' class="centro"' : '') + '>' + (c[0] === 'onboarding' ? '<b>' + feitosOnb + ' feitos</b>' : c[0] === 'pct' ? '<b>' + mediaDe(lista) + '% médio</b>' : '') + '</td>'; }).join('') + '</tr></tfoot>';
       }
@@ -5225,6 +5288,12 @@
         ' <b>Obs.</b>: quem conduz a implantação (e a coordenação) escreve direto na célula; ela também vai para a ficha de repasse. O resto vem do portal e muda quando a implantação muda.</p></section>';
       $$('[data-ord]', raiz).forEach(function (t) {
         t.onclick = function () { var k = t.getAttribute('data-ord'); ordem = { k: k, d: ordem.k === k ? -ordem.d : (k === 'mes' || k === 'pct' ? -1 : 1) }; guardar('ordem2', ordem); desenhar(); };
+      });
+      $$('[data-mes]', raiz).forEach(function (b) {
+        b.onclick = function () { f.mes = b.getAttribute('data-mes'); if ($('#acMes')) { $('#acMes').value = f.mes; $('#acMes').classList.toggle('on', !!f.mes); } salvarFiltroAcomp(); desenhar(); };
+      });
+      $$('[data-etapas]', raiz).forEach(function (b) {
+        b.onclick = function () { var l = j.linhas.find(function (x) { return String(x.id) === b.getAttribute('data-etapas'); }); if (l) editarEtapas(l); };
       });
       if ($('[data-agrupar]', raiz)) $('[data-agrupar]', raiz).onclick = function () { ordem = { k: 'mes', d: -1 }; guardar('ordem2', ordem); desenhar(); };
       $$('[data-sit]', raiz).forEach(function (b) { b.onclick = function () { sit = b.getAttribute('data-sit'); guardar('sit', sit); desenhar(); }; });

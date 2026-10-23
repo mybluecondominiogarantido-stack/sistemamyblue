@@ -623,6 +623,15 @@ tr.sel-ct td{background:var(--surface-2)}
 .obs-ctrl{font:inherit;font-size:13.5px;border:0;border-bottom:1px dashed var(--border-2);background:transparent;color:var(--ink-2);min-width:180px;padding:3px 0}
 .obs-ctrl:focus{outline:0;border-bottom-color:var(--teal)}
 .ctrl-topo{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:14px}
+.meses-ctrl{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:12px}
+.meses-ctrl>span{font-size:12px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-right:4px}
+.mes-ctrl{font:inherit;font-size:13px;font-weight:800;border:1px solid var(--border);background:var(--surface);color:var(--ink-2);border-radius:8px;padding:6px 10px;min-height:34px;cursor:pointer;text-transform:capitalize}
+.mes-ctrl b{font-size:11.5px;color:var(--muted);margin-left:2px}
+.mes-ctrl.on{background:var(--teal);border-color:var(--teal);color:#fff}
+.mes-ctrl.on b{color:#fff;opacity:.85}
+.mes-ctrl:disabled{opacity:.45;cursor:default}
+.edita-ctrl{margin-left:6px;padding:4px 10px;min-height:30px;font-size:12.5px}
+.edita-ctrl svg{width:14px;height:14px}
 .seg-ctrl{display:inline-flex;border:1px solid var(--border);border-radius:999px;background:var(--surface);padding:3px;box-shadow:var(--shadow-sm)}
 .seg-ctrl button{font:inherit;font-size:13.5px;font-weight:800;border:0;background:none;color:var(--muted);border-radius:999px;padding:7px 14px;cursor:pointer;min-height:34px}
 .seg-ctrl button[aria-pressed="true"]{background:var(--teal-bg);color:var(--teal-d)}

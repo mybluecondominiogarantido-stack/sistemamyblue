@@ -56,10 +56,12 @@ async function cobrarDocumentos(db, avisos, l, { autorId = null, lembrete = fals
 }
 
 /* as colunas da planilha Controle Implantações, a partir do formulário, do contrato e das etapas */
-function controle(b, l, podeObs) {
+function controle(b, l, podeObs, podeEtapas) {
   const f = b.formulario || {};
   const e = F.normalizarEtapas(b.etapas);
   return {
+    // em andamento, quem conduz (ou a coordenação) edita as etapas e conclui direto do Controle
+    pode_etapas: !!podeEtapas, etapas: podeEtapas ? e : null, ligada_carteira: !!b.condominio_id,
     cnpj: f.sem_cnpj ? 'ainda não possui (entrega)' : f.cnpj || b.cnpj || '', administradora: f.administradora || 'Não', sindico: f.sindico_nome || '',
     contrato: !!b.contrato_id, data_contrato: l.inicio, doc: e.documentacao.feito, data_doc: l.enviado,
     vouch: e.vouch.id || '', onboarding: e.onboarding.situacao, data_onboarding: /^\d{4}-\d{2}-\d{2}$/.test(e.onboarding.data) ? e.onboarding.data : '',
@@ -81,7 +83,10 @@ function rotasAcompanhamento(r, { db, seg, avisos, perfil, erro, evento, json, f
     const contratos = new Set((await db.q("SELECT DISTINCT implantacao_id FROM implantacao_documentos WHERE tipo = 'contrato' AND substituido_em IS NULL")).rows.map((x) => x.implantacao_id));
     const coord = !!(p.coordenacao || p.admin);
     const linhas = brutas.map(({ _bruto, ...l }) => {
-      const c = controle(_bruto, l, coord || _bruto.responsavel_id === req.usuario.id);
+      const conduz = coord || _bruto.responsavel_id === req.usuario.id;
+      // as importadas das planilhas não passam pelo "assumir"; as do portal, só depois de assumidas
+      const podeEtapas = _bruto.etapa === 'em_implantacao' && conduz && !!(_bruto.importacao_id || _bruto.iniciado_em);
+      const c = controle(_bruto, l, conduz, podeEtapas);
       c.contrato = !!(_bruto.contrato_id || contratos.has(l.id));
       return { ...l, antecipacao_envio: envioAntecipacao[l.id] || null, controle: c };
     });
