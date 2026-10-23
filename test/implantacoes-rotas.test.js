@@ -461,7 +461,7 @@ test('acompanhamento: o setor, a coordenação e a diretoria veem; o executivo n
   assert.deepEqual([l.primeiro_vencimento, l.vencimento_previsto, l.onboarding.limite, l.onboarding.status, l.onboarding.por_nome], ['2026-11-10', false, '2026-12-10', 'batida', 'Analista de Implantação Fictícia']);
   assert.equal(l.documentacao.status, 'pendente');
   assert.deepEqual(l.documentacao.falta, ['Procuração']);
-  assert.deepEqual(r.json.pode, { parametros: false, marcar: false, cobrar: true });
+  assert.deepEqual(r.json.pode, { parametros: false, marcar: false, cobrar: true, antecipacao: true });
   assert.equal((await coord('GET', '/api/implantacoes/acompanhamento')).json.pode.parametros, true);
   assert.ok((await equipe('GET', '/api/implantacoes/resumo')).json.acompanhamento);
   assert.ok(!(await exec('GET', '/api/implantacoes/resumo')).json.acompanhamento);

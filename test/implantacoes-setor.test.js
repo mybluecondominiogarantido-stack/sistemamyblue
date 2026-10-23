@@ -500,3 +500,25 @@ test('antecipação: a Implantação envia; no Controle de Repasses o Gestor cad
   const tipos = (await detalhe(ana, id)).eventos.map((x) => x.tipo);
   for (const t of ['antecipacao_enviada', 'antecipacao_cadastrada', 'antecipacao_devolvida']) assert.ok(tipos.includes(t), t);
 });
+
+test('Acompanhamento: colunas do Controle (Obs. só de quem conduz), fichas de repasse, Excel e desfazer o envio da antecipação', async () => {
+  const j = (await ana('GET', '/api/implantacoes/acompanhamento')).json;
+  const l = j.linhas.find((x) => x.id === idA);
+  assert.equal(l.controle.obs, 'Síndico pediu boleto separado');
+  assert.equal(l.controle.vouch, '90101');
+  assert.equal(l.controle.pode_obs, true);
+  assert.equal((await bia('GET', '/api/implantacoes/acompanhamento')).json.linhas.find((x) => x.id === idA).controle.pode_obs, false);
+  const f = j.fichas.find((x) => x.id === idA);
+  assert.deepEqual([f.situacao, f.destino_nome, f.versao, f.limite], ['enviada', 'Rita Fictícia', 4, 4]);
+  const x = await ana('POST', '/api/implantacoes/acompanhamento/excel', { nome: 'Controle 2026', abas: [{ titulo: 'Controle', cab: ['Protocolo', '%'], linhas: [['IMP-1', 60]] }] }, { bruto: true });
+  assert.equal(x.status, 200);
+  assert.match(x.headers.get('content-disposition'), /Controle_2026\.xlsx/);
+  assert.deepEqual(require('../server/planilha').lerXlsx(x.buffer), [['Protocolo', '%'], ['IMP-1', '60']]);
+  assert.equal((await exec('POST', '/api/implantacoes/acompanhamento/excel', { abas: [{ cab: ['a'], linhas: [] }] })).status, 403);
+  // desfazer: a nova sai da lista do Controle de Repasses
+  const id = await assumida('Residencial Fictício Zeta', { antecipacao: 'sim', antecipacao_valor: 5000, antecipacao_data: '2026-12-10', antecipacao_prazo: 'permanente' });
+  assert.equal((await ana('POST', `/api/implantacoes/${id}/antecipacao/enviar`, {})).json.enviado.fim, '');
+  assert.equal((await ana('POST', `/api/implantacoes/${id}/antecipacao/desfazer`, {})).status, 200);
+  assert.equal((await ana('POST', `/api/implantacoes/${id}/antecipacao/desfazer`, {})).status, 409);
+  assert.equal(await ctx.db.um('SELECT 1 FROM implantacao_antecipacoes WHERE implantacao_id = $1', [id]), null);
+});

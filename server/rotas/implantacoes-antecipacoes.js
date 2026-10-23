@@ -57,11 +57,28 @@ function rotasAntecipacoes(r, deps) {
       await t.q(`INSERT INTO implantacao_antecipacoes (implantacao_id, situacao, atualizacao, enviado, antes, enviada_por, enviada_em, regra_id)
         VALUES ($1, 'enviada', $2, $3::jsonb, $4::jsonb, $5, now(), $6)
         ON CONFLICT (implantacao_id) DO UPDATE SET situacao = 'enviada', atualizacao = EXCLUDED.atualizacao, enviado = EXCLUDED.enviado, antes = EXCLUDED.antes,
-          enviada_por = EXCLUDED.enviada_por, enviada_em = now(), cadastrado = NULL, ajuste = NULL, decidida_por = NULL, decidida_em = NULL, motivo = ''`,
+          enviada_por = EXCLUDED.enviada_por, enviada_em = now(), motivo = ''`,
       [i.id, atualizacao, JSON.stringify(envio), antes ? JSON.stringify(antes) : null, req.usuario.id, atual ? atual.regra_id : null]);
       await evento(t, i.id, req.usuario.id, 'antecipacao_enviada', { ...envio, atualizacao });
     });
     res.json({ ok: true, atualizacao, enviado: envio });
+  });
+
+  /* desfazer o envio (antes de o Gestor decidir): a nova sai da lista; a atualização volta ao que estava cadastrado */
+  r.post('/api/implantacoes/:id/antecipacao/desfazer', json, async (req, res) => {
+    const c = await carregar(req, res);
+    if (!c) return;
+    const { i, p, pd } = c;
+    if (!(p.coordenacao || p.admin || pd.editar_setor)) return erro(res, 403, 'Só quem conduz a implantação (ou tem autorização) e a coordenação desfazem o envio.');
+    const atual = await db.um('SELECT * FROM implantacao_antecipacoes WHERE implantacao_id = $1', [i.id]);
+    if (!atual || atual.situacao !== 'enviada') return erro(res, 409, 'Não há envio esperando o Gestor.');
+    await db.tx(async (t) => {
+      if (atual.atualizacao && atual.antes) {
+        await t.q("UPDATE implantacao_antecipacoes SET situacao = 'cadastrada', enviado = $2::jsonb, antes = NULL, atualizacao = FALSE WHERE implantacao_id = $1", [i.id, JSON.stringify(atual.antes)]);
+      } else await t.q('DELETE FROM implantacao_antecipacoes WHERE implantacao_id = $1', [i.id]);
+      await evento(t, i.id, req.usuario.id, 'antecipacao_desfeita', {});
+    });
+    res.json({ ok: true });
   });
 
   /* ---------- Controle de Repasses ---------- */

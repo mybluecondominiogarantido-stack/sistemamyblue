@@ -4826,13 +4826,43 @@
     };
   }
 
-  /* ---------- acompanhamento: painel, mês vigente, metas, antecipações e parâmetros (regras em server/implantacoes/metas.js) ---------- */
-  var ABAS_ACOMP = [['painel', 'Painel'], ['mes', 'Mês vigente'], ['onboarding', 'Onboarding'], ['documentacao', 'Documentação'], ['antecipacoes', 'Antecipações'], ['parametros', 'Parâmetros']];
+  /* ---------- acompanhamento: painel, mês vigente, controle, metas, antecipações, fichas e parâmetros (regras em server/implantacoes/metas.js) ---------- */
+  var ABAS_ACOMP = [['painel', 'Painel', 'grafico'], ['mes', 'Mês vigente', 'calendario'], ['controle', 'Controle', 'camadas'], ['onboarding', 'Onboarding', 'pessoas'],
+    ['documentacao', 'Documentação', 'documento'], ['antecipacoes', 'Antecipações', 'banco'], ['fichas', 'Fichas de repasse', 'pasta'], ['parametros', 'Parâmetros', 'lapis']];
+  var AVISO_ACOMP = {
+    painel: 'Contratos contados pela <b>data de início</b>; implantações canceladas ficam fora. Os números se atualizam a cada formulário e etapa registrados no portal (antes vinham da planilha).',
+    mes: 'Implantações cujo contrato começa no mês, na ordem do 1º vencimento. A partir do dia da virada (Parâmetros), a tela mostra o mês seguinte.',
+    controle: 'As mesmas colunas da planilha <b>Controle Implantações</b>, uma linha por implantação, preenchidas sozinhas pelo formulário, pelo contrato e pelas etapas do setor. A <b>Obs.</b> quem conduz escreve direto na célula. O botão <b>Excel</b> baixa esta tabela, com os filtros aplicados.',
+    onboarding: 'Meta de onboarding: até o prazo depois do 1º vencimento, na carteira de cada analista. Onboarding fora do prazo, mesmo justificado, fica como não batido.',
+    documentacao: 'Meta de documentação: os documentos da meta em até o prazo contado do <b>envio do formulário</b>. A data de cada documento é a do primeiro anexo (ou da marcação de recebido sem arquivo). Clique num documento que falta para anexar ou marcar recebido.',
+    antecipacoes: 'Vem do bloco "Cashback e antecipação" do formulário. <b>Marque</b> e envie ao <b>Controle de Repasses</b>: o Gestor confirma e a antecipação vira regra lá.',
+    fichas: 'Cada ficha deve ser enviada ao Crédito em até <b>5 dias úteis</b> da conclusão da implantação. Lembrete 1 dia útil antes e no dia; passou do prazo, ela e a <b>coordenação</b> recebem um alerta por dia útil até o envio. A assistente de crédito vem da Carteira; sem ela, a <b>supervisão de Crédito</b> escolhe.',
+    parametros: 'Cada mudança vale a partir da data escolhida: os envios anteriores continuam calculados com a regra da época.',
+  };
   var MESES_ACOMP = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   var MESES_LONGO = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
   var FAIXA_ACOMP = { concluida: ['concluída', 'verde'], so_onboarding: ['só falta o onboarding', 'azul'], alta: ['60% a 99%', 'azul'], media: ['40% a 59%', 'ambar'], baixa: ['abaixo de 40%', 'vermelha'] };
   var SIT_META_ACOMP = { atingida: ['Meta atingida', 'verde'], andamento: ['Em andamento', 'azul'], abaixo: ['Abaixo da meta', 'ambar'] };
-  var filtroAcomp = { ano: '', mes: '', analista: '', executivo: '', mesVig: '', onb: '', docSit: '', antMes: '' };
+  var PADRAO_FILTRO_ACOMP = { ano: '', mes: '', analista: '', executivo: '', busca: '', card: '', docSit: '', onb: '', fichaSit: 'aguardando' };
+  var filtroAcomp = null;
+  var exportarAcomp = null; // a aba aberta diz o que o botão Excel baixa: { nome, abas: [{ titulo, cab, linhas }] }
+  // filtros lembrados por pessoa (neste navegador)
+  function chaveFiltroAcomp() { return 'acomp.filtros.' + (eu ? eu.id : 0); }
+  function carregarFiltroAcomp() { if (!filtroAcomp) filtroAcomp = Object.assign({}, PADRAO_FILTRO_ACOMP, lembrar(chaveFiltroAcomp(), {})); return filtroAcomp; }
+  function salvarFiltroAcomp() { try { localStorage.setItem('portal.' + chaveFiltroAcomp(), JSON.stringify(filtroAcomp)); } catch (e) { /* sem armazenamento */ } }
+  function filtrosMudadosAcomp() { var f = filtroAcomp; return ['mes', 'analista', 'executivo', 'busca', 'card', 'docSit'].some(function (k) { return f[k]; }) || (f.ano && String(f.ano) !== String(new Date().getFullYear())); }
+  function semAcentoAcomp(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+  /* os filtros de cima (ano e mês pelo início do contrato, analista, executivo e a busca) */
+  function passaAcomp(l, o) {
+    var f = filtroAcomp;
+    o = o || {};
+    if (!o.semAno && f.ano && String(l.inicio || '').slice(0, 4) !== String(f.ano)) return false;
+    if (!o.semMes && f.mes && Number(String(l.inicio || '').slice(5, 7)) !== Number(f.mes)) return false;
+    if (!o.semAnalista && f.analista && String(l.responsavel_id) !== String(f.analista)) return false;
+    if (!o.semExecutivo && f.executivo && String(l.executivo_id) !== String(f.executivo)) return false;
+    if (f.busca && semAcentoAcomp((l.condominio || '') + ' ' + (l.protocolo || '')).indexOf(semAcentoAcomp(f.busca)) < 0) return false;
+    return true;
+  }
   function faltamAcomp(n) { return n > 1 ? 'faltam ' + n + ' dias' : n === 1 ? 'falta 1 dia' : 'vence hoje'; }
   function statusOnbAcomp(o) {
     if (o.status === 'batida') return etq(['BATIDA', 'verde']);
@@ -4852,77 +4882,158 @@
     var m = { a_marcar: 'A marcar', marcado: 'Marcado', realizado: 'Realizado', sindico_myblue: 'Síndico MyBlue' }[o.situacao] || '';
     return esc(m) + (o.data ? '<span class="sec">' + dataBr(o.data) + (o.hora ? ' às ' + esc(o.hora) : '') + (o.por_nome ? ' · ' + esc(o.por_nome) : '') + '</span>' : '');
   }
+  function irImpAcomp(raiz) {
+    $$('[data-imp]', raiz).forEach(function (tr) { tr.onclick = function (e) { if (e.target.closest('a, button, input, label, select')) return; location.hash = '#/implantacao/' + tr.getAttribute('data-imp'); }; });
+  }
+  /* contadores das abas: o que pede atenção */
+  function contadoresAcomp(j) {
+    return {
+      onboarding: j.linhas.filter(function (l) { return l.na_meta && l.onboarding.status === 'a_marcar'; }).length,
+      documentacao: j.linhas.filter(function (l) { return l.na_meta && l.documentacao.status === 'pendente'; }).length,
+      antecipacoes: j.linhas.filter(function (l) { return l.antecipacao_envio && (l.antecipacao_envio.situacao === 'devolvida' || l.antecipacao_envio.mudou); }).length,
+      fichas: j.fichas.filter(function (x) { return x.situacao === 'devolvida' || (!x.primeiro_envio_em && x.prazo && x.prazo.status === 'atrasado'); }).length,
+    };
+  }
+  var TITULO_CONTADOR_ACOMP = { onboarding: 'onboardings a marcar', documentacao: 'contratos com documento pendente', antecipacoes: 'devolvidas ou com o formulário mudado', fichas: 'fichas atrasadas ou devolvidas' };
 
   async function paginaAcompanhamentoImp(aba) {
+    carregarFiltroAcomp();
     if (!ABAS_ACOMP.some(function (a) { return a[0] === aba; })) aba = lembrar('acomp.aba', 'painel');
+    if (!ABAS_ACOMP.some(function (a) { return a[0] === aba; })) aba = 'painel';
     try { localStorage.setItem('portal.acomp.aba', JSON.stringify(aba)); } catch (e) { /* sem armazenamento */ }
-    definirBarra('<span class="setor">Implantação</span><span class="sep">/</span><span class="nome">Acompanhamento · ' + esc(ABAS_ACOMP.find(function (a) { return a[0] === aba; })[1]) + '</span>');
-    $('#conteudo').innerHTML = '<div class="pagina" style="max-width:1320px"><h1>Acompanhamento da implantação</h1>' +
-      '<p class="sub" style="margin-bottom:16px">O que a planilha calculava, agora direto dos formulários e das etapas no portal. Contratos contados pela data de início; canceladas ficam fora.</p>' +
-      '<nav class="abas">' + ABAS_ACOMP.map(function (a) { return '<a href="#/acompanhamento/' + a[0] + '" class="' + (a[0] === aba ? 'on' : '') + '">' + esc(a[1]) + '</a>'; }).join('') + '</nav>' +
-      '<div id="corpoAcomp"><div class="vazio">Carregando…</div></div></div>';
+    var info = ABAS_ACOMP.find(function (a) { return a[0] === aba; });
+    definirBarra('<span class="setor">Implantação</span><span class="sep">/</span><span class="nome">Acompanhamento · ' + esc(info[1]) + '</span>');
     var f = filtroAcomp;
     var j;
+    if (!$('#corpoAcomp')) $('#conteudo').innerHTML = '<div class="pagina" style="max-width:1400px"><div class="vazio">Carregando…</div></div>';
     try {
       j = await api('GET', '/api/implantacoes/acompanhamento?ano=' + encodeURIComponent(f.ano) + '&mes=' + encodeURIComponent(f.mes) + '&analista=' + encodeURIComponent(f.analista) + '&executivo=' + encodeURIComponent(f.executivo));
-    } catch (e) { $('#corpoAcomp').innerHTML = '<div class="vazio">' + esc(e.message) + '</div>'; return; }
-    if (!$('#corpoAcomp')) return;
-    var corpo = { painel: painelAcomp, mes: mesAcomp, onboarding: onboardingAcomp, documentacao: documentacaoAcomp, antecipacoes: antecipacoesAcomp, parametros: parametrosAcomp }[aba];
-    corpo(j, $('#corpoAcomp'), function () { paginaAcompanhamentoImp(aba); });
+    } catch (e) { $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">' + esc(e.message) + '</div></div>'; return; }
+    if (!f.ano) f.ano = String(j.ano);
+    var cont = contadoresAcomp(j);
+    var agora = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    var mesesSel = [['', 'Todos os meses']].concat(MESES_LONGO.map(function (m, k) { return [k + 1, m]; }));
+    $('#conteudo').innerHTML = '<div class="pagina" style="max-width:1400px">' +
+      '<div class="cab-acomp"><div class="tit-acomp"><h1>Acompanhamento da implantação</h1><p class="sub" style="margin:0">Contratos, etapas, metas e antecipações · Implantação · Coordenação · Diretoria</p></div><span class="espaco"></span>' +
+      '<div class="status-acomp"><i></i><b>Dados do portal</b><span>' + esc(agora) + '</span><button class="btn icon ghost" id="acRecarregar" aria-label="Atualizar">' + IC.recarregar + '</button></div>' +
+      '<button class="btn ghost" id="acExcel">' + IC.baixar + 'Excel</button></div>' +
+      '<div class="msg info aviso-acomp"><div>' + AVISO_ACOMP[aba] + '</div></div>' +
+      (aba === 'parametros' ? '' : '<div class="filtros-acomp"><span class="rot-ano">Ano</span>' + j.anos.map(function (a) { return '<button class="pilula-acomp' + (String(a) === String(f.ano) ? ' on' : '') + '" data-ano="' + a + '">' + a + '</button>'; }).join('') +
+        selFiltroAcomp('acMes', 'Mês', f.mes, mesesSel) +
+        selFiltroAcomp('acAn', 'Analista', f.analista, [['', 'Todas as analistas']].concat(j.analistas.map(function (x) { return [x.id, x.nome]; }))) +
+        selFiltroAcomp('acEx', 'Executivo', f.executivo, [['', 'Todos os executivos']].concat(j.executivos.map(function (x) { return [x.id, x.nome]; }))) +
+        (filtrosMudadosAcomp() ? '<span class="lembra-acomp">' + IC.historico + 'filtros da sua última visita · <button class="link-acomp" id="acLimpar">Limpar filtros</button></span>' : '') +
+        '<span class="espaco"></span><label class="busca-acomp">' + IC.busca + '<input type="search" id="acBusca" placeholder="Buscar condomínio ou protocolo…" value="' + esc(f.busca) + '" aria-label="Buscar condomínio ou protocolo"></label></div>') +
+      '<nav class="abas abas-acomp">' + ABAS_ACOMP.map(function (a) {
+        var n = cont[a[0]];
+        return '<a href="#/acompanhamento/' + a[0] + '" class="' + (a[0] === aba ? 'on' : '') + '">' + (IC[a[2]] || '') + esc(a[1]) + (n ? '<span class="cont-acomp" title="' + n + ' ' + esc(TITULO_CONTADOR_ACOMP[a[0]]) + '">' + n + '</span>' : '') + '</a>';
+      }).join('') + '</nav><div id="corpoAcomp"></div></div>';
+    var recarregar = function () { salvarFiltroAcomp(); paginaAcompanhamentoImp(aba); };
+    var corpo = { painel: painelAcomp, mes: mesAcomp, controle: controleAcomp, onboarding: onboardingAcomp, documentacao: documentacaoAcomp, antecipacoes: antecipacoesAcomp, fichas: fichasAcomp, parametros: parametrosAcomp }[aba];
+    exportarAcomp = null;
+    var desenhar = function () { salvarFiltroAcomp(); corpo(j, $('#corpoAcomp'), recarregar); };
+    $('#acRecarregar').onclick = recarregar;
+    $('#acExcel').onclick = async function () {
+      if (!exportarAcomp) { toast('Nada para exportar nesta aba.', 'erro'); return; }
+      try {
+        var r = await fetch('/api/implantacoes/acompanhamento/excel', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(exportarAcomp) });
+        if (!r.ok) { var e = {}; try { e = await r.json(); } catch (x) { /* sem JSON */ } throw new Error(e.erro || 'Erro ' + r.status); }
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(await r.blob());
+        a.download = exportarAcomp.nome + '.xlsx';
+        document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      } catch (e) { toast(e.message, 'erro'); }
+    };
+    if (aba !== 'parametros') {
+      $$('[data-ano]').forEach(function (b) { b.onclick = function () { f.ano = b.getAttribute('data-ano'); recarregar(); }; });
+      $('#acMes').onchange = function () { f.mes = this.value; recarregar(); };
+      $('#acAn').onchange = function () { f.analista = this.value; recarregar(); };
+      $('#acEx').onchange = function () { f.executivo = this.value; recarregar(); };
+      if ($('#acLimpar')) $('#acLimpar').onclick = function () { filtroAcomp = Object.assign({}, PADRAO_FILTRO_ACOMP, { ano: String(j.ano) }); recarregar(); };
+      var espera;
+      $('#acBusca').oninput = function () { var v = this.value; clearTimeout(espera); espera = setTimeout(function () { f.busca = v; desenhar(); }, 250); };
+    }
+    desenhar();
+  }
+  function selFiltroAcomp(id, rot, valor, opcoes) {
+    return '<select class="campo sel-acomp' + (valor ? ' on' : '') + '" id="' + id + '" aria-label="' + esc(rot) + '">' + opcoes.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(o[0]) === String(valor) ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select>';
   }
   function selAcomp(id, rot, valor, opcoes) {
     return '<label class="filtro-acomp" for="' + id + '">' + esc(rot) + '<select class="campo" id="' + id + '">' + opcoes.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(o[0]) === String(valor) ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select></label>';
   }
-  function tileAcomp(rot, valor, sec) { return '<div class="tile"><span class="rot-tile">' + esc(rot) + '</span><b>' + valor + '</b>' + (sec ? '<span class="sec">' + sec + '</span>' : '') + '</div>'; }
+  /* cartão do topo: { rot, valor, sec, card (filtra a lista ao clicar), on, barra (%), cor } */
+  function tileAcomp(rot, valor, sec, o) {
+    o = o || {};
+    return '<div class="card-acomp' + (o.card != null ? ' clicavel' : '') + (o.on ? ' on' : '') + '"' + (o.card != null ? ' data-card="' + esc(o.card) + '" role="button" tabindex="0"' : '') + '>' +
+      '<span class="rot-card">' + esc(rot) + '</span><b' + (String(valor).length > 9 ? ' class="longo"' : '') + (o.cor ? ' style="color:var(--' + o.cor + ')"' : '') + '>' + valor + '</b>' + (sec ? '<span class="sec">' + sec + '</span>' : '') +
+      (o.barra != null ? '<span class="barra-card"><i style="width:' + Math.max(0, Math.min(100, o.barra)) + '%"></i></span>' : '') + (o.on ? '<span class="filtrando">✓ filtrando a lista</span>' : '') + '</div>';
+  }
+  function ligarCardsAcomp(raiz, aoMudar) {
+    $$('[data-card]', raiz).forEach(function (c) {
+      var ir = function () { var k = c.getAttribute('data-card'); filtroAcomp.card = filtroAcomp.card === k ? '' : k; aoMudar(); };
+      c.onclick = ir;
+      c.onkeydown = function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ir(); } };
+    });
+  }
   function pontosAcomp(feitas) {
     var n = ['documentacao', 'vouch', 'onboarding', 'boletos', 'envio'].filter(function (k) { return feitas[k]; }).length;
     return '<span class="pontos-acomp" title="documentação, Vouch, onboarding, boletos e envio" aria-label="' + n + ' de 5 etapas">' + ['documentacao', 'vouch', 'onboarding', 'boletos', 'envio'].map(function (k) { return '<i' + (feitas[k] ? ' class="f"' : '') + '></i>'; }).join('') + '</span>';
   }
+  function pctAcomp(p) { return '<span class="pct-acomp"><b>' + p + '%</b><i><em style="width:' + p + '%"></em></i></span>'; }
 
-  function painelAcomp(j, raiz, recarregar) {
+  function painelAcomp(j, raiz) {
     var p = j.painel, f = filtroAcomp;
     var max = Math.max.apply(null, p.mensal.map(function (x) { return x.contratos; }).concat([1]));
     var tabela = function (titulo, cab, linhas) {
       return '<section class="painel" style="flex:1 1 300px"><div class="cab-painel"><h2>' + esc(titulo) + '</h2></div><div class="tabela-wrap"><table><thead><tr><th>' + esc(cab) + '</th><th class="num">Contratos</th><th class="num">% médio</th></tr></thead><tbody>' +
         (linhas.map(function (x) { return '<tr><td>' + esc(x.nome) + '</td><td class="num">' + x.contratos + '</td><td class="num">' + x.pct_medio + '%</td></tr>'; }).join('') || '<tr><td colspan="3" class="sec">Nada no período.</td></tr>') + '</tbody></table></div></section>';
     };
-    raiz.innerHTML = '<div class="linha" style="gap:12px;align-items:flex-end;margin-bottom:16px">' +
-      selAcomp('fAcAno', 'Ano', j.ano, j.anos.map(function (a) { return [a, a]; })) +
-      selAcomp('fAcMes', 'Mês', f.mes, [['', 'Todos']].concat(MESES_LONGO.map(function (m, k) { return [k + 1, m]; }))) +
-      selAcomp('fAcAn', 'Analista', f.analista, [['', 'Todas as pessoas']].concat(j.analistas.map(function (x) { return [x.id, x.nome]; }))) +
-      selAcomp('fAcEx', 'Executivo', f.executivo, [['', 'Todos']].concat(j.executivos.map(function (x) { return [x.id, x.nome]; }))) + '</div>' +
-      '<div class="tiles" style="margin-bottom:16px">' + tileAcomp('Contratos', p.total, 'em ' + (f.mes ? MESES_LONGO[f.mes - 1].toLowerCase() + ' de ' : '') + j.ano) + tileAcomp('% médio de conclusão', p.pct_medio + '%', 'etapas feitas ÷ 5') +
-      tileAcomp('Concluídos', p.concluidos, p.total ? Math.round(p.concluidos * 100 / p.total) + '% dos contratos' : '') + tileAcomp('Em andamento', p.andamento, 'entre 1% e 99%') + tileAcomp('Não iniciados', p.nao_iniciados, '0%: na fila ou sem etapa feita') + '</div>' +
-      '<div class="linha" style="gap:16px;align-items:stretch;margin-bottom:16px">' +
-      '<section class="painel" style="flex:1 1 420px"><div class="cab-painel"><h2>Progresso por etapa</h2><span class="espaco"></span>' + (p.gargalo && p.total ? etq(['Principal gargalo: ' + p.gargalo.nome, 'ambar']) : '') + '</div><div style="padding:8px 0">' +
-      p.por_etapa.map(function (x) {
-        return '<div class="barra-acomp"><span>' + esc(x.nome) + '</span><span class="trilho-acomp"><i style="width:' + x.pct + '%' + (p.gargalo && x.etapa === p.gargalo.etapa && p.total ? ';background:var(--amber)' : '') + '"></i></span><b>' + x.pct + '%</b></div>';
-      }).join('') + '</div><p class="ajuda" style="margin:0;padding:8px 16px 14px">% de contratos com a etapa feita. O gargalo é a etapa com o menor percentual.</p></section>' +
-      '<section class="painel" style="flex:2 1 560px"><div class="cab-painel"><h2>Contratos e concluídos por mês · ' + j.ano + '</h2><span class="espaco"></span>' +
-      '<span class="legenda-acomp"><i style="background:#0b76ba"></i>Contratos</span><span class="legenda-acomp"><i style="background:#d98a1b"></i>Concluídos</span></div>' +
-      '<div class="grafico-acomp" role="img" aria-label="Contratos e concluídos por mês em ' + j.ano + (p.mes_mais ? '. Mês com mais contratos: ' + MESES_LONGO[p.mes_mais.mes - 1] + ', ' + p.mes_mais.contratos : '') + '">' +
-      p.mensal.map(function (x) {
-        var h = function (v) { return Math.round(v * 180 / max); };
-        return '<div class="mes-acomp"><div class="bs"><i style="height:' + h(x.contratos) + 'px;background:#0b76ba" title="' + MESES_LONGO[x.mes - 1] + ': ' + x.contratos + ' contrato(s)"></i><i style="height:' + h(x.concluidos) + 'px;background:#d98a1b" title="' + MESES_LONGO[x.mes - 1] + ': ' + x.concluidos + ' concluído(s)"></i></div>' +
-          '<span class="m">' + MESES_ACOMP[x.mes - 1] + '</span><span class="v">' + (x.contratos ? x.contratos + ' · ' + x.concluidos : '—') + '</span></div>';
-      }).join('') + '</div><p class="ajuda" style="margin:0;padding:8px 16px 14px">Embaixo de cada mês: contratos · concluídos.' + (p.mes_mais ? ' ' + MESES_LONGO[p.mes_mais.mes - 1] + ' foi o mês com mais contratos (' + p.mes_mais.contratos + ').' : '') + ' O filtro de mês não muda o gráfico.</p></section></div>' +
-      '<div class="linha" style="gap:16px;align-items:flex-start;margin-bottom:16px">' + tabela('Por estado', 'UF', p.por_uf) + tabela('Por executivo', 'Executivo', p.por_executivo) + tabela('Por analista', 'Analista', p.por_analista) + '</div>' +
-      '<section class="painel"><div class="cab-painel"><h2>Contratos em aberto</h2><span class="ajuda" style="margin:0">do menor % para o maior · até 30</span></div><div class="tabela-wrap"><table style="min-width:860px"><thead><tr><th>Condomínio</th><th>Início do contrato</th><th>Analista</th><th>Etapas</th><th class="num">%</th><th>Faixa</th></tr></thead><tbody>' +
-      (p.abertos.map(function (x) {
-        return '<tr class="clicavel" data-imp="' + x.id + '"><td><b>' + esc(x.condominio) + '</b></td><td>' + dataBr(x.inicio) + '</td><td>' + (x.responsavel_nome ? esc(x.responsavel_nome) : etq([x.etapa === 'fila' ? 'na fila, sem analista' : 'sem analista', 'cinza'])) + '</td>' +
-          '<td>' + pontosAcomp(x.feitas) + '</td><td class="num"><b>' + x.pct + '%</b></td><td>' + etq(FAIXA_ACOMP[x.faixa]) + '</td></tr>';
-      }).join('') || '<tr><td colspan="6"><div class="vazio" style="border:0;padding:24px">Nenhum contrato em aberto no período.</div></td></tr>') + '</tbody></table></div>' +
-      '<p class="ajuda" style="margin:0;padding:8px 16px 14px">Os pontos seguem a ordem das etapas: documentação, Vouch, onboarding, boletos e envio.</p></section>';
-    var mudar = function (k, id) { $('#' + id, raiz).onchange = function () { f[k] = this.value; if (k === 'ano') f.ano = this.value; recarregar(); }; };
-    mudar('ano', 'fAcAno'); mudar('mes', 'fAcMes'); mudar('analista', 'fAcAn'); mudar('executivo', 'fAcEx');
-    $$('[data-imp]', raiz).forEach(function (tr) { tr.onclick = function () { location.hash = '#/implantacao/' + tr.getAttribute('data-imp'); }; });
+    function desenhar() {
+      var CARD = { todos: function () { return true; }, concluidos: function (l) { return l.pct === 100; }, andamento: function (l) { return l.pct > 0 && l.pct < 100; }, nao_iniciados: function (l) { return l.pct === 0; } };
+      var sel = CARD[f.card] ? f.card : '';
+      var lista = j.linhas.filter(function (l) { return passaAcomp(l) && (!sel || CARD[sel](l)); }).sort(function (a, b) { return a.pct - b.pct || a.inicio.localeCompare(b.inicio); });
+      var periodo = (f.mes ? MESES_LONGO[f.mes - 1].toLowerCase() + ' de ' : '') + j.ano;
+      raiz.innerHTML = '<div class="cards-acomp">' +
+        tileAcomp('Contratos ' + (f.mes ? MESES_ACOMP[f.mes - 1] + '/' : '') + j.ano, p.total, p.mes_mais && !f.mes ? p.mes_mais.contratos + ' em ' + MESES_LONGO[p.mes_mais.mes - 1].toLowerCase() + ', o maior mês' : 'em ' + periodo, { card: 'todos', on: sel === 'todos' }) +
+        tileAcomp('% médio de conclusão', p.pct_medio + '%', 'etapas feitas ÷ 5', { barra: p.pct_medio }) +
+        tileAcomp('Concluídos', p.concluidos, p.total ? Math.round(p.concluidos * 100 / p.total) + '% dos contratos' : '', { card: 'concluidos', on: sel === 'concluidos', barra: p.total ? p.concluidos * 100 / p.total : 0 }) +
+        tileAcomp('Em andamento', p.andamento, 'entre 1% e 99%', { card: 'andamento', on: sel === 'andamento' }) +
+        tileAcomp('Não iniciados', p.nao_iniciados, 'na fila ou sem etapa feita', { card: 'nao_iniciados', on: sel === 'nao_iniciados', cor: p.nao_iniciados ? 'red' : '' }) + '</div>' +
+        '<div class="linha" style="gap:16px;align-items:stretch;margin-bottom:16px">' +
+        '<section class="painel" style="flex:1 1 420px"><div class="cab-painel"><h2>Progresso por etapa</h2><span class="espaco"></span>' + (p.gargalo && p.total ? etq(['Principal gargalo: ' + p.gargalo.nome, 'ambar']) : '') + '</div><div style="padding:8px 0">' +
+        p.por_etapa.map(function (x) {
+          return '<div class="barra-acomp"><span>' + esc(x.nome) + '</span><span class="trilho-acomp"><i style="width:' + x.pct + '%' + (p.gargalo && x.etapa === p.gargalo.etapa && p.total ? ';background:var(--amber)' : '') + '"></i></span><b>' + x.pct + '%</b></div>';
+        }).join('') + '</div><p class="ajuda" style="margin:0;padding:8px 16px 14px">% de contratos com a etapa feita. O gargalo é a etapa com o menor percentual.</p></section>' +
+        '<section class="painel" style="flex:2 1 560px"><div class="cab-painel"><h2>Contratos e concluídos por mês · ' + j.ano + '</h2><span class="espaco"></span>' +
+        '<span class="legenda-acomp"><i style="background:#0b76ba"></i>Contratos</span><span class="legenda-acomp"><i style="background:#d98a1b"></i>Concluídos</span></div>' +
+        '<div class="grafico-acomp" role="img" aria-label="Contratos e concluídos por mês em ' + j.ano + (p.mes_mais ? '. Mês com mais contratos: ' + MESES_LONGO[p.mes_mais.mes - 1] + ', ' + p.mes_mais.contratos : '') + '">' +
+        p.mensal.map(function (x) {
+          var h = function (v) { return Math.round(v * 180 / max); };
+          return '<div class="mes-acomp"><div class="bs"><i style="height:' + h(x.contratos) + 'px;background:#0b76ba" title="' + MESES_LONGO[x.mes - 1] + ': ' + x.contratos + ' contrato(s)"></i><i style="height:' + h(x.concluidos) + 'px;background:#d98a1b" title="' + MESES_LONGO[x.mes - 1] + ': ' + x.concluidos + ' concluído(s)"></i></div>' +
+            '<span class="m">' + MESES_ACOMP[x.mes - 1] + '</span><span class="v">' + (x.contratos ? x.contratos + ' · ' + x.concluidos : '—') + '</span></div>';
+        }).join('') + '</div><p class="ajuda" style="margin:0;padding:8px 16px 14px">Embaixo de cada mês: contratos · concluídos. O filtro de mês não muda o gráfico.</p></section></div>' +
+        '<div class="linha" style="gap:16px;align-items:flex-start;margin-bottom:16px">' + tabela('Por estado', 'UF', p.por_uf) + tabela('Por executivo', 'Executivo', p.por_executivo) + tabela('Por analista', 'Analista', p.por_analista) + '</div>' +
+        '<section class="painel"><div class="cab-painel"><h2>' + (sel === 'concluidos' ? 'Contratos concluídos' : sel === 'andamento' ? 'Contratos em andamento' : sel === 'nao_iniciados' ? 'Contratos não iniciados' : 'Contratos do período') + '</h2><span class="ajuda" style="margin:0">' + lista.length + ' · do menor % para o maior · clique num cartão acima para filtrar</span></div>' +
+        '<div class="tabela-wrap"><table style="min-width:860px"><thead><tr><th>Condomínio</th><th>Início do contrato</th><th>Analista</th><th>Etapas</th><th class="num">%</th><th>Faixa</th></tr></thead><tbody>' +
+        (lista.slice(0, 200).map(function (x) {
+          return '<tr class="clicavel" data-imp="' + x.id + '"><td><b>' + esc(x.condominio) + '</b><span class="sec">' + esc(x.protocolo || '') + '</span></td><td>' + dataBr(x.inicio) + '</td><td>' + (x.responsavel_nome ? esc(x.responsavel_nome) : etq([x.etapa === 'fila' ? 'na fila, sem analista' : 'sem analista', 'cinza'])) + '</td>' +
+            '<td>' + pontosAcomp(x.feitas) + '</td><td class="num"><b>' + x.pct + '%</b></td><td>' + etq(FAIXA_ACOMP[x.faixa]) + '</td></tr>';
+        }).join('') || '<tr><td colspan="6"><div class="vazio" style="border:0;padding:24px">Nenhum contrato com esses filtros.</div></td></tr>') + '</tbody></table></div>' +
+        '<p class="ajuda" style="margin:0;padding:8px 16px 14px">Os pontos seguem a ordem das etapas: documentação, Vouch, onboarding, boletos e envio.</p></section>';
+      ligarCardsAcomp(raiz, desenhar);
+      irImpAcomp(raiz);
+      exportarAcomp = { nome: 'Acompanhamento ' + periodo, abas: [{ titulo: 'Contratos', cab: ['Protocolo', 'Condomínio', 'UF', 'Início do contrato', 'Analista', 'Executivo', '% concluído', 'Faixa'],
+        linhas: lista.map(function (x) { return [x.protocolo || '', x.condominio, x.uf, dataBr(x.inicio), x.responsavel_nome || '', x.executivo_nome || '', x.pct, FAIXA_ACOMP[x.faixa][0]]; }) },
+      { titulo: 'Por mês', cab: ['Mês', 'Contratos', 'Concluídos'], linhas: p.mensal.map(function (x) { return [MESES_LONGO[x.mes - 1], x.contratos, x.concluidos]; }) }] };
+    }
+    desenhar();
   }
 
   function mesAcomp(j, raiz) {
     var f = filtroAcomp;
     if (!f.mesVig) f.mesVig = j.mes_vigente;
     function desenhar() {
-      var lista = j.linhas.filter(function (l) { return l.mes === f.mesVig && (!f.analista || String(l.responsavel_id) === String(f.analista)); })
+      var lista = j.linhas.filter(function (l) { return l.mes === f.mesVig && passaAcomp(l, { semAno: true, semMes: true }); })
         .sort(function (a, b) { return a.primeiro_vencimento.localeCompare(b.primeiro_vencimento) || a.condominio.localeCompare(b.condominio); });
       var conta = function (fx) { return lista.filter(function (l) { return l.faixa === fx; }).length; };
       var a = Number(f.mesVig.slice(0, 4)), m = Number(f.mesVig.slice(5, 7));
@@ -4930,10 +5041,9 @@
       raiz.innerHTML = '<div class="linha" style="gap:12px;margin-bottom:16px;align-items:center">' +
         '<button class="btn ghost" id="mvAnt" aria-label="Mês anterior" style="min-width:44px;justify-content:center">‹</button><h2 style="margin:0;font-family:var(--display);font-size:22px">' + MESES_LONGO[m - 1] + ' de ' + a + '</h2><button class="btn ghost" id="mvProx" aria-label="Próximo mês" style="min-width:44px;justify-content:center">›</button>' +
         (f.mesVig === j.mes_vigente && j.mes_vigente !== j.hoje.slice(0, 7) ? etq(['hoje é ' + dataBr(j.hoje) + ': do dia ' + j.parametros.virada_dia + ' em diante, já vale o mês seguinte', 'azul']) : '') +
-        (f.mesVig !== j.mes_vigente ? '<button class="btn ghost sm" id="mvHoje">Voltar ao mês vigente</button>' : '') + '<span class="espaco"></span>' +
-        selAcomp('mvAn', 'Analista', f.analista, [['', 'Todas as pessoas']].concat(j.analistas.map(function (x) { return [x.id, x.nome]; }))) + '</div>' +
-        '<div class="tiles" style="margin-bottom:16px">' + tileAcomp('Implantações do mês', lista.length) + tileAcomp('Concluídas (100%)', conta('concluida')) + tileAcomp('Só falta o onboarding', conta('so_onboarding')) +
-        tileAcomp('Entre 40% e 99%', conta('alta') + conta('media')) + tileAcomp('Abaixo de 40%', conta('baixa')) + '</div>' +
+        (f.mesVig !== j.mes_vigente ? '<button class="btn ghost sm" id="mvHoje">Voltar ao mês vigente</button>' : '') + '</div>' +
+        '<div class="cards-acomp">' + tileAcomp('Implantações do mês', lista.length, MESES_LONGO[m - 1].toLowerCase() + ' de ' + a) + tileAcomp('Concluídas (100%)', conta('concluida'), '', { barra: lista.length ? conta('concluida') * 100 / lista.length : 0 }) + tileAcomp('Só falta o onboarding', conta('so_onboarding')) +
+        tileAcomp('Entre 40% e 99%', conta('alta') + conta('media')) + tileAcomp('Abaixo de 40%', conta('baixa'), '', { cor: conta('baixa') ? 'red' : '' }) + '</div>' +
         '<section class="painel"><div class="tabela-wrap"><table style="min-width:1040px"><thead><tr><th>1º vencimento</th><th>Condomínio</th><th>Analista</th><th class="centro">Documentação</th><th class="centro">Vouch</th><th class="centro">Onboarding</th><th class="centro">Boletos</th><th class="centro">Envio</th><th class="num">%</th><th>Faixa</th></tr></thead><tbody>' +
         (lista.map(function (l) {
           var o = l.onboarding;
@@ -4942,13 +5052,86 @@
             etapa(l, 'onboarding', 'Onboarding', o.situacao === 'sindico_myblue' ? 'síndico MyBlue' : o.data ? dataBr(o.data).slice(0, 5) + (o.hora ? ' ' + esc(o.hora) : '') : o.situacao === 'a_marcar' ? 'a marcar' : '') +
             etapa(l, 'boletos', 'Boletos') + etapa(l, 'envio', 'Envio') + '<td class="num"><b>' + l.pct + '%</b></td><td>' + etq(FAIXA_ACOMP[l.faixa]) + '</td></tr>';
         }).join('') || '<tr><td colspan="10"><div class="vazio" style="border:0;padding:30px">Nenhuma implantação com contrato começando neste mês.</div></td></tr>') + '</tbody></table></div></section>' +
-        '<p class="ajuda">Implantações cujo contrato começa no mês, na ordem do 1º vencimento ("previsto" enquanto o setor não informa na etapa Emissão de boletos). O dia da virada (' + j.parametros.virada_dia + ') é um parâmetro.</p>';
+        '<p class="ajuda">"Previsto": o 1º vencimento ainda não foi informado na etapa Emissão de boletos. O dia da virada (' + j.parametros.virada_dia + ') é um parâmetro.</p>';
       var anda = function (n) { var mm = m + n, aa = a; if (mm < 1) { mm = 12; aa--; } if (mm > 12) { mm = 1; aa++; } f.mesVig = aa + '-' + ('0' + mm).slice(-2); desenhar(); };
       $('#mvAnt', raiz).onclick = function () { anda(-1); };
       $('#mvProx', raiz).onclick = function () { anda(1); };
       if ($('#mvHoje', raiz)) $('#mvHoje', raiz).onclick = function () { f.mesVig = j.mes_vigente; desenhar(); };
-      $('#mvAn', raiz).onchange = function () { f.analista = this.value; desenhar(); };
-      $$('[data-imp]', raiz).forEach(function (tr) { tr.onclick = function () { location.hash = '#/implantacao/' + tr.getAttribute('data-imp'); }; });
+      irImpAcomp(raiz);
+      exportarAcomp = { nome: 'Mes vigente ' + f.mesVig, abas: [{ titulo: MESES_LONGO[m - 1] + ' ' + a, cab: ['1º vencimento', 'Condomínio', 'Analista', 'Documentação', 'Vouch', 'Onboarding', 'Boletos', 'Envio', '%', 'Faixa'],
+        linhas: lista.map(function (l) { var s = function (k) { return l.feitas[k] ? 'SIM' : ''; }; return [dataBr(l.primeiro_vencimento), l.condominio, l.responsavel_nome || '', s('documentacao'), s('vouch'), s('onboarding'), s('boletos'), s('envio'), l.pct, FAIXA_ACOMP[l.faixa][0]]; }) }] };
+    }
+    desenhar();
+  }
+
+  /* Controle: as colunas da planilha Controle Implantações, com o protocolo do portal no lugar do Nº */
+  var ONB_CTRL = { a_marcar: ['A MARCAR', 'ambar'], marcado: ['MARCADO', 'azul'], realizado: ['REALIZADO', 'verde'], sindico_myblue: ['SÍNDICO MYBLUE', 'verde'] };
+  var ENVIO_CTRL = { email: 'DIGITAL', fisico: 'FÍSICO', ambos: 'AMBOS' };
+  function controleAcomp(j, raiz) {
+    var f = filtroAcomp;
+    var ordem = lembrar('acomp.ctrl.ordem', { k: 'protocolo', d: -1 });
+    var COLS = [
+      ['protocolo', 'Protocolo', 'fixa'], ['condominio', 'Condomínio', 'fixa'],
+      ['cnpj', 'CNPJ', 'Condomínio'], ['uf', 'UF'], ['dia', 'Dia venc.'], ['venc', '1º venc.'], ['adm', 'Adm.'], ['executivo', 'Executivo'], ['sindico', 'Síndico'],
+      ['contrato', 'Contrato', 'Contrato e documentação'], ['data_contrato', 'Data contrato'], ['doc', 'Doc.'], ['data_doc', 'Data doc.'],
+      ['vouch', 'Vouch', 'Etapas do setor'], ['onboarding', 'Onboarding'], ['data_onb', 'Data onboarding'], ['boletos', 'Emissão de boletos'], ['envio', 'Envio'],
+      ['por', 'Implantado por', 'Controle'], ['obs', 'Obs.'], ['mes', 'Mês'], ['pct', '% concluído'],
+    ];
+    var valor = function (l, k) {
+      var c = l.controle;
+      return { protocolo: l.protocolo || '', condominio: l.condominio, cnpj: c.cnpj, uf: l.uf, dia: l.dia_vencimento || '', venc: l.primeiro_vencimento, adm: c.administradora, executivo: l.executivo_nome, sindico: c.sindico,
+        contrato: c.contrato, data_contrato: c.data_contrato, doc: c.doc, data_doc: c.data_doc, vouch: c.vouch, onboarding: c.onboarding, data_onb: c.data_onboarding, boletos: c.boletos, envio: c.envio,
+        por: l.responsavel_nome || '', obs: c.obs, mes: l.mes, pct: l.pct }[k];
+    };
+    var sim = function (ok) { return ok ? '<span class="chip-ctrl ok">SIM</span>' : '<span class="chip-ctrl">—</span>'; };
+    var mesCurto = function (m) { return m ? MESES_ACOMP[Number(m.slice(5, 7)) - 1] + '/' + m.slice(2, 4) : ''; };
+    function desenhar() {
+      var lista = j.linhas.filter(function (l) { return passaAcomp(l); }).sort(function (a, b) {
+        var x = valor(a, ordem.k), y = valor(b, ordem.k);
+        if (typeof x === 'boolean') { x = x ? 1 : 0; y = y ? 1 : 0; }
+        return (typeof x === 'number' ? x - y : String(x || '').localeCompare(String(y || ''))) * ordem.d;
+      });
+      var grupos = [];
+      COLS.forEach(function (c, n) { if (c[2] && c[2] !== 'fixa') grupos.push([c[2], 1]); else if (c[2] === 'fixa') grupos.push(['', 1, 'f' + n]); else grupos[grupos.length - 1][1]++; });
+      var feitosOnb = lista.filter(function (l) { return ['realizado', 'sindico_myblue'].indexOf(l.controle.onboarding) >= 0; }).length;
+      var media = lista.length ? Math.round(lista.reduce(function (s, l) { return s + l.pct; }, 0) / lista.length) : 0;
+      raiz.innerHTML = '<section class="painel"><div class="cab-painel"><h2>Controle de implantações · ' + esc(f.ano) + (f.mes ? ' · ' + MESES_LONGO[f.mes - 1] : '') + '</h2><span class="espaco"></span><span class="ajuda" style="margin:0">clique no título da coluna para ordenar</span></div>' +
+        '<div class="tabela-wrap ctrl-wrap"><table class="ctrl-acomp"><thead><tr class="grupos">' + grupos.map(function (g) { return '<th colspan="' + g[1] + '"' + (g[2] ? ' class="fixa ' + g[2] + '"' : '') + '>' + esc(g[0]) + '</th>'; }).join('') + '</tr><tr>' +
+        COLS.map(function (c, n) { return '<th data-ord="' + c[0] + '"' + (n < 2 ? ' class="fixa f' + n + '"' : '') + ' aria-sort="' + (ordem.k === c[0] ? (ordem.d > 0 ? 'ascending' : 'descending') : 'none') + '">' + esc(c[1]) + (ordem.k === c[0] ? (ordem.d > 0 ? ' ▲' : ' ▼') : '') + '</th>'; }).join('') + '</tr></thead><tbody>' +
+        (lista.map(function (l) {
+          var c = l.controle;
+          return '<tr data-imp="' + l.id + '"><td class="fixa f0"><b>' + esc(l.protocolo || '—') + '</b></td><td class="fixa f1"><a href="#/implantacao/' + l.id + '"><b>' + esc(l.condominio) + '</b></a></td>' +
+            '<td>' + esc(c.cnpj) + '</td><td>' + esc(l.uf) + '</td><td class="centro">' + esc(l.dia_vencimento || '') + '</td><td>' + dataBr(l.primeiro_vencimento).slice(0, 5) + '</td><td>' + esc(c.administradora) + '</td><td>' + esc(l.executivo_nome) + '</td><td>' + esc(c.sindico) + '</td>' +
+            '<td class="centro">' + sim(c.contrato) + '</td><td>' + dataBr(c.data_contrato) + '</td><td class="centro">' + sim(c.doc) + '</td><td>' + dataBr(c.data_doc) + '</td>' +
+            '<td class="centro">' + sim(!!c.vouch) + '</td><td class="centro">' + (ONB_CTRL[c.onboarding] ? '<span class="etiqueta ' + ONB_CTRL[c.onboarding][1] + '">' + ONB_CTRL[c.onboarding][0] + '</span>' : '—') + '</td><td>' + (c.data_onboarding ? dataBr(c.data_onboarding) : '') + '</td>' +
+            '<td class="centro">' + sim(c.boletos) + '</td><td class="centro">' + (ENVIO_CTRL[c.envio] ? '<span class="chip-ctrl azul">' + ENVIO_CTRL[c.envio] + '</span>' : '<span class="chip-ctrl">—</span>') + '</td>' +
+            '<td>' + (l.responsavel_nome ? esc(l.responsavel_nome) : '<span class="chip-ctrl">na fila</span>') + '</td>' +
+            '<td>' + (c.pode_obs ? '<input class="obs-ctrl" data-obs="' + l.id + '" value="' + esc(c.obs) + '" maxlength="300" aria-label="Obs. de ' + esc(l.condominio) + '"' + (c.obs_por ? ' title="por ' + esc(c.obs_por) + '"' : '') + '>' : esc(c.obs)) + '</td>' +
+            '<td>' + mesCurto(l.mes) + '</td><td>' + pctAcomp(l.pct) + '</td></tr>';
+        }).join('') || '<tr><td colspan="' + COLS.length + '"><div class="vazio" style="border:0;padding:30px">Nenhuma implantação com esses filtros.</div></td></tr>') + '</tbody>' +
+        '<tfoot><tr><td class="fixa f0"></td><td class="fixa f1"><b>' + lista.length + ' implantaç' + (lista.length === 1 ? 'ão' : 'ões') + '</b></td>' + COLS.slice(2).map(function (c) { return '<td' + (c[0] === 'onboarding' ? ' class="centro"' : '') + '>' + (c[0] === 'onboarding' ? '<b>' + feitosOnb + ' feitos</b>' : c[0] === 'pct' ? '<b>' + media + '% médio</b>' : '') + '</td>'; }).join('') + '</tr></tfoot></table></div>' +
+        '<p class="ajuda" style="margin:0;padding:8px 16px 14px">Cabeçalho e as duas primeiras colunas ficam fixos ao rolar. <b>Obs.</b>: quem conduz a implantação (e a coordenação) escreve direto na célula; ela também vai para a ficha de repasse. O resto vem do portal e muda quando a implantação muda.</p></section>';
+      $$('[data-ord]', raiz).forEach(function (th) {
+        th.onclick = function () { var k = th.getAttribute('data-ord'); ordem = { k: k, d: ordem.k === k ? -ordem.d : 1 }; try { localStorage.setItem('portal.acomp.ctrl.ordem', JSON.stringify(ordem)); } catch (e) { /* sem armazenamento */ } desenhar(); };
+      });
+      $$('[data-obs]', raiz).forEach(function (inp) {
+        inp.onchange = async function () {
+          var id = inp.getAttribute('data-obs');
+          try {
+            var r = await api('POST', '/api/implantacoes/' + id + '/obs-controle', { texto: inp.value });
+            var l = j.linhas.find(function (x) { return String(x.id) === id; });
+            l.controle.obs = r.obs ? r.obs.texto : ''; l.controle.obs_por = r.obs ? r.obs.por_nome : '';
+            toast('Obs. salva.', 'ok');
+          } catch (e) { toast(e.message, 'erro'); }
+        };
+      });
+      exportarAcomp = { nome: 'Controle Implantacoes ' + f.ano + (f.mes ? '-' + ('0' + f.mes).slice(-2) : ''), abas: [{ titulo: 'Controle ' + f.ano, cab: COLS.map(function (c) { return c[1]; }),
+        linhas: lista.map(function (l) {
+          var c = l.controle;
+          return [l.protocolo || '', l.condominio, c.cnpj, l.uf, l.dia_vencimento || '', dataBr(l.primeiro_vencimento), c.administradora, l.executivo_nome || '', c.sindico,
+            c.contrato ? 'SIM' : '', dataBr(c.data_contrato), c.doc ? 'SIM' : '', dataBr(c.data_doc), c.vouch ? 'SIM' : '', ONB_CTRL[c.onboarding] ? ONB_CTRL[c.onboarding][0] : '', c.data_onboarding ? dataBr(c.data_onboarding) : '',
+            c.boletos ? 'SIM' : '', ENVIO_CTRL[c.envio] || '', l.responsavel_nome || '', c.obs, mesCurto(l.mes), l.pct];
+        }) }] };
     }
     desenhar();
   }
@@ -4959,7 +5142,7 @@
     if (!an.some(function (a) { return String(a.id) === String(f.onb); })) f.onb = an.some(function (a) { return eu && a.id === eu.id; }) ? eu.id : an.length ? an[0].id : '';
     function desenhar() {
       var sel = an.find(function (a) { return String(a.id) === String(f.onb); });
-      var lista = j.linhas.filter(function (l) { return l.na_meta && String(l.responsavel_id) === String(f.onb); }).sort(function (a, b) { return a.onboarding.limite.localeCompare(b.onboarding.limite); });
+      var lista = j.linhas.filter(function (l) { return l.na_meta && String(l.responsavel_id) === String(f.onb) && passaAcomp(l, { semAno: true, semMes: true, semAnalista: true }); }).sort(function (a, b) { return a.onboarding.limite.localeCompare(b.onboarding.limite); });
       raiz.innerHTML = '<p style="margin:0 0 16px;color:var(--ink-2);font-size:14.5px"><b>Regra:</b> o onboarding precisa acontecer em até <b>' + p.onboarding_dias + ' dias</b> depois do 1º vencimento. A meta é <b>' + p.meta_pct + '%</b> da carteira de cada analista. "Síndico MyBlue" conta como batida; "A marcar" entra com o prazo correndo. Contam os envios a partir de ' + dataBr(p.marco) + '.</p>' +
         (an.length ? '<div class="linha" style="gap:16px;align-items:stretch;margin-bottom:16px">' + an.map(function (a) {
           return '<section class="painel cartao-acomp' + (String(a.id) === String(f.onb) ? ' on' : '') + '" style="flex:1 1 340px"><div class="cab-painel"><h2><button class="link-acomp" data-an="' + a.id + '">' + esc(a.nome) + '</button></h2><span class="espaco"></span>' + (a.situacao ? etq(SIT_META_ACOMP[a.situacao]) : '') + '</div>' +
@@ -4968,14 +5151,16 @@
             '<p class="ajuda" style="margin:0;padding:8px 16px 14px"><b>' + a.pct + '%</b> batidas · <b>' + a.pct_com_prazo + '%</b> com as que estão no prazo · meta ' + p.meta_pct + '% (traço)' + (a.prazo_medio != null ? ' · onboarding em média <b>' + Math.abs(a.prazo_medio) + ' dia' + (Math.abs(a.prazo_medio) === 1 ? '' : 's') + (a.prazo_medio < 0 ? ' antes' : ' depois') + '</b> do 1º vencimento' : '') + '</p></section>';
         }).join('') + '</div>' : '<div class="vazio" style="margin-bottom:16px">Ninguém com implantação designada desde ' + dataBr(p.marco) + '.</div>') +
         (sel ? '<section class="painel"><div class="cab-painel"><h2>Carteira de ' + esc(sel.nome) + '</h2></div><div class="tabela-wrap"><table style="min-width:920px"><thead><tr><th>Condomínio</th><th>1º vencimento</th><th>Limite (' + p.onboarding_dias + ' dias)</th><th>Onboarding</th><th>Status</th></tr></thead><tbody>' +
-          lista.map(function (l) {
+          (lista.map(function (l) {
             var o = l.onboarding;
             return '<tr class="clicavel" data-imp="' + l.id + '"><td><b>' + esc(l.condominio) + '</b><span class="sec">' + esc(l.executivo_nome || '') + '</span></td><td>' + dataBr(l.primeiro_vencimento) + (l.vencimento_previsto ? '<span class="sec">previsto</span>' : '') + '</td><td>' + dataBr(o.limite) + '</td>' +
               '<td>' + onbTexto(o) + '</td><td>' + statusOnbAcomp(o) + '</td></tr>';
-          }).join('') + '</tbody></table></div>' +
+          }).join('') || '<tr><td colspan="5" class="sec">Nada com essa busca.</td></tr>') + '</tbody></table></div>' +
           '<p class="ajuda" style="margin:0;padding:8px 16px 14px"><b>Meta atingida</b>: as batidas chegam a ' + p.meta_pct + '% da carteira. <b>Em andamento</b>: batidas + as que ainda estão no prazo chegam lá. Senão, <b>abaixo da meta</b>. O onboarding conta na carteira de quem é responsável pela implantação, mesmo quando outra pessoa faz.</p></section>' : '');
-      $$('[data-an]', raiz).forEach(function (b) { b.onclick = function () { f.onb = b.getAttribute('data-an'); desenhar(); }; });
-      $$('[data-imp]', raiz).forEach(function (tr) { tr.onclick = function () { location.hash = '#/implantacao/' + tr.getAttribute('data-imp'); }; });
+      $$('[data-an]', raiz).forEach(function (b) { b.onclick = function () { f.onb = b.getAttribute('data-an'); salvarFiltroAcomp(); desenhar(); }; });
+      irImpAcomp(raiz);
+      exportarAcomp = { nome: 'Onboarding ' + (sel ? sel.nome : ''), abas: [{ titulo: 'Onboarding', cab: ['Condomínio', 'Executivo', '1º vencimento', 'Limite', 'Onboarding', 'Data', 'Status'],
+        linhas: lista.map(function (l) { var o = l.onboarding; return [l.condominio, l.executivo_nome || '', dataBr(l.primeiro_vencimento), dataBr(o.limite), o.situacao, o.data ? dataBr(o.data) : '', o.status]; }) }] };
     }
     desenhar();
   }
@@ -4987,28 +5172,52 @@
     var curto = { convencao: 'Convenção', ata_eleicao: 'Ata de eleição', ata_orcamento: 'Ata da taxa ordinária', cadastro_moradores: 'Cadastro de moradores', documento_sindico: 'Documento do síndico', conta_bancaria: 'Conta bancária', comprovante_endereco: 'Comprovante de endereço', modelo_boleto: 'Boleto anterior', procuracao: 'Procuração' };
     function desenhar() {
       var ordem = { pendente: 0, nao_batida: 1, batida: 2 };
-      var lista = j.linhas.filter(function (l) { return l.na_meta && (!f.docSit || l.documentacao.status === f.docSit) && (!f.analista || String(l.responsavel_id) === String(f.analista)); })
+      var base = j.linhas.filter(function (l) { return l.na_meta && passaAcomp(l, { semAno: true, semMes: true }); });
+      var lista = base.filter(function (l) { return !f.docSit || l.documentacao.status === f.docSit; })
         .sort(function (a, b) { return ordem[a.documentacao.status] - ordem[b.documentacao.status] || a.documentacao.limite.localeCompare(b.documentacao.limite); });
-      raiz.innerHTML = '<p style="margin:0 0 16px;color:var(--ink-2);font-size:14.5px"><b>Regra:</b> os documentos da meta (' + esc(p.docs_meta.map(function (t) { return nomeDoc[t] || t; }).join(', ')) + ') precisam chegar em até <b>' + p.documentacao_dias + ' dias</b> da data da documentação (envio do formulário de implantação). A meta é <b>' + p.meta_pct + '%</b> dos contratos no prazo. A data de cada documento é a do primeiro envio no portal.</p>' +
-        '<div class="tiles" style="margin-bottom:16px">' + tileAcomp('Contratos desde o marco', r.total) + tileAcomp('Batidas', r.batidas, r.pct + '% · meta ' + p.meta_pct + '%') + tileAcomp('Pendentes no prazo', r.pendentes) +
-        tileAcomp('Não batidas', r.nao_batidas) + tileAcomp('Documentos recebidos', r.recebidos_pct + '%', r.mais_pendentes.length ? 'mais pendente: ' + esc(r.mais_pendentes[0].nome) + ' (' + r.mais_pendentes[0].n + ')' : '') + '</div>' +
-        '<section class="painel"><div class="cab-painel"><h2>Contratos e documentos da meta</h2>' + (r.situacao ? etq([SIT_META_ACOMP[r.situacao][0] + ': ' + r.pct + '%', SIT_META_ACOMP[r.situacao][1]]) : '') + '<span class="espaco"></span>' +
-        selAcomp('dcSit', 'Situação', f.docSit, [['', 'Todas'], ['pendente', 'Pendentes'], ['nao_batida', 'Não batidas'], ['batida', 'Batidas']]) +
-        selAcomp('dcAn', 'Analista', f.analista, [['', 'Todas as pessoas']].concat(j.analistas.map(function (x) { return [x.id, x.nome]; }))) + '</div>' +
+      var conta = function (s) { return base.filter(function (l) { return l.documentacao.status === s; }).length; };
+      raiz.innerHTML = '<p style="margin:0 0 16px;color:var(--ink-2);font-size:14.5px"><b>Regra:</b> os documentos da meta (' + esc(p.docs_meta.map(function (t) { return nomeDoc[t] || t; }).join(', ')) + ') precisam chegar em até <b>' + p.documentacao_dias + ' dias</b> do envio do formulário de implantação. A meta é <b>' + p.meta_pct + '%</b> dos contratos no prazo.</p>' +
+        '<div class="cards-acomp">' + tileAcomp('Contratos desde o marco', r.total, r.situacao ? SIT_META_ACOMP[r.situacao][0] + ' · ' + r.pct + '%' : '') +
+        tileAcomp('Batidas', r.batidas, r.pct + '% · meta ' + p.meta_pct + '%', { card: 'batida', on: f.docSit === 'batida', barra: r.pct }) + tileAcomp('Pendentes no prazo', conta('pendente'), 'documentos ainda chegando', { card: 'pendente', on: f.docSit === 'pendente' }) +
+        tileAcomp('Não batidas', conta('nao_batida'), 'passaram do prazo', { card: 'nao_batida', on: f.docSit === 'nao_batida', cor: conta('nao_batida') ? 'red' : '' }) +
+        tileAcomp('Documentos recebidos', r.recebidos_pct + '%', r.mais_pendentes.length ? 'mais pendente: ' + esc(r.mais_pendentes[0].nome) + ' (' + r.mais_pendentes[0].n + ')' : '') + '</div>' +
+        '<section class="painel"><div class="cab-painel"><h2>Contratos e documentos da meta</h2><span class="espaco"></span><span class="ajuda" style="margin:0">' + lista.length + ' contrato(s) · clique num documento que falta para anexar ou marcar recebido</span></div>' +
         '<div class="tabela-wrap"><table style="min-width:900px"><thead><tr><th>Condomínio</th><th>Prazo</th>' + p.docs_meta.map(function (t) { return '<th class="centro" title="' + esc(nomeDoc[t] || t) + '">' + esc(curto[t] || nomeDoc[t] || t) + '</th>'; }).join('') + '<th>Status</th></tr></thead><tbody>' +
         (lista.map(function (l) {
           var d = l.documentacao;
           return '<tr><td style="min-width:190px"><a href="#/implantacao/' + l.id + '"><b>' + esc(l.condominio) + '</b></a><span class="sec">' + esc([l.responsavel_nome || 'na fila', l.executivo_nome].filter(Boolean).join(' · ')) + (l.origem === 'entrega' ? ' · entrega' : '') + '</span></td>' +
             '<td style="white-space:nowrap">até <b>' + dataBr(d.limite) + '</b><span class="sec">enviado ' + dataBr(l.enviado) + '</span></td>' +
-            d.docs.map(function (x) { return '<td class="centro">' + marcaAcomp(!!x.em, x.nome + (x.em ? ': recebido' : ': pendente')) + (x.em ? '<span class="sec">' + dataBr(x.em).slice(0, 5) + '</span>' : '') + '</td>'; }).join('') +
+            d.docs.map(function (x) {
+              return '<td class="centro">' + (x.em ? marcaAcomp(true, x.nome + ': recebido') + '<span class="sec">' + dataBr(x.em).slice(0, 5) + '</span>'
+                : j.pode.cobrar ? '<button class="link-acomp" data-doc-acomp="' + l.id + '" data-tipo="' + esc(x.tipo) + '" data-nome="' + esc(x.nome) + '" title="Anexar ou marcar recebido: ' + esc(x.nome) + '">' + marcaAcomp(false, x.nome + ': pendente') + '</button>' : marcaAcomp(false, x.nome + ': pendente')) + '</td>';
+            }).join('') +
             '<td style="min-width:230px">' + statusDocAcomp(d) + (d.manual ? '<span class="sec" title="' + esc(d.manual.motivo) + '">"' + esc(d.manual.motivo.length > 60 ? d.manual.motivo.slice(0, 60) + '…' : d.manual.motivo) + '" · ' + esc(d.manual.por_nome || '') + '</span>' : '') +
             (l.cobranca_doc_em ? '<span class="sec">cobrado em ' + dataHoraCr(l.cobranca_doc_em) + '</span>' : '') +
             '<span class="acoes-acomp">' + (j.pode.cobrar && d.falta_executivo.length && !d.manual ? '<button class="link-acomp" data-cobrar="' + l.id + '">Cobrar</button>' : '') +
             (j.pode.marcar && (d.status !== 'batida' || d.manual) ? '<button class="link-acomp" data-marcar="' + l.id + '">Marcar à mão</button>' : '') + '</span></td></tr>';
         }).join('') || '<tr><td colspan="' + (3 + p.docs_meta.length) + '"><div class="vazio" style="border:0;padding:30px">Nada por aqui.</div></td></tr>') + '</tbody></table></div>' +
-        '<p class="ajuda" style="margin:0;padding:8px 16px 14px">A procuração é providenciada pela equipe de Implantação. "Cobrar" envia ao executivo, no portal e por e-mail, o que é dele; faltando ' + 3 + ' dias para o limite, o portal lembra sozinho. "Marcar à mão" é da coordenação e substitui o cálculo naquele condomínio, com motivo.</p></section>';
-      $('#dcSit', raiz).onchange = function () { f.docSit = this.value; desenhar(); };
-      $('#dcAn', raiz).onchange = function () { f.analista = this.value; desenhar(); };
+        '<p class="ajuda" style="margin:0;padding:8px 16px 14px">A procuração é providenciada pela equipe de Implantação. "Cobrar" envia ao executivo, no portal e por e-mail, o que é dele; faltando 3 dias para o limite, o portal lembra sozinho. "Marcar à mão" é da coordenação e substitui o cálculo naquele condomínio, com motivo.</p></section>';
+      $$('[data-card]', raiz).forEach(function (c) {
+        var ir = function () { var k = c.getAttribute('data-card'); f.docSit = f.docSit === k ? '' : k; salvarFiltroAcomp(); desenhar(); };
+        c.onclick = ir;
+        c.onkeydown = function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ir(); } };
+      });
+      $$('[data-doc-acomp]', raiz).forEach(function (b) {
+        b.onclick = function () {
+          var id = b.getAttribute('data-doc-acomp'), tipo = b.getAttribute('data-tipo');
+          var mo = modal({ titulo: b.getAttribute('data-nome'), corpo: '<p class="ajuda" style="margin-top:0">Anexe o arquivo ou, se o documento chegou em papel, marque como recebido com uma observação. A data de hoje passa a contar na meta.</p>' +
+            '<label class="btn ghost" style="margin-bottom:14px">' + IC.enviar + 'Anexar arquivo<input type="file" id="mDocArq" hidden></label>' +
+            '<label class="rot" for="mDocObs2">Ou marcar recebido sem arquivo · observação</label><textarea class="campo" id="mDocObs2" rows="2" placeholder="Ex.: original em papel, arquivado no CPD."></textarea>',
+          pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mDocMarcar">Marcar recebido</button>' });
+          $('#mDocArq', mo).onchange = async function () {
+            if (!this.files[0]) return;
+            try { await enviarDocImp(id, tipo, this.files[0]); mo.fechar(); toast('Documento anexado.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+          };
+          $('#mDocMarcar', mo).onclick = async function () {
+            try { await api('POST', '/api/implantacoes/' + id + '/documentos/marcar', { tipo: tipo, observacao: $('#mDocObs2', mo).value }); mo.fechar(); toast('Marcado como recebido.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+          };
+        };
+      });
       $$('[data-cobrar]', raiz).forEach(function (b) {
         b.onclick = async function () {
           var l = j.linhas.find(function (x) { return String(x.id) === b.getAttribute('data-cobrar'); });
@@ -5036,40 +5245,131 @@
           if ($('#mMetaCalc', mo)) $('#mMetaCalc', mo).onclick = function () { salvar(null); };
         };
       });
+      exportarAcomp = { nome: 'Documentacao', abas: [{ titulo: 'Documentação', cab: ['Condomínio', 'Analista', 'Executivo', 'Enviado', 'Prazo'].concat(p.docs_meta.map(function (t) { return curto[t] || nomeDoc[t] || t; })).concat(['Status']),
+        linhas: lista.map(function (l) { var d = l.documentacao; return [l.condominio, l.responsavel_nome || '', l.executivo_nome || '', dataBr(l.enviado), dataBr(d.limite)].concat(d.docs.map(function (x) { return x.em ? dataBr(x.em) : ''; })).concat([d.status]); }) }] };
     }
     desenhar();
   }
 
-  function antecipacoesAcomp(j, raiz) {
+  /* antecipações: marcar e enviar ao Controle de Repasses; a situação volta de lá */
+  function situacaoAntAcomp(l) {
+    var e = l.antecipacao_envio;
+    if (!e) return '<span class="sec" style="display:inline">ainda não enviada</span>';
+    var quando = function (d) { return d ? dataBr(String(d).slice(0, 10)).slice(0, 5) : ''; };
+    var fim = function (v) { return v ? String(v).slice(5, 7) + '/' + String(v).slice(0, 4) : 'sem prazo final'; };
+    if (e.situacao === 'cadastrada') {
+      var aj = e.ajuste ? Object.keys(e.ajuste).map(function (k) { var x = e.ajuste[k]; return k === 'valor' ? 'valor ' + reais(x.de) + ' → ' + reais(x.para) : k === 'dia' ? 'dia ' + x.de + ' → ' + x.para : 'fim ' + fim(x.de) + ' → ' + fim(x.para); }).join('; ') : '';
+      return etq([e.ajuste ? 'CADASTRADA COM AJUSTE' : 'CADASTRADA', 'verde']) + '<span class="sec">' + quando(e.decidida_em) + (e.decidida_por_nome ? ' por ' + esc(e.decidida_por_nome) : '') + (e.regra_id ? ' · regra ' + esc(e.regra_id) : '') + '</span>' +
+        (aj ? '<span class="sec" style="color:var(--amber)">ajuste: ' + esc(aj) + '</span>' : '') + (e.mudou ? '<span class="sec" style="color:var(--amber)">o formulário mudou depois do cadastro</span>' : '');
+    }
+    if (e.situacao === 'devolvida') return etq(['DEVOLVIDA', 'vermelha']) + '<span class="sec">' + quando(e.decidida_em) + (e.decidida_por_nome ? ' por ' + esc(e.decidida_por_nome) : '') + ': "' + esc(e.motivo) + '"</span>';
+    return etq([e.atualizacao ? 'ATUALIZAÇÃO ENVIADA' : 'ENVIADA', e.atualizacao ? 'ambar' : 'azul']) + '<span class="sec">' + quando(e.enviada_em) + ' · aguardando o Gestor' + (l.etapa !== 'na_carteira' ? ' (aparece no Controle de Repasses quando entrar na Carteira)' : '') + '</span>' +
+      (e.atualizacao && e.antes ? '<span class="sec">antes: ' + reais(e.antes.valor) + ', dia ' + esc(e.antes.dia) + ', ' + fim(e.antes.fim) + '</span>' : '') + (e.mudou ? '<span class="sec" style="color:var(--amber)">o formulário mudou depois do envio</span>' : '');
+  }
+  function antecipacoesAcomp(j, raiz, recarregar) {
     var f = filtroAcomp;
-    var ano = String(f.ano || j.ano);
+    var marcadas = {};
     function desenhar() {
-      var lista = j.linhas.filter(function (l) { return l.antecipacao && l.inicio.slice(0, 4) === ano && (!f.antMes || Number(l.inicio.slice(5, 7)) === Number(f.antMes)); })
-        .sort(function (a, b) { return a.inicio.localeCompare(b.inicio) || a.condominio.localeCompare(b.condominio); });
+      var lista = j.linhas.filter(function (l) { return l.antecipacao && passaAcomp(l); }).sort(function (a, b) { return a.inicio.localeCompare(b.inicio) || a.condominio.localeCompare(b.condominio); });
       var total = lista.reduce(function (s, l) { return s + l.antecipacao.valor; }, 0);
-      raiz.innerHTML = '<div class="linha" style="gap:12px;align-items:flex-end;margin-bottom:16px">' +
-        selAcomp('anAno', 'Ano', ano, j.anos.map(function (a) { return [a, a]; })) + selAcomp('anMes', 'Mês de início do contrato', f.antMes, [['', 'Todos']].concat(MESES_LONGO.map(function (m, k) { return [k + 1, m]; }))) +
-        '<span class="espaco"></span><button class="btn ghost" id="anCsv"' + (lista.length ? '' : ' disabled') + '>' + IC.baixar + 'Baixar planilha (.csv)</button></div>' +
-        '<div class="tiles" style="margin-bottom:16px">' + tileAcomp('Antecipações', lista.length) + tileAcomp('Valor total', reais(total)) + '</div>' +
-        '<section class="painel"><div class="tabela-wrap"><table style="min-width:960px"><thead><tr><th>Condomínio</th><th>Executivo</th><th>Início do contrato</th><th class="num">Valor</th><th>Data da antecipação</th><th>Prazo</th><th>Implantação</th></tr></thead><tbody>' +
+      var sit = function (s) { return lista.filter(function (l) { return l.antecipacao_envio && l.antecipacao_envio.situacao === s; }); };
+      var cad = sit('cadastrada'), agu = sit('enviada'), dev = sit('devolvida');
+      var podeEnviar = function (l) { var e = l.antecipacao_envio; return j.pode.antecipacao && (!e || e.situacao === 'devolvida' || e.mudou); };
+      var nMarc = lista.filter(function (l) { return marcadas[l.id] && podeEnviar(l); }).length;
+      var periodo = f.mes ? MESES_LONGO[f.mes - 1].toLowerCase() : f.ano;
+      raiz.innerHTML = '<div class="cards-acomp">' + tileAcomp('Antecipações em ' + periodo, lista.length, 'contratos com início ' + (f.mes ? 'no mês' : 'no ano')) +
+        tileAcomp('Valor ' + (f.mes ? 'no mês' : 'no ano'), reais(total), lista.length ? 'média de ' + reais(total / lista.length) : '') +
+        tileAcomp('Cadastradas no Controle de Repasses', cad.length, cad.filter(function (l) { return l.antecipacao_envio.ajuste; }).length + ' com ajuste do Gestor') +
+        tileAcomp('Aguardando', agu.length, agu.length ? 'com o Gestor' + (agu.filter(function (l) { return l.etapa !== 'na_carteira'; }).length ? ' · ' + agu.filter(function (l) { return l.etapa !== 'na_carteira'; }).length + ' à espera da Carteira' : '') : '') +
+        tileAcomp('Devolvidas', dev.length, dev.length ? 'corrigir e reenviar' : '', { cor: dev.length ? 'red' : '' }) + '</div>' +
+        '<section class="painel"><div class="cab-painel"><h2>Antecipações · ' + esc(periodo) + '</h2><span class="espaco"></span>' +
+        (j.pode.antecipacao ? '<span class="ajuda" style="margin:0">' + nMarc + ' marcada(s)</span><button class="btn primary sm" id="anEnviar"' + (nMarc ? '' : ' disabled') + '>Enviar marcadas ao Controle de Repasses (' + nMarc + ')</button>' : '') + '</div>' +
+        '<div class="tabela-wrap"><table style="min-width:1240px"><thead><tr>' + (j.pode.antecipacao ? '<th>Enviar</th>' : '') + '<th>Condomínio</th><th>Executivo</th><th>Início do contrato</th><th class="num">Valor</th><th>Data da antecipação</th><th>Prazo</th><th>Implantação</th><th>Controle de Repasses</th></tr></thead><tbody>' +
         (lista.map(function (l) {
-          return '<tr class="clicavel" data-imp="' + l.id + '"><td><b>' + esc(l.condominio) + '</b><span class="sec">' + esc([l.uf, l.uh_total ? l.uh_total + ' unidades' : ''].filter(Boolean).join(' · ')) + '</span></td><td style="white-space:nowrap">' + esc(l.executivo_nome || '—') + '</td><td>' + dataBr(l.inicio) + '</td>' +
-            '<td class="num"><b>' + reais(l.antecipacao.valor) + '</b></td><td>' + (l.antecipacao.data ? dataBr(l.antecipacao.data) : '—') + '</td><td>' + esc(l.antecipacao.prazo || '—') + '</td><td>' + etq(l.pct === 100 ? ['concluída', 'verde'] : ['em implantação · ' + l.pct + '%', 'azul']) + '</td></tr>';
-        }).join('') || '<tr><td colspan="7"><div class="vazio" style="border:0;padding:30px">Nenhuma antecipação negociada no período.</div></td></tr>') + '</tbody></table></div></section>' +
-        '<p class="ajuda">Vem do bloco "Cashback e antecipação" do formulário: Sim ou Não, com valor, data e prazo obrigatórios quando é Sim.</p>';
-      $('#anAno', raiz).onchange = function () { ano = this.value; desenhar(); };
-      $('#anMes', raiz).onchange = function () { f.antMes = this.value; desenhar(); };
-      $$('[data-imp]', raiz).forEach(function (tr) { tr.onclick = function () { location.hash = '#/implantacao/' + tr.getAttribute('data-imp'); }; });
-      $('#anCsv', raiz).onclick = function () {
-        var q = function (v) { v = String(v == null ? '' : v); return /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
-        var linhas = [['Condomínio', 'UF', 'Executivo', 'Início do contrato', 'Valor', 'Data da antecipação', 'Prazo', '% concluído']].concat(lista.map(function (l) {
-          return [l.condominio, l.uf, l.executivo_nome, dataBr(l.inicio), l.antecipacao.valor.toFixed(2).replace('.', ','), l.antecipacao.data ? dataBr(l.antecipacao.data) : '', l.antecipacao.prazo, l.pct + '%'];
-        }));
-        var a = document.createElement('a');
-        a.href = URL.createObjectURL(new Blob(['﻿' + linhas.map(function (x) { return x.map(q).join(';'); }).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
-        a.download = 'antecipacoes-' + ano + (f.antMes ? '-' + ('0' + f.antMes).slice(-2) : '') + '.csv';
-        document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+          var e = l.antecipacao_envio;
+          return '<tr data-imp="' + l.id + '">' + (j.pode.antecipacao ? '<td class="centro">' + (podeEnviar(l) ? '<input type="checkbox" data-marca-ant="' + l.id + '"' + (marcadas[l.id] ? ' checked' : '') + ' aria-label="Marcar ' + esc(l.condominio) + ' para enviar">' : '') + '</td>' : '') +
+            '<td style="min-width:210px"><a href="#/implantacao/' + l.id + '"><b>' + esc(l.condominio) + '</b></a><span class="sec">' + esc([l.protocolo, l.uf].filter(Boolean).join(' · ')) + '</span></td><td style="white-space:nowrap">' + esc(l.executivo_nome || '—') + '</td><td>' + dataBr(l.inicio) + '</td>' +
+            '<td class="num"><b>' + reais(l.antecipacao.valor) + '</b></td><td>' + (l.antecipacao.data ? dataBr(l.antecipacao.data) : '—') + '</td><td>' + esc(l.antecipacao.prazo || '—') + '</td>' +
+            '<td>' + etq(l.pct === 100 ? ['concluída', 'verde'] : l.etapa === 'fila' ? ['na fila · ' + l.pct + '%', 'cinza'] : ['em implantação · ' + l.pct + '%', 'azul']) + '</td>' +
+            '<td style="min-width:240px">' + situacaoAntAcomp(l) + (j.pode.antecipacao && e && e.situacao === 'enviada' ? '<button class="link-acomp sub-link" data-desfazer-ant="' + l.id + '">Desfazer envio</button>' : '') +
+            (j.pode.antecipacao && e && (e.situacao === 'devolvida' || e.mudou) ? '<button class="link-acomp sub-link" data-reenviar-ant="' + l.id + '">' + (e.situacao === 'devolvida' ? 'Corrigir e reenviar' : 'Enviar atualização') + '</button>' : '') +
+            (!e && podeEnviar(l) && marcadas[l.id] ? '<span class="sec">marcada · não enviada</span>' : '') + '</td></tr>';
+        }).join('') || '<tr><td colspan="9"><div class="vazio" style="border:0;padding:30px">Nenhuma antecipação negociada no período.</div></td></tr>') + '</tbody></table></div>' +
+        '<p class="ajuda" style="margin:0;padding:8px 16px 14px">A equipe de Implantação marca e envia; o <b>Gestor confirma no Controle de Repasses</b> (Regras de repasse → Vindas da Implantação), onde a antecipação vira uma regra. Se o Gestor mudar algo, aparece aqui como <b>ajuste</b>; se o formulário mudar depois do cadastro, a antecipação volta para lá como <b>atualização</b>. "Corrigir e reenviar": ajuste o formulário pela implantação (com o comercial) e reenvie.</p></section>';
+      $$('[data-marca-ant]', raiz).forEach(function (c) { c.onchange = function () { marcadas[c.getAttribute('data-marca-ant')] = c.checked; desenhar(); }; });
+      var enviar = async function (ids) {
+        var ok = 0;
+        for (var n = 0; n < ids.length; n++) {
+          try { await api('POST', '/api/implantacoes/' + ids[n] + '/antecipacao/enviar', {}); ok++; } catch (e) {
+            var l = j.linhas.find(function (x) { return String(x.id) === String(ids[n]); });
+            toast((l ? l.condominio + ': ' : '') + e.message, 'erro');
+          }
+        }
+        if (ok) { toast(ok === 1 ? 'Enviada ao Controle de Repasses.' : ok + ' enviadas ao Controle de Repasses.', 'ok'); recarregar(); }
       };
+      if ($('#anEnviar', raiz)) $('#anEnviar', raiz).onclick = function () { enviar(lista.filter(function (l) { return marcadas[l.id] && podeEnviar(l); }).map(function (l) { return l.id; })); };
+      $$('[data-reenviar-ant]', raiz).forEach(function (b) { b.onclick = function () { enviar([b.getAttribute('data-reenviar-ant')]); }; });
+      $$('[data-desfazer-ant]', raiz).forEach(function (b) {
+        b.onclick = async function () {
+          if (!(await confirmar('Desfazer o envio', 'A antecipação sai da lista do Controle de Repasses (uma atualização volta ao que estava cadastrado).', 'Desfazer', true))) return;
+          try { await api('POST', '/api/implantacoes/' + b.getAttribute('data-desfazer-ant') + '/antecipacao/desfazer', {}); toast('Envio desfeito.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+        };
+      });
+      exportarAcomp = { nome: 'Antecipacoes ' + f.ano + (f.mes ? '-' + ('0' + f.mes).slice(-2) : ''), abas: [{ titulo: 'Antecipações', cab: ['Protocolo', 'Condomínio', 'UF', 'Executivo', 'Início do contrato', 'Valor', 'Data da antecipação', 'Prazo', '% concluído', 'Controle de Repasses'],
+        linhas: lista.map(function (l) { var e = l.antecipacao_envio; return [l.protocolo || '', l.condominio, l.uf, l.executivo_nome || '', dataBr(l.inicio), l.antecipacao.valor, l.antecipacao.data ? dataBr(l.antecipacao.data) : '', l.antecipacao.prazo, l.pct, e ? e.situacao : 'não enviada']; }) }] };
+    }
+    desenhar();
+  }
+
+  /* fichas de repasse: prazo de 5 dias úteis da conclusão até o envio ao Crédito */
+  var SIT_FICHAS_ACOMP = [['aguardando', 'A enviar e aguardando'], ['atrasadas', 'Atrasadas'], ['devolvidas', 'Devolvidas'], ['recebidas', 'Recebidas'], ['todas', 'Todas']];
+  function fichasAcomp(j, raiz, recarregar) {
+    var f = filtroAcomp;
+    var coord = j.pode.parametros;
+    function desenhar() {
+      var base = j.fichas.filter(function (x) { return (!f.analista || String(x.responsavel_id) === String(f.analista)) && (!f.busca || semAcentoAcomp(x.condominio + ' ' + x.protocolo).indexOf(semAcentoAcomp(f.busca)) >= 0); });
+      var atrasada = function (x) { return !x.primeiro_envio_em && x.prazo && x.prazo.status === 'atrasado'; };
+      var FILTRO = { aguardando: function (x) { return ['a_enviar', 'enviada'].indexOf(x.situacao) >= 0; }, atrasadas: atrasada, devolvidas: function (x) { return x.situacao === 'devolvida'; },
+        recebidas: function (x) { return x.situacao === 'recebida'; }, todas: function () { return true; } };
+      if (!FILTRO[f.fichaSit]) f.fichaSit = 'aguardando';
+      var lista = base.filter(FILTRO[f.fichaSit]);
+      var mesAtual = j.hoje.slice(0, 7);
+      var doMes = base.filter(function (x) { return x.primeiro_envio_em && String(x.prazo && x.prazo.em || '').slice(0, 7) === mesAtual; });
+      var noPrazo = doMes.filter(function (x) { return x.prazo.status === 'cumprido'; }).length;
+      var vencem = base.filter(function (x) { return !x.primeiro_envio_em && x.prazo && ['vence_hoje', 'vence_amanha'].indexOf(x.prazo.status) >= 0; }).length;
+      raiz.innerHTML = '<div class="linha" style="gap:8px;margin-bottom:14px">' + SIT_FICHAS_ACOMP.map(function (s) {
+        var n = base.filter(FILTRO[s[0]]).length;
+        return '<button class="pilula-acomp' + (f.fichaSit === s[0] ? ' on' : '') + '" data-fsit="' + s[0] + '">' + esc(s[1]) + ' <span class="n">' + n + '</span></button>';
+      }).join('') + '</div>' +
+        '<div class="cards-acomp">' + tileAcomp('Fichas a enviar', base.filter(function (x) { return x.situacao === 'a_enviar'; }).length, 'implantações concluídas') +
+        tileAcomp('Vencem em até 1 dia útil', vencem, 'lembrete já enviado') + tileAcomp('Atrasadas', base.filter(atrasada).length, 'passaram do prazo', { cor: base.filter(atrasada).length ? 'red' : '' }) +
+        tileAcomp('Enviadas no prazo no mês', doMes.length ? Math.round(noPrazo * 100 / doMes.length) + '%' : '—', doMes.length ? noPrazo + ' de ' + doMes.length : 'nenhum envio no mês', { barra: doMes.length ? noPrazo * 100 / doMes.length : 0 }) +
+        tileAcomp('Devolvidas com pergunta', base.filter(function (x) { return x.situacao === 'devolvida'; }).length, 'responder ou enviar nova versão') + '</div>' +
+        '<section class="painel"><div class="cab-painel"><h2>Fichas de repasse</h2><span class="espaco"></span><span class="ajuda" style="margin:0">prazo: ' + (j.parametros.ficha_dias || 5) + ' dias úteis da conclusão da implantação até o envio ao Crédito</span></div>' +
+        '<div class="tabela-wrap"><table style="min-width:1100px"><thead><tr><th>Condomínio</th><th>Conduzida por</th><th>Assistente de crédito</th><th>Versão</th><th>Situação</th><th>Prazo (' + (j.parametros.ficha_dias || 5) + ' dias úteis)</th></tr></thead><tbody>' +
+        (lista.map(function (x) {
+          var s = x.prazo || {};
+          var prazo = !x.primeiro_envio_em ? (s.status === 'atrasado' ? etq(['ATRASADA · ' + diasUteisImp(s.atraso), 'vermelha']) + '<span class="sec">prazo era ' + dataBr(s.vence) + ' · alerta à assistente e à coordenação</span>' + (coord ? '<button class="link-acomp sub-link" data-cobrar-ficha="' + x.id + '">Cobrar</button>' : '')
+            : s.status === 'vence_hoje' ? etq(['VENCE HOJE · ' + dataBr(s.vence).slice(0, 5), 'ambar']) : s.status === 'vence_amanha' ? etq(['VENCE NO PRÓXIMO DIA ÚTIL · ' + dataBr(s.vence).slice(0, 5), 'ambar']) : etq(['NO PRAZO · até ' + dataBr(s.vence).slice(0, 5), 'azul']))
+            : etq(s.status === 'cumprido' ? ['ENVIADA NO PRAZO', 'verde'] : ['ENVIADA COM ATRASO · ' + diasUteisImp(s.atraso), 'ambar']) + '<span class="sec">1º envio ' + dataBr(s.em).slice(0, 5) + ' · prazo ' + dataBr(s.vence).slice(0, 5) + '</span>';
+          var sit = x.situacao === 'a_enviar' ? etq(['A ENVIAR', 'ambar']) + (x.faltas ? '<span class="sec">faltam campos em azul (' + x.faltas + ')</span>' : '<span class="sec">pronta para enviar</span>')
+            : x.situacao === 'devolvida' ? etq(['DEVOLVIDA COM PERGUNTA', 'vermelha']) + '<span class="sec">' + (x.devolvida_em ? dataBr(String(x.devolvida_em).slice(0, 10)).slice(0, 5) : '') + (x.devolvida_por ? ' por ' + esc(x.devolvida_por) : '') + ' · responder</span>'
+              : x.situacao === 'recebida' ? etq(['RECEBIDA', 'verde']) + '<span class="sec">versão ' + x.versao + ' confirmada</span>' : etq(['ENVIADA', 'azul']) + '<span class="sec">aguardando confirmação</span>';
+          return '<tr class="clicavel" data-ficha="' + x.id + '"><td><a href="#/implantacao/' + x.id + '/ficha"><b>' + esc(x.condominio) + '</b></a><span class="sec">' + esc([x.protocolo, x.uf, x.concluido_em ? 'concluída ' + dataBr(String(x.concluido_em).slice(0, 10)).slice(0, 5) : ''].filter(Boolean).join(' · ')) + (x.na_carteira ? '' : ' · ainda não está na Carteira') + '</span></td>' +
+            '<td>' + esc(x.responsavel_nome || '—') + '</td><td>' + (x.destino_nome ? esc(x.destino_nome) : x.versao ? '<span class="sec" style="display:inline">a supervisão escolhe</span>' : '—') + '</td>' +
+            '<td>' + (x.versao ? 'v' + x.versao + (x.versao >= x.limite ? ' de ' + x.limite : '') : '—') + '</td><td>' + sit + '</td><td>' + prazo + '</td></tr>';
+        }).join('') || '<tr><td colspan="6"><div class="vazio" style="border:0;padding:30px">Nenhuma ficha aqui.</div></td></tr>') + '</tbody></table></div>' +
+        '<p class="ajuda" style="margin:0;padding:8px 16px 14px">O prazo conta da conclusão da implantação até o <b>primeiro envio</b> ao Crédito, em dias úteis (fins de semana e feriados não contam). Devolução e nova versão não reabrem o prazo. Até 3 versões por ficha; depois, só com a liberação da coordenação de Implantação.</p></section>';
+      $$('[data-fsit]', raiz).forEach(function (b) { b.onclick = function () { f.fichaSit = b.getAttribute('data-fsit'); salvarFiltroAcomp(); desenhar(); }; });
+      $$('[data-ficha]', raiz).forEach(function (tr) { tr.onclick = function (e) { if (e.target.closest('a, button')) return; location.hash = '#/implantacao/' + tr.getAttribute('data-ficha') + '/ficha'; }; });
+      $$('[data-cobrar-ficha]', raiz).forEach(function (b) {
+        b.onclick = async function () {
+          if (!(await confirmar('Cobrar a ficha de repasse', 'Quem conduz recebe a cobrança no portal e por e-mail.', 'Cobrar'))) return;
+          try { await api('POST', '/api/implantacoes/' + b.getAttribute('data-cobrar-ficha') + '/cobrar', { qual: 'ficha' }); toast('Cobrança enviada.', 'ok'); } catch (e) { toast(e.message, 'erro'); }
+        };
+      });
+      exportarAcomp = { nome: 'Fichas de repasse', abas: [{ titulo: 'Fichas de repasse', cab: ['Protocolo', 'Condomínio', 'UF', 'Concluída em', 'Conduzida por', 'Assistente de crédito', 'Versão', 'Situação', 'Prazo', '1º envio'],
+        linhas: lista.map(function (x) { return [x.protocolo, x.condominio, x.uf, x.concluido_em ? dataBr(String(x.concluido_em).slice(0, 10)) : '', x.responsavel_nome || '', x.destino_nome || '', x.versao || '', x.situacao, x.prazo && x.prazo.vence ? dataBr(x.prazo.vence) : '', x.prazo && x.prazo.em ? dataBr(x.prazo.em) : '']; }) }] };
     }
     desenhar();
   }
@@ -5080,11 +5380,11 @@
     var vigente = j.historico.find(function (h) { return h.vale_desde <= j.hoje; });
     var nomeDoc = {};
     j.documentos.forEach(function (d) { nomeDoc[d.tipo] = d.nome; });
-    raiz.innerHTML = '<p style="margin:0 0 16px;color:var(--ink-2);font-size:14.5px">' + (pode ? 'Só a coordenação do setor Implantação e a administração alteram. ' : 'Quem altera é a coordenação do setor Implantação. ') +
-      'Cada mudança vale a partir da data escolhida: os envios anteriores continuam calculados com a regra da época.</p>' +
+    raiz.innerHTML = '<p style="margin:0 0 16px;color:var(--ink-2);font-size:14.5px">' + (pode ? 'Só a coordenação do setor Implantação e a administração alteram. ' : 'Quem altera é a coordenação do setor Implantação. ') + '</p>' +
       '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Regras em vigor</h2><span class="espaco"></span>' + etq([vigente ? 'valem desde ' + dataBr(vigente.vale_desde) : 'as da planilha (ninguém alterou ainda)', vigente ? 'verde' : 'cinza']) + '</div>' +
       '<div class="corpo grade-3">' + campo('pmOnb', 'Prazo do onboarding (dias)', p.onboarding_dias, 'contados do 1º vencimento') + campo('pmDoc', 'Prazo da documentação (dias)', p.documentacao_dias, 'contados do envio do formulário de implantação') +
       campo('pmMeta', 'Meta da carteira (%)', p.meta_pct, 'onboarding e documentação') + campo('pmVir', 'Dia da virada do mês vigente', p.virada_dia, 'a partir dele, a tela mostra o mês seguinte') +
+      campo('pmConc', 'Prazo para concluir (dias úteis)', p.concluir_dias, 'depois de assumir; pausa com pendência ou impedimento') + campo('pmFicha', 'Prazo da ficha de repasse (dias úteis)', p.ficha_dias, 'da conclusão até o 1º envio ao Crédito') +
       '<div><label class="rot" for="pmMarco">Data-marco das metas</label><input class="campo" id="pmMarco" type="date" value="' + esc(p.marco) + '"' + dis + '><div class="ajuda">envios anteriores ficam fora das metas</div></div></div>' +
       '<div class="corpo" style="padding-top:0"><span class="rot">Documentos que contam na meta de documentação</span><div class="marcas">' +
       j.documentos.map(function (d) { return '<label class="marca"><input type="checkbox" data-docmeta value="' + esc(d.tipo) + '"' + (p.docs_meta.indexOf(d.tipo) >= 0 ? ' checked' : '') + dis + '> ' + esc(d.nome) + '</label>'; }).join('') + '</div></div>' +
@@ -5093,12 +5393,15 @@
       '<section class="painel"><div class="cab-painel"><h2>Histórico</h2></div><div class="tabela-wrap"><table style="min-width:820px"><thead><tr><th>Vale a partir de</th><th>Regras</th><th>Quem alterou</th><th>Quando</th></tr></thead><tbody>' +
       (j.historico.map(function (h) {
         var v = h.valores;
-        return '<tr><td><b>' + dataBr(h.vale_desde) + '</b></td><td>Onboarding ' + v.onboarding_dias + ' dias · documentação ' + v.documentacao_dias + ' dias · meta ' + v.meta_pct + '% · virada no dia ' + v.virada_dia + ' · marco ' + dataBr(v.marco) +
+        return '<tr><td><b>' + dataBr(h.vale_desde) + '</b></td><td>Onboarding ' + v.onboarding_dias + ' dias · documentação ' + v.documentacao_dias + ' dias · meta ' + v.meta_pct + '% · virada no dia ' + v.virada_dia + ' · concluir em ' + v.concluir_dias + ' dias úteis · ficha em ' + v.ficha_dias + ' dias úteis · marco ' + dataBr(v.marco) +
           '<span class="sec">' + esc(v.docs_meta.map(function (t) { return nomeDoc[t] || t; }).join(', ')) + '</span></td><td>' + esc(h.alterado_por_nome || '—') + '</td><td>' + dataHoraCr(h.alterado_em) + '</td></tr>';
-      }).join('') || '<tr><td colspan="4" class="sec">Ainda sem alteração: valem as regras da planilha (onboarding 30 dias, documentação 60 dias, meta 90%, virada no dia 25).</td></tr>') + '</tbody></table></div></section>';
+      }).join('') || '<tr><td colspan="4" class="sec">Ainda sem alteração: valem as regras da planilha (onboarding 30 dias, documentação 60 dias, meta 90%, virada no dia 25), concluir em 3 dias úteis e ficha em 5 dias úteis.</td></tr>') + '</tbody></table></div></section>';
+    exportarAcomp = { nome: 'Parametros', abas: [{ titulo: 'Histórico', cab: ['Vale a partir de', 'Onboarding (dias)', 'Documentação (dias)', 'Meta (%)', 'Virada', 'Concluir (dias úteis)', 'Ficha (dias úteis)', 'Marco', 'Quem alterou'],
+      linhas: j.historico.map(function (h) { var v = h.valores; return [dataBr(h.vale_desde), v.onboarding_dias, v.documentacao_dias, v.meta_pct, v.virada_dia, v.concluir_dias, v.ficha_dias, dataBr(v.marco), h.alterado_por_nome || '']; }) }] };
     if (!pode) return;
     $('#pmSalvar', raiz).onclick = async function () {
       var valores = { onboarding_dias: Number($('#pmOnb', raiz).value), documentacao_dias: Number($('#pmDoc', raiz).value), meta_pct: Number($('#pmMeta', raiz).value), virada_dia: Number($('#pmVir', raiz).value),
+        concluir_dias: Number($('#pmConc', raiz).value), ficha_dias: Number($('#pmFicha', raiz).value),
         marco: $('#pmMarco', raiz).value, docs_meta: $$('[data-docmeta]:checked', raiz).map(function (c) { return c.value; }) };
       try { await api('POST', '/api/implantacoes/acompanhamento/parametros', { valores: valores, vale_desde: $('#pmVale', raiz).value }); toast('Regras salvas.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
     };

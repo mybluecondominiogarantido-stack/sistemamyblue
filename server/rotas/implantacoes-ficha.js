@@ -305,7 +305,25 @@ function rotasFicha(r, deps) {
     res.send(pdf);
   });
 
-  return { aoConcluir, prazoFicha };
+  /* todas as fichas, para a aba Fichas de repasse do Acompanhamento */
+  async function resumo() {
+    const { rows } = await db.q(`SELECT f.*, i.protocolo, i.condominio, i.uf, i.concluido_em, i.responsavel_id, i.condominio_id, ur.nome AS responsavel_nome, ud.nome AS destino_nome,
+        (SELECT ev.criado_em FROM implantacao_eventos ev WHERE ev.implantacao_id = f.implantacao_id AND ev.tipo = 'ficha_devolvida' ORDER BY ev.id DESC LIMIT 1) AS devolvida_em,
+        (SELECT u.nome FROM implantacao_eventos ev JOIN usuarios u ON u.id = ev.usuario_id WHERE ev.implantacao_id = f.implantacao_id AND ev.tipo = 'ficha_devolvida' ORDER BY ev.id DESC LIMIT 1) AS devolvida_por
+      FROM implantacao_fichas f JOIN implantacoes i ON i.id = f.implantacao_id LEFT JOIN usuarios ur ON ur.id = i.responsavel_id LEFT JOIN usuarios ud ON ud.id = f.destino_id
+      WHERE i.etapa IN ('concluida','na_carteira') ORDER BY f.aberta_em DESC`);
+    const out = [];
+    for (const f of rows) {
+      out.push({ id: f.implantacao_id, protocolo: f.protocolo, condominio: f.condominio, uf: f.uf, concluido_em: f.concluido_em, aberta_em: f.aberta_em,
+        responsavel_id: f.responsavel_id, responsavel_nome: f.responsavel_nome, destino_nome: f.destino_nome, na_carteira: !!f.condominio_id,
+        situacao: f.situacao, versao: f.versao, limite: FI.LIMITE_VERSOES + f.versoes_extra, primeiro_envio_em: f.primeiro_envio_em,
+        devolvida_em: f.situacao === 'devolvida' ? f.devolvida_em : null, devolvida_por: f.situacao === 'devolvida' ? f.devolvida_por : null,
+        faltas: FI.faltas(f.dados).length, aviso_prazo_em: f.aviso_prazo_em, prazo: await prazoFicha(f) });
+    }
+    return out;
+  }
+
+  return { aoConcluir, prazoFicha, resumo };
 }
 
 /* rotina: lembrete na véspera e no dia, e atraso uma vez por dia útil (à assistente e à coordenação) até o primeiro envio */

@@ -388,7 +388,7 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     res.json({ ok: true });
   });
 
-  rotasAcompanhamento(r, { db, seg, avisos, perfil, erro, evento, json });
+  rotasAcompanhamento(r, { db, seg, avisos, perfil, erro, evento, json, fichas: () => fichaRotas.resumo() });
   rotasSetor(r, { db, avisos, erro, evento, json, link, coordenacao, carregar, historicoParametros, expediente });
   // a ficha de repasse abre na conclusão
   const fichaRotas = rotasFicha(r, { db, seg, avisos, erro, evento, json, link, perfil, pode, coordenacao, pessoasDoSetor, administradores, historicoParametros,

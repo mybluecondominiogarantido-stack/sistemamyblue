@@ -7,6 +7,7 @@
  * coordenação e administração. Cobrar documentos (só ao executivo): o setor, a coordenação e a administração.
  */
 const { situacoesAntecipacao } = require('./implantacoes-antecipacoes');
+const { criarXlsx } = require('../xlsx');
 const M = require('../implantacoes/metas');
 const F = require('../implantacoes/formulario');
 
@@ -53,7 +54,19 @@ async function cobrarDocumentos(db, avisos, l, { autorId = null, lembrete = fals
   return true;
 }
 
-function rotasAcompanhamento(r, { db, seg, avisos, perfil, erro, evento, json }) {
+/* as colunas da planilha Controle Implantações, a partir do formulário, do contrato e das etapas */
+function controle(b, l, podeObs) {
+  const f = b.formulario || {};
+  const e = F.normalizarEtapas(b.etapas);
+  return {
+    cnpj: f.sem_cnpj ? 'ainda não possui (entrega)' : f.cnpj || b.cnpj || '', administradora: f.administradora || 'Não', sindico: f.sindico_nome || '',
+    contrato: !!b.contrato_id, data_contrato: l.inicio, doc: e.documentacao.feito, data_doc: l.enviado,
+    vouch: e.vouch.id || '', onboarding: e.onboarding.situacao, data_onboarding: /^\d{4}-\d{2}-\d{2}$/.test(e.onboarding.data) ? e.onboarding.data : '',
+    boletos: e.boletos.feito, envio: e.envio.forma, obs: b.obs_controle ? b.obs_controle.texto : '', obs_por: b.obs_controle ? b.obs_controle.por_nome : '', pode_obs: podeObs,
+  };
+}
+
+function rotasAcompanhamento(r, { db, seg, avisos, perfil, erro, evento, json, fichas }) {
   const interno = (p) => p.admin || p.equipe || p.coordenacao || p.diretoria;
 
   r.get('/api/implantacoes/acompanhamento', async (req, res) => {
@@ -64,7 +77,13 @@ function rotasAcompanhamento(r, { db, seg, avisos, perfil, erro, evento, json })
     const atual = M.parametrosEm(historico, hoje);
     const brutas = await carregarLinhas(db, { hoje, historico });
     const envioAntecipacao = await situacoesAntecipacao(db, brutas);
-    const linhas = brutas.map(({ _bruto, ...l }) => ({ ...l, antecipacao_envio: envioAntecipacao[l.id] || null }));
+    const contratos = new Set((await db.q("SELECT DISTINCT implantacao_id FROM implantacao_documentos WHERE tipo = 'contrato' AND substituido_em IS NULL")).rows.map((x) => x.implantacao_id));
+    const coord = !!(p.coordenacao || p.admin);
+    const linhas = brutas.map(({ _bruto, ...l }) => {
+      const c = controle(_bruto, l, coord || _bruto.responsavel_id === req.usuario.id);
+      c.contrato = !!(_bruto.contrato_id || contratos.has(l.id));
+      return { ...l, antecipacao_envio: envioAntecipacao[l.id] || null, controle: c };
+    });
     const porIds = [...new Set(linhas.map((l) => l.onboarding.por).filter(Boolean))];
     const nomesPor = new Map(porIds.length ? (await db.q(`SELECT id, nome FROM usuarios WHERE id IN (${porIds.map(Number).join(',')})`)).rows.map((x) => [x.id, x.nome]) : []);
     for (const l of linhas) l.onboarding.por_nome = nomesPor.get(l.onboarding.por) || '';
@@ -78,12 +97,30 @@ function rotasAcompanhamento(r, { db, seg, avisos, perfil, erro, evento, json })
       hoje, ano, parametros: atual, mes_vigente: M.mesVigente(hoje, atual.virada_dia),
       historico: historico.map((h) => ({ ...h, valores: M.normalizarParametros(h.valores).valores })).reverse(),
       documentos: Object.entries(F.DOCUMENTOS).filter(([t]) => !['analise_credito', 'contrato', 'outro'].includes(t)).map(([tipo, d]) => ({ tipo, nome: d.nome })),
-      linhas, painel: M.painel(linhas, { ano, mes, analista, executivo }),
+      linhas, painel: M.painel(linhas, { ano, mes, analista, executivo }), fichas: fichas ? await fichas() : [],
       onboarding: M.resumoOnboarding(linhas, atual.meta_pct), documentacao: M.resumoDocumentacao(linhas, atual.meta_pct),
       analistas: nomes('responsavel_id', 'responsavel_nome'), executivos: nomes('executivo_id', 'executivo_nome'),
       anos: [...new Set([ano, ...linhas.map((l) => Number(l.inicio.slice(0, 4)))])].sort(),
       pode: { parametros: !!(p.coordenacao || p.admin), marcar: !!(p.coordenacao || p.admin), cobrar: !!(p.equipe || p.coordenacao || p.admin), antecipacao: !!(p.equipe || p.coordenacao || p.admin) },
     });
+  });
+
+  /* Excel da aba aberta: a tela manda as colunas e as linhas como estão (com os filtros) */
+  r.post('/api/implantacoes/acompanhamento/excel', json, async (req, res) => {
+    const p = await perfil(req.usuario);
+    if (!interno(p)) return erro(res, 403, 'O acompanhamento é do setor Implantação, da coordenação e da diretoria.');
+    const b = req.body || {};
+    const abas = (Array.isArray(b.abas) ? b.abas : []).slice(0, 8).map((a) => ({
+      titulo: texto(a && a.titulo, 31),
+      cab: (Array.isArray(a && a.cab) ? a.cab : []).slice(0, 60).map((x) => texto(x, 80)),
+      linhas: (Array.isArray(a && a.linhas) ? a.linhas : []).slice(0, 5000).map((l) => (Array.isArray(l) ? l : []).slice(0, 60).map((v) => (typeof v === 'number' ? v : texto(v, 2000)))),
+    }));
+    if (!abas.length) return erro(res, 400, 'Nada para exportar.');
+    const nome = `${texto(b.nome, 80).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'acompanhamento'}.xlsx`;
+    res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.set('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(nome)}`);
+    res.set('Cache-Control', 'private, no-store');
+    res.send(criarXlsx(abas));
   });
 
   r.post('/api/implantacoes/acompanhamento/parametros', json, async (req, res) => {
