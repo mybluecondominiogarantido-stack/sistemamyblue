@@ -91,7 +91,7 @@ function rotasFicha(r, deps) {
     const editar = concluida && !!ficha && pd.marcar_documentos;
     const limite = FI.LIMITE_VERSOES + (ficha ? ficha.versoes_extra : 0);
     const pf = {
-      abrir: concluida && !ficha && pd.marcar_documentos,
+      abrir: concluida && !ficha && pd.marcar_documentos && !i.importacao_id,
       editar,
       enviar: editar && ficha.versao < limite,
       liberar: !!ficha && (p.coordenacao || p.admin) && ficha.versao >= limite,

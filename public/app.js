@@ -4111,7 +4111,7 @@
       try { r = await api('GET', '/api/implantacoes?vis=' + aba + (q ? '&q=' + encodeURIComponent(q) : '')); } catch (e) { toast(e.message, 'erro'); return; }
       if (meu !== seq) return;
       $('#tbImp').innerHTML = r.implantacoes.map(function (i) {
-        return '<tr class="clicavel" data-id="' + i.id + '"><td style="white-space:nowrap"><b>' + esc(i.protocolo || 'Rascunho') + '</b><span class="sec">' + dataHoraCr(i.enviado_em || i.criado_em) + '</span></td>' +
+        return '<tr class="clicavel" data-id="' + i.id + '"><td style="white-space:nowrap"><b>' + esc(i.protocolo || (i.numero_planilha ? 'Nº ' + i.numero_planilha : 'Rascunho')) + '</b>' + (i.importacao_id ? ' <span class="etiqueta cinza">planilha</span>' : '') + '<span class="sec">' + dataHoraCr(i.enviado_em || i.criado_em) + '</span></td>' +
           '<td><b>' + esc(i.condominio || 'Sem nome') + '</b><span class="sec">' + esc([i.uf, i.uh_total ? i.uh_total + ' unidades' : ''].filter(Boolean).join(' · ')) + '</span></td>' +
           '<td style="white-space:nowrap">' + esc(origemImp(i)) + '</td><td>' + esc(i.executivo_nome || '—') + '</td><td>' + etqCr(ETAPA_IMP, i.etapa) + '</td>' +
           // 🔒: a equipe vê, mas só quem conduz edita (outra pessoa, só com autorização da coordenação)
@@ -4654,6 +4654,12 @@
   }
   function htmlDiaADiaImp(d) {
     var i = d.implantacao, pd = d.pode, st = d.setor;
+    if (i.importacao_id) {
+      var im = i.importacao || {};
+      return '<div class="msg info" style="margin-bottom:16px"><div><b>Importada do histórico das planilhas</b> (Nº ' + esc(i.numero_planilha || '—') + ', ' + (im.fonte === 'controle' ? 'Controle Implantações' : 'Formulário de implantação') + ').' +
+        ' É histórico: não gera avisos, prazos, cobranças nem ficha de repasse.' + (i.etapa === 'em_implantacao' && pd.etapas ? ' Ficou em andamento: dá para atualizar as etapas e concluir.' : '') +
+        ((im.avisos || []).length ? '<br><span class="ajuda" style="margin:0">Conferência: ' + esc(im.avisos.join('; ')) + '</span>' : '') + '</div></div>';
+    }
     if (!st) return '';
     var html = '';
     var meusPedidos = st.autorizacoes.filter(function (a) { return eu && a.usuario_id === eu.id && a.situacao === 'pedida'; });
@@ -5016,14 +5022,14 @@
         '<section class="painel"><div class="cab-painel"><h2>' + (sel === 'concluidos' ? 'Contratos concluídos' : sel === 'andamento' ? 'Contratos em andamento' : sel === 'nao_iniciados' ? 'Contratos não iniciados' : 'Contratos do período') + '</h2><span class="ajuda" style="margin:0">' + lista.length + ' · do menor % para o maior · clique num cartão acima para filtrar</span></div>' +
         '<div class="tabela-wrap"><table style="min-width:860px"><thead><tr><th>Condomínio</th><th>Início do contrato</th><th>Analista</th><th>Etapas</th><th class="num">%</th><th>Faixa</th></tr></thead><tbody>' +
         (lista.slice(0, 200).map(function (x) {
-          return '<tr class="clicavel" data-imp="' + x.id + '"><td><b>' + esc(x.condominio) + '</b><span class="sec">' + esc(x.protocolo || '') + '</span></td><td>' + dataBr(x.inicio) + '</td><td>' + (x.responsavel_nome ? esc(x.responsavel_nome) : etq([x.etapa === 'fila' ? 'na fila, sem analista' : 'sem analista', 'cinza'])) + '</td>' +
+          return '<tr class="clicavel" data-imp="' + x.id + '"><td><b>' + esc(x.condominio) + '</b>' + (x.importada ? ' <span class="etiqueta cinza">planilha</span>' : '') + '<span class="sec">' + esc(x.protocolo || (x.numero ? 'Nº ' + x.numero : '')) + '</span></td><td>' + dataBr(x.inicio) + '</td><td>' + (x.responsavel_nome ? esc(x.responsavel_nome) : etq([x.etapa === 'fila' ? 'na fila, sem analista' : 'sem analista', 'cinza'])) + '</td>' +
             '<td>' + pontosAcomp(x.feitas) + '</td><td class="num"><b>' + x.pct + '%</b></td><td>' + etq(FAIXA_ACOMP[x.faixa]) + '</td></tr>';
         }).join('') || '<tr><td colspan="6"><div class="vazio" style="border:0;padding:24px">Nenhum contrato com esses filtros.</div></td></tr>') + '</tbody></table></div>' +
         '<p class="ajuda" style="margin:0;padding:8px 16px 14px">Os pontos seguem a ordem das etapas: documentação, Vouch, onboarding, boletos e envio.</p></section>';
       ligarCardsAcomp(raiz, desenhar);
       irImpAcomp(raiz);
       exportarAcomp = { nome: 'Acompanhamento ' + periodo, abas: [{ titulo: 'Contratos', cab: ['Protocolo', 'Condomínio', 'UF', 'Início do contrato', 'Analista', 'Executivo', '% concluído', 'Faixa'],
-        linhas: lista.map(function (x) { return [x.protocolo || '', x.condominio, x.uf, dataBr(x.inicio), x.responsavel_nome || '', x.executivo_nome || '', x.pct, FAIXA_ACOMP[x.faixa][0]]; }) },
+        linhas: lista.map(function (x) { return [x.protocolo || (x.numero ? 'Nº ' + x.numero : ''), x.condominio, x.uf, dataBr(x.inicio), x.responsavel_nome || '', x.executivo_nome || '', x.pct, FAIXA_ACOMP[x.faixa][0]]; }) },
       { titulo: 'Por mês', cab: ['Mês', 'Contratos', 'Concluídos'], linhas: p.mensal.map(function (x) { return [MESES_LONGO[x.mes - 1], x.contratos, x.concluidos]; }) }] };
     }
     desenhar();
@@ -5079,7 +5085,7 @@
     ];
     var valor = function (l, k) {
       var c = l.controle;
-      return { protocolo: l.protocolo || '', condominio: l.condominio, cnpj: c.cnpj, uf: l.uf, dia: l.dia_vencimento || '', venc: l.primeiro_vencimento, adm: c.administradora, executivo: l.executivo_nome, sindico: c.sindico,
+      return { protocolo: l.protocolo || (l.numero ? 'Nº ' + l.numero : ''), condominio: l.condominio, cnpj: c.cnpj, uf: l.uf, dia: l.dia_vencimento || '', venc: l.primeiro_vencimento, adm: c.administradora, executivo: l.executivo_nome, sindico: c.sindico,
         contrato: c.contrato, data_contrato: c.data_contrato, doc: c.doc, data_doc: c.data_doc, vouch: c.vouch, onboarding: c.onboarding, data_onb: c.data_onboarding, boletos: c.boletos, envio: c.envio,
         por: l.responsavel_nome || '', obs: c.obs, mes: l.mes, pct: l.pct }[k];
     };
@@ -5100,7 +5106,7 @@
         COLS.map(function (c, n) { return '<th data-ord="' + c[0] + '"' + (n < 2 ? ' class="fixa f' + n + '"' : '') + ' aria-sort="' + (ordem.k === c[0] ? (ordem.d > 0 ? 'ascending' : 'descending') : 'none') + '">' + esc(c[1]) + (ordem.k === c[0] ? (ordem.d > 0 ? ' ▲' : ' ▼') : '') + '</th>'; }).join('') + '</tr></thead><tbody>' +
         (lista.map(function (l) {
           var c = l.controle;
-          return '<tr data-imp="' + l.id + '"><td class="fixa f0"><b>' + esc(l.protocolo || '—') + '</b></td><td class="fixa f1"><a href="#/implantacao/' + l.id + '"><b>' + esc(l.condominio) + '</b></a></td>' +
+          return '<tr data-imp="' + l.id + '"><td class="fixa f0"><b>' + esc(l.protocolo || (l.numero ? 'Nº ' + l.numero : '—')) + '</b></td><td class="fixa f1"><a href="#/implantacao/' + l.id + '"><b>' + esc(l.condominio) + '</b></a>' + (l.importada ? ' <span class="etiqueta cinza" title="Importada do histórico das planilhas">planilha</span>' : '') + '</td>' +
             '<td>' + esc(c.cnpj) + '</td><td>' + esc(l.uf) + '</td><td class="centro">' + esc(l.dia_vencimento || '') + '</td><td>' + dataBr(l.primeiro_vencimento).slice(0, 5) + '</td><td>' + esc(c.administradora) + '</td><td>' + esc(l.executivo_nome) + '</td><td>' + esc(c.sindico) + '</td>' +
             '<td class="centro">' + sim(c.contrato) + '</td><td>' + dataBr(c.data_contrato) + '</td><td class="centro">' + sim(c.doc) + '</td><td>' + dataBr(c.data_doc) + '</td>' +
             '<td class="centro">' + sim(!!c.vouch) + '</td><td class="centro">' + (ONB_CTRL[c.onboarding] ? '<span class="etiqueta ' + ONB_CTRL[c.onboarding][1] + '">' + ONB_CTRL[c.onboarding][0] + '</span>' : '—') + '</td><td>' + (c.data_onboarding ? dataBr(c.data_onboarding) : '') + '</td>' +
@@ -5128,7 +5134,7 @@
       exportarAcomp = { nome: 'Controle Implantacoes ' + f.ano + (f.mes ? '-' + ('0' + f.mes).slice(-2) : ''), abas: [{ titulo: 'Controle ' + f.ano, cab: COLS.map(function (c) { return c[1]; }),
         linhas: lista.map(function (l) {
           var c = l.controle;
-          return [l.protocolo || '', l.condominio, c.cnpj, l.uf, l.dia_vencimento || '', dataBr(l.primeiro_vencimento), c.administradora, l.executivo_nome || '', c.sindico,
+          return [l.protocolo || (l.numero ? 'Nº ' + l.numero : ''), l.condominio, c.cnpj, l.uf, l.dia_vencimento || '', dataBr(l.primeiro_vencimento), c.administradora, l.executivo_nome || '', c.sindico,
             c.contrato ? 'SIM' : '', dataBr(c.data_contrato), c.doc ? 'SIM' : '', dataBr(c.data_doc), c.vouch ? 'SIM' : '', ONB_CTRL[c.onboarding] ? ONB_CTRL[c.onboarding][0] : '', c.data_onboarding ? dataBr(c.data_onboarding) : '',
             c.boletos ? 'SIM' : '', ENVIO_CTRL[c.envio] || '', l.responsavel_nome || '', c.obs, mesCurto(l.mes), l.pct];
         }) }] };
@@ -5274,7 +5280,7 @@
       var total = lista.reduce(function (s, l) { return s + l.antecipacao.valor; }, 0);
       var sit = function (s) { return lista.filter(function (l) { return l.antecipacao_envio && l.antecipacao_envio.situacao === s; }); };
       var cad = sit('cadastrada'), agu = sit('enviada'), dev = sit('devolvida');
-      var podeEnviar = function (l) { var e = l.antecipacao_envio; return j.pode.antecipacao && (!e || e.situacao === 'devolvida' || e.mudou); };
+      var podeEnviar = function (l) { var e = l.antecipacao_envio; return j.pode.antecipacao && !l.importada && (!e || e.situacao === 'devolvida' || e.mudou); };
       var nMarc = lista.filter(function (l) { return marcadas[l.id] && podeEnviar(l); }).length;
       var periodo = f.mes ? MESES_LONGO[f.mes - 1].toLowerCase() : f.ano;
       raiz.innerHTML = '<div class="cards-acomp">' + tileAcomp('Antecipações em ' + periodo, lista.length, 'contratos com início ' + (f.mes ? 'no mês' : 'no ano')) +
@@ -5395,16 +5401,114 @@
         var v = h.valores;
         return '<tr><td><b>' + dataBr(h.vale_desde) + '</b></td><td>Onboarding ' + v.onboarding_dias + ' dias · documentação ' + v.documentacao_dias + ' dias · meta ' + v.meta_pct + '% · virada no dia ' + v.virada_dia + ' · concluir em ' + v.concluir_dias + ' dias úteis · ficha em ' + v.ficha_dias + ' dias úteis · marco ' + dataBr(v.marco) +
           '<span class="sec">' + esc(v.docs_meta.map(function (t) { return nomeDoc[t] || t; }).join(', ')) + '</span></td><td>' + esc(h.alterado_por_nome || '—') + '</td><td>' + dataHoraCr(h.alterado_em) + '</td></tr>';
-      }).join('') || '<tr><td colspan="4" class="sec">Ainda sem alteração: valem as regras da planilha (onboarding 30 dias, documentação 60 dias, meta 90%, virada no dia 25), concluir em 3 dias úteis e ficha em 5 dias úteis.</td></tr>') + '</tbody></table></div></section>';
+      }).join('') || '<tr><td colspan="4" class="sec">Ainda sem alteração: valem as regras da planilha (onboarding 30 dias, documentação 60 dias, meta 90%, virada no dia 25), concluir em 3 dias úteis e ficha em 5 dias úteis.</td></tr>') + '</tbody></table></div></section>' +
+      (pode ? '<div id="impHist" style="margin-top:16px"></div>' : '');
     exportarAcomp = { nome: 'Parametros', abas: [{ titulo: 'Histórico', cab: ['Vale a partir de', 'Onboarding (dias)', 'Documentação (dias)', 'Meta (%)', 'Virada', 'Concluir (dias úteis)', 'Ficha (dias úteis)', 'Marco', 'Quem alterou'],
       linhas: j.historico.map(function (h) { var v = h.valores; return [dataBr(h.vale_desde), v.onboarding_dias, v.documentacao_dias, v.meta_pct, v.virada_dia, v.concluir_dias, v.ficha_dias, dataBr(v.marco), h.alterado_por_nome || '']; }) }] };
     if (!pode) return;
+    importacaoAcomp($('#impHist', raiz), recarregar);
     $('#pmSalvar', raiz).onclick = async function () {
       var valores = { onboarding_dias: Number($('#pmOnb', raiz).value), documentacao_dias: Number($('#pmDoc', raiz).value), meta_pct: Number($('#pmMeta', raiz).value), virada_dia: Number($('#pmVir', raiz).value),
         concluir_dias: Number($('#pmConc', raiz).value), ficha_dias: Number($('#pmFicha', raiz).value),
         marco: $('#pmMarco', raiz).value, docs_meta: $$('[data-docmeta]:checked', raiz).map(function (c) { return c.value; }) };
       try { await api('POST', '/api/implantacoes/acompanhamento/parametros', { valores: valores, vale_desde: $('#pmVale', raiz).value }); toast('Regras salvas.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
     };
+  }
+
+  /* ---------- importar o histórico das planilhas (Formulário + Controle): conferir, importar, desfazer ---------- */
+  var SIT_IMP = { pronta: ['Pronta', 'verde'], aviso: ['Com aviso', 'ambar'], decisao: ['Precisa de decisão', 'vermelha'], fora: ['Fica de fora', 'cinza'] };
+  function lerBase64Imp(arquivo) {
+    return new Promise(function (ok, falha) {
+      var r = new FileReader();
+      r.onload = function () { ok(String(r.result).split(',')[1] || ''); };
+      r.onerror = function () { falha(new Error('Não consegui ler ' + arquivo.name + '.')); };
+      r.readAsDataURL(arquivo);
+    });
+  }
+  async function importacaoAcomp(caixa, recarregar) {
+    var lotes = [];
+    try { lotes = (await api('GET', '/api/implantacoes/importacao')).lotes; } catch (e) { /* sem acesso */ }
+    var ativo = lotes.find(function (l) { return !l.desfeita_em; });
+    var estado = { previa: null, arquivos: null, sit: 'todas', pular: {}, incluir: {} };
+    function desenhar() {
+      var p = estado.previa;
+      var html = '<section class="painel"><div class="cab-painel"><h2>Importar o histórico das planilhas</h2><span class="espaco"></span><span class="ajuda" style="margin:0">Formulário de implantação (todas as respostas) + Controle Implantações</span></div><div class="corpo pilha" style="gap:14px">' +
+        '<p class="ajuda" style="margin:0">O portal confere tudo antes de gravar, com as regras das fórmulas da planilha: a linha do Controle aponta a resposta pela "Nº FORM (Ref.)"; Obs. com teste ou desconsiderar fica de fora; o mesmo condomínio repetido no ano vale pelo envio mais recente. As importadas são histórico: não geram avisos, prazos, cobranças nem ficha, e não entram nas filas.</p>' +
+        (ativo ? '<div class="msg aviso"><div>Já existe uma importação de ' + dataHoraCr(ativo.criado_em) + ' (' + ativo.ativas + ' implantações). Para importar de novo, desfaça a anterior.</div></div>' : '') +
+        '<div class="grade-2"><div><label class="rot" for="impForm">Formulário de implantação (.csv ou .xlsx)</label><input class="campo" type="file" id="impForm" accept=".csv,.xlsx"></div>' +
+        '<div><label class="rot" for="impCtrl">Controle Implantações (.csv ou .xlsx)</label><input class="campo" type="file" id="impCtrl" accept=".csv,.xlsx"></div></div>' +
+        '<div class="linha" style="justify-content:flex-end"><button class="btn primary" id="impConferir">Conferir</button></div>';
+      if (p) {
+        var r = p.resumo;
+        var itens = p.itens.filter(function (x) { return estado.sit === 'todas' || x.situacao === estado.sit; });
+        var entra = p.itens.filter(function (x) { return !estado.pular[x.chave] && (x.situacao === 'pronta' || x.situacao === 'aviso' || (x.situacao === 'decisao' && estado.incluir[x.chave])); }).length;
+        html += '<div class="cards-acomp">' + tileAcomp('Vão entrar', entra, r.controle + ' do Controle · ' + r.historico + ' do histórico') + tileAcomp('Prontas', r.pronta, 'tudo conferido') + tileAcomp('Com aviso', r.aviso, 'entram, com o que foi ajustado') +
+          tileAcomp('Precisam de decisão', r.decisao, 'só entram se você marcar') + tileAcomp('Ficam de fora', r.fora, r.desconsideradas + ' desconsideradas · ' + r.substituidas + ' substituídas · ' + r.ja_no_portal + ' já no portal') + '</div>' +
+          '<div class="linha" style="gap:16px;align-items:flex-start"><div style="flex:1 1 320px;min-width:0"><b>Controle por mês</b> <span class="ajuda" style="margin:0">confira com a planilha</span><div class="tabela-wrap"><table><thead><tr><th>Mês</th><th class="num">Contratos</th><th class="num">100%</th><th class="num">% médio</th></tr></thead><tbody>' +
+          r.por_mes.map(function (m) { return '<tr><td>' + esc(m.mes) + '</td><td class="num">' + m.contratos + '</td><td class="num">' + m.concluidos + '</td><td class="num">' + m.pct_medio + '%</td></tr>'; }).join('') + '</tbody></table></div></div>' +
+          '<div style="flex:1 1 220px"><b>Histórico (só no Formulário)</b><div class="tabela-wrap"><table><thead><tr><th>Ano do contrato</th><th class="num">Implantações</th></tr></thead><tbody>' +
+          Object.keys(r.anos_historico).map(function (a) { return '<tr><td>' + esc(a) + '</td><td class="num">' + r.anos_historico[a] + '</td></tr>'; }).join('') + '</tbody></table></div><p class="ajuda">Entram como concluídas, só para ter os dados dos outros anos.</p></div></div>' +
+          '<div class="linha" style="gap:8px">' + [['todas', 'Todas'], ['pronta', 'Prontas'], ['aviso', 'Com aviso'], ['decisao', 'Decisão'], ['fora', 'De fora']].map(function (s) {
+            return '<button class="pilula-acomp' + (estado.sit === s[0] ? ' on' : '') + '" data-imp-sit="' + s[0] + '">' + esc(s[1]) + ' <span class="n">' + (s[0] === 'todas' ? p.itens.length : r[s[0]]) + '</span></button>';
+          }).join('') + '</div>' +
+          '<div class="tabela-wrap" style="max-height:60vh;overflow:auto"><table style="min-width:1100px"><thead><tr><th>Entra</th><th>Nº</th><th>Condomínio</th><th>Origem</th><th>Início</th><th class="num">%</th><th>Executivo</th><th>Implantado por</th><th>Carteira</th><th>Situação</th></tr></thead><tbody>' +
+          itens.map(function (x) {
+            var marca = x.situacao === 'fora' ? '' : x.situacao === 'decisao' ? '<input type="checkbox" data-imp-incluir="' + esc(x.chave) + '"' + (estado.incluir[x.chave] ? ' checked' : '') + ' aria-label="Incluir">'
+              : '<input type="checkbox" data-imp-pular="' + esc(x.chave) + '"' + (estado.pular[x.chave] ? '' : ' checked') + ' aria-label="Importar">';
+            return '<tr><td class="centro">' + marca + '</td><td>' + esc(x.numero || '') + '</td><td><b>' + esc(x.condominio || '—') + '</b><span class="sec">' + esc([x.cnpj, x.uf].filter(Boolean).join(' · ')) + '</span></td>' +
+              '<td>' + (x.fonte === 'controle' ? 'Controle ' + esc(x.ano || '') : 'Formulário') + '<span class="sec">linha ' + esc(x.linha_forms || '—') + ' do Forms</span></td><td>' + (x.inicio ? dataBr(x.inicio) : '—') + '</td>' +
+              '<td class="num">' + (x.pct == null ? '—' : x.pct + '%') + '</td><td>' + esc(x.executivo || '—') + (x.executivo && !x.executivo_achado ? '<span class="sec">não cadastrado</span>' : '') + '</td>' +
+              '<td>' + esc(x.responsavel || '—') + (x.responsavel && !x.responsavel_achado ? '<span class="sec">fora da equipe</span>' : '') + '</td><td>' + (x.carteira ? 'ID ' + esc(x.carteira) : '—') + '</td>' +
+              '<td style="min-width:240px">' + etq(SIT_IMP[x.situacao]) + (x.motivo ? '<span class="sec">' + esc(x.motivo) + '</span>' : '') + (x.avisos.length ? '<span class="sec" style="color:var(--amber)">' + esc(x.avisos.join('; ')) + '</span>' : '') + '</td></tr>';
+          }).join('') + '</tbody></table></div>' +
+          '<div class="linha" style="justify-content:flex-end"><button class="btn ghost" id="impExcel">' + IC.baixar + 'Baixar a conferência</button><button class="btn primary" id="impOk"' + (ativo || !entra ? ' disabled' : '') + '>Importar ' + entra + ' implantações</button></div>';
+      }
+      if (lotes.length) {
+        html += '<div><b>Importações</b><div class="tabela-wrap"><table><thead><tr><th>Quando</th><th>Quem</th><th class="num">Importadas</th><th class="num">De fora</th><th>Situação</th></tr></thead><tbody>' +
+          lotes.map(function (l) {
+            return '<tr><td>' + dataHoraCr(l.criado_em) + '</td><td>' + esc(l.criado_por_nome || '') + '</td><td class="num">' + esc(l.resumo.importadas || 0) + '</td><td class="num">' + (l.fora || []).length + '</td><td>' +
+              (l.desfeita_em ? etq(['desfeita em ' + dataHoraCr(l.desfeita_em), 'cinza']) + (l.ativas ? '<span class="sec">' + l.ativas + ' ficaram (editadas depois)</span>' : '') : etq(['ativa · ' + l.ativas + ' implantações', 'verde']) + '<button class="link-acomp sub-link" data-desfazer-lote="' + l.id + '">Desfazer importação</button>') + '</td></tr>';
+          }).join('') + '</tbody></table></div></div>';
+      }
+      caixa.innerHTML = html + '</div></section>';
+      $('#impConferir', caixa).onclick = async function () {
+        var fa = $('#impForm', caixa).files[0], ct = $('#impCtrl', caixa).files[0];
+        if (!fa) { toast('Escolha o arquivo do Formulário de implantação.', 'erro'); return; }
+        try {
+          estado.arquivos = { formulario: await lerBase64Imp(fa), controle: ct ? await lerBase64Imp(ct) : null };
+          estado.previa = await api('POST', '/api/implantacoes/importacao/previa', estado.arquivos);
+          estado.pular = {}; estado.incluir = {};
+          desenhar();
+        } catch (e) { toast(e.message, 'erro'); }
+      };
+      $$('[data-imp-sit]', caixa).forEach(function (b) { b.onclick = function () { estado.sit = b.getAttribute('data-imp-sit'); desenhar(); }; });
+      $$('[data-imp-pular]', caixa).forEach(function (c) { c.onchange = function () { estado.pular[c.getAttribute('data-imp-pular')] = !c.checked; desenhar(); }; });
+      $$('[data-imp-incluir]', caixa).forEach(function (c) { c.onchange = function () { estado.incluir[c.getAttribute('data-imp-incluir')] = c.checked; desenhar(); }; });
+      if ($('#impExcel', caixa)) $('#impExcel', caixa).onclick = async function () {
+        var linhas = estado.previa.itens.map(function (x) {
+          return [x.numero || '', x.linha_forms || '', x.fonte, x.ano || '', x.condominio, x.cnpj, x.uf, x.inicio ? dataBr(x.inicio) : '', x.pct == null ? '' : x.pct, x.executivo, x.responsavel, x.carteira,
+            SIT_IMP[x.situacao][0], x.motivo, x.avisos.join('; ')];
+        });
+        exportarAcomp = { nome: 'Conferencia importacao', abas: [{ titulo: 'Conferência', cab: ['Nº', 'Linha do Forms', 'Origem', 'Ano', 'Condomínio', 'CNPJ', 'UF', 'Início', '%', 'Executivo', 'Implantado por', 'Carteira', 'Situação', 'Motivo', 'Avisos'], linhas: linhas },
+          { titulo: 'Por mês', cab: ['Mês', 'Contratos', '100%', '% médio'], linhas: estado.previa.resumo.por_mes.map(function (m) { return [m.mes, m.contratos, m.concluidos, m.pct_medio]; }) }] };
+        $('#acExcel').click();
+      };
+      if ($('#impOk', caixa)) $('#impOk', caixa).onclick = async function () {
+        var entra = estado.previa.itens.filter(function (x) { return !estado.pular[x.chave] && (x.situacao === 'pronta' || x.situacao === 'aviso' || (x.situacao === 'decisao' && estado.incluir[x.chave])); }).length;
+        if (!(await confirmar('Importar o histórico', entra + ' implantações entram como histórico, sem avisos nem prazos. Dá para desfazer depois.', 'Importar'))) return;
+        try {
+          var r = await api('POST', '/api/implantacoes/importacao', Object.assign({}, estado.arquivos, { pular: Object.keys(estado.pular).filter(function (k) { return estado.pular[k]; }), incluir: Object.keys(estado.incluir).filter(function (k) { return estado.incluir[k]; }) }));
+          toast(r.importadas + ' implantações importadas.', 'ok'); recarregar();
+        } catch (e) { toast(e.message, 'erro'); }
+      };
+      $$('[data-desfazer-lote]', caixa).forEach(function (b) {
+        b.onclick = async function () {
+          if (!(await confirmar('Desfazer a importação', 'Apaga as implantações dessa importação que ninguém editou no portal. As editadas ficam.', 'Desfazer', true))) return;
+          try { var r = await api('POST', '/api/implantacoes/importacao/' + b.getAttribute('data-desfazer-lote') + '/desfazer', {}); toast(r.apagadas + ' apagadas' + (r.mantidas.length ? ', ' + r.mantidas.length + ' ficaram (editadas).' : '.'), 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+        };
+      });
+    }
+    desenhar();
   }
 
   /* ---------- ficha de repasse ---------- */
@@ -5614,7 +5718,7 @@
     if (pd.pendencia) acoes += '<button class="btn ghost sm" id="btPendImp">Devolver com pendência</button>';
     if (pd.concluir) acoes += '<button class="btn primary sm" id="btConclImp"' + (d.faltas_etapas.length ? ' disabled title="' + esc(d.faltas_etapas.join(' ')) + '"' : '') + '>Concluir implantação</button>';
     if (pd.carteira) acoes += '<button class="btn primary sm" id="btCartImp">Confirmar na Carteira</button>';
-    definirBarra('<span class="setor">Implantação</span><span class="sep">/</span><span class="nome">' + esc(i.protocolo || 'Rascunho') + '</span>', acoes);
+    definirBarra('<span class="setor">Implantação</span><span class="sep">/</span><span class="nome">' + esc(i.protocolo || (i.numero_planilha ? 'Nº ' + i.numero_planilha : 'Rascunho')) + '</span>', acoes);
     var difs = {};
     d.diferencas.forEach(function (x) { difs[x.campo] = x; });
     var fmtDif = function (x) {

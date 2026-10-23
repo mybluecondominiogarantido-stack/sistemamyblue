@@ -27,7 +27,8 @@ async function carregarLinhas(db, { id = null, hoje = M.diaSP(Date.now()), histo
   const { rows } = await db.q(`SELECT i.id, i.protocolo, i.condominio, i.uf, i.origem, i.etapa, i.executivo_id, i.responsavel_id, i.solicitante_id,
       i.formulario, i.etapas, i.enviado_em, i.meta_doc_manual, i.cobranca_doc_em, i.lembrete_doc_em, i.iniciado_em, i.concluido_em, i.designado_em,
       i.obs_controle, i.onboarding_justificativa, i.aviso_onboarding_em, i.condominio_id, i.cnpj, i.analise_protocolo, i.contrato_id,
-      e.nome AS executivo_nome, u.nome AS responsavel_nome
+      i.importacao_id, i.numero_planilha, i.importacao,
+      COALESCE(e.nome, NULLIF(i.importacao->>'executivo', '')) AS executivo_nome, COALESCE(u.nome, NULLIF(i.importacao->>'implantado_por', '')) AS responsavel_nome
     FROM implantacoes i LEFT JOIN executivos e ON e.id = i.executivo_id LEFT JOIN usuarios u ON u.id = i.responsavel_id
     WHERE ${ABERTAS}${filtro} ORDER BY i.enviado_em`);
   const datas = {};
@@ -174,7 +175,7 @@ async function lembretesDocumentacao(db, avisos, hoje = M.diaSP(Date.now())) {
   let n = 0;
   for (const l of await carregarLinhas(db, { hoje })) {
     const d = l.documentacao;
-    if (!l.na_meta || d.status !== 'pendente' || !d.falta_executivo.length || d.faltam > DIAS_LEMBRETE_DOC || l._bruto.lembrete_doc_em) continue;
+    if (!l.na_meta || l._bruto.importacao_id || d.status !== 'pendente' || !d.falta_executivo.length || d.faltam > DIAS_LEMBRETE_DOC || l._bruto.lembrete_doc_em) continue;
     if (await cobrarDocumentos(db, avisos, l, { lembrete: true })) n++;
     await db.q('UPDATE implantacoes SET lembrete_doc_em = now() WHERE id = $1', [l.id]);
   }

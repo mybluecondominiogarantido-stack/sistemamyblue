@@ -40,7 +40,7 @@ const comoDias = (pausas) => pausas.map((p) => ({ inicio: M.diaSP(p.inicio), fim
 
 /* situação do prazo para concluir (null antes de assumir) */
 function prazoConcluir(i, pausas, params, P, hoje) {
-  if (!i.iniciado_em || ['rascunho', 'cancelada'].includes(i.etapa)) return null;
+  if (!i.iniciado_em || i.importacao_id || ['rascunho', 'cancelada'].includes(i.etapa)) return null;
   const fim = i.concluido_em ? M.diaSP(i.concluido_em) : null;
   const s = P.situacao({ inicio: M.diaSP(i.iniciado_em), n: params.concluir_dias, pausas: comoDias(pausas), fim, hoje });
   return s && { ...s, dias: params.concluir_dias, assumida: M.diaSP(i.iniciado_em) };
@@ -301,7 +301,7 @@ function criarRotinaPrazos({ db, avisos, expediente, coordenacao, link, carregar
     const fmt = (d) => d.split('-').reverse().join('/');
     // prazo para concluir
     for (const i of (await db.q(`SELECT i.*, u.nome AS responsavel_nome FROM implantacoes i LEFT JOIN usuarios u ON u.id = i.responsavel_id
-        WHERE i.etapa IN ('em_implantacao','pendencia') AND i.iniciado_em IS NOT NULL AND (i.aviso_concluir_em IS NULL OR i.aviso_concluir_em < $1::date)`, [hoje])).rows) {
+        WHERE i.etapa IN ('em_implantacao','pendencia') AND i.iniciado_em IS NOT NULL AND i.importacao_id IS NULL AND (i.aviso_concluir_em IS NULL OR i.aviso_concluir_em < $1::date)`, [hoje])).rows) {
       const params = M.parametrosEm(historico, M.diaSP(i.enviado_em || i.iniciado_em));
       const pausas = await pausasDe(db, i.id);
       const s = prazoConcluir(i, pausas, params, P, hoje);
@@ -333,7 +333,7 @@ function criarRotinaPrazos({ db, avisos, expediente, coordenacao, link, carregar
     const linhas = await carregarLinhas(db, { historico, hoje });
     for (const l of linhas) {
       const b = l._bruto;
-      if (b.onboarding_justificativa || !['em_implantacao', 'pendencia', 'concluida', 'na_carteira'].includes(b.etapa) || !b.responsavel_id) continue;
+      if (b.onboarding_justificativa || b.importacao_id || !['em_implantacao', 'pendencia', 'concluida', 'na_carteira'].includes(b.etapa) || !b.responsavel_id) continue;
       const o = prazoOnboarding(l);
       if (!o || !o.vencido || !l.na_meta) continue;
       if (b.aviso_onboarding_em && M.diaSP(b.aviso_onboarding_em) >= hoje) continue;

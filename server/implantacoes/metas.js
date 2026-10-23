@@ -110,7 +110,8 @@ function statusOnboarding(i, vencimento, enviado, p, hoje, anoRef) {
   const data = dataOnboarding(o.data, anoRef);
   let status;
   if (o.situacao === 'sindico_myblue') status = 'batida';
-  else if (o.situacao === 'realizado') status = !data ? 'sem_data' : data <= limite ? 'batida' : 'nao_batida';
+  // importada das planilhas com "REALIZADO" sem data: conta como batida (o Controle não registrava a data)
+  else if (o.situacao === 'realizado') status = !data ? (i.importacao_id ? 'batida' : 'sem_data') : data <= limite ? 'batida' : 'nao_batida';
   else if (hoje > limite) status = 'nao_batida';
   else if (o.situacao === 'marcado') status = data && data > limite ? 'apos_prazo' : 'agendado';
   else status = 'a_marcar';
@@ -152,6 +153,7 @@ function linha(i, datas, historico, hoje) {
   const naMeta = enviado >= p.marco;
   return {
     id: i.id, protocolo: i.protocolo, condominio: f.nome || i.condominio || '', uf: f.uf || i.uf || '', origem: i.origem, etapa: i.etapa,
+    importada: !!i.importacao_id, numero: i.numero_planilha || null,
     executivo_id: i.executivo_id, executivo_nome: i.executivo_nome || '', responsavel_id: i.responsavel_id, responsavel_nome: i.responsavel_nome || '',
     enviado, inicio, mes: inicio.slice(0, 7), dia_vencimento: Number(f.dia_vencimento) || null, primeiro_vencimento: vencimento, vencimento_previsto: !informado && !doFormulario, uh_total: Number(f.uh_total) || null,
     feitas, pct, faixa: faixa(pct, feitas), na_meta: naMeta,

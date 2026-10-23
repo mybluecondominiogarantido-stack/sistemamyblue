@@ -30,6 +30,7 @@ const M = require('../implantacoes/metas');
 const { rotasAcompanhamento, lembretesDocumentacao, carregarLinhas, historicoParametros } = require('./implantacoes-acompanhamento');
 const { rotasFicha, criarRotinaFichas } = require('./implantacoes-ficha');
 const { rotasAntecipacoes } = require('./implantacoes-antecipacoes');
+const { rotasImportacao } = require('./implantacoes-importacao');
 const { rotasSetor, criarRotinaPrazos, prazoConcluir, autorizacaoAtiva, autorizados, pausasDe, prazoOnboarding, ESCOPOS, MOTIVOS_IMPEDIMENTO } = require('./implantacoes-setor');
 const { criarPrazos } = require('../implantacoes/prazos');
 
@@ -103,7 +104,7 @@ function criarRotinasImplantacao({ db, seg, avisos, expediente }) {
     }
     if (!m.noExpediente) return feito;
     const { rows } = await db.q(`SELECT id, protocolo, origem, condominio, formulario, solicitante_id, executivo_id FROM implantacoes
-      WHERE etapa IN ('fila','em_implantacao','pendencia','concluida') AND (aviso_docs_em IS NULL OR aviso_docs_em < $1::date)`, [m.dia]);
+      WHERE etapa IN ('fila','em_implantacao','pendencia','concluida') AND importacao_id IS NULL AND (aviso_docs_em IS NULL OR aviso_docs_em < $1::date)`, [m.dia]);
     for (const i of rows) {
       const pend = F.pendencias(i.formulario || {}, await tiposVigentes(db, i.id), i.origem);
       if (pend.length) {
@@ -220,6 +221,14 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     const depois = ['concluida', 'na_carteira'].includes(i.etapa);
     const onbPendente = !F.onboardingFeito(i.etapas);
     const aprovada = !!(i.referencia && i.referencia.aprovado_em);
+    // importada das planilhas (histórico): consulta, Obs., documentos e, se ficou em andamento, as etapas e concluir (sem avisos)
+    if (i.importacao_id) {
+      const emAndamento = i.etapa === 'em_implantacao' && (doSetor || autEtapas);
+      const nada = { pedir_diretoria: false, decidir_diretoria: false, designar: false, iniciar: false, pendencia: false, carteira: false, editar: false, tirar_documentos: false, enviar: false,
+        cancelar: false, impedimento: false, onboarding: false, justificar_onboarding: false, pedir_autorizacao: false, autorizar: false };
+      return { ...nada, ver: interno, interno, etapas: emAndamento, concluir: emAndamento, documentos: doSetor || autDocs, marcar_documentos: doSetor || autDocs,
+        obs_controle: doSetor || autTudo, editar_setor: doSetor || autTudo, importada: true };
+    }
     return {
       pedir_diretoria: i.origem === 'entrega' && i.etapa === 'rascunho' && !aprovada && (dono || p.admin),
       decidir_diretoria: p.diretoria && i.etapa === 'diretoria',
@@ -308,7 +317,7 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     if (p.equipe || p.coordenacao) {
       Object.assign(out, await db.um(`SELECT COUNT(*) FILTER (WHERE etapa = 'fila')::int AS fila,
         COUNT(*) FILTER (WHERE etapa = 'em_implantacao' AND responsavel_id = $1)::int AS minhas,
-        COUNT(*) FILTER (WHERE etapa = 'concluida')::int AS carteira FROM implantacoes`, [req.usuario.id]));
+        COUNT(*) FILTER (WHERE etapa = 'concluida')::int AS carteira FROM implantacoes WHERE importacao_id IS NULL`, [req.usuario.id]));
       if (!p.coordenacao) out.carteira = 0;
     }
     if (p.gestorCredito) out.liberacoes = (await db.um('SELECT COUNT(*)::int AS n FROM implantacao_liberacoes WHERE aprovado IS NULL')).n;
@@ -389,6 +398,7 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
   });
 
   rotasAcompanhamento(r, { db, seg, avisos, perfil, erro, evento, json, fichas: () => fichaRotas.resumo() });
+  rotasImportacao(r, { db, erro, perfil, historicoParametros });
   rotasSetor(r, { db, avisos, erro, evento, json, link, coordenacao, carregar, historicoParametros, expediente });
   // a ficha de repasse abre na conclusão
   const fichaRotas = rotasFicha(r, { db, seg, avisos, erro, evento, json, link, perfil, pode, coordenacao, pessoasDoSetor, administradores, historicoParametros,
@@ -405,8 +415,9 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     const where = [];
     const vis = String(req.query.vis || 'minhas');
     const setor = p.equipe || p.coordenacao;
-    if (vis === 'minhas') where.push(`(i.solicitante_id = ${v(u.id)} OR i.executivo_id = ${v(p.executivo ? p.executivo.id : 0)})`);
-    else if (vis === 'fila') { if (!setor) return erro(res, 403, 'A fila é do setor Implantação.'); where.push("i.etapa IN ('fila','em_implantacao','pendencia')"); }
+    // as importadas das planilhas são histórico: aparecem em Todas e no Acompanhamento, não nas filas
+    if (vis === 'minhas') where.push(`(i.solicitante_id = ${v(u.id)} OR i.executivo_id = ${v(p.executivo ? p.executivo.id : 0)}) AND i.importacao_id IS NULL`);
+    else if (vis === 'fila') { if (!setor) return erro(res, 403, 'A fila é do setor Implantação.'); where.push("i.etapa IN ('fila','em_implantacao','pendencia') AND i.importacao_id IS NULL"); }
     else if (vis === 'diretoria') { if (!p.diretoria) return erro(res, 403, 'Só a diretoria aprova taxa e boleto de condomínio de entrega.'); where.push("i.etapa = 'diretoria'"); }
     else if (vis === 'carteira') { if (!setor) return erro(res, 403, 'Só o setor Implantação.'); where.push("i.etapa = 'concluida'"); }
     else if (vis === 'todas') { if (!setor && !p.diretoria) return erro(res, 403, 'O histórico é do setor Implantação e da diretoria.'); where.push("i.etapa <> 'rascunho'"); }
@@ -414,7 +425,8 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     const busca = texto(req.query.q, 100);
     if (busca) where.push(`(i.condominio ILIKE ${v('%' + busca + '%')} OR i.protocolo ILIKE $${args.length} OR i.cnpj ILIKE $${args.length})`);
     const { rows } = await db.q(`SELECT i.id, i.protocolo, i.etapa, i.origem, i.analise_id, i.analise_protocolo, i.condominio, i.cnpj, i.uf, i.formulario,
-        i.enviado_em, i.prazo_inicio, i.iniciado_em, i.criado_em, i.atualizado_em, i.responsavel_id, e.nome AS executivo_nome, ur.nome AS responsavel_nome,
+        i.enviado_em, i.prazo_inicio, i.iniciado_em, i.criado_em, i.atualizado_em, i.responsavel_id, i.numero_planilha, i.importacao_id,
+        COALESCE(e.nome, NULLIF(i.importacao->>'executivo', '')) AS executivo_nome, COALESCE(ur.nome, NULLIF(i.importacao->>'implantado_por', '')) AS responsavel_nome,
         (SELECT array_agg(DISTINCT d.tipo) FROM implantacao_documentos d WHERE d.implantacao_id = i.id AND d.substituido_em IS NULL) AS tipos
       FROM implantacoes i LEFT JOIN executivos e ON e.id = i.executivo_id LEFT JOIN usuarios ur ON ur.id = i.responsavel_id
       WHERE ${where.join(' AND ')}
@@ -955,6 +967,14 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     const lista = F.faltasConcluir(i.etapas);
     if (lista.length) return erro(res, 400, 'Faltam etapas para concluir.', { faltas: lista });
     const semOnboarding = !F.onboardingFeito(i.etapas);
+    if (i.importacao_id) {
+      // histórico das planilhas: conclui sem avisos, sem ficha e sem passar pela Carteira
+      await db.tx(async (t) => {
+        await t.q("UPDATE implantacoes SET etapa = 'na_carteira', concluido_em = now(), atualizado_em = now() WHERE id = $1", [i.id]);
+        await evento(t, i.id, req.usuario.id, 'concluida', { importada: true });
+      });
+      return res.json({ ok: true, parceiros: null });
+    }
     await db.tx(async (t) => {
       await t.q("UPDATE implantacoes SET etapa = 'concluida', concluido_em = now(), atualizado_em = now() WHERE id = $1", [i.id]);
       await evento(t, i.id, req.usuario.id, 'concluida', semOnboarding ? { onboarding_pendente: true } : {});

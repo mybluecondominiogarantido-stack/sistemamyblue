@@ -43,6 +43,7 @@ function rotasAntecipacoes(r, deps) {
     const { i, p, pd } = c;
     if (!(p.coordenacao || p.admin || pd.editar_setor)) return erro(res, 403, 'Só quem conduz a implantação (ou tem autorização) e a coordenação enviam a antecipação.');
     if (['rascunho', 'diretoria', 'cancelada'].includes(i.etapa)) return erro(res, 409, 'A implantação ainda não foi enviada ao setor.');
+    if (i.importacao_id) return erro(res, 409, 'Implantação importada da planilha (histórico): a antecipação não vai ao Controle de Repasses por aqui.');
     const envio = montarEnvio(i);
     if (!envio) return erro(res, 409, 'O formulário não tem antecipação negociada.');
     if (!(envio.valor > 0) || !envio.data) return erro(res, 400, 'O formulário precisa do valor e da data da antecipação.');

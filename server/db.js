@@ -529,7 +529,7 @@ CREATE TABLE IF NOT EXISTS implantacoes (
   id SERIAL PRIMARY KEY,
   protocolo TEXT UNIQUE,
   etapa TEXT NOT NULL DEFAULT 'rascunho' CHECK (etapa IN ('rascunho','diretoria','fila','em_implantacao','pendencia','concluida','na_carteira','cancelada')),
-  origem TEXT NOT NULL CHECK (origem IN ('analise','pdf','entrega')),
+  origem TEXT NOT NULL CHECK (origem IN ('analise','pdf','entrega','planilha')),
   analise_id INTEGER REFERENCES analises(id) ON DELETE SET NULL,
   analise_protocolo TEXT,
   condominio TEXT NOT NULL DEFAULT '',
@@ -674,6 +674,17 @@ CREATE TABLE IF NOT EXISTS implantacao_ficha_versoes (
   UNIQUE (implantacao_id, versao)
 );
 
+-- importação do histórico das planilhas (Formulário e Controle Implantações): cada importação é um lote, que dá para desfazer
+CREATE TABLE IF NOT EXISTS implantacao_importacoes (
+  id SERIAL PRIMARY KEY,
+  criado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  resumo JSONB NOT NULL DEFAULT '{}'::jsonb,
+  fora JSONB NOT NULL DEFAULT '[]'::jsonb,
+  desfeita_em TIMESTAMPTZ,
+  desfeita_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
+);
+
 -- antecipação enviada ao Controle de Repasses: o Gestor de lá cadastra a regra (com ajuste ou não) ou devolve
 CREATE TABLE IF NOT EXISTS implantacao_antecipacoes (
   implantacao_id INTEGER PRIMARY KEY REFERENCES implantacoes(id) ON DELETE CASCADE,
@@ -772,7 +783,7 @@ const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 
   'parametros_politica', 'faixas_precificacao', 'executivos', 'analise_protocolos', 'analises', 'analise_documentos', 'analise_unidades',
   'analise_lancamentos', 'analise_exclusoes', 'analise_alertas', 'analise_eventos',
   'implantacao_protocolos', 'implantacoes', 'implantacao_documentos', 'implantacao_eventos', 'implantacao_liberacoes', 'implantacao_parametros',
-  'implantacao_autorizacoes', 'implantacao_pausas', 'implantacao_fichas', 'implantacao_ficha_versoes', 'implantacao_antecipacoes',
+  'implantacao_autorizacoes', 'implantacao_pausas', 'implantacao_fichas', 'implantacao_ficha_versoes', 'implantacao_antecipacoes', 'implantacao_importacoes',
   'contrato_protocolos', 'contratos', 'contrato_documentos', 'contrato_eventos'];
 const RLS = TABELAS.map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`).join(';\n');
 
@@ -845,6 +856,12 @@ ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS obs_controle JSONB;
 ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS onboarding_justificativa JSONB;
 ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS aviso_concluir_em DATE;
 ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS aviso_onboarding_em DATE;
+-- implantação importada das planilhas: lote, Nº do formulário e o que veio de lá (fonte, avisos, nomes não achados no portal)
+ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS importacao_id INTEGER REFERENCES implantacao_importacoes(id) ON DELETE SET NULL;
+ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS numero_planilha INTEGER;
+ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS importacao JSONB;
+ALTER TABLE implantacoes DROP CONSTRAINT IF EXISTS implantacoes_origem_check;
+ALTER TABLE implantacoes ADD CONSTRAINT implantacoes_origem_check CHECK (origem IN ('analise','pdf','entrega','planilha'));
 -- Solicitação de Contrato: o executivo pede a assinatura e a advogada envia para assinar (etapas para_assinar e em_assinatura)
 ALTER TABLE contratos DROP CONSTRAINT IF EXISTS contratos_etapa_check;
 ALTER TABLE contratos ADD CONSTRAINT contratos_etapa_check CHECK (etapa IN ('rascunho','fila','em_elaboracao','pendencia','minuta_enviada','para_assinar','em_assinatura','conferencia','assinado','cancelada'));

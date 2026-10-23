@@ -143,6 +143,28 @@ Entram as implantações enviadas ao setor (fora rascunho, diretoria e cancelada
   metas) e os documentos da meta. Só a coordenação e a administração alteram; cada mudança vale a partir de uma data e
   fica no histórico (`implantacao_parametros`): cada implantação usa a regra que valia no dia do envio.
 
+## Histórico das planilhas (importação)
+
+Em **Acompanhamento → Parâmetros → Importar o histórico das planilhas** (coordenação e administração), o portal recebe o
+*Formulário de implantação* (todas as respostas do Forms) e o *Controle Implantações* (.csv ou .xlsx, como o Excel salva),
+confere e mostra a prévia antes de gravar. Regras (`server/implantacoes/importacao.js`), as mesmas das fórmulas da planilha:
+
+- a linha do Controle aponta a resposta pela coluna **Nº FORM (Ref.)**, que é a linha no Forms (resolve os Nº repetidos);
+- Obs. com "teste" ou "desconsiderar" fica de fora; o mesmo condomínio (nome) repetido no ano vale pelo envio mais
+  recente; mesmo CNPJ com nome diferente fica, com aviso;
+- datas em número do Excel e "set-26" são convertidas; a UF sai do texto livre do estado; executivo pelo e-mail (ou
+  nome), "implantado por" pela equipe do setor e o condomínio na Carteira pelo CNPJ (ou nome); o que não acha fica escrito,
+  com aviso; implantação que já está no portal (mesmo CNPJ) vale a do portal;
+- linhas do Controle entram com as etapas, a Obs., o % (100% = Na Carteira, senão em andamento) e, com "DOC. SIM", os
+  documentos da meta como recebidos sem arquivo na DATA DOC.; respostas que não estão no Controle (anos anteriores) entram
+  como concluídas, só como histórico.
+
+As importadas ficam com `origem = 'planilha'`, o **Nº** do formulário e a etiqueta *planilha*. São histórico: contam no
+Painel e nas metas da época (onboarding "REALIZADO" sem data conta como batido), mas não geram avisos, prazos, cobranças,
+ficha de repasse nem envio ao Controle de Repasses, e não entram na fila nem em "minhas". A que ficou em andamento dá para
+atualizar e concluir (sem avisos). Cada importação é um lote (`implantacao_importacoes`): **Desfazer importação** apaga o
+que ninguém editou no portal. Os arquivos não ficam guardados: só o que foi importado.
+
 ## Contrato
 
 A implantação aberta de uma análise que tem **Solicitação de Contrato** (`docs/contratos/LEIAME.md`) vem com os dados
