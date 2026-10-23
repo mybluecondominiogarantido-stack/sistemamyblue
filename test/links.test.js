@@ -41,7 +41,7 @@ async function logar(email, senha) {
 }
 
 async function criarUsuario(admin, email, extra = {}) {
-  const r = await admin('POST', '/api/admin/usuarios', { nome: email.split('@')[0], email, senha: 'Senha1234', ...extra });
+  const r = await admin('POST', '/api/admin/usuarios', { data_nascimento: '1990-05-10', data_admissao: '2024-02-01', nome: email.split('@')[0], email, senha: 'Senha1234', ...extra });
   assert.equal(r.status, 201);
   await ctx.db.q('UPDATE usuarios SET trocar_senha = FALSE WHERE id = $1', [r.json.id]);
   return logar(email, 'Senha1234');

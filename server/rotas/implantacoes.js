@@ -126,8 +126,8 @@ async function trazerDoContrato(t, implantacaoId, ct) {
     const para = FC.DOC_IMPLANTACAO[d.tipo];
     if (!para || (para !== 'outro' && ja.has(para))) continue;
     ja.add(para);
-    await t.q(`INSERT INTO implantacao_documentos (implantacao_id, tipo, nome, mime, tamanho, sha256, conteudo, enviado_por, enviado_em)
-      SELECT $1, $2, nome, mime, tamanho, sha256, conteudo, enviado_por, enviado_em FROM contrato_documentos WHERE id = $3`, [implantacaoId, para, d.id]);
+    await t.q(`INSERT INTO implantacao_documentos (implantacao_id, tipo, nome, mime, tamanho, sha256, conteudo, enviado_por, enviado_em, vinculado)
+      SELECT $1, $2, nome, mime, tamanho, sha256, conteudo, enviado_por, enviado_em, TRUE FROM contrato_documentos WHERE id = $3`, [implantacaoId, para, d.id]);
   }
 }
 
@@ -158,8 +158,8 @@ async function abrirDoContrato(t, ct, usuarioId) {
     String(formulario.uf || ct.uf || '').toUpperCase(), ct.executivo_id, ct.solicitante_id, JSON.stringify(formulario), JSON.stringify(referencia), ct.id]);
   if (analise) {
     for (const [de, para] of [['convencao', 'convencao'], ['retorno_pdf', 'analise_credito']]) {
-      await t.q(`INSERT INTO implantacao_documentos (implantacao_id, tipo, nome, mime, tamanho, sha256, conteudo, enviado_por, enviado_em)
-        SELECT $1, $2, nome, mime, tamanho, sha256, conteudo, enviado_por, enviado_em FROM analise_documentos
+      await t.q(`INSERT INTO implantacao_documentos (implantacao_id, tipo, nome, mime, tamanho, sha256, conteudo, enviado_por, enviado_em, vinculado)
+        SELECT $1, $2, nome, mime, tamanho, sha256, conteudo, enviado_por, enviado_em, TRUE FROM analise_documentos
         WHERE id = (SELECT MAX(id) FROM analise_documentos WHERE analise_id = $3 AND tipo = $4 AND substituido_em IS NULL)`, [id, para, analise.id, de]);
     }
   }
@@ -424,8 +424,8 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
       [a.id, a.protocolo, formulario.nome, formulario.cnpj, formulario.uf, a.executivo_id, u.id, JSON.stringify(formulario), JSON.stringify(referencia)]);
       // a convenção e o retorno da análise vêm junto
       for (const [de, para] of [['convencao', 'convencao'], ['retorno_pdf', 'analise_credito']]) {
-        await t.q(`INSERT INTO implantacao_documentos (implantacao_id, tipo, nome, mime, tamanho, sha256, conteudo, enviado_por, enviado_em)
-          SELECT $1, $2, nome, mime, tamanho, sha256, conteudo, enviado_por, enviado_em FROM analise_documentos
+        await t.q(`INSERT INTO implantacao_documentos (implantacao_id, tipo, nome, mime, tamanho, sha256, conteudo, enviado_por, enviado_em, vinculado)
+          SELECT $1, $2, nome, mime, tamanho, sha256, conteudo, enviado_por, enviado_em, TRUE FROM analise_documentos
           WHERE id = (SELECT MAX(id) FROM analise_documentos WHERE analise_id = $3 AND tipo = $4 AND substituido_em IS NULL)`, [novo, para, a.id, de]);
       }
       if (ct) await trazerDoContrato(t, novo, ct);
@@ -443,7 +443,7 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     const info = await db.um(`SELECT e.nome AS executivo_nome, e.uf AS executivo_uf, us.nome AS solicitante_nome, ur.nome AS responsavel_nome
       FROM implantacoes i LEFT JOIN executivos e ON e.id = i.executivo_id LEFT JOIN usuarios us ON us.id = i.solicitante_id
       LEFT JOIN usuarios ur ON ur.id = i.responsavel_id WHERE i.id = $1`, [i.id]);
-    const documentos = (await db.q(`SELECT d.id, d.tipo, d.nome, d.mime, d.tamanho, d.enviado_em, d.substituido_em, u.nome AS enviado_por_nome
+    const documentos = (await db.q(`SELECT d.id, d.tipo, d.nome, d.mime, d.tamanho, d.enviado_em, d.substituido_em, d.vinculado, u.nome AS enviado_por_nome
       FROM implantacao_documentos d LEFT JOIN usuarios u ON u.id = d.enviado_por WHERE d.implantacao_id = $1 ORDER BY d.id`, [i.id])).rows;
     const eventos = (await db.q(`SELECT ev.id, ev.tipo, ev.detalhe, ev.criado_em, u.nome AS usuario_nome FROM implantacao_eventos ev
       LEFT JOIN usuarios u ON u.id = ev.usuario_id WHERE ev.implantacao_id = $1 ORDER BY ev.id`, [i.id])).rows;
@@ -506,6 +506,14 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
       if (!ex) return erro(res, 400, 'Executivo não encontrado.');
       executivoId = ex.id;
     }
+    // o que vem das condições fechadas no contrato não se altera na implantação: vale o do contrato
+    const ct = i.contrato_id ? await db.um('SELECT * FROM contratos WHERE id = $1 AND fechado_em IS NOT NULL', [i.contrato_id]) : null;
+    if (ct) {
+      const doContrato = FC.paraImplantacao(ct);
+      for (const k of FC.CAMPOS_FECHADOS_IMPLANTACAO) { if (doContrato[k] !== undefined) f[k] = doContrato[k]; else delete f[k]; }
+    }
+    // o dia de vencimento dos boletos acompanha a data do primeiro vencimento
+    if (/^\d{4}-\d{2}-\d{2}$/.test(texto(f.primeiro_vencimento))) f.dia_vencimento = Number(texto(f.primeiro_vencimento).slice(8, 10));
     await db.tx(async (t) => {
       await t.q(`UPDATE implantacoes SET formulario = $2::jsonb, condominio = $3, cnpj = $4, uf = $5, executivo_id = $6, atualizado_em = now() WHERE id = $1`,
         [i.id, JSON.stringify(f), texto(f.nome, 200), f.sem_cnpj ? '' : texto(f.cnpj, 20), texto(f.uf, 2).toUpperCase(), executivoId]);
@@ -529,6 +537,10 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     nome = nome.replace(/[\\/\r\n"]/g, '_').slice(0, 200) || 'arquivo';
     const pdf = buf.subarray(0, 5).toString('latin1') === '%PDF-';
     const mime = pdf ? 'application/pdf' : /^[\w.+-]+\/[\w.+-]+$/.test(String(req.headers['content-type'] || '')) ? String(req.headers['content-type']) : 'application/octet-stream';
+    // o que veio vinculado da análise ou do contrato não é trocado aqui
+    if (tipo !== 'outro' && await db.um('SELECT 1 FROM implantacao_documentos WHERE implantacao_id = $1 AND tipo = $2 AND substituido_em IS NULL AND vinculado', [i.id, tipo])) {
+      return erro(res, 409, `${F.DOCUMENTOS[tipo].nome} veio vinculado da análise ou do contrato e não pode ser trocado.`);
+    }
     const antes = await tiposVigentes(db, i.id);
     const id = await db.tx(async (t) => {
       // um vigente por tipo (o anterior fica no histórico); "outro" acumula
@@ -564,8 +576,9 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     const c = await carregar(req, res);
     if (!c) return;
     if (!c.pd.tirar_documentos) return erro(res, 403, 'Os documentos não podem mais ser removidos.');
-    const d = await db.um('SELECT id, tipo, nome FROM implantacao_documentos WHERE id = $1 AND implantacao_id = $2', [Number(req.params.did) || 0, c.i.id]);
+    const d = await db.um('SELECT id, tipo, nome, vinculado FROM implantacao_documentos WHERE id = $1 AND implantacao_id = $2', [Number(req.params.did) || 0, c.i.id]);
     if (!d) return erro(res, 404, 'Documento não encontrado.');
+    if (d.vinculado) return erro(res, 409, 'Este documento veio vinculado da análise ou do contrato e não pode ser removido.');
     await db.tx(async (t) => {
       await t.q('DELETE FROM implantacao_documentos WHERE id = $1', [d.id]);
       await evento(t, c.i.id, req.usuario.id, 'documento_removido', { tipo: d.tipo, nome: d.nome });
@@ -724,7 +737,7 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
       [lido.protocolo, formulario.nome, formulario.cnpj, formulario.uf, executivoId, u.id, JSON.stringify(formulario), JSON.stringify(referencia)]);
       let nome = 'analise.pdf';
       try { nome = decodeURIComponent(String(req.headers['x-nome-arquivo'] || nome)).replace(/[\\/\r\n"]/g, '_').slice(0, 200) || nome; } catch { /* mantém */ }
-      await t.q(`INSERT INTO implantacao_documentos (implantacao_id, tipo, nome, mime, tamanho, sha256, conteudo, enviado_por) VALUES ($1, 'analise_credito', $2, 'application/pdf', $3, $4, $5, $6)`,
+      await t.q(`INSERT INTO implantacao_documentos (implantacao_id, tipo, nome, mime, tamanho, sha256, conteudo, enviado_por, vinculado) VALUES ($1, 'analise_credito', $2, 'application/pdf', $3, $4, $5, $6, TRUE)`,
         [novo, nome, buf.length, crypto.createHash('sha256').update(buf).digest('hex'), buf, u.id]);
       if (ct) await trazerDoContrato(t, novo, ct);
       await evento(t, novo, u.id, 'criada', { origem: 'pdf', analise: lido.protocolo, contrato: ct ? ct.protocolo : null });

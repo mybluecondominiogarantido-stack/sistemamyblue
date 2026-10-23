@@ -51,7 +51,7 @@ before(async () => {
   await new Promise((ok) => servidor.listen(0, '127.0.0.1', ok));
   base = `http://127.0.0.1:${servidor.address().port}`;
   admin = await entrar('admin@teste.com', 'Admin1234');
-  const u = await admin('POST', '/api/admin/usuarios', { nome: 'Paula Pessoa', email: 'paula@teste.com', papel: 'usuario', senha: 'Senha1234' });
+  const u = await admin('POST', '/api/admin/usuarios', { data_nascimento: '1990-05-10', data_admissao: '2024-02-01', nome: 'Paula Pessoa', email: 'paula@teste.com', papel: 'usuario', senha: 'Senha1234' });
   await ctx.db.q('UPDATE usuarios SET trocar_senha = FALSE WHERE id = $1', [u.json.id]);
   pessoa = await entrar('paula@teste.com', 'Senha1234');
 });
@@ -156,7 +156,7 @@ test('quem edita o quê na carteira: o portal diz o que identificou e a configur
   const setores = (await admin('GET', '/api/admin/setores')).json.setores;
   const S = (n) => setores.find((x) => x.nome === n).id;
   const nova = async (nome, email, extra) => {
-    const u = await admin('POST', '/api/admin/usuarios', { nome, email, senha: 'Senha1234', ...extra });
+    const u = await admin('POST', '/api/admin/usuarios', { data_nascimento: '1990-05-10', data_admissao: '2024-02-01', nome, email, senha: 'Senha1234', ...extra });
     await ctx.db.q('UPDATE usuarios SET trocar_senha = FALSE WHERE id = $1', [u.json.id]);
     return { id: u.json.id, c: await entrar(email, 'Senha1234') };
   };

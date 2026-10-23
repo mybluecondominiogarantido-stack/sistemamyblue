@@ -12,7 +12,7 @@ const COMPLETO = {
   garantias: ['Taxa ordinária'], parceria: 'nao', cashback: 'nao', antecipacao: 'nao',
   administradora: 'Administradora Exemplo', consultor_nome: 'Consultor Fictício', consultor_email: 'consultor@exemplo.com',
 };
-const TODOS_DOCS = new Set(['convencao', 'cadastro_moradores', 'ata_eleicao', 'ata_orcamento']);
+const TODOS_DOCS = new Set(['convencao', 'cadastro_moradores', 'ata_eleicao', 'ata_orcamento', 'analise_credito']);
 
 test('CPF: confere os dígitos verificadores', () => {
   assert.equal(F.cpfValido('111.444.777-35'), true);
@@ -21,8 +21,12 @@ test('CPF: confere os dígitos verificadores', () => {
   assert.equal(F.cpfValido('123'), false);
 });
 
-test('formulário completo com os 4 documentos obrigatórios não tem faltas', () => {
+test('formulário completo com os 5 documentos obrigatórios (a análise vem vinculada) não tem faltas', () => {
   assert.deepEqual(F.faltas(COMPLETO, { docs: TODOS_DOCS, origem: 'analise', executivoId: 1 }), []);
+  // sem o retorno da análise, falta; no condomínio de entrega não há análise
+  const semAnalise = new Set([...TODOS_DOCS].filter((t) => t !== 'analise_credito'));
+  assert.deepEqual(F.faltas(COMPLETO, { docs: semAnalise, origem: 'analise', executivoId: 1 }), ['Anexar: Análise de Crédito.']);
+  assert.ok(!F.docsObrigatorios('entrega').includes('analise_credito'));
 });
 
 test('faltas: documentos obrigatórios, CPF, parceria e cashback com as condicionais', () => {

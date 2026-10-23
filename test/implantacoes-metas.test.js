@@ -43,6 +43,10 @@ test('meta de onboarding: 30 dias do 1º vencimento (o informado pelo setor vale
   // o setor informa outro 1º vencimento (prazo curto para implantar)
   assert.equal(onb({}, { primeiro_vencimento: '2026-12-10' }).limite, '2027-01-09');
   assert.equal(M.linha(imp({ etapas: { boletos: { primeiro_vencimento: '2026-12-10' } } }), {}, [], HOJE).vencimento_previsto, false);
+  // a data do formulário (executivo) vale sobre a prevista; a informada pelo setor vale sobre as duas
+  const comForm = (etapas = {}) => M.linha(imp({ etapas, formulario: { ...imp({}).formulario, primeiro_vencimento: '2026-11-20' } }), {}, [], HOJE);
+  assert.deepEqual([comForm().primeiro_vencimento, comForm().vencimento_previsto], ['2026-11-20', false]);
+  assert.equal(comForm({ boletos: { primeiro_vencimento: '2026-12-10' } }).primeiro_vencimento, '2026-12-10');
   assert.equal(onb({ situacao: 'realizado', data: '2026-12-10' }).status, 'batida');
   assert.equal(onb({ situacao: 'realizado', data: '2026-12-11' }).status, 'nao_batida');
   assert.equal(onb({ situacao: 'realizado', data: 'combinado com o síndico' }).status, 'sem_data');

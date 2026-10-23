@@ -35,7 +35,7 @@ async function entrar(email, senha) {
 }
 
 async function pessoa(nome, email, modulos) {
-  const r = await admin('POST', '/api/admin/usuarios', { nome, email, papel: 'usuario', senha: 'Senha1234', modulos });
+  const r = await admin('POST', '/api/admin/usuarios', { data_nascimento: '1990-05-10', data_admissao: '2024-02-01', nome, email, papel: 'usuario', senha: 'Senha1234', modulos });
   assert.equal(r.status, 201, r.texto);
   await ctx.db.q('UPDATE usuarios SET trocar_senha = FALSE WHERE id = $1', [r.json.id]);
   return { c: await entrar(email, 'Senha1234'), id: r.json.id };

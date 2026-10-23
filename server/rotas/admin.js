@@ -79,7 +79,8 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     const perms = {};
     for (const p of (await db.q('SELECT usuario_id, modulo_slug FROM permissoes')).rows) (perms[p.usuario_id] ||= []).push(p.modulo_slug);
     const setoresU = await setoresDosUsuarios();
-    let { rows } = await db.q('SELECT id, nome, email, papel, ativo, trocar_senha, supervisor_tickets, editor_links, criado_em, ultimo_login, foto_em FROM usuarios ORDER BY ativo DESC, nome');
+    let { rows } = await db.q(`SELECT id, nome, email, papel, ativo, trocar_senha, supervisor_tickets, editor_links, criado_em, ultimo_login, foto_em,
+      to_char(data_nascimento, 'YYYY-MM-DD') AS data_nascimento, to_char(data_admissao, 'YYYY-MM-DD') AS data_admissao FROM usuarios ORDER BY ativo DESC, nome`);
     if (esc) rows = rows.filter((u) => esc.gerencia(u.id));
     const todosSetores = (await db.q('SELECT id, nome, ordem FROM setores ORDER BY ordem, nome')).rows;
     const saida = {
@@ -103,13 +104,27 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     const papel = PAPEIS.includes(body.papel) ? body.papel : 'usuario';
     if (!nome || nome.length > 120) return { erro: 'Informe o nome (até 120 caracteres).' };
     if (!EMAIL_RE.test(email) || email.length > 200) return { erro: 'E-mail inválido.' };
+    const nascimento = dataCadastro(body.data_nascimento), admissao = dataCadastro(body.data_admissao);
+    if (!nascimento) return { erro: 'Informe a data de nascimento.' };
+    if (!admissao) return { erro: 'Informe a data de admissão.' };
+    const hoje = new Date().toISOString().slice(0, 10);
+    const ano = Number(hoje.slice(0, 4));
+    if (nascimento < `${ano - 100}-01-01` || nascimento > `${ano - 14}${hoje.slice(4)}`) return { erro: 'Data de nascimento inválida: confira o ano.' };
+    if (admissao < nascimento || admissao > `${ano + 1}${hoje.slice(4)}`) return { erro: 'Data de admissão inválida: confira o ano.' };
     const lista = Array.isArray(body.modulos) ? body.modulos.map(String) : [];
     const existentes = new Set((await db.q('SELECT slug FROM modulos')).rows.map((m) => m.slug));
     const setoresValidos = new Set((await db.q('SELECT id FROM setores')).rows.map((x) => x.id));
     const setores = Array.isArray(body.setores) ? [...new Set(body.setores.map(Number))].filter((x) => setoresValidos.has(x)) : null;
     if (setores && ['coordenador', 'supervisor'].includes(papel) && !setores.length) return { erro: 'Escolha o setor que esta pessoa coordena ou supervisiona.' };
     // Coordenador e Supervisor já têm a Supervisão da Central de Tickets pelo perfil: a marcação fica só para os outros
-    return { nome, email, papel, supervisor_tickets: !!body.supervisor_tickets && !['coordenador', 'supervisor'].includes(papel), editor_links: !!body.editor_links, modulos: lista.filter((s) => existentes.has(s)), setores };
+    return { nome, email, papel, data_nascimento: nascimento, data_admissao: admissao, supervisor_tickets: !!body.supervisor_tickets && !['coordenador', 'supervisor'].includes(papel), editor_links: !!body.editor_links, modulos: lista.filter((s) => existentes.has(s)), setores };
+  }
+  /* data do cadastro (AAAA-MM-DD) ou null */
+  function dataCadastro(v) {
+    const s = String(v || '').trim().slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+    const d = new Date(s + 'T12:00:00Z');
+    return Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== s ? null : s;
   }
 
   // quem continua liberado numa ferramenta mantém o "só consulta" e os papéis que tinha nela
@@ -139,8 +154,9 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     if (senha) { const e = validarNovaSenha(senha); if (e) return erro(res, 400, e); } else senha = senhaAleatoria();
     let id;
     try {
-      id = (await db.um("INSERT INTO usuarios (nome, email, senha_hash, papel, trocar_senha, supervisor_tickets, editor_links, criado_por) VALUES ($1, $2, $3, $4, TRUE, $5, $6, $7) RETURNING id",
-        [d.nome, d.email, hashSenha(senha), d.papel, d.supervisor_tickets, d.editor_links, req.usuario.id])).id;
+      id = (await db.um(`INSERT INTO usuarios (nome, email, senha_hash, papel, trocar_senha, supervisor_tickets, editor_links, criado_por, data_nascimento, data_admissao)
+        VALUES ($1, $2, $3, $4, TRUE, $5, $6, $7, $8, $9) RETURNING id`,
+        [d.nome, d.email, hashSenha(senha), d.papel, d.supervisor_tickets, d.editor_links, req.usuario.id, d.data_nascimento, d.data_admissao])).id;
     } catch (e) {
       if (ehDuplicado(e)) return erro(res, 409, 'Já existe um usuário com este e-mail.');
       throw e;
@@ -155,7 +171,8 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     const id = Number(req.params.id);
     const esc = await escopoDe(req);
     if (esc && !esc.gerencia(id)) return erro(res, 404, 'Usuário não encontrado.');
-    const atual = await db.um('SELECT id, nome, email, papel, ativo, supervisor_tickets, editor_links FROM usuarios WHERE id = $1', [id]);
+    const atual = await db.um(`SELECT id, nome, email, papel, ativo, supervisor_tickets, editor_links, to_char(data_nascimento, 'YYYY-MM-DD') AS data_nascimento,
+      to_char(data_admissao, 'YYYY-MM-DD') AS data_admissao FROM usuarios WHERE id = $1`, [id]);
     if (!atual) return erro(res, 404, 'Usuário não encontrado.');
     const pedido = { ...req.body };
     if (esc) {
@@ -178,7 +195,8 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
       if (outros.n === 0) return erro(res, 400, 'Não é possível remover o último administrador ativo.');
     }
     try {
-      await db.q('UPDATE usuarios SET nome = $1, email = $2, papel = $3, ativo = $4, supervisor_tickets = $5, editor_links = $6, atualizado_em = now() WHERE id = $7', [d.nome, d.email, d.papel, ativo, d.supervisor_tickets, d.editor_links, id]);
+      await db.q(`UPDATE usuarios SET nome = $1, email = $2, papel = $3, ativo = $4, supervisor_tickets = $5, editor_links = $6, data_nascimento = $8, data_admissao = $9,
+        atualizado_em = now() WHERE id = $7`, [d.nome, d.email, d.papel, ativo, d.supervisor_tickets, d.editor_links, id, d.data_nascimento, d.data_admissao]);
     } catch (e) {
       if (ehDuplicado(e)) return erro(res, 409, 'Já existe um usuário com este e-mail.');
       throw e;

@@ -141,14 +141,16 @@ function linha(i, datas, historico, hoje) {
   const inicio = valida(f.inicio_contrato) ? f.inicio_contrato : enviado;
   const p = parametrosEm(historico, enviado);
   const informado = F.normalizarEtapas(i.etapas).boletos.primeiro_vencimento;
-  const vencimento = informado || primeiroVencimento(f, inicio);
+  // o setor informa na etapa Emissão de boletos; senão vale a data do formulário; senão, a prevista pelo dia de vencimento
+  const doFormulario = valida(f.primeiro_vencimento) ? f.primeiro_vencimento : '';
+  const vencimento = informado || doFormulario || primeiroVencimento(f, inicio);
   const feitas = etapasFeitas(i);
   const pct = percentual(feitas);
   const naMeta = enviado >= p.marco;
   return {
     id: i.id, protocolo: i.protocolo, condominio: f.nome || i.condominio || '', uf: f.uf || i.uf || '', origem: i.origem, etapa: i.etapa,
     executivo_id: i.executivo_id, executivo_nome: i.executivo_nome || '', responsavel_id: i.responsavel_id, responsavel_nome: i.responsavel_nome || '',
-    enviado, inicio, mes: inicio.slice(0, 7), dia_vencimento: Number(f.dia_vencimento) || null, primeiro_vencimento: vencimento, vencimento_previsto: !informado, uh_total: Number(f.uh_total) || null,
+    enviado, inicio, mes: inicio.slice(0, 7), dia_vencimento: Number(f.dia_vencimento) || null, primeiro_vencimento: vencimento, vencimento_previsto: !informado && !doFormulario, uh_total: Number(f.uh_total) || null,
     feitas, pct, faixa: faixa(pct, feitas), na_meta: naMeta,
     onboarding: statusOnboarding(i, vencimento, enviado, p, hoje, inicio.slice(0, 4)),
     documentacao: statusDocumentacao(i, enviado, datas || {}, p, hoje),

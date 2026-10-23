@@ -63,9 +63,10 @@ function criarNotificador(db, cfg) {
       const ids = [...new Set(usuarios.filter((x) => x != null && x !== n.autor_id).map(Number))];
       if (!ids.length) return;
       const destino = (await db.q('SELECT id, nome, email FROM usuarios WHERE id = ANY($1::int[]) AND ativo', [ids])).rows;
+      const avisoDe = {};
       for (const u of destino) {
-        await db.q('INSERT INTO notificacoes (usuario_id, ticket_id, tipo, titulo, texto, link) VALUES ($1, $2, $3, $4, $5, $6)',
-          [u.id, n.ticket_id || null, n.tipo, n.titulo, n.texto, n.link || null]);
+        avisoDe[u.id] = (await db.um('INSERT INTO notificacoes (usuario_id, ticket_id, tipo, titulo, texto, link) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+          [u.id, n.ticket_id || null, n.tipo, n.titulo, n.texto, n.link || null])).id;
       }
       if (!n.email || !enviar) return;
       let msg;
@@ -75,9 +76,14 @@ function criarNotificador(db, cfg) {
         msg = montarEmail(n, ticket);
       } else msg = montarEmailSimples(n);
       // e-mail sai em segundo plano: a tela não espera o servidor de e-mail
+      // o resultado fica no aviso (email_enviado_em ou email_erro)
       for (const u of destino) {
         Promise.resolve(enviar({ para: { nome: u.nome, email: u.email }, ...msg }))
-          .catch((e) => console.error('[avisos] falha ao enviar e-mail para', u.email, '-', e.message));
+          .then(() => db.q('UPDATE notificacoes SET email_enviado_em = now(), email_erro = NULL WHERE id = $1', [avisoDe[u.id]]))
+          .catch((e) => {
+            console.error('[avisos] falha ao enviar e-mail para', u.email, '-', e.message);
+            return db.q('UPDATE notificacoes SET email_erro = $2 WHERE id = $1', [avisoDe[u.id], String(e.message || e).slice(0, 500)]).catch(() => {});
+          });
       }
     } catch (e) {
       console.error('[avisos]', e.message);

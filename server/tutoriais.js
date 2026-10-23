@@ -19,7 +19,8 @@
  *   implantacao_acompanhar  quem vê o Acompanhamento (setor Implantação e diretoria)
  *   contrato    quem usa a Solicitação de Contrato (executivos cadastrados, quem elabora e diretoria)
  *   contrato_juridico  quem elabora os contratos (Solicitação de Contrato → Quem elabora)
- *   jornada     quem usa a Análise de Crédito, a Solicitação de Contrato ou a Implantação (o caminho inteiro)
+ *   jornada_executivo  executivos de negócios cadastrados (o caminho inteiro, pelo executivo)
+ *   jornada_equipe     analistas e diretoria da Análise de Crédito, quem elabora os contratos e o setor Implantação
  *   { modulo }  quem abre aquela ferramenta
  * O administrador vê todos.
  */
@@ -32,7 +33,7 @@ const ROTULO_PUBLICO = {
   credito: 'Para executivos de negócios e a Análise de Crédito', credito_analise: 'Para analistas de crédito e a diretoria',
   implantacao: 'Para executivos de negócios e o setor Implantação', implantacao_setor: 'Para o setor Implantação', implantacao_acompanhar: 'Para o setor Implantação e a diretoria',
   contrato: 'Para executivos de negócios e o Jurídico', contrato_juridico: 'Para quem elabora os contratos (Jurídico)',
-  jornada: 'Para o comercial, a Análise de Crédito, o Jurídico e a Implantação',
+  jornada_executivo: 'Para executivos de negócios', jornada_equipe: 'Para a Análise de Crédito, o Jurídico e a Implantação',
 };
 
 const TUTORIAIS = [
@@ -76,8 +77,10 @@ const TUTORIAIS = [
     descricao: 'Registrar renegociações, acompanhar a perda de receita e os tickets do CS.' },
   { slug: 'ferramenta-partnerchip', grupo: 'Ferramentas', publico: { modulo: 'partnerchip-resultados' }, titulo: 'PartnerChip — Resultados',
     descricao: 'O painel de resultados dos parceiros.' },
-  { slug: 'jornada-credito-implantacao', grupo: 'Ferramentas', publico: 'jornada', titulo: 'Da Análise de Crédito à Implantação',
-    descricao: 'O caminho inteiro de um condomínio: a análise de crédito, a solicitação de contrato, a minuta, a assinatura, as condições fechadas, a implantação solicitada pelo executivo e a Carteira.' },
+  { slug: 'jornada-credito-implantacao', grupo: 'Ferramentas', publico: 'jornada_executivo', titulo: 'Da Análise de Crédito à Implantação — pelo executivo',
+    descricao: 'O caminho do executivo: pedir a análise e receber o retorno, pedir o contrato, levar a minuta ao síndico, pedir a assinatura, solicitar a implantação e acompanhar até a Carteira.' },
+  { slug: 'jornada-credito-implantacao-equipe', grupo: 'Ferramentas', publico: 'jornada_equipe', titulo: 'Da Análise de Crédito à Implantação — por quem executa',
+    descricao: 'O mesmo caminho pelas mãos de quem executa: a analista de crédito libera o retorno, a advogada redige, manda assinar e registra as condições, a coordenação designa, a assistente conduz e a coordenação confirma na Carteira.' },
   { slug: 'credito-solicitar', grupo: 'Ferramentas', publico: 'credito', titulo: 'Análise de Crédito — pedir e acompanhar',
     descricao: 'Preencher a solicitação, anexar a convenção e o relatório, enviar, responder pendências, abrir o retorno e pedir reanálise.' },
   { slug: 'credito-analisar', grupo: 'Ferramentas', publico: 'credito_analise', titulo: 'Análise de Crédito — analisar e liberar',
@@ -140,7 +143,8 @@ async function visibilidade(db, seg, u) {
     implantacao_acompanhar: setorImplantacao || diretoria,
     contrato: executivo || elaborador || diretoria,
     contrato_juridico: elaborador,
-    jornada: analista || diretoria || executivo || setorImplantacao || elaborador,
+    jornada_executivo: executivo,
+    jornada_equipe: analista || diretoria || setorImplantacao || elaborador,
     admin: false,
   };
   return (t) => (typeof t.publico === 'string' ? !!regra[t.publico] : mods.has(t.publico.modulo));

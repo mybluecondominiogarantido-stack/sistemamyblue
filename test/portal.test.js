@@ -108,18 +108,18 @@ test('bloqueia após muitas tentativas de login', async () => {
 
 test('requisições de outro site são recusadas (CSRF)', async () => {
   const { c } = await logar('admin@teste.com', 'Admin1234');
-  const r = await c('POST', '/api/admin/usuarios', { nome: 'X', email: 'x@x.com' }, { headers: { origin: 'https://site-malicioso.com' } });
+  const r = await c('POST', '/api/admin/usuarios', { data_nascimento: '1990-05-10', data_admissao: '2024-02-01', nome: 'X', email: 'x@x.com' }, { headers: { origin: 'https://site-malicioso.com' } });
   assert.equal(r.status, 403);
 });
 
 test('usuário comum: primeiro acesso, troca de senha e permissões', async () => {
   const { c: adm } = await logar('admin@teste.com', 'Admin1234');
   assert.equal((await adm('PUT', '/api/admin/modulos/credito/arquivo', HTML_SIMPLES, { headers: { 'content-type': 'text/html' } })).status, 200);
-  const novo = await adm('POST', '/api/admin/usuarios', { nome: 'Bia Lima', email: 'bia@teste.com', modulos: ['credito'] });
+  const novo = await adm('POST', '/api/admin/usuarios', { data_nascimento: '1990-05-10', data_admissao: '2024-02-01', nome: 'Bia Lima', email: 'bia@teste.com', modulos: ['credito'] });
   assert.equal(novo.status, 201);
   const temp = novo.json.senha_temporaria;
   assert.ok(temp && temp.length >= 12);
-  assert.equal((await adm('POST', '/api/admin/usuarios', { nome: 'Outra', email: 'BIA@teste.com' })).status, 409);
+  assert.equal((await adm('POST', '/api/admin/usuarios', { data_nascimento: '1990-05-10', data_admissao: '2024-02-01', nome: 'Outra', email: 'BIA@teste.com' })).status, 409);
 
   const { c, r } = await logar('bia@teste.com', temp);
   assert.equal(r.json.usuario.trocar_senha, true);
@@ -179,7 +179,7 @@ test('armazenamento no servidor: equipe e por usuário', async () => {
   const { c: adm } = await logar('admin@teste.com', 'Admin1234');
   await adm('POST', '/api/admin/modulos', { slug: 'equipe-x', nome: 'Equipe X', armazenamento: 'compartilhado' });
   await adm('POST', '/api/admin/modulos', { slug: 'pessoal-x', nome: 'Pessoal X', armazenamento: 'usuario' });
-  const u = await adm('POST', '/api/admin/usuarios', { nome: 'Caio', email: 'caio@teste.com', senha: 'Caio12345', modulos: ['equipe-x', 'pessoal-x'] });
+  const u = await adm('POST', '/api/admin/usuarios', { data_nascimento: '1990-05-10', data_admissao: '2024-02-01', nome: 'Caio', email: 'caio@teste.com', senha: 'Caio12345', modulos: ['equipe-x', 'pessoal-x'] });
   const { c } = await logar('caio@teste.com', 'Caio12345');
   await c('POST', '/api/auth/senha', { atual: 'Caio12345', nova: 'Caio123456' });
   assert.ok(u.json.id);
@@ -529,7 +529,7 @@ test('foto de perfil: enviar, ver, recusar arquivo inválido e remover', async (
   const eu = (await c('GET', '/api/auth/eu')).json.usuario;
   assert.equal(eu.foto_v, r.json.foto_v);
   // outra pessoa logada consegue ver a foto
-  await c('POST', '/api/admin/usuarios', { nome: 'Dani', email: 'dani@teste.com', senha: 'Dani12345' });
+  await c('POST', '/api/admin/usuarios', { data_nascimento: '1990-05-10', data_admissao: '2024-02-01', nome: 'Dani', email: 'dani@teste.com', senha: 'Dani12345' });
   const { c: dani } = await logar('dani@teste.com', 'Dani12345');
   const img = await dani('GET', `/api/usuarios/${eu.id}/foto?v=${eu.foto_v}`, undefined, { bruto: true });
   assert.equal(img.status, 200);
