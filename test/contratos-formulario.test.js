@@ -8,7 +8,7 @@ const FORM = {
   nome: 'Condomínio Residencial Fictício', cnpj: '11.222.333/0001-81', uf: 'CE', cidade: 'Fortaleza', administradora: 'Administradora Exemplo',
   sindico_nome: 'Síndico Fictício', sindico_cpf: '111.444.777-35', sindico_email: 'sindico@exemplo.com', sindico_telefone: '(85) 90000-0000',
   taxa_adm: 3.5, boleto: 2, desconto_tipo: 'percentual', desconto_valor: 10, garantias: ['Taxa ordinária', 'Taxa extraordinária'], taxa_ordinaria: 1000, taxa_extra: 300,
-  cashback: 'nao', inicio_contrato: '2026-12-01', dia_vencimento: 10, pedidos: [], minucias: 'Nenhuma',
+  cashback: 'nao', inicio_contrato: '2026-12-01', primeiro_vencimento: '2026-12-10', dia_vencimento: 10, pedidos: [], minucias: 'Nenhuma',
 };
 
 test('da análise: condomínio, taxa, boleto, desconto e a taxa extra somada vêm preenchidos', () => {

@@ -503,6 +503,7 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
       executivoId = ex.id;
     }
     await db.tx(async (t) => {
+      F.completarPedido(f);
       await t.q('UPDATE contratos SET formulario = $2::jsonb, condominio = $3, cnpj = $4, uf = $5, executivo_id = $6, atualizado_em = now() WHERE id = $1',
         [c.id, JSON.stringify(f), texto(f.nome, 200), f.sem_cnpj ? '' : texto(f.cnpj, 20), texto(f.uf, 2).toUpperCase(), executivoId]);
       await evento(t, c.id, req.usuario.id, 'formulario', {});

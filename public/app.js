@@ -4293,8 +4293,8 @@
   }
 
   // campos da implantação que vêm das condições fechadas no contrato
-  var CAMPOS_CONTRATO_IMP = '#i_taxa_adm, #i_boleto, #i_desconto_tipo, #i_desconto_valor, #i_inicio_contrato, #i_dia_vencimento, input[name=i_honorarios_op], #i_honorarios_outro, ' +
-    '[data-marca=garantias], #i_garantia_outra, input[name=i_cashback], #i_cashback_pct, [data-marca=cashback_receitas]';
+  var CAMPOS_CONTRATO_IMP = '#i_taxa_adm, #i_boleto, #i_desconto_tipo, #i_desconto_valor, #i_inicio_contrato, #i_primeiro_vencimento, #i_dia_vencimento, input[name=i_honorarios_op], #i_honorarios_outro, ' +
+    'input[name=i_cashback], #i_cashback_pct, [data-marca=cashback_receitas]';
   function htmlFormImp(i, m, parceiros, difs) {
     var f = i.formulario || {}, ref = i.referencia || {};
     var temRef = ref.taxa_adm != null;
@@ -4336,7 +4336,8 @@
       selImp('desconto_tipo', 'Desconto de pontualidade', f.desconto_tipo || 'nenhum', [['nenhum', 'Não possui'], ['percentual', 'Percentual (%)'], ['valor', 'Valor por unidade (R$)']], { ref: temRef && ref.desconto_tipo ? DESC[ref.desconto_tipo] + (ref.desconto_valor ? ' ' + fmtNumCr(ref.desconto_valor) : '') : null, difs: difs, dif: 'desconto' }) +
       campoImp('desconto_valor', 'Desconto (% ou R$)', fmtNumCr(f.desconto_valor), { se: 'desconto_tipo:percentual,valor' }) +
       campoImp('desconto_ate_dia', 'Desconto vale até o dia', f.desconto_ate_dia, { se: 'desconto_tipo:percentual,valor', ph: '1 a 31' }) +
-      campoImp('inicio_contrato', 'Data de início do contrato', f.inicio_contrato, { tipo: 'date', ajuda: 'Também conta as parcelas restantes da taxa extra.' }) +
+      campoImp('inicio_contrato', 'Data de início do contrato (vigência)', f.inicio_contrato, { tipo: 'date', ajuda: 'Também conta as parcelas restantes da taxa extra.' }) +
+      (f.primeiro_vencimento ? campoImp('primeiro_vencimento', 'Data do primeiro vencimento', f.primeiro_vencimento, { tipo: 'date', ajuda: 'O boleto é gerado para o dia ' + (f.dia_vencimento || Number(String(f.primeiro_vencimento).slice(8, 10))) + '.' }) : '') +
       radiosImp('honorarios_op', 'Honorários de cobrança extrajudicial', honOutro ? 'outro' : f.honorarios != null ? String(f.honorarios) : '', hon.map(function (h) { return [String(h), fmtNumCr(h) + '%']; }).concat([['outro', 'Outro']]),
         { extra: '<input class="campo" id="i_honorarios_outro" data-se="honorarios_op:outro" style="width:110px" placeholder="%" value="' + esc(honOutro ? fmtNumCr(f.honorarios) : '') + '" aria-label="Outro percentual de honorários">' }) +
       marcasImp('garantias', 'O que será garantido (marque todos)', f.garantias, m.garantias, { extra: '<input class="campo" id="i_garantia_outra" style="max-width:220px" placeholder="Outra (descreva)" value="' + esc(f.garantia_outra || '') + '" aria-label="Outra garantia">' }) +
@@ -4416,7 +4417,7 @@
       sindico_tipo: v('sindico_tipo'), sindico_isencao: v('sindico_isencao'), sindico_isencao_pct: numCr(v('sindico_isencao_pct')), sindico_nome: v('sindico_nome'),
       sindico_cpf: v('sindico_cpf'), sindico_email: v('sindico_email'), sindico_telefone: v('sindico_telefone'),
       taxa_adm: numCr(v('taxa_adm')), boleto: numCr(v('boleto')), taxa_ordinaria: numCr(v('taxa_ordinaria')), desconto_tipo: v('desconto_tipo'),
-      desconto_valor: numCr(v('desconto_valor')), desconto_ate_dia: numCr(v('desconto_ate_dia')), inicio_contrato: v('inicio_contrato'),
+      desconto_valor: numCr(v('desconto_valor')), desconto_ate_dia: numCr(v('desconto_ate_dia')), inicio_contrato: v('inicio_contrato'), primeiro_vencimento: $('#i_primeiro_vencimento') ? v('primeiro_vencimento') : undefined,
       honorarios: hon === 'outro' ? numCr($('#i_honorarios_outro').value) : numCr(hon),
       garantias: marcas('garantias'), garantia_outra: $('#i_garantia_outra').value.trim(),
       taxas_extras: $$('#tbExtrasImp tr').map(function (tr) {
@@ -4516,7 +4517,7 @@
       '<div class="grade-2"><dl class="info-ticket" style="margin:0">' + par('Taxa administrativa', pctCr(x.taxa_adm)) + par('Boleto', reais(x.boleto)) +
       par('Desconto de pontualidade', esc(desc) + (x.desconto_inicio ? ' · a partir de ' + esc(x.desconto_inicio) : '')) + par('Garantias', esc([].concat(x.garantias || [], x.garantia_outra ? [x.garantia_outra] : []).join(', '))) +
       par('Taxa extra coberta', x.limite_extra ? 'até ' + fmtNumCr(x.limite_extra) + '% da ordinária' : '') + par('Cashback', esc(cb) + ((x.cashback_receitas || []).length ? ' · ' + esc(x.cashback_receitas.join(', ')) : '')) + '</dl>' +
-      '<dl class="info-ticket" style="margin:0">' + par('Início (1ª arrecadação)', dataBr(x.inicio_contrato)) + par('Vencimento', x.dia_vencimento ? 'dia ' + x.dia_vencimento : '') +
+      '<dl class="info-ticket" style="margin:0">' + par('Vigência (início do contrato)', dataBr(x.inicio_contrato)) + par('Primeiro vencimento', x.primeiro_vencimento ? dataBr(x.primeiro_vencimento) + (x.dia_vencimento ? ' (dia ' + x.dia_vencimento + ')' : '') : x.dia_vencimento ? 'dia ' + x.dia_vencimento : '') +
       par('Período mínimo', x.periodo_minimo ? x.periodo_minimo + ' meses' : 'padrão') + par('Cláusula 12ª', x.fidelizacao ? 'com fidelização' : 'sem fidelização') +
       (x.honorarios ? par('Honorários de cobrança extrajudicial', pctCr(x.honorarios)) : '') +
       par('Foro', esc(x.foro)) + par('Contestação da prestação de contas', x.prazo_contestacao ? x.prazo_contestacao + ' dias' : '') + '</dl></div>' +
@@ -4739,7 +4740,7 @@
       $$('[data-tirar-contato]').forEach(function (b) { b.onclick = function () { b.closest('[data-contato]').remove(); }; });
     };
     ligarTirar();
-    // o que vem das condições fechadas no contrato (taxa, boleto, desconto, início, vencimento, honorários, garantias e cashback) não se altera aqui
+    // o que vem das condições fechadas no contrato (taxa, boleto, desconto, vigência, vencimento, honorários e cashback) não se altera aqui; o que será garantido o comercial preenche
     if (d.contrato && d.contrato.fechado) {
       var fImp = $('#formImp');
       $$(CAMPOS_CONTRATO_IMP, fImp).forEach(function (el) { el.disabled = true; el.title = 'Vem das condições fechadas no contrato'; });
@@ -5087,9 +5088,8 @@
         extra: '<input class="campo" id="c_cashback_receita_outra" style="max-width:220px" placeholder="Outra (descreva)" value="' + esc(f.cashback_receita_outra || '') + '" aria-label="Outra receita">' }) + '</div></section>' +
 
       '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">3</span>Vigência</h2></div><div class="corpo grade-3">' +
-      campoCt('inicio_contrato', 'Início do contrato (primeira arrecadação garantida)', f.inicio_contrato, { tipo: 'date' }) +
-      campoCt('dia_vencimento', 'Dia de vencimento da taxa condominial', f.dia_vencimento, { ref: r(ref.dia_vencimento), dif: difs.dia_vencimento, ph: '1 a 31',
-        ajuda: 'O boleto sai até o 5º dia útil antes; o condomínio envia a composição e o balancete até o dia 20 do mês anterior.' }) +
+      campoCt('primeiro_vencimento', 'Data do primeiro vencimento', f.primeiro_vencimento, { tipo: 'date', ref: ref.dia_vencimento ? 'dia ' + ref.dia_vencimento : '', dif: difs.dia_vencimento,
+        ajuda: 'O dia desta data é o dia de vencimento dos boletos. O boleto sai até o 5º dia útil antes; o condomínio envia a composição e o balancete até o dia 20 do mês anterior.' }) +
       '<div>' + '<label class="rot" for="c_periodo_minimo">Período mínimo (meses)</label><input class="campo" id="c_periodo_minimo" value="' + esc(f.periodo_minimo == null ? '' : f.periodo_minimo) + '" placeholder="vazio = padrão do contrato">' +
       '<label class="linha" style="margin-top:8px;font-size:13px;font-weight:700;color:var(--ink-2);flex-wrap:nowrap;align-items:flex-start"><input type="checkbox" id="c_fidelizacao"' + (f.fidelizacao ? ' checked' : '') + '> Pedir a versão com fidelização (benefício a mais ou risco alto)</label>' +
       '<div class="ajuda">Na Paraíba, o contrato já é com fidelização.</div></div></div></section>' +
@@ -5118,7 +5118,7 @@
       taxa_adm: numCr(v('taxa_adm')), boleto: numCr(v('boleto')), desconto_tipo: v('desconto_tipo'), desconto_valor: numCr(v('desconto_valor')),
       garantias: marcas('garantias'), garantia_outra: $('#c_garantia_outra', raiz).value.trim(), taxa_ordinaria: numCr(v('taxa_ordinaria')), taxa_extra: numCr(v('taxa_extra')),
       cashback: v('cashback'), cashback_pct: numCr($('#c_cashback_pct', raiz).value), cashback_receitas: marcas('cashback_receitas'), cashback_receita_outra: $('#c_cashback_receita_outra', raiz).value.trim(),
-      inicio_contrato: v('inicio_contrato'), dia_vencimento: numCr(v('dia_vencimento')), periodo_minimo: numCr(v('periodo_minimo')), fidelizacao: $('#c_fidelizacao', raiz).checked,
+      primeiro_vencimento: v('primeiro_vencimento'), periodo_minimo: numCr(v('periodo_minimo')), fidelizacao: $('#c_fidelizacao', raiz).checked,
       pedidos: $$('[data-pedido]:checked', raiz).map(function (x) { return x.getAttribute('data-pedido'); }), pedidos_detalhe: det, minucias: $('#c_minucias', raiz).value.trim(),
     };
   }
@@ -5267,7 +5267,8 @@
       campoCt('f_desconto_valor', 'Desconto (% ou R$)', fmtNumCr(x.desconto_valor), { se: 'f_desconto_tipo:percentual,valor' }) +
       campoCt('f_desconto_inicio', 'Desconto vale a partir de', x.desconto_inicio, { se: 'f_desconto_tipo:percentual,valor', ph: 'Ex.: janeiro/2027 (vazio = assinatura)' }) +
       ((x.garantias || []).indexOf('Taxa extraordinária') >= 0 ? campoCt('f_limite_extra', 'Taxa extra coberta até (% da ordinária)', fmtNumCr(x.limite_extra), { ajuda: 'O padrão é 40%.' }) : '') +
-      campoCt('f_inicio_contrato', 'Início (primeira arrecadação garantida)', x.inicio_contrato, { tipo: 'date' }) +
+      campoCt('f_inicio_contrato', 'Vigência (início do contrato)', x.inicio_contrato, { tipo: 'date',
+        ajuda: x.primeiro_vencimento ? 'Primeiro vencimento informado pelo executivo: ' + dataBr(x.primeiro_vencimento) + (x.dia_vencimento ? ' (boletos no dia ' + x.dia_vencimento + ')' : '') + '.' : '' }) +
       radiosCt('f_honorarios_op', 'Honorários de cobrança extrajudicial', honOp, [['10', '10%'], ['12', '12%'], ['15', '15%'], ['17.5', '17,50%'], ['outro', 'Outro']],
         { extra: '<input class="campo" id="c_f_honorarios_outro" data-se="f_honorarios_op:outro" style="width:110px" placeholder="%" value="' + esc(honOp === 'outro' ? fmtNumCr(x.honorarios) : '') + '" aria-label="Outro percentual de honorários">' }) +
       campoCt('f_periodo_minimo', 'Período mínimo (meses)', x.periodo_minimo, { ph: 'vazio = padrão' }) +
