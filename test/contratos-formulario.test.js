@@ -47,6 +47,8 @@ test('avisos do manual: fundo de obras, sem pontualidade, sem CNPJ, fidelizaçã
   assert.match(t(FORM), /sem fidelização/);
   assert.match(t(FORM, { diasAnalise: 45, validadeProposta: 30 }), /vale 30 dias/);
   assert.match(t(FORM), /30,00% da ordinária: dentro dos 40%/);
+  assert.match(t(FORM, { semConvencao: true }), /não pode ser assinado sem ela/);
+  assert.doesNotMatch(t(FORM), /Procuração/);
 });
 
 test('condições fechadas: partem do pedido (foro na capital, 30 dias), exigem o resultado de cada cláusula e mostram o que mudou', () => {
