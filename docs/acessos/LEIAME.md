@@ -154,8 +154,11 @@ Tela própria do portal (menu **Implantação**), não é uma ferramenta em HTML
 | Quem | Como entra | Pode |
 |---|---|---|
 | **Comercial** (executivo de negócios) | o mesmo cadastro de executivo da Análise de Crédito | abrir a implantação a partir das suas análises liberadas, preencher o formulário, anexar documentos (inclusive os pendentes, depois do envio) e pedir ao gestor da Análise de Crédito a liberação de análise além do prazo |
-| **Equipe de implantação** | estar no setor **Implantação** | ver a fila e todas as implantações, anexar documentos; quem foi designado inicia, marca as 5 etapas, devolve com pendência e conclui |
-| **Coordenação** | líder do setor Implantação, ou perfil Coordenador/Supervisor no setor | o da equipe, mais designar quem conduz, conduzir qualquer implantação, cancelar e confirmar a entrada na Carteira |
+| **Equipe de implantação** | estar no setor **Implantação** | ver a fila e todas as implantações (🔒 nas de outra pessoa); quem foi designada inicia, marca as 5 etapas, anexa e marca documentos, marca impedimento, devolve com pendência, conclui, preenche e envia a ficha de repasse e envia a antecipação ao Controle de Repasses. Outra pessoa da equipe só edita com **autorização da coordenação** (pedida ou dada direto), com escopo (tudo, só as etapas, só documentos e ficha) e prazo |
+| **Coordenação** | líder do setor Implantação, ou perfil Coordenador/Supervisor no setor | o da equipe em qualquer implantação, mais designar quem conduz, autorizar, recusar e revogar quem edita, cobrar prazos, liberar versão extra da ficha, cancelar e confirmar a entrada na Carteira |
+| **Assistente de crédito** | estar no setor **Crédito** e receber a ficha (da Carteira ou escolhida pela supervisão) | ver a ficha de repasse que recebeu, confirmar o recebimento ou devolver com pergunta |
+| **Supervisão de Crédito** | líder do setor Crédito, ou perfil Coordenador/Supervisor no setor | escolher a assistente de crédito quando a Carteira ainda não tem (o portal grava na Carteira) |
+| **Gestor do Controle de Repasses** | papel **Gestor** na ferramenta *repasses* (janela da ferramenta → Quem abre e com qual papel) | cadastrar (com ajuste) ou devolver as antecipações vindas da Implantação |
 | **Gestor da Análise de Crédito** | líder do setor Análise de Crédito, ou perfil Coordenador/Supervisor no setor | liberar (ou não) análises além do prazo da política (`implantacao_validade_dias`, padrão 90) |
 | **Diretoria** | permissão *Chancelar análises de crédito* | aprovar (ou não) taxa e boleto do condomínio de entrega; ver todas |
 | **Administração** | perfil | tudo |
@@ -240,6 +243,9 @@ rotas da comissão. Nada de administração, de outras ferramentas ou dos ticket
   antes de isolar) e **Prestação de Contas** lê PDF com o Web Worker do pdf.js (isolada, o pdf.js usa a alternativa sem
   Worker, mais lenta: teste a leitura de PDF). As demais devem funcionar isoladas, mas teste cada uma.
 - A lista de *Módulos e dados* marca **não isolada** as que ainda rodam com a sessão de quem abre.
+- **Controle de Repasses** (slug `repasses`) alcança também as antecipações vindas da Implantação:
+  `GET /api/repasses/antecipacoes`, `POST /api/repasses/antecipacoes/:id/cadastrar` e `.../devolver`. Ler pede só abrir
+  a ferramenta; cadastrar e devolver, o papel **Gestor** (`gestor` ou `gestao`), sem *só consulta*.
 
 ## HTML novo da coordenação
 

@@ -13,9 +13,12 @@ Análise de Crédito.
 | Regras do formulário: o que vem da análise, o que falta, o que fica pendente, o comparativo | `server/implantacoes/formulario.js` |
 | Tabelas `implantacoes`, `implantacao_documentos`, `implantacao_eventos`, `implantacao_liberacoes`, `implantacao_protocolos` | `server/db.js` |
 | Lembretes: fila sem designação (4h úteis), prazo para iniciar vencido, pendências do executivo (uma vez por dia útil) — roda a cada 10 min | `criarRotinasImplantacao` em `server/rotas/implantacoes.js`, ligado em `server/index.js` |
-| Acompanhamento (painel, mês vigente, metas, antecipações, parâmetros, cobrança de documentos) | `server/rotas/implantacoes-acompanhamento.js`; regras em `server/implantacoes/metas.js`; tabela `implantacao_parametros` |
-| Telas | `public/app.js` (bloco Implantação e bloco Acompanhamento) |
-| Testes (dados fictícios) | `test/implantacoes-formulario.test.js`, `test/implantacoes-rotas.test.js`, `test/implantacoes-metas.test.js` |
+| Setor no dia a dia: quem edita (autorizações), pausas e prazo para concluir, onboarding depois de concluir, documento recebido sem arquivo, Obs. do Controle, Cobrar e a rotina dos prazos | `server/rotas/implantacoes-setor.js`; prazos em dias úteis em `server/implantacoes/prazos.js`; tabelas `implantacao_autorizacoes` e `implantacao_pausas` |
+| Ficha de repasse (montagem, envio, devolução, versões, PDF e rotina do prazo) | `server/implantacoes/ficha.js` e `server/rotas/implantacoes-ficha.js`; tabelas `implantacao_fichas` e `implantacao_ficha_versoes` |
+| Antecipação → Controle de Repasses | `server/rotas/implantacoes-antecipacoes.js`; tabela `implantacao_antecipacoes` |
+| Acompanhamento (painel, mês vigente, controle, metas, antecipações, fichas, parâmetros, cobrança de documentos, Excel) | `server/rotas/implantacoes-acompanhamento.js`; regras em `server/implantacoes/metas.js`; tabela `implantacao_parametros`; .xlsx em `server/xlsx.js` |
+| Telas | `public/app.js` (bloco Implantação, ficha de repasse e bloco Acompanhamento) |
+| Testes (dados fictícios) | `test/implantacoes-formulario.test.js`, `test/implantacoes-rotas.test.js`, `test/implantacoes-metas.test.js`, `test/implantacoes-setor.test.js` |
 
 ## Regras
 
@@ -47,18 +50,64 @@ Análise de Crédito.
   recusado), onboarding (a marcar, marcado, síndico MyBlue ou realizado; marcado e realizado com data, hora e quem fez —
   começa com quem conduz), emissão de boletos (com o **1º vencimento**, que o setor informa: nem sempre é o dia do
   formulário, pelo prazo curto para implantar) e envio (digital, físico ou ambos; vai para a Carteira como forma de
-  envio). Concluir só com as 5 feitas, a data do onboarding realizado e o 1º vencimento.
+  envio). Concluir com as outras 4 etapas feitas e o 1º vencimento; o onboarding pode ficar para depois.
+- **Quem edita:** a equipe toda vê todas as implantações; só **quem foi designada** edita (as de outra pessoa aparecem
+  com 🔒). Outra pessoa da equipe edita com **autorização da coordenação**: pedida pela própria pessoa (com o motivo) ou
+  dada direto, com escopo (**tudo**, **só as etapas** ou **só documentos e ficha**) e prazo opcional. A coordenação
+  recusa (com resposta) e revoga quando quiser; tudo fica no histórico. Coordenação e administração editam todas.
+- **Prazo para concluir:** `concluir_dias` (**3**) dias úteis depois de assumir. Um dia útil conta quando o prazo não
+  estava pausado no começo dele. **Pausa** com a pendência com o comercial (abre e fecha sozinha; no reenvio, quem
+  conduz é avisada de que o prazo voltou a contar) ou com um **impedimento** marcado por quem conduz (motivo e detalhe;
+  a coordenação é avisada, sem precisar aprovar). Para retomar, **Resolvido: retomar o prazo**, dizendo o que foi
+  resolvido; o prazo continua de onde parou. Impedimento aberto há 3 dias úteis: lembrete "ainda está impedida?".
+  Lembrete 1 dia útil antes e no dia; atrasada, um alerta por dia útil a quem conduz e à coordenação (com **Cobrar**).
+  Concluir com impedimento aberto encerra a pausa.
+- **Documento recebido sem arquivo** (em papel, já no CPD): **Marcar recebido**, com observação obrigatória; conta como
+  recebido na data da marcação (pendências e meta de documentação). Dá para desfazer; o arquivo, se chegar depois, é
+  anexado normalmente.
 - **Conferências do portal:** diferenças com a análise, CPF do síndico, CNPJ e o cadastro de moradores (Excel/CSV): nº
   de unidades contra o formulário e linhas com CPF/CNPJ inválido.
 - **Pendência:** quem conduz devolve ao comercial com a lista do que falta (sino e e-mail); o reenvio volta para a
   mesma pessoa.
-- **Conclusão:** avisa a coordenação ("Pronta para a Carteira"). Com parceria, o condomínio entra na Prestação de
+- **Onboarding depois de concluir:** dá para concluir com o onboarding pendente; o alerta fica na implantação até
+  registrar. Vencido o prazo do onboarding sem ele, quem conduz escreve a **justificativa** (a coordenação é avisada
+  por dia útil até justificar); a meta fica como não batida mesmo justificada.
+- **Conclusão:** avisa a coordenação ("Pronta para a Carteira") e abre a **ficha de repasse**. Com parceria, o condomínio entra na Prestação de
   Contas (coleção `condos`) ligado ao parceiro com comissão 0% (`vinculosJSON`), e o setor Parceiros é avisado para
   cadastrar a condição; se o condomínio já existir lá, ou o parceiro não estiver na base, o aviso diz o que conferir.
 - **Carteira:** a coordenação confere os dados sugeridos (ID Vouch, nome sugerido, UF, vencimento, vigência,
   administradora, forma de envio, executivo, razão social, CNPJ) e confirma; o portal recusa ID ou CNPJ que já estão na
   Carteira. Os responsáveis (cobrança, extrajudicial, crédito) são escolhidos depois, na ficha do condomínio. O Controle
   de Emissão de Boletos acompanha, como em qualquer condomínio novo da Carteira.
+
+## Ficha de repasse
+
+Abre na conclusão, já preenchida (`server/implantacoes/ficha.js`) com o formulário, a análise, o contrato, as etapas e os
+documentos, em 8 partes: informações gerais, financeiras (2.1 consumo, 2.2 taxa extra, 2.3 fundo de reserva, 2.4
+reservas e outras receitas), não garantidos (taxas do contrato e unidades), conta bancária e repasse, documentos
+(anexados e conferidos pela Implantação), cashback, particularidades e outras observações (já com a Obs. do Controle).
+O que só a Implantação sabe vai nos **campos em azul**; o resto não se edita na ficha (corrige-se no formulário ou na
+etapa, e a ficha acompanha).
+
+- **Envio:** à assistente de crédito do condomínio na Carteira (`assistente_credito`, pelo nome, no setor Crédito);
+  sem ela, à **supervisão de Crédito**, que escolhe (e o portal grava na Carteira quando o condomínio entrar). Aviso no
+  sino e por e-mail; ela confirma o recebimento ou **devolve com uma pergunta**. Quem conduz responde sem mudar a ficha
+  ou envia uma nova versão.
+- **Versões:** cada envio guarda a ficha como foi (`implantacao_ficha_versoes`); a partir da 2ª, com o motivo. Até
+  **3**; mais, só com a liberação da coordenação (com motivo). PDF de cada versão no papel timbrado
+  (`GET /api/implantacoes/:id/ficha.pdf?versao=N`, arquivo com `-vN`).
+- **Prazo:** `ficha_dias` (**5**) dias úteis da conclusão até o **primeiro envio**; devolução e nova versão não reabrem.
+  Lembrete 1 dia útil antes e no dia; atrasada, alerta por dia útil a quem conduz e à coordenação (Cobrar).
+- Tela: `#/implantacao/:id/ficha` (a assistente de crédito entra pelo link do aviso).
+
+## Antecipação → Controle de Repasses
+
+Na aba Antecipações do Acompanhamento, a equipe marca e envia a antecipação negociada no formulário (valor, data, dia,
+prazo e o mês final). No Controle de Repasses (ferramenta `repasses`), quem tem o papel **Gestor** cadastra a regra (com
+ajuste ou não) ou devolve com o motivo; a situação volta para a implantação. Se o formulário mudar depois do cadastro,
+a aba mostra e reenvia como **atualização**, com o antes e o depois. Dá para desfazer o envio antes da decisão. API:
+`GET /api/repasses/antecipacoes`, `POST /api/repasses/antecipacoes/:id/cadastrar` `{ regra_id, valor, dia, modo, fim, obs }`
+e `.../devolver` `{ motivo }` (liberadas para a ferramenta isolada em `server/seguranca.js`).
 
 ## Acompanhamento
 
@@ -68,8 +117,16 @@ Entram as implantações enviadas ao setor (fora rascunho, diretoria e cancelada
 
 - **% concluído:** etapas feitas ÷ 5 (concluída ou na Carteira = 100%). Faixas: concluída, só falta o onboarding, 60–99%,
   40–59% e abaixo de 40%.
+- **Visual:** cabeçalho com **Dados do portal** e **Excel** (baixa a aba aberta, com os filtros, em .xlsx); aviso de
+  cada aba; ano em pílulas, mês, analista, executivo e busca, **lembrados por pessoa** (com *Limpar filtros*); abas com
+  ícones e contadores do que pede atenção; cartões clicáveis que filtram a lista.
 - **Painel:** contratos, % médio, concluídos, em andamento, não iniciados; progresso por etapa e o gargalo; contratos e
-  concluídos por mês (o filtro de mês não muda o gráfico); por UF, executivo e analista; até 30 em aberto.
+  concluídos por mês (o filtro de mês não muda o gráfico); por UF, executivo e analista; a lista dos contratos.
+- **Controle:** as colunas da planilha *Controle Implantações*, com o **protocolo do portal** no lugar do Nº, cabeçalho e
+  duas colunas fixas, ordenação por coluna; a **Obs.** quem conduz (e a coordenação) escreve na célula e ela vai para a
+  ficha de repasse.
+- **Fichas de repasse:** situação (a enviar, enviada, devolvida, recebida), versão, assistente de crédito e o prazo de 5
+  dias úteis, com Cobrar para a coordenação.
 - **Mês vigente:** contratos que começam no mês, na ordem do 1º vencimento (previsto — o primeiro dia de vencimento a
   partir do início do contrato — até o setor informar). Do dia da virada (25) em diante, mostra o mês seguinte.
 - **Meta de onboarding:** em até **30 dias depois do 1º vencimento**. "Síndico MyBlue" conta como batida; "A marcar"
@@ -80,8 +137,9 @@ Entram as implantações enviadas ao setor (fora rascunho, diretoria e cancelada
   documento no portal. A coordenação pode **marcar à mão** (bateu ou faltou, com motivo), e voltar ao cálculo.
 - **Cobrança de documentos:** só ao **executivo** (sem usuário no portal, a quem pediu), no sino e por e-mail; pelo botão
   Cobrar (setor) e sozinha, uma vez, quando faltam 3 dias para o limite. Fica no histórico da implantação.
-- **Antecipações:** as negociadas no formulário, por mês de início do contrato, com .csv para baixar.
-- **Parâmetros:** prazos (30 e 60 dias), meta (90%), virada (25), data-marco (01/07/2026, envios anteriores ficam fora das
+- **Antecipações:** as negociadas no formulário, por mês de início do contrato; marcar e enviar ao Controle de
+  Repasses, com a situação de lá.
+- **Parâmetros:** prazos (30 e 60 dias; concluir em 3 e ficha em 5 dias úteis), meta (90%), virada (25), data-marco (01/07/2026, envios anteriores ficam fora das
   metas) e os documentos da meta. Só a coordenação e a administração alteram; cada mudança vale a partir de uma data e
   fica no histórico (`implantacao_parametros`): cada implantação usa a regra que valia no dia do envio.
 
@@ -123,12 +181,13 @@ se trocam nem se removem na implantação. O retorno da análise é obrigatório
 Botão **PDF** na implantação (quem a vê pode exportar): `GET /api/implantacoes/:id/formulario.pdf`. O conteúdo é
 montado em `server/implantacoes/formulario-pdf.js` e desenhado por `server/implantacoes/formulario_pdf.py` (ReportLab,
 no visual do Retorno de Análise de Crédito): cabeçalho com o protocolo, faixa do condomínio, diferenças em relação à
-análise, os 7 blocos, documentos (entregues e pendentes) e o andamento no setor.
+análise, os 7 blocos, documentos (entregues e pendentes) e o andamento no setor. Sai no **papel timbrado** da MyBlue
+(`server/implantacoes/timbrado.png`, a página A4 inteira; o mesmo da ficha de repasse).
 
 ## Tutoriais
 
 No catálogo (`server/tutoriais.js`): `implantacao-solicitar` (executivos, setor Implantação e diretoria),
-`implantacao-conduzir` (setor Implantação) e `implantacao-acompanhar` (setor Implantação e diretoria). Roteiros em `docs/tutoriais/fonte/roteiros.js`; no cenário de gravação, a
+`implantacao-conduzir` e `implantacao-ficha-repasse` (setor Implantação) e `implantacao-acompanhar` (setor Implantação e diretoria). Roteiros em `docs/tutoriais/fonte/roteiros.js`; no cenário de gravação, a
 coordenadora e o analista de implantação fictícios. Os vídeos são gravados com `docs/tutoriais/fonte/gravar-tutoriais.js`
 e enviados em Administração → Tutoriais.
 

@@ -100,7 +100,7 @@ const FORM_IMP = {
   parceria: 'nao', cashback: 'nao', antecipacao: 'nao', administradora: 'Administradora Exemplo', consultor_nome: 'Consultor Fictício', consultor_telefone: '(85) 90000-0001',
 };
 /* implantação aberta pela executiva (Vera) a partir de uma análise liberada e enviada ao setor; com "responsavel", já designada e iniciada */
-async function implantacaoTut(base, nome, { responsavel, etapas, extra } = {}) {
+async function implantacaoTut(base, nome, { responsavel, etapas, extra, concluir } = {}) {
   const aid = await analiseCr(base, { ...FORM_CR, razao_social: nome }, { liberar: true });
   const vera = await sessaoCr(base, 'vera@myblue.com.br');
   const { id } = await vera('POST', '/api/implantacoes', { origem: 'analise', analise_id: aid });
@@ -117,6 +117,7 @@ async function implantacaoTut(base, nome, { responsavel, etapas, extra } = {}) {
     const conduz = await sessaoCr(base, quem.nome === 'Nina Prado' ? 'nina@myblue.com.br' : 'otto@myblue.com.br');
     await conduz('POST', `/api/implantacoes/${id}/iniciar`, {});
     if (etapas) await conduz('PATCH', `/api/implantacoes/${id}/etapas`, { etapas });
+    if (concluir) await conduz('POST', `/api/implantacoes/${id}/concluir`, {});
   }
   return id;
 }
@@ -1008,7 +1009,7 @@ module.exports = [
       cen.impFila = await implantacaoTut(base, 'Edifício Mirante do Sol');
       cen.impNina = await implantacaoTut(base, 'Residencial Vila das Palmeiras', { responsavel: 'Nina Prado' });
     },
-    abertura: ['Do pedido que chegou ao condomínio na Carteira.', ['Designar quem conduz', 'As 5 etapas e as conferências', 'Pendência e conclusão', 'Confirmar na Carteira']],
+    abertura: ['Do pedido que chegou ao condomínio na Carteira.', ['Designar quem conduz', 'As 5 etapas, o prazo e as conferências', 'Pendência e conclusão', 'Confirmar na Carteira']],
     async gravar(t, cen) {
       const A = '1 · Fila e designação';
       await t.legenda('Quando chega uma implantação, a coordenação e a equipe são avisadas. A <b>Fila do setor</b> mostra o que espera designação.', { etapa: A, ms: 600 });
@@ -1021,6 +1022,9 @@ module.exports = [
 
       const B = '2 · Etapas e conferências';
       await t.ir(`#/implantacao/${cen.impNina}`, 1800);
+      await t.legenda('Só quem foi designada edita; o resto da equipe consulta (🔒) e, para editar, pede autorização à coordenação.', { etapa: B, ms: 500 });
+      await t.legenda('O <b>prazo para concluir</b> é de 3 dias úteis depois de assumir. Se algo impedir, <b>Marcar impedimento</b> pausa o prazo (a coordenação é avisada); resolvido, <b>Resolvido: retomar o prazo</b>.', { etapa: B, ms: 500 });
+      await t.mostrar('#btImpedImp', 2800);
       await t.legenda('Com a implantação iniciada, marque as <b>5 etapas</b>: documentação, cadastro no Vouch (com o ID), onboarding, emissão e envio dos boletos.', { etapa: B, ms: 500 });
       await t.clicar('#e_doc', { depois: 500 });
       await t.digitar('#e_vouch', '90001', { atraso: 90 });
@@ -1038,7 +1042,7 @@ module.exports = [
       const C = '3 · Pendência e conclusão';
       await t.legenda('Faltou algo? <b>Devolver com pendência</b> manda a lista ao comercial, e o reenvio volta para você.', { etapa: C, ms: 500 });
       await t.mostrar('#btPendImp', 2400);
-      await t.legenda('Com as 5 etapas feitas, <b>Concluir implantação</b>. Se houver parceria, o setor Parceiros é avisado e o condomínio entra na Prestação de Contas.', { etapa: C, ms: 400 });
+      await t.legenda('Com as etapas feitas, <b>Concluir implantação</b> (o onboarding pode ficar para depois, com o alerta). Se houver parceria, o setor Parceiros é avisado. A <b>ficha de repasse</b> abre na conclusão.', { etapa: C, ms: 400 });
       await t.clicar('#btConclImp', { depois: 1000 });
       await t.clicar('#mOk', { depois: 2600 });
 
@@ -1049,7 +1053,49 @@ module.exports = [
       await t.clicar('#kOk', { depois: 2600 });
       await t.legenda('Pronto: o condomínio está na Carteira, e o Controle de Emissão de Boletos acompanha.', { etapa: D, ms: 3000 });
     },
-    resumo: ['<b>Designar</b> · 8h úteis para iniciar', 'Marque as 5 etapas · confira as conferências', '<b>Concluir</b> · <b>Confirmar na Carteira</b>'],
+    resumo: ['<b>Designar</b> · 8h úteis para iniciar', 'Marque as 5 etapas · 3 dias úteis para concluir', '<b>Concluir</b> · <b>Confirmar na Carteira</b>'],
+  },
+
+  {
+    nome: 'implantacao-ficha-repasse',
+    entrar: 'nina@myblue.com.br',
+    inicio: '#/implantacao/fila',
+    async preparar(cen, base) {
+      const feito = { documentacao: { feito: true }, vouch: { id: '90021' }, onboarding: { situacao: 'realizado', data: hoje(), hora: '10:00' }, boletos: { feito: true, primeiro_vencimento: diaUtil(15) }, envio: { forma: 'email' } };
+      cen.fichaImp = await implantacaoTut(base, 'Residencial Vila das Palmeiras', { responsavel: 'Nina Prado', etapas: feito, concluir: true });
+    },
+    abertura: ['Da implantação concluída à ficha nas mãos do Crédito.', ['A ficha já vem preenchida', 'Os campos em azul', 'Enviar ao Crédito', 'Devolução, versões e PDF']],
+    async gravar(t, cen) {
+      const A = '1 · A ficha vem preenchida';
+      await t.ir(`#/implantacao/${cen.fichaImp}`, 1800);
+      await t.legenda('Ao concluir a implantação, a <b>ficha de repasse</b> abre já preenchida com o formulário, a análise, o contrato e as etapas.', { etapa: A, ms: 600 });
+      await t.ir(`#/implantacao/${cen.fichaImp}/ficha`, 2000);
+      await t.legenda('O prazo para enviar ao Crédito é de <b>5 dias úteis</b> da conclusão, com lembrete 1 dia antes e no dia.', { etapa: A, ms: 600 });
+      await t.pausa(2400);
+
+      const B = '2 · Campos em azul';
+      await t.legenda('Em preto, o que o portal já sabe. Em <b>azul</b>, o que só a Implantação sabe: subsíndico, consumo, fundo de reserva, não garantidos, particularidades.', { etapa: B, ms: 600 });
+      await t.digitar('[data-k="subsindico"]', 'Subsíndica Fictícia (apto 302)', { atraso: 50 });
+      await t.escolher('[data-k="balancete"]', 'Sim');
+      await t.escolher('[data-k="consumo.0.tipo"]', 'Variável');
+      await t.escolher('[data-k="conferidos.ata_taxa_extra"]', 'Não se aplica');
+      await t.escolher('[data-k="conferidos.ata_receita"]', 'Conferida');
+      await t.legenda('A seção <b>Outras observações</b> já vem com a Obs. do Controle; revise antes de enviar.', { etapa: B, ms: 500 });
+      await t.mostrar('[data-k="outras_observacoes"]', 2400);
+      await t.clicar('#btSalvarFicha', { depois: 2000 });
+
+      const C = '3 · Enviar ao Crédito';
+      await t.legenda('<b>Enviar à assistente de crédito</b>: vai para a assistente do condomínio na Carteira; sem ela, a supervisão de Crédito escolhe.', { etapa: C, ms: 500 });
+      await t.clicar('#btEnviarFicha', { depois: 900 });
+      await t.clicar('#mFichaOk', { depois: 2600 });
+
+      const D = '4 · Devolução, versões e PDF';
+      await t.legenda('A assistente de crédito confirma o recebimento ou devolve com uma pergunta. Você responde ou envia uma <b>nova versão</b> (até 3), com o motivo.', { etapa: D, ms: 600 });
+      await t.legenda('Cada versão tem o seu <b>PDF no papel timbrado</b> (-v1, -v2…) para guardar no CPD.', { etapa: D, ms: 600 });
+      await t.rolar(4000);
+      await t.pausa(2600);
+    },
+    resumo: ['A ficha abre na <b>conclusão</b>, já preenchida', 'Complete os <b>campos em azul</b> · 5 dias úteis', 'Envie ao Crédito · versões com PDF'],
   },
 
   {
@@ -1062,13 +1108,15 @@ module.exports = [
       await implantacaoTut(base, 'Edifício Mirante do Sol', { responsavel: 'Otto Reis', etapas: { documentacao: { feito: true }, vouch: { id: '90012' } }, extra: { antecipacao: 'sim', antecipacao_valor: 15000, antecipacao_data: diaUtil(12), antecipacao_prazo: 'desconta em 10 parcelas' } });
       await implantacaoTut(base, 'Condomínio Parque das Amostras');
     },
-    abertura: ['As telas que substituem a planilha de controle da implantação.', ['Painel', 'Mês vigente', 'Metas de onboarding e documentação', 'Antecipações e parâmetros']],
+    abertura: ['As telas que substituem a planilha de controle da implantação.', ['Painel e filtros', 'Mês vigente e Controle', 'Metas de onboarding e documentação', 'Antecipações, fichas e parâmetros']],
     async gravar(t) {
       const A = '1 · Painel';
       await t.legenda('No menu, <b>Acompanhamento</b> reúne o que a planilha calculava, direto dos formulários e das etapas no portal.', { etapa: A, ms: 600 });
       await t.mostrar(menu('#/acompanhamento'), 1800, { dx: 0.3 });
-      await t.legenda('Contratos do ano, <b>% médio de conclusão</b> (etapas feitas ÷ 5), concluídos, em andamento e não iniciados. Filtre por mês, analista e executivo.', { etapa: A, ms: 500 });
-      await t.mostrar('.tiles', 2800, { dx: 0.4 });
+      await t.legenda('Contratos do ano, <b>% médio de conclusão</b> (etapas feitas ÷ 5), concluídos, em andamento e não iniciados. Clique num cartão para filtrar a lista.', { etapa: A, ms: 500 });
+      await t.mostrar('.cards-acomp', 2800, { dx: 0.4 });
+      await t.legenda('Os filtros (ano, mês, analista, executivo e a busca) ficam lembrados para a próxima visita. O botão <b>Excel</b> baixa a aba aberta.', { etapa: A, ms: 500 });
+      await t.mostrar('.filtros-acomp', 2400);
       await t.legenda('O <b>progresso por etapa</b> aponta o gargalo; o gráfico mostra contratos e concluídos por mês.', { etapa: A, ms: 400 });
       await t.mostrar('.barra-acomp', 2600);
 
@@ -1076,6 +1124,9 @@ module.exports = [
       await t.ir('#/acompanhamento/mes', 1600);
       await t.legenda('As implantações do mês do contrato, na ordem do 1º vencimento, com as 5 etapas e a faixa de conclusão. Do dia 25 em diante, já mostra o mês seguinte.', { etapa: B, ms: 600 });
       await t.pausa(3000);
+      await t.ir('#/acompanhamento/controle', 1600);
+      await t.legenda('<b>Controle</b>: as mesmas colunas da planilha, preenchidas pelo portal, com o protocolo. A <b>Obs.</b> quem conduz escreve na célula; ela vai para a ficha de repasse.', { etapa: B, ms: 600 });
+      await t.mostrar('.ctrl-acomp', 3000, { dx: 0.3 });
 
       const C = '3 · Metas';
       await t.ir('#/acompanhamento/onboarding', 1600);
@@ -1089,13 +1140,16 @@ module.exports = [
 
       const D = '4 · Antecipações e parâmetros';
       await t.ir('#/acompanhamento/antecipacoes', 1600);
-      await t.legenda('<b>Antecipações</b> negociadas no formulário, por mês de início do contrato, com a planilha para baixar.', { etapa: D, ms: 600 });
+      await t.legenda('<b>Antecipações</b>: marque e envie ao <b>Controle de Repasses</b>; o Gestor de lá confirma e a situação volta para cá (cadastrada, com ajuste ou devolvida).', { etapa: D, ms: 600 });
+      await t.pausa(2400);
+      await t.ir('#/acompanhamento/fichas', 1600);
+      await t.legenda('<b>Fichas de repasse</b>: o prazo de 5 dias úteis de cada ficha, as atrasadas (a coordenação cobra) e as devolvidas.', { etapa: D, ms: 600 });
       await t.pausa(2400);
       await t.ir('#/acompanhamento/parametros', 1600);
       await t.legenda('Os prazos e metas ficam em <b>Parâmetros</b>: a coordenação ajusta, e cada mudança vale a partir da data escolhida.', { etapa: D, ms: 600 });
       await t.mostrar('#pmOnb', 2800);
     },
-    resumo: ['<b>Acompanhamento</b> no menu da Implantação', 'Painel, mês vigente e metas calculados pelo portal', '<b>Cobrar</b> documentos · <b>Parâmetros</b> da coordenação'],
+    resumo: ['<b>Acompanhamento</b> no menu da Implantação', 'Painel, mês vigente, Controle e metas calculados pelo portal', 'Antecipações ao Controle de Repasses · <b>Fichas</b> · <b>Parâmetros</b>'],
   },
 
   /* ======================= Solicitação de Contrato ======================= */
