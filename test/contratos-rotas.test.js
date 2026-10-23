@@ -127,7 +127,7 @@ const FORM = {
   sindico_nome: 'Síndico Fictício', sindico_cpf: '111.444.777-35', sindico_email: 'sindico@exemplo.com', sindico_telefone: '(84) 90000-0000',
   taxa_adm: 3.5, boleto: 2, desconto_tipo: 'percentual', desconto_valor: 10, garantias: ['Taxa ordinária', 'Taxa extraordinária', 'Água'], taxa_ordinaria: 1840, taxa_extra: 700,
   cashback: 'nao', inicio_contrato: '2026-12-01', primeiro_vencimento: '2026-12-10', periodo_minimo: 12,
-  pedidos: ['foro_capital', 'reembolso_limitar'], pedidos_detalhe: { reembolso_limitar: 'teto de R$ 50 por certidão' }, minucias: 'Primeiro repasse adiantado em 5 dias.',
+  pedidos: ['foro_capital', 'reembolso_limitar'], pedidos_detalhe: { reembolso_limitar: 'teto de R$ 50 por certidão', foro_capital: 'Natal/RN' }, minucias: 'Primeiro repasse adiantado em 5 dias.',
 };
 
 test('enviar: confere o que falta, gera o protocolo, prazo de 72h úteis e avisa quem elabora, a diretoria e o executivo', async () => {

@@ -4908,7 +4908,7 @@
       if (meu !== seq) return;
       var k = r.contadores;
       var tile = function (rot, n, alerta) { return '<div class="tile' + (alerta && n ? ' alerta' : '') + '"><span class="rot-tile">' + rot + '</span><b>' + n + '</b></div>'; };
-      $('#tilesCt').innerHTML = tile('Na fila', k.fila) + tile('Em elaboração', k.em_elaboracao) + tile('Com o comercial', k.minuta_enviada + k.pendencia) +
+      $('#tilesCt').innerHTML = tile('Atividades pendentes', k.fila) + tile('Em análise do Jurídico', k.em_elaboracao) + tile('Aguardando retorno do solicitante', k.minuta_enviada + k.pendencia) +
         tile('Pronto para assinatura', k.para_assinar) + tile('Em assinatura', k.em_assinatura) +
         tile('Aguardando condições fechadas', k.conferencia) + tile('Assinados no mês', k.assinados_mes) + tile('Passaram do prazo', k.atrasados, true);
       $('#tbCtc').innerHTML = r.contratos.map(function (c) {
@@ -5106,8 +5106,9 @@
         return '<div class="pedido-ct"><input type="checkbox" data-pedido="' + esc(x.chave) + '"' + (on ? ' checked' : '') + ' aria-label="' + esc(x.pedido) + '">' +
           '<span class="t"><small>' + esc(x.clausula) + '</small>' + esc(x.pedido) + (x.diretoria ? ' ' + etq(['diretoria', 'ambar']) : '') + (x.juridico ? ' ' + etq(['exige o Jurídico', 'ambar']) : '') + '</span>' +
           (x.detalhe ? '<label class="det-ct" data-pedido-det-rot="' + esc(x.chave) + '"' + (on ? '' : ' hidden') + '>' + (x.exemplo ? '<span>' + esc(x.detalhe) + '</span>' : '') +
-            '<input class="campo" data-pedido-det="' + esc(x.chave) + '" placeholder="' + esc(x.exemplo || x.detalhe) + '" value="' + esc(det[x.chave] || '') + '" aria-label="' + esc(x.detalhe) + '"></label>' : '') +
-          '<span class="resp" data-pedido-resp="' + esc(x.chave) + '"' + (on ? '' : ' hidden') + '><b>Resposta do Jurídico:</b> ' + esc(x.resposta) + '</span></div>';
+            '<input class="campo" data-pedido-det="' + esc(x.chave) + '" placeholder="' + esc(x.exemplo || x.detalhe) + '" value="' + esc(det[x.chave] || '') + '" aria-label="' + esc(x.detalhe) + '">' +
+            (x.ajuda ? '<span class="ajuda" style="margin:0">' + esc(x.ajuda) + '</span>' : '') + '</label>' : '') +
+          (x.semResposta ? '' : '<span class="resp" data-pedido-resp="' + esc(x.chave) + '"' + (on ? '' : ' hidden') + '><b>Resposta do Jurídico:</b> ' + esc(x.resposta) + '</span>') + '</div>';
       }).join('') + '</div></section>' +
 
       '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">5</span>Outras solicitações</h2></div><div class="corpo">' +

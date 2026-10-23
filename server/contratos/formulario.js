@@ -115,6 +115,7 @@ function faltasCampos(f, { docs = new Set(), executivoId } = {}) {
   exige(dataOk(f.inicio_contrato), 'inicio_contrato', 'Informar a vigência (início do contrato).');
   exige(dataOk(f.primeiro_vencimento), 'primeiro_vencimento', 'Informar a data do primeiro vencimento.');
   for (const k of f.pedidos || []) if (!C.porChave.has(k)) l.push({ campo: 'pedidos', msg: 'Pedido de alteração desconhecido: desmarque e marque de novo.' });
+  if ((f.pedidos || []).includes('foro_capital')) exige(texto((f.pedidos_detalhe || {}).foro_capital), 'pedidos', 'Dizer para qual foro (capital do estado de origem do contrato).');
   exige(executivoId, 'executivo_id', 'Escolher o executivo de negócios.');
   return l;
 }
@@ -198,7 +199,8 @@ function fechadoInicial(c) {
     inicio_contrato: texto(f.inicio_contrato), primeiro_vencimento: texto(f.primeiro_vencimento), dia_vencimento: diaDe(f.primeiro_vencimento) || num(f.dia_vencimento),
     periodo_minimo: num(f.periodo_minimo), fidelizacao: comFidelizacao(f),
     honorarios: num(f.honorarios),
-    foro: pedidos.includes('foro_capital') && CAPITAIS[uf] ? `${CAPITAIS[uf]}/${uf}` : FORO_PADRAO,
+    // o foro que o comercial escreveu; sem resposta, a capital do estado do condomínio
+    foro: pedidos.includes('foro_capital') ? (texto((f.pedidos_detalhe || {}).foro_capital).slice(0, 120) || (CAPITAIS[uf] ? `${CAPITAIS[uf]}/${uf}` : FORO_PADRAO)) : FORO_PADRAO,
     // o prazo que o cliente pediu (a advogada confirma); sem número, os 30 dias que o Jurídico aceita
     prazo_contestacao: pedidos.includes('contestacao_30') ? Math.round(num(String((f.pedidos_detalhe || {}).contestacao_30 || '').replace(/[^\d]/g, ''))) || 30 : 15,
     clausulas: pedidos.map((k) => C.porChave.get(k)).filter(Boolean).map((x) => ({ chave: x.chave, clausula: x.clausula, pedido: x.pedido,

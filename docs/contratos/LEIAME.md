@@ -54,8 +54,9 @@ comercial) e `cancelada`. O pedido de ajuste volta a solicitação para `em_elab
   mudar (taxa administrativa, boleto, vencimento, desconto) aparece como diferença. Mais o estado, a administradora,
   a taxa ordinária e a taxa extra (para o limite de 40%), o período mínimo, o pedido de fidelização, as **Objeções e
   Solicitações de modificação de contrato** (ao marcar uma, aparece a resposta padrão do Jurídico e, quando há, a
-  pergunta: pontualidade em *retirar* ou *adiar*, "para quando?" em texto livre; o prazo de contestação pedido pelo
-  cliente, em dias) e as **Outras solicitações** (opcional). Os pedidos que saíram da lista (out/2026) ficam marcados
+  pergunta: pontualidade em *retirar* ou *adiar*, "para quando?" em texto livre, sem a resposta padrão; o prazo de
+  contestação pedido pelo cliente, em dias; o foro, "Para qual foro?", que o comercial escreve, só capital do estado de
+  origem do contrato, sem a resposta padrão) e as **Outras solicitações** (opcional). Os pedidos que saíram da lista (out/2026) ficam marcados
   `antigo` em `clausulas.js`: aparecem nas solicitações que já os tinham.
 - **Obrigatórios para enviar:** os dados do formulário (CPF do síndico válido, e-mail, telefone, taxa, boleto, desconto,
   garantias, cashback, a **vigência (início do contrato)** e a **data do primeiro vencimento**: o dia dela é o dia de
@@ -85,6 +86,8 @@ comercial) e `cancelada`. O pedido de ajuste volta a solicitação para `em_elab
   resultado de cada cláusula pedida (aceito, em parte ou recusado, com a redação). Garantias, cashback e o primeiro
   vencimento são do executivo: valem sempre os do pedido (`comPedido`), e a advogada não os altera. Concluir leva a `assinado` e avisa o executivo para
   **solicitar a implantação** (veja abaixo). O Jurídico não abre a implantação.
+- **Controle:** os cartões Atividades pendentes (na fila), Em análise do Jurídico (em elaboração), Aguardando retorno do
+  solicitante (minuta com o comercial e pendência) e os demais da situação.
 - **Contratos encerrados:** ficam em Acompanhamento de demandas Jurídicas → **Controle** (filtro "Assinado" ou busca). As condições ficam travadas; quem
   elabora usa **Corrigir condições**, com o motivo obrigatório. O histórico guarda o que mudou (de → para), e o
   executivo e a Implantação (quem conduz, ou a coordenação) são avisados.
