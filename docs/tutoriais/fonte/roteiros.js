@@ -1125,8 +1125,14 @@ module.exports = [
       await t.legenda('As implantações do mês do contrato, na ordem do 1º vencimento, com as 5 etapas e a faixa de conclusão. Do dia 25 em diante, já mostra o mês seguinte.', { etapa: B, ms: 600 });
       await t.pausa(3000);
       await t.ir('#/acompanhamento/controle', 1600);
-      await t.legenda('<b>Controle</b>: as mesmas colunas da planilha, preenchidas pelo portal, com o protocolo. A <b>Obs.</b> quem conduz escreve na célula; ela vai para a ficha de repasse.', { etapa: B, ms: 600 });
+      await t.legenda('<b>Controle</b>, visão <b>Resumida</b>: agrupada por mês, com o % e as 5 etapas em selos (verde feita, âmbar falta). A <b>Obs.</b> quem conduz escreve na célula; ela vai para a ficha de repasse.', { etapa: B, ms: 600 });
       await t.mostrar('.ctrl-acomp', 3000, { dx: 0.3 });
+      await t.legenda('As pílulas filtram: <b>em andamento</b>, <b>só falta o onboarding</b> ou <b>concluídas</b>.', { etapa: B, ms: 400 });
+      await t.clicar('[data-sit="andamento"]', { depois: 1800 });
+      await t.legenda('<b>Planilha completa</b> mostra todas as colunas da planilha (CNPJ, administradora, síndico, datas). O Excel sai sempre completo.', { etapa: B, ms: 400 });
+      await t.clicar('[data-visao="completa"]', { depois: 2400 });
+      await t.clicar('[data-visao="resumida"]', { depois: 600 });
+      await t.clicar('[data-sit="todas"]', { depois: 800 });
 
       const C = '3 · Metas';
       await t.ir('#/acompanhamento/onboarding', 1600);
