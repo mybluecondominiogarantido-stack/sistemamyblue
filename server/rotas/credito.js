@@ -182,18 +182,31 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
       uh_escopo = $8, receita_liquida = $9, exposicao = $10, validade_ate = $11, atualizado_em = now() WHERE id = $1`, [a.id, JSON.stringify(res), res.status.codigo,
       politica.versao, res.inad_media, res.precificacao && res.precificacao.taxa_adm, res.precificacao && res.precificacao.boleto, res.escopo.uh_escopo,
       res.valores.receita_liquida, res.indicadores && res.indicadores.exposicao, res.validade_ate]);
+    // cada tabela num comando só: relatório com milhares de lançamentos, um INSERT por linha segurava a análise
+    // travada por minutos (e quem salvava ou calculava de novo esperava até estourar o tempo)
     await t.q('DELETE FROM analise_alertas WHERE analise_id = $1', [a.id]);
-    for (const x of res.alertas) await t.q('INSERT INTO analise_alertas (analise_id, codigo, nivel, mensagem, dados) VALUES ($1, $2, $3, $4, $5::jsonb)', [a.id, x.codigo, x.nivel, x.mensagem, x.dados ? JSON.stringify(x.dados) : null]);
+    if (res.alertas.length) await t.q(`INSERT INTO analise_alertas (analise_id, codigo, nivel, mensagem, dados)
+      SELECT $1, x.codigo, x.nivel, x.mensagem, x.dados FROM jsonb_to_recordset($2::jsonb) AS x(i int, codigo text, nivel text, mensagem text, dados jsonb) ORDER BY x.i`,
+      [a.id, JSON.stringify(res.alertas.map((x, i) => ({ i, codigo: x.codigo, nivel: x.nivel, mensagem: x.mensagem, dados: x.dados || null })))]);
     await t.q('DELETE FROM analise_exclusoes WHERE analise_id = $1', [a.id]);
-    for (const x of res.escopo.exclusoes) await t.q('INSERT INTO analise_exclusoes (analise_id, unidade, motivo, detalhe, debito, origem) VALUES ($1, $2, $3, $4, $5, $6)', [a.id, x.unidade, x.motivo, x.detalhe || '', x.debito, x.origem]);
+    if (res.escopo.exclusoes.length) await t.q(`INSERT INTO analise_exclusoes (analise_id, unidade, motivo, detalhe, debito, origem)
+      SELECT $1, x.unidade, x.motivo, x.detalhe, x.debito, x.origem FROM jsonb_to_recordset($2::jsonb) AS x(i int, unidade text, motivo text, detalhe text, debito numeric, origem text) ORDER BY x.i`,
+      [a.id, JSON.stringify(res.escopo.exclusoes.map((x, i) => ({ i, unidade: x.unidade, motivo: x.motivo, detalhe: x.detalhe || '', debito: x.debito, origem: x.origem })))]);
     await t.q('DELETE FROM analise_unidades WHERE analise_id = $1', [a.id]);
-    for (const un of (entrada.relatorio && entrada.relatorio.unidades) || []) {
-      const { id } = await t.um(`INSERT INTO analise_unidades (analise_id, unidade, titular, documento, tipo_pessoa, flag, espolio, fonte) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb) RETURNING id`,
-        [a.id, String(un.unidade), un.titular || '', un.documento || '', ['PF', 'PJ'].includes(un.tipo_pessoa) ? un.tipo_pessoa : '', un.flag || null, !!un.espolio, un.fonte ? JSON.stringify(un.fonte) : null]);
-      for (const l of un.lancamentos || []) {
-        await t.q('INSERT INTO analise_lancamentos (unidade_id, competencia, vencimento, tipo, valor, fonte) VALUES ($1, $2, $3, $4, $5, $6::jsonb)',
-          [id, l.competencia, l.vencimento || null, l.tipo, l.valor, l.fonte ? JSON.stringify(l.fonte) : null]);
-      }
+    const unidades = (entrada.relatorio && entrada.relatorio.unidades) || [];
+    if (unidades.length) {
+      // os ids saem antes da sequência, para ligar cada lançamento à sua unidade sem depender da ordem do RETURNING
+      const ids = (await t.q("SELECT nextval(pg_get_serial_sequence('analise_unidades', 'id'))::int AS id FROM generate_series(1, $1::int)", [unidades.length])).rows.map((x) => x.id);
+      await t.q(`INSERT INTO analise_unidades (id, analise_id, unidade, titular, documento, tipo_pessoa, flag, espolio, fonte)
+        SELECT x.id, $1, x.unidade, x.titular, x.documento, x.tipo_pessoa, x.flag, x.espolio, x.fonte
+        FROM jsonb_to_recordset($2::jsonb) AS x(id int, unidade text, titular text, documento text, tipo_pessoa text, flag text, espolio boolean, fonte jsonb) ORDER BY x.id`,
+      [a.id, JSON.stringify(unidades.map((un, i) => ({ id: ids[i], unidade: String(un.unidade), titular: un.titular || '', documento: un.documento || '',
+        tipo_pessoa: ['PF', 'PJ'].includes(un.tipo_pessoa) ? un.tipo_pessoa : '', flag: un.flag || null, espolio: !!un.espolio, fonte: un.fonte || null })))]);
+      const lanc = unidades.flatMap((un, i) => (un.lancamentos || []).map((l) => ({ unidade_id: ids[i], competencia: l.competencia, vencimento: l.vencimento || null, tipo: l.tipo, valor: l.valor, fonte: l.fonte || null })))
+        .map((l, n) => ({ n, ...l }));
+      if (lanc.length) await t.q(`INSERT INTO analise_lancamentos (unidade_id, competencia, vencimento, tipo, valor, fonte)
+        SELECT x.unidade_id, x.competencia, x.vencimento, x.tipo, x.valor, x.fonte
+        FROM jsonb_to_recordset($1::jsonb) AS x(n int, unidade_id int, competencia text, vencimento date, tipo text, valor numeric, fonte jsonb) ORDER BY x.n`, [JSON.stringify(lanc)]);
     }
     await evento(t, a.id, u.id, 'motor', { status: res.status.rotulo, inad_media: res.inad_media, taxa_adm: res.precificacao && res.precificacao.taxa_adm, politica: politica.versao });
     });
@@ -369,6 +382,13 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
         && JSON.stringify(aj) !== JSON.stringify(((a.dados_analista || {}).ajustes || {})[k])) : [];
       // ajustes ficam na trilha com quem, quando e por quê (no retorno, a nota não diz quem ajustou)
       for (const [campo, aj] of novos) await evento(t, a.id, req.usuario.id, 'ajuste', { campo, valor: aj.valor, justificativa: aj.justificativa });
+      // consulta Assertiva: quem registrou, quando e o resultado de cada unidade
+      if (b.dados_analista) {
+        const antes = (a.dados_analista || {}).assertiva || {};
+        const depois = b.dados_analista.assertiva || {};
+        const mud = Object.keys({ ...antes, ...depois }).filter((k) => (antes[k] || {}).resultado !== (depois[k] || {}).resultado).map((k) => ({ unidade: k, resultado: (depois[k] || {}).resultado || null }));
+        if (mud.length) await evento(t, a.id, req.usuario.id, 'assertiva', { consultas: mud });
+      }
       if (correcao) {
         const mudancas = mudancasFormulario(a.formulario || {}, b.formulario || {});
         if (mudancas.length) await evento(t, a.id, req.usuario.id, 'formulario_corrigido', { mudancas });
@@ -597,6 +617,7 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
     let resultado;
     try { resultado = await calcular(a, req.usuario); } catch (e) { if (e.status) return erro(res, e.status, e.message); throw e; }
     if (resultado.status.codigo === 'pendente') return erro(res, 400, 'A análise está pendente: devolva ao executivo com a lista do que falta.');
+    if (resultado.assertiva && resultado.assertiva.pendentes && resultado.assertiva.pendentes.length) return erro(res, 400, `Registre o resultado da consulta Assertiva antes de liberar: ${resultado.assertiva.pendentes.length === 1 ? 'falta a unidade' : `faltam ${resultado.assertiva.pendentes.length} unidades:`} ${resultado.assertiva.pendentes.join(', ')}.`);
     if (resultado.diretoria && !a.chancela_em) return erro(res, 400, 'Inadimplência acima de 35%: envie à diretoria antes de liberar.');
     const atual = await db.um('SELECT * FROM analises WHERE id = $1', [a.id]);
     const ctx = await ctxRetorno(atual, req.usuario.nome);

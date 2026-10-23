@@ -90,3 +90,9 @@ test('§9.8 o PDF sai sempre com 4 páginas, condensando o texto quando passa', 
   assert.ok(cond.condensado > 0);
   assert.ok(cond.dados.observacoes_juridicas.length <= 6);
 });
+
+test('complemento das observações entra depois do texto automático da página 1', () => {
+  const { r, ctx } = caso();
+  const d = R.montarDados(r, { ...ctx, ajustesTexto: { complemento_status: 'Unidades 108 e 207 recorrentes.' } });
+  assert.match(d.observacoes_status, /aprovado.*Unidades 108 e 207 recorrentes\.$/s);
+});

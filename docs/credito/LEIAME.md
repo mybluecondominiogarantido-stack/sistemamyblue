@@ -39,17 +39,43 @@ conferências da política e os candidatos à Assertiva; `skills/leitura-convenc
 **Convenção** (com página e trecho) e os textos para **Textos do retorno** (observações jurídicas, próximos passos e
 ressalvas). Para instalar: claude.ai → Configurações → Capacidades → Skills → enviar o `.skill` (ou a pasta em zip).
 
-No portal, o analista cola a resposta inteira do Claude em **Colar resultado da skill** (no topo dos dados do analista)
-e clica em *Preencher os campos*: `server/credito/skill.js` separa os lançamentos, a data de emissão, se o relatório é
-por competência e traz nomes, os campos da convenção (com página e trecho), as observações jurídicas, os próximos passos
-e as ressalvas. Nada é gravado sem o analista conferir e clicar em *Salvar e calcular*. Os avisos da skill (taxa
-reajustada, acordos, Assertiva) aparecem na tela para conferir. Testes em `test/credito-skill.test.js`.
+No portal, o analista copia o **bloco PORTAL MYBLUE** que as skills escrevem no fim da resposta (botão de copiar do
+bloco) e cola em **Colar resultado da skill** (no topo dos dados do analista); *Preencher os campos* põe cada etiqueta no
+seu campo e marca em verde o que preencheu:
+
+| Etiqueta do bloco | Campo no portal |
+|---|---|
+| `[relatorio]` | data de emissão, primeira competência, "detalhado por competência", "traz o nome dos devedores" |
+| `[lancamentos]` | Relatório de inadimplência → Lançamentos |
+| `[convencao]` | Convenção (registro, unidades, multa, foro, cartório, cláusula), com página e trecho |
+| `[observacoes_analise]` | Textos do retorno → complemento da página 1 (tendência, recorrência, acordos), depois do texto automático |
+| `[observacoes_juridicas]`, `[proximos_passos]` | Textos do retorno (página 4) |
+| `[ressalvas]` | Ressalvas do analista |
+| `[avisos]`, `[assertiva]` | avisos na tela, para conferir |
+
+Os blocos das duas skills podem ser colados juntos (ou num bloco só, quando a conversa tem os dois documentos); um
+relatório grande vem em partes, cada uma com o seu bloco. Sem o bloco, o portal reconhece o que puder do texto livre e
+avisa. Nada é gravado sem o analista conferir e clicar em *Salvar e calcular*. Leitor em `server/credito/skill.js`,
+testes em `test/credito-skill.test.js`.
+
+## Consulta Assertiva
+
+As pessoas físicas com 24 ou mais taxas ordinárias em aberto aparecem em **Consulta Assertiva (espólios)**. O analista
+consulta cada uma e registra o resultado na linha: *não é espólio* ou *é espólio (fora da garantia)*. Espólio
+confirmado sai do escopo (a MyBlue não garante a unidade) e aparece nas exclusões do retorno. Sem o registro de todas as
+unidades, o retorno não é liberado. O histórico guarda quem registrou cada resultado.
 
 ## Correção do formulário pelo analista
 
 Depois do envio o executivo não muda mais o formulário. O analista que assumiu a análise corrige em **Formulário do
 executivo** (ex.: taxa ordinária digitada errada) e clica em *Salvar correção do formulário* (ou *Salvar e calcular*,
 que também salva). O histórico registra cada campo corrigido, de → para.
+
+## Relatórios grandes
+
+O cálculo grava as unidades e os lançamentos do relatório num comando por tabela. Antes era um comando por lançamento:
+com um relatório de 3 mil lançamentos, a análise ficava travada por mais de um minuto e quem salvava ou abria a fila
+recebia "Erro interno". Os botões *Salvar dados* e *Salvar e calcular* ficam desativados enquanto o pedido roda.
 
 ## Retorno em PDF
 

@@ -902,7 +902,7 @@ module.exports = [
       await t.clicar('#btAssumirCr', { depois: 2200 });
 
       const B = '2 · Relatório e convenção';
-      await t.legenda('Lance o relatório de inadimplência: <b>cole a planilha</b> (unidade, titular, documento, competência, tipo e valor), ou cole a resposta inteira da skill do Claude em <b>Colar resultado da skill</b>.', { etapa: B, ms: 500 });
+      await t.legenda('Lance o relatório de inadimplência: <b>cole a planilha</b> (unidade, titular, documento, competência, tipo e valor), ou cole o bloco <b>PORTAL MYBLUE</b> da skill do Claude em <b>Colar resultado da skill</b>: cada parte vai para o seu campo.', { etapa: B, ms: 500 });
       await t.apontar('#dCola');
       await t.p.locator('#dCola').fill(planilhaCr());
       await t.pausa(1600);
@@ -924,7 +924,7 @@ module.exports = [
       await t.mostrar('#conteudo .pagina > .painel', 3000, { dx: 0.3 });
       await t.legenda('Inadimplência, receitas e exposição, e logo abaixo a <b>memória de cálculo</b> mês a mês.', { etapa: C, ms: 600 });
       await t.mostrar('.tiles', 3000, { dx: 0.4 });
-      await t.legenda('Os <b>alertas</b> (concentração, multa, divergência entre as fontes) e a lista da <b>Assertiva</b> vêm em seguida.', { etapa: C, ms: 3200 });
+      await t.legenda('Os <b>alertas</b> (concentração, multa, divergência entre as fontes) e a lista da <b>Assertiva</b> vêm em seguida: registre em cada unidade se é ou não espólio; espólio sai da garantia.', { etapa: C, ms: 3200 });
 
       const D = '4 · Liberar';
       await t.legenda('Confira a <b>Prévia do retorno</b> em PDF. Se faltar documento, use <b>Devolver com pendência</b>.', { etapa: D, ms: 500 });

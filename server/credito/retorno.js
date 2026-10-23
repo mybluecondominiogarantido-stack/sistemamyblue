@@ -75,6 +75,9 @@ function observacoesStatus(r, ctx) {
     ? `Divergência entre as fontes: ${r.divergencias.map((d) => esc(rotuloDivergencia(d))).join('; ')}.`
     : 'Não houve divergência entre o formulário, o relatório e a convenção.');
   for (const o of r.observacoes) if (/ajustad[oa] na análise/.test(o)) partes.push(esc(o));
+  // o que o analista (ou a skill) acrescentou: tendência, recorrência, acordos
+  const comp = (ctx.ajustesTexto || {}).complemento_status;
+  if (comp) partes.push(esc(comp));
   return partes.join(' ');
 }
 
