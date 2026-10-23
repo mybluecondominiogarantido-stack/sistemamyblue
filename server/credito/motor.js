@@ -22,6 +22,7 @@
  *      lancamentos: [{ competencia, vencimento, tipo, valor }] }] }
  *    tipo do lançamento: ordinaria | extra | agua_gas | acordo | multa | juros | correcao | honorarios | fundo_reserva | outro
  *  analista: { espolios: [{ unidade, nome }], retomadas: [{ unidade, banco }], abandonos: [{ unidade, motivo }],
+ *    assertiva: { unidade: { resultado: 'espolio'|'nao_espolio', em } } — resultado da consulta de cada candidato; espólio sai do escopo
  *    condicao_estrutural, ressalvas: [{ texto, justificativa }], ajustes: { campo: { valor, justificativa } } }
  *    ajustes aceitos: janela (lista de competências), uh_total, taxa_ordinaria, dia_vencimento, uh_isentas, taxa_adm, boleto
  */
@@ -293,6 +294,14 @@ function analisar(entrada, politica = POLITICA_PADRAO, opcoes = {}) {
   const exclusoes = new Map();
   const excluir = (id, motivo, detalhe, origem) => { if (id && !exclusoes.has(id)) exclusoes.set(id, { unidade: id, motivo, detalhe: detalhe || '', origem }); };
   for (const u of unidades) if (u.espolio || /\besp[oó]lio\b/i.test(u.titular || '')) excluir(u.id, 'espolio', u.titular, 'relatorio');
+  // consulta Assertiva registrada pelo analista: espólio confirmado não entra na garantia
+  const consultas = an.assertiva && typeof an.assertiva === 'object' ? an.assertiva : {};
+  const espolioAssertiva = new Set();
+  for (const u of unidades) {
+    if (consultas[u.id]?.resultado !== 'espolio' || exclusoes.has(u.id)) continue;
+    excluir(u.id, 'espolio', `confirmado na consulta Assertiva${u.titular ? ` (${u.titular})` : ''}`, 'analista');
+    espolioAssertiva.add(u.id);
+  }
   for (const e of an.espolios || []) excluir(String(e.unidade).trim(), 'espolio', e.nome, 'analista');
   for (const r of an.retomadas || []) excluir(String(r.unidade).trim(), 'retomada', r.banco, 'analista');
   for (const a of an.abandonos || []) excluir(String(a.unidade).trim(), 'abandono', a.motivo, 'analista');
@@ -465,7 +474,7 @@ function analisar(entrada, politica = POLITICA_PADRAO, opcoes = {}) {
     const titulares = new Map();
     for (const u of unidades) { const t = semAcento(u.titular); if (t) titulares.set(t, (titulares.get(t) || 0) + 1); }
     for (const u of unidades) {
-      if (exclusoes.has(u.id) || ehPJ(u)) continue;
+      if ((exclusoes.has(u.id) && !espolioAssertiva.has(u.id)) || ehPJ(u)) continue;
       const abertas = [...new Set(u.lancamentos.filter((l) => l.tipo === 'ordinaria' && l.c > 0).map((l) => l.competencia))].sort();
       if (!abertas.length) continue;
       let maiorSeq = 1, seq = 1;
@@ -478,16 +487,26 @@ function analisar(entrada, politica = POLITICA_PADRAO, opcoes = {}) {
         unidade: u.id, titular: u.titular || '', documento: u.documento || '', taxas_em_aberto: abertas.length, consecutivas: maiorSeq,
         desde: abertas[0], ate: abertas[abertas.length - 1], cessacao_abrupta: cessacao,
         unidade_unica: (titulares.get(semAcento(u.titular)) || 0) === 1,
+        consulta: ['espolio', 'nao_espolio'].includes(consultas[u.id]?.resultado) ? { resultado: consultas[u.id].resultado, em: consultas[u.id].em || null } : null,
       });
     }
     assertiva.candidatos.sort((a, b) => b.taxas_em_aberto - a.taxas_em_aberto || (a.desde < b.desde ? -1 : 1));
     assertiva.indicada = assertiva.candidatos.length > 0;
   }
+  // o analista registra o resultado de cada consulta; sem isso o retorno não é liberado
+  assertiva.pendentes = assertiva.candidatos.filter((x) => !x.consulta).map((x) => x.unidade);
+  assertiva.espolios = assertiva.candidatos.filter((x) => x.consulta?.resultado === 'espolio').map((x) => x.unidade);
+  const nCand = assertiva.candidatos.length;
+  const unid = (n) => `${n} ${n === 1 ? 'unidade' : 'unidades'}`;
   assertiva.texto = assertiva.inviavel
     ? 'Consulta Assertiva inviável: o relatório não identifica os devedores.'
-    : assertiva.indicada
-      ? `Consulta Assertiva indicada para ${assertiva.candidatos.length} ${assertiva.candidatos.length === 1 ? 'unidade' : 'unidades'} com ${assertiva.criterio}.`
-      : `Nenhuma pessoa física com ${assertiva.criterio}: consulta Assertiva não indicada.`;
+    : !assertiva.indicada
+      ? `Nenhuma pessoa física com ${assertiva.criterio}: consulta Assertiva não indicada.`
+      : assertiva.pendentes.length
+        ? `Consulta Assertiva indicada para ${unid(nCand)} com ${assertiva.criterio}${nCand - assertiva.pendentes.length ? ` (${nCand - assertiva.pendentes.length} já consultadas)` : ''}.`
+        : assertiva.espolios.length
+          ? `Consulta Assertiva feita em ${unid(nCand)} com ${assertiva.criterio}: ${assertiva.espolios.length === 1 ? '1 espólio confirmado, fora' : `${assertiva.espolios.length} espólios confirmados, fora`} da garantia (${assertiva.espolios.join(', ')}).`
+          : `Consulta Assertiva feita em ${unid(nCand)} com ${assertiva.criterio}: nenhum espólio.`;
 
   return {
     politica_versao: P.versao,

@@ -6,7 +6,7 @@ description: Lê o relatório de inadimplência / contas a receber de um condom�
 # Leitura do relatório de inadimplência (Análise de Crédito MyBlue)
 
 Você transcreve o relatório de inadimplência de um condomínio para o analista de crédito da MyBlue colar no portal
-(Análise de Crédito → a análise → **Relatório de inadimplência → Lançamentos → Ler planilha**). O portal calcula tudo
+(Análise de Crédito → a análise → **Colar resultado da skill**, pelo bloco PORTAL MYBLUE do fim da resposta). O portal calcula tudo
 (janela de meses, inadimplência, faixa, preço): por isso **não calcule percentual nem diga se o condomínio é aprovado**.
 Seu trabalho é ler com fidelidade, separar o principal dos acréscimos e apontar o que o analista precisa conferir.
 
@@ -40,9 +40,9 @@ Seu trabalho é ler com fidelidade, separar o principal dos acréscimos e aponta
 
 ## Formato da resposta
 
-O analista cola a resposta inteira na caixa **Colar resultado da skill** do portal, que preenche os campos sozinha:
-mantenha os títulos das seções, o bloco de código dos lançamentos e as linhas "Data de emissão", "Detalhado por
-competência" e "Traz o nome dos devedores" como no modelo.
+A resposta tem duas partes: o texto para o analista ler (seções 1 a 4) e, no fim, o **bloco PORTAL MYBLUE** (seção 5),
+que o analista copia pelo botão de copiar do bloco e cola em **Colar resultado da skill** no portal. O portal lê só o
+bloco e põe cada etiqueta no seu campo: siga o modelo do bloco à risca. Os lançamentos ficam só dentro do bloco.
 
 Responda sempre nesta ordem, em português:
 
@@ -53,21 +53,7 @@ Responda sempre nesta ordem, em português:
 - Período coberto: mm/aaaa a mm/aaaa · Unidades com débito: N · Lançamentos: N
 - Taxa ordinária vigente: R$ X (desde mm/aaaa) — se a taxa mudou no período, diga também o valor anterior e até quando
 
-### 2. Lançamentos para colar no portal
-Um bloco de código, sem cabeçalho extra além da primeira linha, separado por ponto e vírgula, valores no formato
-brasileiro (1.840,00), CPF/CNPJ como estão no relatório (vazio se não houver), vencimento dd/mm/aaaa ou vazio:
-
-```
-Unidade;Titular;Documento;Competência;Tipo;Valor;Vencimento
-A-101;Fulano de Tal;111.111.111-11;07/2026;Taxa ordinária;1.840,00;10/07/2026
-A-101;Fulano de Tal;111.111.111-11;07/2026;Multa;36,80;
-B-203;;;08/2026;Taxa ordinária;1.840,00;10/08/2026
-```
-
-Use o mesmo texto de unidade em todas as linhas da mesma unidade (o portal agrupa por ele). Sem nomes no relatório,
-deixe titular e documento vazios.
-
-### 3. Conferências da política (para o analista)
+### 2. Conferências da política (para o analista)
 - **Validade**: relatório emitido há mais de 3 meses → o portal não aceita; pedir relatório atualizado.
 - **Competência**: só total por devedor, sem mês → análise fica PENDENTE; pedir o relatório detalhado.
 - **Nomes**: sem nomes → a análise sai com ressalva (Assertiva inviável).
@@ -75,15 +61,50 @@ deixe titular e documento vazios.
   competência só entra se, na data de emissão, já passaram **mais de 10 dias** do vencimento dela.
 - **Totais**: por competência, soma do principal da ordinária × total do relatório (se houver).
 
-### 4. Candidatos à consulta Assertiva (espólio)
+### 3. Candidatos à consulta Assertiva (espólio)
 Pessoas físicas (CPF ou nome de pessoa) com **24 ou mais taxas ordinárias em aberto**, da mais antiga para a mais
 recente, dizendo desde quando e se os débitos formam um bloco contínuo até hoje (cessação abrupta é sinal forte de
 espólio). CNPJ nunca entra. Se ninguém atingir 24, escreva "Nenhuma pessoa física com 24 ou mais taxas em aberto:
 Assertiva não indicada."
 
-### 5. Avisos
+### 4. Avisos
 Tudo que o analista precisa olhar no PDF: páginas ilegíveis, colunas ambíguas, unidades em acordo/jurídico/espólio/
 retomada, valores que não batem, tipos "Outro".
+
+### 5. Bloco PORTAL MYBLUE (sempre, no fim)
+Um bloco de código, exatamente neste formato (as etiquetas entre colchetes não mudam; deixe vazio o que não houver):
+
+```
+#PORTAL-MYBLUE v1
+[relatorio]
+sistema: Superlógica
+data_emissao: 16/10/2026
+detalhado_por_competencia: sim
+traz_nomes: sim
+periodo_inicio: 01/2026
+taxa_vigente: R$ 1.840,00 desde 01/2026 (antes R$ 1.700,00)
+[lancamentos]
+Unidade;Titular;Documento;Competência;Tipo;Valor;Vencimento
+A-101;Fulano de Tal;111.111.111-11;07/2026;Taxa ordinária;1.840,00;10/07/2026
+A-101;Fulano de Tal;111.111.111-11;07/2026;Multa;36,80;
+B-203;;;08/2026;Taxa ordinária;1.840,00;10/08/2026
+[observacoes_analise]
+Tendência da inadimplência mês a mês em palavras e em reais (subiu, caiu, estável), unidades recorrentes, acordos e o
+que mais o analista precisa saber, em 2 a 4 frases. Sem percentual de inadimplência nem faixa: o portal calcula.
+[avisos]
+- Unidade C-305 em acordo (flag "A"): sai da base.
+[assertiva]
+- AP 0704 — Fulano de Tal — 30 taxas em aberto desde 01/2024, bloco contínuo
+#FIM
+```
+
+- `[lancamentos]`: um lançamento por linha, ponto e vírgula, valores no formato brasileiro (1.840,00), CPF/CNPJ como
+  estão no relatório (vazio se não houver), vencimento dd/mm/aaaa ou vazio. Mesmo texto de unidade em todas as linhas
+  da mesma unidade (o portal agrupa por ele). Sem nomes no relatório, titular e documento vazios.
+- Relatório grande demais para uma resposta: divida em partes ("parte 1 de 3"), cada parte com o seu bloco
+  `#PORTAL-MYBLUE v1` … `#FIM` só com `[lancamentos]` e o que couber; o analista cola todas as partes juntas.
+- Se a conversa também tiver a convenção (skill leitura-convencao-myblue), faça **um bloco só** com as etiquetas das
+  duas skills.
 
 ## Dados pessoais
 

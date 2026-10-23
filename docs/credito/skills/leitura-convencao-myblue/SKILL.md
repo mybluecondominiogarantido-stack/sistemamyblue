@@ -38,8 +38,10 @@ escreva "não consta" — não deduza.
 
 ## Formato da resposta
 
-O analista cola a resposta inteira na caixa **Colar resultado da skill** do portal, que preenche os campos sozinha:
-mantenha os títulos das seções, os nomes da primeira coluna da tabela e um item por linha.
+A resposta tem duas partes: o texto para o analista ler (seções 1 a 3) e, no fim, o **bloco PORTAL MYBLUE** (seção 4),
+que o analista copia pelo botão de copiar do bloco e cola em **Colar resultado da skill** no portal. O portal lê só o
+bloco e põe cada etiqueta no seu campo (Convenção, Observações jurídicas, Próximos passos, Ressalvas): siga o modelo à
+risca.
 
 ### 1. Campos para o portal (seção Convenção)
 | Campo no portal | Valor | Página | Trecho |
@@ -70,6 +72,43 @@ exigida, ajustar multa no boleto…). Se nada for necessário, escreva "Nenhum p
 
 **Ressalvas** — só as que a política prevê para a convenção (registro fora do Registro de Imóveis; convenção ausente
 ou incompleta), no formato `ressalva — justificativa` para o campo *Ressalvas do analista*. Se não houver, "Nenhuma".
+
+### 4. Bloco PORTAL MYBLUE (sempre, no fim)
+Um bloco de código, exatamente neste formato (as etiquetas entre colchetes e os nomes antes dos dois-pontos não mudam;
+deixe vazio o que não houver):
+
+```
+#PORTAL-MYBLUE v1
+[convencao]
+registro: RI
+unidades: 24
+multa_pct: 2
+foro: Comarca de Fortaleza/CE
+cartorio: 1º Registro de Imóveis de Fortaleza, Livro 3, R-12.345, 10/05/2017
+clausula_restritiva:
+fonte_registro: p. 38 | registrada sob o nº R-12.345, Livro 3
+fonte_unidades: p. 3 | composto de 24 unidades autônomas
+fonte_multa: p. 17 | multa de 2% sobre o débito
+fonte_foro: p. 41 | fica eleito o foro da Comarca de Fortaleza
+[observacoes_juridicas]
+- Convenção registrada no 1º Registro de Imóveis de Fortaleza (Livro 3, R-12.345).
+- A convenção não traz cláusula que impeça a contratação de garantidora.
+[proximos_passos]
+- Nenhum passo adicional pela convenção.
+[ressalvas]
+- Nenhuma
+[avisos]
+- Página 12 ilegível.
+#FIM
+```
+
+- `registro`: `RI` (Registro de Imóveis, inclui Livro 3), `cartorio` (sem especificar), `RTD` (só Títulos e
+  Documentos) ou `nenhum` (sem registro; cópia só autenticada em tabelionato também é `nenhum`).
+- `multa_pct`: só o número; vazio se a convenção não fixar a multa.
+- `[ressalvas]`: `- ressalva — justificativa`, só o que o portal não vê pelos campos (convenção incompleta, cláusula que
+  exige ata…). Registro fora do Registro de Imóveis, multa e foro o portal já trata sozinho pela etiqueta `[convencao]`.
+- Se a conversa também tiver o relatório de inadimplência (skill leitura-inadimplencia-myblue), faça **um bloco só**
+  com as etiquetas das duas skills.
 
 ## Cuidados
 

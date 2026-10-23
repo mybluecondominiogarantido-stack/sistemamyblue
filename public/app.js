@@ -3296,7 +3296,7 @@
     enviada: 'enviou para análise', reenviada: 'reenviou depois da pendência', assumida: 'assumiu a análise', motor: 'calculou a análise', ajuste: 'ajustou um valor',
     pendencia: 'devolveu com pendência', diretoria: 'enviou à diretoria', chancelada: 'chancelou', chancela_recusada: 'não chancelou', liberada: 'liberou o retorno',
     reanalise_pedida: 'pediu reanálise', cancelada: 'cancelou', leitura: 'leu o PDF com IA', leitura_erro: 'não conseguiu ler o PDF com IA',
-    formulario_corrigido: 'corrigiu o formulário do executivo',
+    formulario_corrigido: 'corrigiu o formulário do executivo', assertiva: 'registrou a consulta Assertiva',
   };
 
   function etqCr(mapa, k) { return k && mapa[k] ? etq(mapa[k]) : ''; }
@@ -3401,6 +3401,14 @@
   }
 
   /* ---------- formulário do executivo ---------- */
+  /* botão ocupado enquanto o pedido roda: evita o segundo clique (relatório grande leva alguns segundos) */
+  async function ocupadoCr(btn, texto, fn) {
+    if (btn.disabled) return;
+    var antes = btn.innerHTML;
+    $$('#btCalcCr, #btSalvarDadosCr, #btLibCr').forEach(function (b) { b.disabled = true; });
+    btn.textContent = texto;
+    try { return await fn(); } finally { $$('#btCalcCr, #btSalvarDadosCr, #btLibCr').forEach(function (b) { b.disabled = false; }); btn.innerHTML = antes; }
+  }
   function campoCr(id, rotulo, valor, extra) {
     return '<div' + (extra && extra.span ? ' style="grid-column:span ' + extra.span + '"' : '') + '><label class="rot" for="' + id + '">' + esc(rotulo) + '</label>' +
       '<input class="campo" id="' + id + '" value="' + esc(valor == null ? '' : valor) + '"' + (extra && extra.ph ? ' placeholder="' + esc(extra.ph) + '"' : '') + (extra && extra.tipo ? ' type="' + extra.tipo + '"' : '') + (extra && extra.dis ? ' disabled' : '') + '>' +
@@ -3561,7 +3569,8 @@
   }
 
   /* ---------- resultado do motor ---------- */
-  function htmlResultadoCredito(r) {
+  function htmlResultadoCredito(r, consultas, editavel) {
+    consultas = consultas || {};
     if (!r) return '';
     var st = r.status.codigo;
     var cor = { aprovada: ['var(--green-bg)', '#bfe7d6', '#17734f'], ressalvas: ['var(--amber-bg)', '#ecd8a8', '#8a5a10'], reprovada: ['var(--red-bg)', '#f3c6c2', '#a3352c'], pendente: ['var(--teal-bg)', '#bfdde5', '#0f6878'] }[st];
@@ -3587,9 +3596,17 @@
       (r.divergencias.length ? '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Divergência entre as fontes</h2></div><div class="corpo" style="font-size:13px;font-weight:600">' +
         r.divergencias.map(function (x) { return '<div><b>' + esc(CAMPO_CR[x.campo] || x.campo) + '</b>: ' + esc(Object.keys(x.valores).map(function (k) { return (FONTE_CR[k] || k) + ' ' + x.valores[k]; }).join(' × ')) + ' — vale ' + esc(String(x.usado)) + ' (' + esc(FONTE_CR[x.fonte] || x.fonte) + ')</div>'; }).join('') + '</div></section>' : '') +
       '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Consulta Assertiva (espólios)</h2></div><div class="corpo pilha"><div class="msg ' + (r.assertiva.indicada ? 'aviso' : 'ok') + '">' + esc(r.assertiva.texto) + '</div>' +
-      (r.assertiva.candidatos.length ? '<div class="tabela-wrap"><table><thead><tr><th>Unidade</th><th>Titular</th><th>Documento</th><th class="num">Taxas em aberto</th><th>Desde</th><th>Padrão</th></tr></thead><tbody>' +
-        r.assertiva.candidatos.map(function (x) { return '<tr><td><b>' + esc(x.unidade) + '</b></td><td>' + esc(x.titular) + '</td><td>' + esc(x.documento) + '</td><td class="num">' + x.taxas_em_aberto + '</td><td>' + esc(mesAno(x.desde + '-01')) + '</td><td>' +
-          (x.cessacao_abrupta ? '<span class="etiqueta ambar">parou de pagar de vez</span> ' : '') + (x.unidade_unica ? '<span class="etiqueta cinza">unidade única</span>' : '') + '</td></tr>'; }).join('') + '</tbody></table></div>' : '') + '</div></section>' +
+      (r.assertiva.candidatos.length ? (editavel ? '<div class="ajuda" style="margin:0">Consulte cada pessoa na Assertiva e registre o resultado. Espólio confirmado sai do escopo: a MyBlue não garante a unidade. Sem o registro de todas, o retorno não é liberado. Depois clique em <b>Salvar e calcular</b>.</div>' : '') +
+        '<div class="tabela-wrap"><table><thead><tr><th>Unidade</th><th>Titular</th><th>Documento</th><th class="num">Taxas em aberto</th><th>Desde</th><th>Padrão</th><th>Consulta Assertiva</th></tr></thead><tbody>' +
+        r.assertiva.candidatos.map(function (x) {
+          var c = consultas[x.unidade] || x.consulta || {};
+          var consulta = editavel ? '<select class="campo" data-assertiva="' + esc(x.unidade) + '" style="min-width:220px" aria-label="Resultado da consulta Assertiva de ' + esc(x.unidade) + '">' +
+              [['', 'Falta consultar'], ['nao_espolio', 'Consultei: não é espólio'], ['espolio', 'Consultei: é espólio (fora da garantia)']].map(function (o) { return '<option value="' + o[0] + '"' + ((c.resultado || '') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>'
+            : c.resultado === 'espolio' ? '<span class="etiqueta vermelha">espólio — fora da garantia</span>' : c.resultado === 'nao_espolio' ? '<span class="etiqueta verde">não é espólio</span>' : '<span class="etiqueta ambar">falta consultar</span>';
+          return '<tr><td><b>' + esc(x.unidade) + '</b></td><td>' + esc(x.titular) + '</td><td>' + esc(x.documento) + '</td><td class="num">' + x.taxas_em_aberto + '</td><td>' + esc(mesAno(x.desde + '-01')) + '</td><td>' +
+            (x.cessacao_abrupta ? '<span class="etiqueta ambar">parou de pagar de vez</span> ' : '') + (x.unidade_unica ? '<span class="etiqueta cinza">unidade única</span>' : '') + '</td><td>' + consulta +
+            (c.em ? '<span class="sec">' + esc(dataBr(c.em)) + '</span>' : '') + '</td></tr>';
+        }).join('') + '</tbody></table></div>' : '') + '</div></section>' +
       (r.observacoes.length ? '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Observações automáticas</h2></div><div class="corpo"><ul style="margin:0;padding-left:18px;font-size:13px;font-weight:600;color:var(--ink-2)">' + r.observacoes.map(function (o) { return '<li>' + esc(o) + '</li>'; }).join('') + '</ul></div></section>' : '');
   }
 
@@ -3630,8 +3647,8 @@
     var aj = d.ajustes || {};
     var tx = d.textos || {};
     var dis = editavel ? '' : ' disabled';
-    return (editavel ? '<details class="painel" style="margin-bottom:16px"><summary class="cab-painel" style="cursor:pointer"><h2 style="display:inline">Colar resultado da skill</h2> <span class="ajuda" style="margin:0">a resposta inteira do Claude (leitura da inadimplência ou da convenção)</span></summary><div class="corpo pilha">' +
-      '<textarea class="campo" id="dSkill" rows="6" placeholder="No Claude, clique em Copiar embaixo da resposta da skill e cole aqui." style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px"></textarea>' +
+    return (editavel ? '<details class="painel" style="margin-bottom:16px"><summary class="cab-painel" style="cursor:pointer"><h2 style="display:inline">Colar resultado da skill</h2> <span class="ajuda" style="margin:0">o bloco PORTAL MYBLUE do fim da resposta das skills: cada parte vai para o seu campo</span></summary><div class="corpo pilha">' +
+      '<textarea class="campo" id="dSkill" rows="6" placeholder="No Claude, copie o bloco PORTAL MYBLUE do fim da resposta (botão de copiar do bloco) e cole aqui. Pode colar os blocos das duas skills juntos." style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px"></textarea>' +
       '<div class="linha"><button type="button" class="btn primary sm" id="btSkill">Preencher os campos</button><span class="ajuda" style="margin:0">O portal preenche lançamentos, data de emissão, convenção, textos do retorno e ressalvas. Confira e clique em Salvar e calcular.</span></div><div id="dSkillInfo"></div></div></details>' : '') +
       '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Relatório de inadimplência</h2><span class="espaco"></span><span class="etiqueta ' + ((rel.unidades || []).length || rel.sem_inadimplencia ? 'verde' : 'ambar') + '">' +
       ((rel.unidades || []).length ? (rel.unidades || []).length + ' unidades lançadas' : rel.sem_inadimplencia ? 'sem inadimplência' : 'falta lançar') + '</span></div><div class="corpo pilha">' +
@@ -3654,15 +3671,16 @@
       })() +
       campoCr('dCart', 'Cartório e matrícula', conv.cartorio || '', { dis: !editavel, span: 2 }) + campoCr('dClaus', 'Cláusula que limita garantidora (se houver)', conv.clausula_restritiva || '', { dis: !editavel, span: 2 }) + '</div></section>' +
       '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Espólios, retomadas e condições</h2></div><div class="corpo grade-3">' +
-      '<div><label class="rot" for="dEsp">Espólios confirmados (Assertiva) — um por linha: unidade — nome</label><textarea class="campo" id="dEsp" rows="3"' + dis + '>' + esc(linhasCr(d.espolios, ['unidade', 'nome'])) + '</textarea></div>' +
+      '<div><label class="rot" for="dEsp">Outros espólios (fora da lista da Assertiva) — um por linha: unidade — nome</label><textarea class="campo" id="dEsp" rows="3"' + dis + '>' + esc(linhasCr(d.espolios, ['unidade', 'nome'])) + '</textarea></div>' +
       '<div><label class="rot" for="dRet">Retomadas Caixa/banco — unidade — banco</label><textarea class="campo" id="dRet" rows="3"' + dis + '>' + esc(linhasCr(d.retomadas, ['unidade', 'banco'])) + '</textarea></div>' +
       '<div><label class="rot" for="dAban">Abandono ou litígio — unidade — motivo</label><textarea class="campo" id="dAban" rows="3"' + dis + '>' + esc(linhasCr(d.abandonos, ['unidade', 'motivo'])) + '</textarea></div>' +
       '<div style="grid-column:span 2"><label class="rot" for="dRess">Ressalvas do analista — ressalva — justificativa operacional</label><textarea class="campo" id="dRess" rows="3"' + dis + '>' + esc(linhasCr(d.ressalvas, ['texto', 'justificativa'])) + '</textarea></div>' +
       '<div><label class="rot" for="dEstr">Condição estrutural que reprova (concordata, fraude, processo relevante)</label><textarea class="campo" id="dEstr" rows="3"' + dis + '>' + esc(d.condicao_estrutural || '') + '</textarea></div></div></section>' +
       '<details class="painel" style="margin-bottom:16px"' + (Object.keys(aj).length ? ' open' : '') + '><summary class="cab-painel" style="cursor:pointer"><h2 style="display:inline">Ajustes do analista</h2> <span class="ajuda" style="margin:0">sempre com justificativa; no retorno, a nota não diz quem ajustou</span></summary><div class="corpo pilha">' +
       AJUSTES_CR.map(function (x) { var a = aj[x[0]] || {}; return '<div class="grade-2">' + campoCr('aj_' + x[0], x[1], Array.isArray(a.valor) ? a.valor.join(', ') : (a.valor == null ? '' : a.valor), { dis: !editavel }) + campoCr('ajj_' + x[0], 'Justificativa', a.justificativa || '', { dis: !editavel }) + '</div>'; }).join('') + '</div></details>' +
-      '<details class="painel" style="margin-bottom:16px"' + (tx.observacoes_status || tx.observacoes_juridicas || tx.proximos_passos ? ' open' : '') + '><summary class="cab-painel" style="cursor:pointer"><h2 style="display:inline">Textos do retorno</h2> <span class="ajuda" style="margin:0">em branco, o portal escreve sozinho a partir do cálculo</span></summary><div class="corpo pilha">' +
-      '<div><label class="rot" for="tObs">Observações da análise (página 1)</label><textarea class="campo" id="tObs" rows="4"' + dis + '>' + esc(tx.observacoes_status || '') + '</textarea></div>' +
+      '<details class="painel" style="margin-bottom:16px"' + (tx.observacoes_status || tx.complemento_status || tx.observacoes_juridicas || tx.proximos_passos ? ' open' : '') + '><summary class="cab-painel" style="cursor:pointer"><h2 style="display:inline">Textos do retorno</h2> <span class="ajuda" style="margin:0">em branco, o portal escreve sozinho a partir do cálculo</span></summary><div class="corpo pilha">' +
+      '<div><label class="rot" for="tComp">Observações da análise — complemento (página 1, depois do texto automático: tendência, recorrência, acordos)</label><textarea class="campo" id="tComp" rows="3"' + dis + '>' + esc(tx.complemento_status || '') + '</textarea></div>' +
+      '<div><label class="rot" for="tObs">Observações da análise — trocar o texto automático inteiro (deixe em branco para o portal escrever)</label><textarea class="campo" id="tObs" rows="3"' + dis + '>' + esc(tx.observacoes_status || '') + '</textarea></div>' +
       '<div class="grade-2"><div><label class="rot" for="tJur">Observações jurídicas — uma por linha</label><textarea class="campo" id="tJur" rows="5"' + dis + '>' + esc((tx.observacoes_juridicas || []).join('\n')) + '</textarea></div>' +
       '<div><label class="rot" for="tPas">Próximos passos — um por linha</label><textarea class="campo" id="tPas" rows="5"' + dis + '>' + esc((tx.proximos_passos || []).join('\n')) + '</textarea></div></div></div></details>';
   }
@@ -3677,12 +3695,19 @@
       ajustes[x[0]] = { valor: x[0] === 'janela' ? val.split(/[,;\s]+/).filter(Boolean) : numCr(val), justificativa: v('ajj_' + x[0]) };
     });
     var linhas = function (id) { return v(id).split(/\n/).map(function (l) { return l.trim(); }).filter(Boolean); };
-    var textos = { observacoes_status: v('tObs') || undefined, observacoes_juridicas: linhas('tJur').length ? linhas('tJur') : undefined, proximos_passos: linhas('tPas').length ? linhas('tPas') : undefined };
+    // consulta Assertiva: o resultado de cada unidade, com a data em que foi registrado
+    var assertiva = Object.assign({}, d.assertiva || {});
+    $$('[data-assertiva]').forEach(function (sel) {
+      var un = sel.getAttribute('data-assertiva');
+      if (!sel.value) { delete assertiva[un]; return; }
+      if (!assertiva[un] || assertiva[un].resultado !== sel.value) assertiva[un] = { resultado: sel.value, em: new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date()) };
+    });
+    var textos = { observacoes_status: v('tObs') || undefined, complemento_status: v('tComp') || undefined, observacoes_juridicas: linhas('tJur').length ? linhas('tJur') : undefined, proximos_passos: linhas('tPas').length ? linhas('tPas') : undefined };
     return Object.assign({}, d, {
       relatorio: rel,
       convencao: { registro: v('dReg'), uh: numCr(v('dCuh')), multa_pct: numCr(v('dMulta')), foro: v('dForo'), cartorio: v('dCart'), clausula_restritiva: v('dClaus'), origem: (d.convencao || {}).origem },
       espolios: lerLinhasCr(v('dEsp'), ['unidade', 'nome']), retomadas: lerLinhasCr(v('dRet'), ['unidade', 'banco']), abandonos: lerLinhasCr(v('dAban'), ['unidade', 'motivo']),
-      ressalvas: lerLinhasCr(v('dRess'), ['texto', 'justificativa']), condicao_estrutural: v('dEstr'), ajustes: ajustes, textos: textos,
+      ressalvas: lerLinhasCr(v('dRess'), ['texto', 'justificativa']), condicao_estrutural: v('dEstr'), ajustes: ajustes, textos: textos, assertiva: assertiva,
     });
   }
 
@@ -3741,7 +3766,7 @@
         '<div class="linha" style="justify-content:flex-end"><span class="ajuda" style="flex:1 1 320px;margin:0">Ao enviar, o portal confere o que falta. Se estiver tudo certo, gera o protocolo e o prazo começa a contar. <span id="salvoCr"></span></span>' +
         (pd.cancelar ? '<button class="btn danger" id="btCancCr">Cancelar solicitação</button>' : '') + '<button class="btn ghost" id="btSalvarCr">Salvar rascunho</button><button class="btn primary" id="btEnviarCr">' + (a.etapa === 'pendencia' ? 'Reenviar para análise' : 'Enviar para análise') + '</button></div></div>';
     } else if (pd.interno && a.etapa !== 'rascunho') {
-      html += htmlResultadoCredito(a.resultado_motor) +
+      html += htmlResultadoCredito(a.resultado_motor, (a.dados_analista || {}).assertiva, pd.analisar) +
         (pd.analisar ? htmlDadosAnalista(a.dados_analista || {}, true, docsVig, m.ia) + '<div class="linha" style="justify-content:flex-end;margin-bottom:18px"><button class="btn ghost" id="btSalvarDadosCr">Salvar dados</button><button class="btn primary" id="btCalcCr">Salvar e calcular</button></div>'
           : a.dados_analista ? htmlDadosAnalista(a.dados_analista, false) : '') +
         '<details class="painel" id="formExecCr" style="margin-bottom:16px"><summary class="cab-painel" style="cursor:pointer"><h2 style="display:inline">Formulário do executivo</h2>' + (pd.analisar ? ' <span class="ajuda" style="margin:0">corrija aqui o que o executivo informou errado; o histórico guarda o que mudou</span>' : '') + '</summary><div class="corpo pilha" style="gap:18px">' + htmlFormCredito(f, a, m, !pd.analisar) +
@@ -3755,6 +3780,7 @@
         var x = e.detalhe || {};
         var extra = e.tipo === 'documento' || e.tipo === 'documento_removido' ? ': ' + esc(x.nome) : e.tipo === 'ajuste' ? ': ' + esc(x.campo) + ' → ' + esc(Array.isArray(x.valor) ? x.valor.join(', ') : x.valor) + ' (' + esc(x.justificativa) + ')'
           : e.tipo === 'leitura' ? ': ' + (x.tipo === 'relatorio' ? 'relatório, ' + x.unidades + ' unidades e ' + x.lancamentos + ' lançamentos' : 'convenção') + (x.aplicada ? '' : ' (não trocou o que já estava lançado)')
+          : e.tipo === 'assertiva' ? ': ' + (x.consultas || []).map(function (y) { return esc(y.unidade) + ' ' + (y.resultado === 'espolio' ? 'é espólio' : y.resultado === 'nao_espolio' ? 'não é espólio' : 'voltou para falta consultar'); }).join('; ')
           : e.tipo === 'formulario_corrigido' ? ': ' + (x.mudancas || []).map(function (y) { return esc(y.campo) + ' ' + esc(y.de) + ' → ' + esc(y.para); }).join('; ')
           : e.tipo === 'leitura_erro' ? ': ' + (x.tipo === 'relatorio' ? 'relatório' : 'convenção') + ' — ' + esc(x.erro)
           : e.tipo === 'motor' ? ': ' + esc(x.status) + (x.inad_media != null ? ', ' + pctCr(x.inad_media) : '') : e.tipo === 'enviada' ? ' (' + esc(x.protocolo) + ')' : (e.tipo === 'chancela_recusada' || e.tipo === 'chancelada') && x.observacao ? ': ' + esc(x.observacao) : '';
@@ -3841,9 +3867,11 @@
       $('#btSkill').onclick = async function () {
         try {
           var r = await api('POST', '/api/credito/analises/' + a.id + '/resultado-skill', { texto: $('#dSkill').value });
-          var put = function (id, v) { if ($('#' + id) && v !== undefined && v !== null) $('#' + id).value = v; };
-          if (r.lancamentos && r.lancamentos.linhas) { $('#dCola').value = r.lancamentos.texto; unidadesLidas = r.lancamentos.unidades; if ($('#dSemInad')) $('#dSemInad').checked = false; }
-          put('dEmis', r.relatorio.data_emissao);
+          $$('.da-skill').forEach(function (el) { el.classList.remove('da-skill'); });
+          // cada campo preenchido fica marcado, para o analista conferir
+          var put = function (id, v) { if ($('#' + id) && v !== undefined && v !== null) { $('#' + id).value = v; $('#' + id).classList.add('da-skill'); } };
+          if (r.lancamentos && r.lancamentos.linhas) { put('dCola', r.lancamentos.texto); unidadesLidas = r.lancamentos.unidades; if ($('#dSemInad')) $('#dSemInad').checked = false; }
+          put('dEmis', r.relatorio.data_emissao); put('dIni', r.relatorio.periodo_inicio);
           if (r.relatorio.tem_competencia !== undefined) $('#dComp').checked = r.relatorio.tem_competencia;
           if (r.relatorio.tem_nomes !== undefined) $('#dNomes').checked = r.relatorio.tem_nomes;
           if (r.convencao) {
@@ -3853,17 +3881,19 @@
             Object.keys(campos).forEach(function (idc) { var k = campos[idc]; if (k in c) put(idc, c[k] == null ? '' : k === 'multa_pct' ? fmtNumCr(c[k]) : c[k]); });
             a.dados_analista = Object.assign({}, a.dados_analista || {}, { convencao: Object.assign({}, (a.dados_analista || {}).convencao || {}, { origem: c.origem }) });
           }
-          if (r.textos.observacoes_juridicas || r.textos.proximos_passos) {
+          if (r.textos.observacoes_juridicas || r.textos.proximos_passos || r.textos.complemento_status) {
             put('tJur', (r.textos.observacoes_juridicas || []).join('\n') || undefined); put('tPas', (r.textos.proximos_passos || []).join('\n') || undefined);
+            put('tComp', r.textos.complemento_status);
             $('#tJur').closest('details').open = true;
           }
           if (r.ressalvas.length) {
             var atuais = $('#dRess').value.trim();
             var novas = r.ressalvas.map(function (x) { return x.texto + (x.justificativa ? ' — ' + x.justificativa : ''); }).filter(function (l) { return atuais.indexOf(l) < 0; });
-            $('#dRess').value = [atuais].concat(novas).filter(Boolean).join('\n');
+            put('dRess', [atuais].concat(novas).filter(Boolean).join('\n'));
           }
           var extras = (r.lancamentos && r.lancamentos.erros.length ? ['Linhas de lançamento com problema: ' + r.lancamentos.erros.slice(0, 3).join(' ')] : []).concat(r.avisos, r.assertiva.length ? ['Assertiva: ' + r.assertiva.join(' ')] : []);
-          $('#dSkillInfo').innerHTML = '<div class="msg ok">Preenchido: ' + esc(r.achados.join(', ')) + '. Confira e clique em <b>Salvar e calcular</b>.</div>' +
+          $('#dSkillInfo').innerHTML = '<div class="msg ok">Preenchido: ' + esc(r.achados.join(', ')) + '. Os campos preenchidos ficaram marcados em verde: confira e clique em <b>Salvar e calcular</b>.</div>' +
+            (r.bloco ? '' : '<div class="msg aviso" style="margin-top:8px">A resposta não trouxe o bloco <b>PORTAL MYBLUE</b>: o portal reconheceu o que pôde do texto. Atualize as skills para o portal preencher tudo.</div>') +
             (extras.length ? '<div class="msg aviso" style="margin-top:8px"><b>Avisos da skill para conferir:</b><ul style="margin:6px 0 0;padding-left:18px">' + extras.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>' : '');
         } catch (e) { toast(e.message, 'erro'); }
       };
@@ -3883,11 +3913,13 @@
           $('#dColaInfo').textContent = r.linhas + ' lançamentos de ' + r.unidades.length + ' unidades lidos' + (r.erros.length ? '; ' + r.erros.length + ' linha(s) com problema: ' + r.erros.slice(0, 3).join(' ') : '') + '. Salve para guardar.';
         } catch (e) { toast(e.message, 'erro'); }
       };
-      $('#btSalvarDadosCr').onclick = async function () { try { await salvarDados(); toast('Dados salvos.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
+      $('#btSalvarDadosCr').onclick = function () { ocupadoCr(this, 'Salvando…', async function () { try { await salvarDados(); toast('Dados salvos.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); } }); };
       // anexar ou trocar documento recarrega a tela: salva antes o que foi digitado
       ligarDocsCredito(a, recarregar, salvarDados);
-      $('#btCalcCr').onclick = async function () {
-        try { await salvarDados(); await api('POST', '/api/credito/analises/' + a.id + '/calcular', {}); toast('Análise calculada.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+      $('#btCalcCr').onclick = function () {
+        ocupadoCr(this, 'Calculando…', async function () {
+          try { await salvarDados(); await api('POST', '/api/credito/analises/' + a.id + '/calcular', {}); toast('Análise calculada.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+        });
       };
       $('#btPendCr').onclick = function () {
         var sugestao = a.resultado_motor ? a.resultado_motor.pendencias.map(function (x) { return x.mensagem; }).join('\n') : '';

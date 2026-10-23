@@ -78,3 +78,45 @@ test('tipo de registro pelo texto da skill', () => {
   assert.equal(registroDe('Só autenticação de cópia'), 'nenhum');
   assert.equal(lerRespostaSkill('nada aqui').achados.length, 0);
 });
+
+test('formatos que o Claude também usa: resumo em tabela, lançamentos em tabela, coluna a menos, data por extenso', () => {
+  const r = lerRespostaSkill([
+    '| Campo | Valor |', '|---|---|', '| Data de emissão | 16 de outubro de 2026 (página 1) |', '| Detalhado por competência | Sim |', '| Traz o nome dos devedores | Não |',
+    '| Período coberto | 01/2011 a 10/2026 |', '',
+    '| Unidade | Titular | Competência | Tipo | Valor |', '|---|---|---|---|---|', '| AP 0704 | Titular Fictício | 01/2011 | Taxa ordinária | 310,00 |', '| AP 0704 | Titular Fictício | 02/2011 | Taxa ordinária | 1.840,00 |', '',
+    '```', 'Unidade;Competência;Tipo;Valor', 'B-203;08/2026;Taxa ordinária;310,00', '```',
+  ].join('\n'));
+  assert.equal(r.relatorio.data_emissao, '2026-10-16');
+  assert.equal(r.relatorio.tem_competencia, true);
+  assert.equal(r.relatorio.tem_nomes, false);
+  assert.equal(r.relatorio.periodo_inicio, '2011-01');
+  assert.equal(r.lancamentos.linhas, 3, JSON.stringify(r.lancamentos.erros));
+  const ap = r.lancamentos.unidades.find((u) => u.unidade === 'AP 0704');
+  assert.equal(ap.titular, 'Titular Fictício');
+  assert.deepEqual(ap.lancamentos.map((l) => l.valor), [310, 1840]);
+  assert.equal(r.lancamentos.unidades.find((u) => u.unidade === 'B-203').lancamentos[0].competencia, '2026-08');
+});
+
+test('bloco PORTAL MYBLUE: cada etiqueta vai para o seu campo, e as partes (das duas skills) se somam', () => {
+  const r = lerRespostaSkill([
+    'Texto da análise para ler (o portal ignora o que fica fora do bloco).', '- Data de emissão: 01/01/2020', '',
+    '```', '#PORTAL-MYBLUE v1', '[relatorio]', 'sistema: Gescon', 'data_emissao: 16/10/2026', 'detalhado_por_competencia: sim', 'traz_nomes: sim', 'periodo_inicio: 01/2011', 'taxa_vigente: R$ 476,84 desde 10/2026',
+    '[lancamentos]', 'Unidade;Titular;Documento;Competência;Tipo;Valor;Vencimento', 'AP 0704;Titular Fictício;111.111.111-11;09/2026;Taxa ordinária;476,84;10/09/2026',
+    '[observacoes_analise]', 'Inadimplência em alta nos últimos meses; as unidades 108 e 207 são recorrentes.',
+    '[avisos]', '- Unidade 305 em acordo: sai da base.', '#FIM', '```', '',
+    '```', '#PORTAL-MYBLUE v1', '[convencao]', 'registro: nenhum', 'unidades: 32', 'multa_pct: não consta', 'foro: Comarca de Cidade Exemplo/PB', 'cartorio: não consta', 'clausula_restritiva:',
+    'fonte_registro: p. 14 | confere com o original', 'fonte_unidades: p. 2 | 32 apartamentos',
+    '[observacoes_juridicas]', '- Convenção sem registro no Registro de Imóveis: regularizar em até 90 dias.', '- Multa não fixada: cobrança limitada a 2% (art. 1.336, §1º, CC).',
+    '[proximos_passos]', '1. Regularizar o registro da convenção em até 90 dias.', '[ressalvas]', '- Convenção sem registro — regularizar em até 90 dias', '#FIM', '```',
+  ].join('\n'));
+  assert.equal(r.bloco, true);
+  assert.deepEqual(r.relatorio, { sistema: 'Gescon', data_emissao: '2026-10-16', tem_competencia: true, tem_nomes: true, periodo_inicio: '2011-01' });
+  assert.equal(r.lancamentos.linhas, 1);
+  assert.equal(r.textos.complemento_status, 'Inadimplência em alta nos últimos meses; as unidades 108 e 207 são recorrentes.');
+  assert.deepEqual({ ...r.convencao, origem: undefined }, { registro: 'nenhum', uh: 32, multa_pct: null, foro: 'Comarca de Cidade Exemplo/PB', cartorio: '', clausula_restritiva: '', origem: undefined });
+  assert.deepEqual(r.convencao.origem.fontes.registro, { pagina: 14, trecho: 'confere com o original' });
+  assert.equal(r.textos.observacoes_juridicas.length, 2);
+  assert.deepEqual(r.textos.proximos_passos, ['Regularizar o registro da convenção em até 90 dias.']);
+  assert.deepEqual(r.ressalvas, []); // o portal já põe a ressalva do registro pelo campo da convenção
+  assert.deepEqual(r.avisos, ['Taxa ordinária vigente no relatório: R$ 476,84 desde 10/2026', 'Unidade 305 em acordo: sai da base.']);
+});

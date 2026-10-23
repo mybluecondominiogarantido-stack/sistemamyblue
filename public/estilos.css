@@ -623,3 +623,6 @@ tr.sel-ct td{background:var(--surface-2)}
 .abas-acomp{gap:0}
 .abas-acomp a{padding:10px 11px;font-size:14px}
 .card-acomp b.longo{font-size:22px}
+
+/* Análise de Crédito: campo preenchido pela skill, para conferir */
+.campo.da-skill{border-color:var(--green);box-shadow:0 0 0 3px rgba(31,157,107,.16)}

@@ -391,3 +391,42 @@ test('caixa "Colar resultado da skill": separa lançamentos, emissão, convenç�
   assert.deepEqual(lido.json.ressalvas, []);
   assert.equal((await analista('POST', `/api/credito/analises/${id}/resultado-skill`, { texto: 'oi' })).status, 400);
 });
+
+test('consulta Assertiva: o analista registra cada unidade; espólio sai da garantia e sem registro não libera', { skip: !temGerador && 'python3 com reportlab não instalado' }, async () => {
+  const r = await exec('POST', '/api/credito/analises', { formulario: FORM });
+  const id = r.json.id;
+  await anexar(exec, id, 'relatorio');
+  await anexar(exec, id, 'convencao');
+  await exec('POST', `/api/credito/analises/${id}/enviar`, {});
+  await analista('POST', `/api/credito/analises/${id}/assumir`, {});
+  // A-101 com 30 taxas em aberto (candidata à Assertiva) e B-203 com 1.500 lançamentos (relatório grande grava num comando só)
+  const hoje = new Date();
+  const comp = (k) => { const d = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth() - k, 1)); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`; };
+  const unidades = [
+    { unidade: 'A-101', titular: 'Titular Fictício 1', documento: '111.111.111-11', lancamentos: Array.from({ length: 30 }, (_, i) => ({ competencia: comp(i + 1), vencimento: `${comp(i + 1)}-10`, tipo: 'ordinaria', valor: 1840 })) },
+    { unidade: 'B-203', titular: 'Empresa Fictícia', documento: '11.222.333/0001-81', lancamentos: Array.from({ length: 1500 }, (_, i) => ({ competencia: comp(1 + (i % 3)), vencimento: null, tipo: 'juros', valor: 1 })) },
+  ];
+  const dados = { convencao: { registro: 'RI', uh: 24 }, relatorio: { data_emissao: hojeIso(), unidades } };
+  assert.equal((await analista('PATCH', `/api/credito/analises/${id}`, { dados_analista: dados })).status, 200);
+  let calc = await analista('POST', `/api/credito/analises/${id}/calcular`, {});
+  assert.equal(calc.status, 200, calc.texto);
+  assert.deepEqual(calc.json.resultado.assertiva.pendentes, ['A-101']);
+  const n = await ctx.db.um('SELECT count(*)::int AS n FROM analise_lancamentos l JOIN analise_unidades u ON u.id = l.unidade_id WHERE u.analise_id = $1 AND u.unidade = $2', [id, 'B-203']);
+  assert.equal(n.n, 1500);
+  const lib = await analista('POST', `/api/credito/analises/${id}/liberar`, {});
+  assert.equal(lib.status, 400);
+  assert.match(lib.json.erro, /consulta Assertiva.*A-101/);
+
+  assert.equal((await analista('PATCH', `/api/credito/analises/${id}`, { dados_analista: { ...dados, assertiva: { 'A-101': { resultado: 'espolio', em: hojeIso() } } } })).status, 200);
+  calc = await analista('POST', `/api/credito/analises/${id}/calcular`, {});
+  const res = calc.json.resultado;
+  assert.deepEqual(res.assertiva.pendentes, []);
+  assert.deepEqual(res.assertiva.espolios, ['A-101']);
+  assert.equal(res.assertiva.candidatos[0].consulta.resultado, 'espolio'); // continua na lista, marcada
+  assert.match(res.assertiva.texto, /1 espólio confirmado, fora da garantia \(A-101\)/);
+  assert.deepEqual(res.escopo.exclusoes.map((x) => [x.unidade, x.motivo]), [['A-101', 'espolio']]);
+  assert.equal(res.escopo.uh_escopo, 22); // 24 − 1 isenta − 1 espólio
+  const det = (await analista('GET', `/api/credito/analises/${id}`)).json;
+  assert.deepEqual(det.eventos.find((e) => e.tipo === 'assertiva').detalhe.consultas, [{ unidade: 'A-101', resultado: 'espolio' }]);
+  assert.equal((await analista('POST', `/api/credito/analises/${id}/liberar`, {})).status, 200);
+});
