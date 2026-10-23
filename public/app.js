@@ -42,6 +42,19 @@
   }
 
   var toastTimer;
+  /* saiu versão nova do portal: a página aberta continua com o código antigo até recarregar */
+  var VERSAO_TELA = ((document.querySelector('script[src*="app.js?v="]') || {}).src || '').replace(/^.*app\.js\?v=/, '');
+  async function verificarVersao() {
+    if (!VERSAO_TELA || $('#avisoVersao')) return;
+    var j;
+    try { j = await api('GET', '/api/versao'); } catch (e) { return; }
+    if (!j.versao || j.versao === VERSAO_TELA) return;
+    var d = document.body.appendChild(document.createElement('div'));
+    d.id = 'avisoVersao';
+    d.setAttribute('role', 'status');
+    d.innerHTML = '<span>O portal foi atualizado. Salve o que estiver fazendo e recarregue a página para usar a versão nova.</span><button type="button" class="btn primary sm">Recarregar</button>';
+    d.querySelector('button').onclick = function () { location.reload(); };
+  }
   function toast(msg, tipo) {
     var t = $('.toast') || document.body.appendChild(document.createElement('div'));
     t.className = 'toast ' + (tipo || '');
@@ -6991,7 +7004,7 @@
     atualizarComissao();
     buscarAvisos();
     $('#btSino').onclick = abrirAvisos;
-    setInterval(function () { atualizarResumo(); atualizarComissao(); atualizarCredito(); atualizarImp(); atualizarCt(); buscarAvisos(); }, 30 * 1000);
+    setInterval(function () { atualizarResumo(); atualizarComissao(); atualizarCredito(); atualizarImp(); atualizarCt(); buscarAvisos(); verificarVersao(); }, 30 * 1000);
     window.addEventListener('hashchange', rotear);
     rotear();
   }

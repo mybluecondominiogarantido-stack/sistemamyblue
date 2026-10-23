@@ -566,3 +566,11 @@ test('login: limite por IP vale também para quem testa a mesma senha em muitas 
   // nem a senha certa entra até passar a janela (o bloqueio é do IP)
   assert.equal((await logar('admin@teste.com', 'Admin1234')).r.status, 429);
 });
+
+test('versão da tela: a página aberta compara com a do servidor para avisar que há versão nova', async () => {
+  const c = cliente();
+  const r = await c('GET', '/api/versao');
+  assert.equal(r.status, 200);
+  const indice = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  assert.equal(r.json.versao, indice.match(/app\.js\?v=([\w.-]+)/)[1]);
+});
