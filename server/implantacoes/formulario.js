@@ -22,12 +22,13 @@ const DOCUMENTOS = {
   convencao: { nome: 'Convenção do condomínio', obrigatorio: true },
   cadastro_moradores: { nome: 'Cadastro de moradores atualizado (Excel)', obrigatorio: true },
   ata_eleicao: { nome: 'Ata de eleição do síndico', obrigatorio: true },
-  ata_orcamento: { nome: 'Ata de previsão orçamentária', obrigatorio: true },
+  ata_orcamento: { nome: 'Ata de previsão orçamentária (taxa ordinária)', obrigatorio: true },
   analise_credito: { nome: 'Análise de Crédito', obrigatorio: true }, // vem vinculada da análise (no condomínio de entrega não há)
   documento_sindico: { nome: 'RG/CPF ou CNH do síndico', pendente: true },
   conta_bancaria: { nome: 'Conta bancária', pendente: true },
   comprovante_endereco: { nome: 'Comprovante de endereço do síndico', pendente: true },
   modelo_boleto: { nome: 'Modelo do boleto anterior', pendente: true },
+  procuracao: { nome: 'Procuração', setor: true }, // a equipe de Implantação providencia: não é cobrada do executivo
   contrato: { nome: 'Contrato assinado' },
   outro: { nome: 'Outro documento' },
 };
@@ -160,7 +161,11 @@ function diferencas(f, ref) {
 }
 
 /* ---------- setor Implantação: as 5 etapas ----------
-   etapas = { documentacao: { feito }, vouch: { id }, onboarding: { situacao, data }, boletos: { feito }, envio: { forma } } */
+   etapas = { documentacao: { feito }, vouch: { id }, onboarding: { situacao, data, hora, por }, boletos: { feito, primeiro_vencimento }, envio: { forma } }
+   boletos.primeiro_vencimento: AAAA-MM-DD, preenchido pelo setor (nem sempre é o dia do formulário: o prazo para implantar
+   pode ser curto); o prazo do onboarding conta daqui
+   onboarding.data: AAAA-MM-DD (antes do Acompanhamento era texto livre, que continua aceito); hora: HH:MM; por: quem fez (id) */
+const DATA = /^\d{4}-\d{2}-\d{2}$/;
 const ONBOARDING = { a_marcar: 'A marcar', marcado: 'Marcado', sindico_myblue: 'Síndico MyBlue', realizado: 'Realizado' };
 const ENVIO = { email: 'Digital (e-mail)', fisico: 'Físico', ambos: 'Ambos' };
 const ENVIO_CARTEIRA = { email: 'E-MAIL', fisico: 'IMPRESSO', ambos: 'IMPRESSO/E-MAIL' };
@@ -171,8 +176,9 @@ function normalizarEtapas(e) {
   return {
     documentacao: { feito: !!(e.documentacao && e.documentacao.feito) },
     vouch: { id: texto(e.vouch && e.vouch.id).slice(0, 30) },
-    onboarding: { situacao: ONBOARDING[o.situacao] ? o.situacao : 'a_marcar', data: texto(o.data).slice(0, 30) },
-    boletos: { feito: !!(e.boletos && e.boletos.feito) },
+    onboarding: { situacao: ONBOARDING[o.situacao] ? o.situacao : 'a_marcar', data: texto(o.data).slice(0, 30),
+      hora: /^([01]\d|2[0-3]):[0-5]\d$/.test(texto(o.hora)) ? texto(o.hora) : '', por: Number.isInteger(Number(o.por)) && Number(o.por) > 0 ? Number(o.por) : null },
+    boletos: { feito: !!(e.boletos && e.boletos.feito), primeiro_vencimento: DATA.test(texto(e.boletos && e.boletos.primeiro_vencimento)) ? texto(e.boletos.primeiro_vencimento) : '' },
     envio: { forma: ENVIO[e.envio && e.envio.forma] ? e.envio.forma : '' },
   };
 }
@@ -184,7 +190,9 @@ function faltasEtapas(e) {
   if (!e.documentacao.feito) l.push('Conferir a documentação.');
   if (!e.vouch.id) l.push('Cadastrar no sistema (Vouch) e informar o ID.');
   if (!['realizado', 'sindico_myblue'].includes(e.onboarding.situacao)) l.push('Fazer o onboarding (ou marcar "Síndico MyBlue").');
+  else if (e.onboarding.situacao === 'realizado' && !DATA.test(e.onboarding.data)) l.push('Informar a data em que o onboarding foi feito.');
   if (!e.boletos.feito) l.push('Emitir os boletos.');
+  if (!e.boletos.primeiro_vencimento) l.push('Informar o 1º vencimento (etapa Emissão de boletos).');
   if (!e.envio.forma) l.push('Escolher o envio dos boletos (digital, físico ou ambos).');
   return l;
 }

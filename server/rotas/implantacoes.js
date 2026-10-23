@@ -26,6 +26,8 @@ const F = require('../implantacoes/formulario');
 const leitorPdf = require('../implantacoes/pdf');
 const formularioPdf = require('../implantacoes/formulario-pdf');
 const FC = require('../contratos/formulario');
+const M = require('../implantacoes/metas');
+const { rotasAcompanhamento, lembretesDocumentacao } = require('./implantacoes-acompanhamento');
 
 const SETOR = 'Implantação';
 const ETAPAS = ['rascunho', 'diretoria', 'fila', 'em_implantacao', 'pendencia', 'concluida', 'na_carteira', 'cancelada'];
@@ -64,7 +66,8 @@ async function tiposVigentes(db, id) {
 /* Rotinas (rodam a cada poucos minutos):
  *  - pedido sem ninguém designado: lembrete à coordenação a cada 4h úteis;
  *  - prazo para iniciar (8h úteis da designação) estourado: aviso, uma vez, à coordenação e a quem foi designado;
- *  - documentos pendentes: lembrete diário, por e-mail, ao executivo (uma vez por dia útil, no expediente). */
+ *  - documentos pendentes: lembrete diário, por e-mail, ao executivo (uma vez por dia útil, no expediente);
+ *  - documentos da meta: lembrete ao executivo, uma vez, quando faltam até 3 dias para o limite (Acompanhamento). */
 const HORAS_LEMBRETE_FILA = 4;
 function criarRotinasImplantacao({ db, seg, avisos, expediente }) {
   async function coordenacao() {
@@ -73,7 +76,7 @@ function criarRotinasImplantacao({ db, seg, avisos, expediente }) {
   }
   async function executar(agora = new Date()) {
     const m = expediente.momento(agora);
-    const feito = { documentos: 0, sem_designacao: 0, prazos: 0 };
+    const feito = { documentos: 0, sem_designacao: 0, prazos: 0, meta_documentos: 0 };
     for (const i of (await db.q("SELECT id, protocolo, condominio, enviado_em, lembrete_fila_em FROM implantacoes WHERE etapa = 'fila'")).rows) {
       if (expediente.somarHorasUteis(i.lembrete_fila_em || i.enviado_em, HORAS_LEMBRETE_FILA) > agora) continue;
       await avisos.notificar(await coordenacao(), { link: `#/implantacao/${i.id}`, tipo: 'implantacao', email: true,
@@ -104,6 +107,7 @@ function criarRotinasImplantacao({ db, seg, avisos, expediente }) {
       }
       await db.q('UPDATE implantacoes SET aviso_docs_em = $2::date WHERE id = $1', [i.id, m.dia]);
     }
+    feito.meta_documentos = await lembretesDocumentacao(db, avisos, M.diaSP(agora));
     return feito;
   }
   return { executar };
@@ -263,14 +267,14 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
       documentos: Object.entries(F.DOCUMENTOS).map(([tipo, d]) => ({ tipo, ...d })),
       garantias: F.GARANTIAS, receitas_cashback: F.RECEITAS_CASHBACK, origens: ORIGEM, onboarding: F.ONBOARDING, envio: F.ENVIO,
       horas_para_iniciar: HORAS_PARA_INICIAR,
-      equipe: p.coordenacao ? (await db.q(`SELECT u.id, u.nome FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id JOIN usuarios u ON u.id = sm.usuario_id
+      equipe: p.coordenacao || p.equipe ? (await db.q(`SELECT u.id, u.nome FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id JOIN usuarios u ON u.id = sm.usuario_id
         WHERE s.nome = $1 AND u.ativo ORDER BY u.nome`, [SETOR])).rows : [],
     });
   });
 
   r.get('/api/implantacoes/resumo', async (req, res) => {
     const p = await perfil(req.usuario);
-    const out = { acesso: !!(p.executivo || p.equipe || p.coordenacao || p.diretoria || p.gestorCredito) };
+    const out = { acesso: !!(p.executivo || p.equipe || p.coordenacao || p.diretoria || p.gestorCredito), acompanhamento: !!(p.admin || p.equipe || p.coordenacao || p.diretoria) };
     if (!out.acesso) return res.json(out);
     if (p.equipe || p.coordenacao) {
       Object.assign(out, await db.um(`SELECT COUNT(*) FILTER (WHERE etapa = 'fila')::int AS fila,
@@ -354,6 +358,8 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     await seg.auditar(req, 'implantacao_liberacao_decidida', null, { liberacao: l.id, analise: l.analise_id, aprovado: aprovar });
     res.json({ ok: true });
   });
+
+  rotasAcompanhamento(r, { db, seg, avisos, perfil, erro, evento, json });
 
   /* ===================== listagem ===================== */
   r.get('/api/implantacoes', async (req, res) => {
@@ -801,6 +807,8 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     if (!pd.etapas) return erro(res, 403, 'Só quem conduz a implantação (depois de iniciar) ou a coordenação marca as etapas.');
     const antes = F.normalizarEtapas(i.etapas);
     const etapas = F.normalizarEtapas(req.body && req.body.etapas);
+    // quem fez o onboarding: começa com quem é responsável pela implantação
+    if (['marcado', 'realizado'].includes(etapas.onboarding.situacao) && !etapas.onboarding.por) etapas.onboarding.por = i.responsavel_id || req.usuario.id;
     if (etapas.vouch.id && etapas.vouch.id !== antes.vouch.id && await db.um('SELECT 1 FROM condominios WHERE codigo = $1', [etapas.vouch.id])) {
       return erro(res, 409, `O ID Vouch ${etapas.vouch.id} já está na Carteira.`);
     }

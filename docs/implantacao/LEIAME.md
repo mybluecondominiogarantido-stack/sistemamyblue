@@ -13,8 +13,9 @@ Análise de Crédito.
 | Regras do formulário: o que vem da análise, o que falta, o que fica pendente, o comparativo | `server/implantacoes/formulario.js` |
 | Tabelas `implantacoes`, `implantacao_documentos`, `implantacao_eventos`, `implantacao_liberacoes`, `implantacao_protocolos` | `server/db.js` |
 | Lembretes: fila sem designação (4h úteis), prazo para iniciar vencido, pendências do executivo (uma vez por dia útil) — roda a cada 10 min | `criarRotinasImplantacao` em `server/rotas/implantacoes.js`, ligado em `server/index.js` |
-| Telas | `public/app.js` (bloco Implantação) |
-| Testes (dados fictícios) | `test/implantacoes-formulario.test.js`, `test/implantacoes-rotas.test.js` |
+| Acompanhamento (painel, mês vigente, metas, antecipações, parâmetros, cobrança de documentos) | `server/rotas/implantacoes-acompanhamento.js`; regras em `server/implantacoes/metas.js`; tabela `implantacao_parametros` |
+| Telas | `public/app.js` (bloco Implantação e bloco Acompanhamento) |
+| Testes (dados fictícios) | `test/implantacoes-formulario.test.js`, `test/implantacoes-rotas.test.js`, `test/implantacoes-metas.test.js` |
 
 ## Regras
 
@@ -28,7 +29,7 @@ Análise de Crédito.
 - **Obrigatórios para enviar:** os dados do formulário e quatro documentos: convenção, cadastro de moradores (Excel),
   ata de eleição do síndico e ata de previsão orçamentária.
 - **Podem chegar depois:** RG/CPF ou CNH do síndico, conta bancária, comprovante de endereço do síndico, modelo do boleto
-  anterior (e o CNPJ, no condomínio de entrega sem CNPJ). No envio, o executivo recebe a lista no sino; depois, um e-mail
+  anterior, procuração (e o CNPJ, no condomínio de entrega sem CNPJ). No envio, o executivo recebe a lista no sino; depois, um e-mail
   por dia útil até chegar. Quando um pendente chega, quem conduz (ou a coordenação) é avisado.
 - **Parceria:** o executivo só diz se há e escolhe o parceiro da base de comissão (ferramenta *Prestação de Contas —
   Comissão de Parceiros*, coleção `partners`); o percentual é do setor Parceiros. Com a ferramenta ainda na planilha
@@ -43,8 +44,10 @@ Análise de Crédito.
   contam). Sem designação, a coordenação recebe um lembrete a cada **4h úteis**; prazo para iniciar vencido avisa,
   uma vez, a coordenação e quem foi designado.
 - **As 5 etapas:** documentação conferida, cadastro no Vouch (o ID vai para a Carteira; ID já usado na Carteira é
-  recusado), onboarding (a marcar, marcado, síndico MyBlue ou realizado), emissão de boletos e envio (digital, físico ou
-  ambos; vai para a Carteira como forma de envio). Concluir só com as 5 feitas.
+  recusado), onboarding (a marcar, marcado, síndico MyBlue ou realizado; marcado e realizado com data, hora e quem fez —
+  começa com quem conduz), emissão de boletos (com o **1º vencimento**, que o setor informa: nem sempre é o dia do
+  formulário, pelo prazo curto para implantar) e envio (digital, físico ou ambos; vai para a Carteira como forma de
+  envio). Concluir só com as 5 feitas, a data do onboarding realizado e o 1º vencimento.
 - **Conferências do portal:** diferenças com a análise, CPF do síndico, CNPJ e o cadastro de moradores (Excel/CSV): nº
   de unidades contra o formulário e linhas com CPF/CNPJ inválido.
 - **Pendência:** quem conduz devolve ao comercial com a lista do que falta (sino e e-mail); o reenvio volta para a
@@ -56,6 +59,31 @@ Análise de Crédito.
   administradora, forma de envio, executivo, razão social, CNPJ) e confirma; o portal recusa ID ou CNPJ que já estão na
   Carteira. Os responsáveis (cobrança, extrajudicial, crédito) são escolhidos depois, na ficha do condomínio. O Controle
   de Emissão de Boletos acompanha, como em qualquer condomínio novo da Carteira.
+
+## Acompanhamento
+
+Menu **Implantação → Acompanhamento** (setor Implantação, coordenação, diretoria e administração). Substitui as telas
+calculadas da planilha de controle (Dashboard, Mês Vigente, Onboarding, Documentação, Devolutiva e Antecipações).
+Entram as implantações enviadas ao setor (fora rascunho, diretoria e canceladas); ano e mês pela data de início do contrato.
+
+- **% concluído:** etapas feitas ÷ 5 (concluída ou na Carteira = 100%). Faixas: concluída, só falta o onboarding, 60–99%,
+  40–59% e abaixo de 40%.
+- **Painel:** contratos, % médio, concluídos, em andamento, não iniciados; progresso por etapa e o gargalo; contratos e
+  concluídos por mês (o filtro de mês não muda o gráfico); por UF, executivo e analista; até 30 em aberto.
+- **Mês vigente:** contratos que começam no mês, na ordem do 1º vencimento (previsto — o primeiro dia de vencimento a
+  partir do início do contrato — até o setor informar). Do dia da virada (25) em diante, mostra o mês seguinte.
+- **Meta de onboarding:** em até **30 dias depois do 1º vencimento**. "Síndico MyBlue" conta como batida; "A marcar"
+  entra na carteira com o prazo correndo. Carteira = quem é responsável pela implantação (mesmo quando outra pessoa faz
+  o onboarding). Meta **90%**: atingida com as batidas; em andamento se batidas + as que estão no prazo chegam lá.
+- **Meta de documentação:** convenção, ata de eleição, ata da taxa ordinária (previsão orçamentária) e procuração em até
+  **60 dias da data da documentação** (envio do formulário de implantação). Vale a data do primeiro envio de cada
+  documento no portal. A coordenação pode **marcar à mão** (bateu ou faltou, com motivo), e voltar ao cálculo.
+- **Cobrança de documentos:** só ao **executivo** (sem usuário no portal, a quem pediu), no sino e por e-mail; pelo botão
+  Cobrar (setor) e sozinha, uma vez, quando faltam 3 dias para o limite. Fica no histórico da implantação.
+- **Antecipações:** as negociadas no formulário, por mês de início do contrato, com .csv para baixar.
+- **Parâmetros:** prazos (30 e 60 dias), meta (90%), virada (25), data-marco (01/07/2026, envios anteriores ficam fora das
+  metas) e os documentos da meta. Só a coordenação e a administração alteram; cada mudança vale a partir de uma data e
+  fica no histórico (`implantacao_parametros`): cada implantação usa a regra que valia no dia do envio.
 
 ## Contrato
 
@@ -99,8 +127,8 @@ análise, os 7 blocos, documentos (entregues e pendentes) e o andamento no setor
 
 ## Tutoriais
 
-No catálogo (`server/tutoriais.js`): `implantacao-solicitar` (executivos, setor Implantação e diretoria) e
-`implantacao-conduzir` (setor Implantação). Roteiros em `docs/tutoriais/fonte/roteiros.js`; no cenário de gravação, a
+No catálogo (`server/tutoriais.js`): `implantacao-solicitar` (executivos, setor Implantação e diretoria),
+`implantacao-conduzir` (setor Implantação) e `implantacao-acompanhar` (setor Implantação e diretoria). Roteiros em `docs/tutoriais/fonte/roteiros.js`; no cenário de gravação, a
 coordenadora e o analista de implantação fictícios. Os vídeos são gravados com `docs/tutoriais/fonte/gravar-tutoriais.js`
 e enviados em Administração → Tutoriais.
 
