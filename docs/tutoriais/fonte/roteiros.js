@@ -1084,7 +1084,7 @@ module.exports = [
       await t.preencherCampo('#c_primeiro_vencimento', dia10());
 
       const C = '3 · Objeções e solicitações';
-      await t.legenda('O síndico pediu para mudar alguma cláusula? Marque em <b>Objeções e Solicitações de modificação de contrato</b>: aparece a resposta padrão do Jurídico, e o que é decisão da diretoria vai para ela.', { etapa: C, ms: 500 });
+      await t.legenda('O síndico pediu para mudar alguma cláusula? Marque em <b>Objeções e Solicitações de modificação de contrato</b> e responda a pergunta, quando houver. O que é decisão da diretoria vai para ela.', { etapa: C, ms: 500 });
       await t.clicar('[data-pedido=foro_capital]', { depois: 900 });
       await t.legenda('Para o foro, escreva qual: a mudança só pode ser para a capital do estado de origem do contrato.', { etapa: C, ms: 300 });
       await t.digitar('[data-pedido-det=foro_capital]', 'Fortaleza/CE', { atraso: 60, depois: 1200 });

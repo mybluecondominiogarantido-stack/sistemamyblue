@@ -7,7 +7,7 @@
  *  - diretoria: o item só entra na minuta com a decisão da diretoria;
  *  - juridico: o comercial não promete nada; o Jurídico avalia;
  *  - detalhe: pergunta que acompanha o pedido (o comercial responde em uma linha), exemplo: o texto de exemplo dela;
- *  - semResposta: o comercial não vê a resposta padrão (a pergunta a substitui); ajuda: observação embaixo da pergunta;
+ *  - resposta: só o Jurídico (e a diretoria) vê, o comercial não; ajuda: observação embaixo da pergunta;
  *  - antigo: não é mais oferecido ao comercial, mas continua para mostrar as solicitações que já o tinham.
  */
 
@@ -16,15 +16,15 @@ const NEGOCIAVEIS = [
     resposta: 'O padrão é 40%; pode chegar a 100% com aprovação; acima disso, só com aditivo e taxa própria. Não prometa percentual sem a diretoria.',
     diretoria: true, detalhe: 'Até quantos % da ordinária?' },
   { chave: 'pontualidade_retirar', clausula: 'Cláusula 2ª, §2º', pedido: 'Retirar a política de pontualidade (10% ou +1 ponto na taxa administrativa)',
-    resposta: 'Retirar a sanção, não: retirada só com o Jurídico e a diretoria. O que se aceita é adiar o início.', diretoria: true, semResposta: true },
+    resposta: 'Retirar a sanção, não: retirada só com o Jurídico e a diretoria. O que se aceita é adiar o início.', diretoria: true },
   { chave: 'pontualidade_adiar', clausula: 'Cláusula 2ª, §2º', pedido: 'Adiar a política de pontualidade',
-    resposta: 'Adiar o início para o próximo orçamento (competência de janeiro), sim.', semResposta: true,
+    resposta: 'Adiar o início para o próximo orçamento (competência de janeiro), sim.',
     detalhe: 'Para quando?', exemplo: 'Ex.: para a próxima assembleia ordinária, 30, 60 ou 90 dias' },
   { chave: 'contestacao_30', clausula: 'Cláusula 10ª', pedido: 'Ampliar o prazo para contestar a prestação de contas',
     resposta: 'Pode ampliar para 30 dias corridos, mantida a preclusão. Mais que isso, só com o Jurídico.',
     detalhe: 'Prazo solicitado pelo cliente (dias)', exemplo: 'Ex.: 30' },
   { chave: 'foro_capital', clausula: 'Cláusula 20ª', pedido: 'Mudar o foro (o padrão é Fortaleza/CE)',
-    resposta: 'Aceito: capital do estado do condomínio.', semResposta: true, detalhe: 'Para qual foro?', exemplo: 'Ex.: Natal/RN',
+    resposta: 'Aceito: capital do estado do condomínio.', detalhe: 'Para qual foro?', exemplo: 'Ex.: Natal/RN',
     ajuda: 'A mudança de foro pode ser feita apenas para as capitais do estado de origem do contrato.' },
   // não são mais oferecidos (ajustes de out/2026): ficam só para as solicitações que já os tinham
   { chave: 'erro_cadastral_dolo', clausula: 'Cláusula 2ª, §1º, VI', pedido: 'Condomínio só responde por erro cadastral com dolo ou culpa grave',

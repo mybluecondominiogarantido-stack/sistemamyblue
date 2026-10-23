@@ -364,8 +364,8 @@ function montarPdf(c, { executivo, responsavel, documentos = [], usuario, origem
     { numero: 3, titulo: 'Vigência', campos: [['Primeiro vencimento', dataBr(f.primeiro_vencimento) + (f.dia_vencimento ? ` (boletos no dia ${f.dia_vencimento})` : '')],
       ['Período mínimo', f.periodo_minimo ? `${f.periodo_minimo} meses` : 'padrão do contrato'], ['Cláusula 12ª', comFidelizacao(f) ? 'com fidelização' : 'sem fidelização']] },
     { numero: 4, titulo: 'Objeções e solicitações de modificação de contrato', campos: (f.pedidos || []).length ? [] : [['Alteração de cláusulas', 'Nenhuma pedida']],
-      tabela: (f.pedidos || []).length ? { cab: ['Cláusula', 'Pedido', 'Resposta padrão do Jurídico'], larguras: [0.17, 0.38, 0.45],
-        linhas: f.pedidos.map((k) => C.porChave.get(k)).filter(Boolean).map((x) => [x.clausula, x.pedido + (texto(det[x.chave]) ? ` — ${texto(det[x.chave])}` : ''), x.resposta + (x.diretoria ? ' (diretoria)' : '')]) } : null },
+      tabela: (f.pedidos || []).length ? { cab: ['Cláusula', 'Pedido'], larguras: [0.22, 0.78],
+        linhas: f.pedidos.map((k) => C.porChave.get(k)).filter(Boolean).map((x) => [x.clausula, x.pedido + (texto(det[x.chave]) ? ` — ${texto(det[x.chave])}` : '') + (x.diretoria ? ' (diretoria)' : '')]) } : null },
     { numero: 5, titulo: 'Outras solicitações', texto_titulo: 'Outras solicitações', texto: f.minucias || '—' },
   ];
   if ((d.itens || []).length) {
