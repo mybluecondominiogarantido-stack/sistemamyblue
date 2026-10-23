@@ -982,7 +982,7 @@ module.exports = [
       await t.digitar('#i_consultor_telefone', '(85) 90000-0001', { atraso: 45 });
 
       const C = '3 · Documentos';
-      await t.legenda('Quatro documentos são <b>obrigatórios</b> para enviar: convenção (já veio da análise), cadastro de moradores, ata de eleição e ata de previsão orçamentária.', { etapa: C, ms: 600 });
+      await t.legenda('Cinco documentos são <b>obrigatórios</b> para enviar: a convenção e o retorno da análise (já vêm vinculados, sem trocar), o cadastro de moradores, a ata de eleição e a ata de previsão orçamentária.', { etapa: C, ms: 600 });
       for (const tipo of ['cadastro_moradores', 'ata_eleicao', 'ata_orcamento']) {
         await t.clicar('#btSalvarImp', { depois: 1800 });
         await t.enviarArquivo(`label:has(input[data-doc-imp=${tipo}])`, `input[data-doc-imp=${tipo}]`, cen.pdfsImp[tipo], { depois: 2200 });
@@ -996,7 +996,7 @@ module.exports = [
       await t.mostrar('#acoesBarra a[href$="formulario.pdf"]', 2600);
       await t.legenda('Se o setor devolver com pendência, você recebe a lista no sino e por e-mail: ajuste e reenvie.', { etapa: D, ms: 3200 });
     },
-    resumo: ['<b>Nova implantação</b> · escolha a origem', 'Complete o formulário: a análise fica ao lado para comparar', 'Anexe os 4 obrigatórios · <b>Enviar ao setor Implantação</b>'],
+    resumo: ['<b>Nova implantação</b> · escolha a origem', 'Complete o formulário: a análise fica ao lado para comparar', 'Anexe os obrigatórios · <b>Enviar ao setor Implantação</b>'],
   },
   {
     nome: 'implantacao-conduzir',
