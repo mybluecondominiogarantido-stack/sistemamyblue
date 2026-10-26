@@ -7,6 +7,13 @@
 const zlib = require('zlib');
 const { lerCsv, decodificar } = require('./carteira');
 
+/* Limites contra planilha preparada para derrubar o servidor (zip que descompacta em gigabytes, célula na linha
+   1.000.000 ou na coluna XFD): bem acima do que as planilhas de implantação e de moradores usam. */
+const LIMITE_DESCOMPACTADO = 200 * 1024 * 1024;
+const MAX_LINHAS = 200000;
+const MAX_COLUNAS = 2000;
+const GRANDE_DEMAIS = 'Planilha grande demais para ler no portal. Confira se ela não tem linhas ou colunas a mais.';
+
 /* arquivos de dentro do zip: Map nome → Buffer (só os que interessam) */
 function abrirZip(buf, quer) {
   // fim do diretório central: assinatura 0x06054b50, procurada de trás para frente
@@ -16,6 +23,7 @@ function abrirZip(buf, quer) {
   const total = buf.readUInt16LE(fim + 10);
   let p = buf.readUInt32LE(fim + 16);
   const saida = new Map();
+  let usado = 0;
   for (let n = 0; n < total; n++) {
     if (buf.readUInt32LE(p) !== 0x02014b50) throw new Error('Arquivo .xlsx inválido.');
     const metodo = buf.readUInt16LE(p + 10);
@@ -29,7 +37,16 @@ function abrirZip(buf, quer) {
     if (!quer(nome)) continue;
     const ini = local + 30 + buf.readUInt16LE(local + 26) + buf.readUInt16LE(local + 28);
     const dados = buf.subarray(ini, ini + tamComp);
-    saida.set(nome, metodo === 0 ? dados : zlib.inflateRawSync(dados));
+    let conteudo = dados;
+    if (metodo !== 0) {
+      try { conteudo = zlib.inflateRawSync(dados, { maxOutputLength: LIMITE_DESCOMPACTADO - usado }); } catch (e) {
+        if (e.code === 'ERR_BUFFER_TOO_LARGE') throw new Error(GRANDE_DEMAIS);
+        throw new Error('Arquivo .xlsx inválido.');
+      }
+    }
+    usado += conteudo.length;
+    if (usado > LIMITE_DESCOMPACTADO) throw new Error(GRANDE_DEMAIS);
+    saida.set(nome, conteudo);
   }
   return saida;
 }
@@ -55,6 +72,7 @@ function lerXlsx(buf) {
   for (const [, attrs, corpo] of folha.matchAll(/<row\b([^>]*)>([\s\S]*?)<\/row>/g)) {
     const r = +((attrs.match(/\br="(\d+)"/) || [])[1] || linhas.length + 1) - 1;
     const linha = [];
+    let temValor = false;
     for (const [, a, c] of corpo.matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
       const ref = (a.match(/\br="([A-Z]+\d+)"/) || [])[1];
       const tipo = (a.match(/\bt="(\w+)"/) || [])[1];
@@ -63,7 +81,17 @@ function lerXlsx(buf) {
       if (tipo === 's') val = comp[+v] ?? '';
       else if (tipo === 'inlineStr') val = textos(c || '');
       else if (v != null) val = desescapar(v);
-      linha[ref ? coluna(ref) : linha.length] = val;
+      const col = ref ? coluna(ref) : linha.length;
+      if (col >= MAX_COLUNAS) {
+        if (val === '') continue; // célula só com formatação (o Excel guarda até na coluna XFD)
+        throw new Error(GRANDE_DEMAIS);
+      }
+      linha[col] = val;
+      if (val !== '') temValor = true;
+    }
+    if (r >= MAX_LINHAS) {
+      if (!temValor) continue; // linha só com formatação lá no fim da aba
+      throw new Error(GRANDE_DEMAIS);
     }
     linhas[r] = Array.from(linha, (x) => (x == null ? '' : String(x)));
   }
