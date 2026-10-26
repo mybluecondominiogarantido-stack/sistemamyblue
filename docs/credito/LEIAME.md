@@ -71,6 +71,13 @@ Depois do envio o executivo não muda mais o formulário. O analista que assumiu
 executivo** (ex.: taxa ordinária digitada errada) e clica em *Salvar correção do formulário* (ou *Salvar e calcular*,
 que também salva). O histórico registra cada campo corrigido, de → para.
 
+## Primeira competência do relatório
+
+O campo diz em que mês o relatório começa. Quando ele vem depois do início dos meses-base, o portal mostra um **aviso**
+ao analista (não trava a análise): se o relatório de fato não cobre esses meses, o analista devolve ao executivo
+pedindo o relatório desde o primeiro mês-base; se só não há débito neles, apaga o campo (o mês sem débito já sai da
+média). A caixa da skill não preenche esse campo: ele vinha com o primeiro mês com débito e deixava análises pendentes.
+
 ## Condomínio ainda sem CNPJ
 
 No formulário, **Ainda não tem CNPJ** (ex.: entrega de construtora) dispensa o CNPJ no envio. O cálculo gera o alerta

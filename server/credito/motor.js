@@ -287,7 +287,9 @@ function analisar(entrada, politica = POLITICA_PADRAO, opcoes = {}) {
     pendencias.push({ codigo: 'relatorio_anterior_janela', mensagem: `A posição do relatório é anterior aos ${P.meses_base} meses-base exigidos hoje: enviar o relatório atualizado.` });
   }
   const periodoIni = rel ? normalizarCompetencia(rel.periodo_inicio) : null;
-  if (periodoIni && comps.some((c) => c < periodoIni)) pendencias.push({ codigo: 'competencia_faltante', mensagem: `O relatório começa em ${rotuloMes(periodoIni)} e não cobre toda a janela (${textoJanela(comps)}): enviar o relatório desde ${rotuloMes(comps[0])}.` });
+  // aviso, não pendência: o campo costuma vir com o primeiro mês com débito, e o mês sem débito já sai da média.
+  // Se o relatório de fato não cobre os meses-base, o analista devolve ao executivo pedindo o relatório desde o primeiro.
+  if (periodoIni && comps.some((c) => c < periodoIni)) alerta('competencia_faltante', 'atencao', `"Primeira competência do relatório" está em ${rotuloMes(periodoIni)}, depois do início dos meses-base (${textoJanela(comps)}). Se o relatório não cobre esses meses, devolva ao executivo pedindo o relatório desde ${rotuloMes(comps[0])}; se só não há débito neles, apague o campo.`);
   if (comps.length) {
     let txt = `Inadimplência apurada sobre ${textoJanela(comps)}`;
     if (janela.descartadas.length && !janela.ajustada) txt += ` (${janela.descartadas.map((d) => rotuloMes(d.competencia)).join(', ')} fora da base: vencimento com ${P.dias_inclusivo ? 'menos de' : 'até'} ${P.dias_apos_vencimento} dias na emissão do relatório)`;
