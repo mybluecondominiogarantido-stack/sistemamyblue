@@ -9,3 +9,6 @@ modulos-originais/
 *.csv
 # banco embutido criado ao rodar com DATA_DIR=:memoria: fora dos testes
 :memoria:/
+# backups do banco (dados de negócio)
+myblue-backup-*
+*.jsonl.gz

@@ -94,7 +94,7 @@ before(async () => {
   const setores = (await admin('GET', '/api/admin/usuarios')).json.setores;
   const S = (n) => setores.find((x) => x.nome === n).id;
   for (const [nome, email, extra] of [['Cora Coordenadora', 'cora@teste.com', { papel: 'coordenador', setores: [S('Implantação')] }], ['Ivo Comum', 'ivo@teste.com', { setores: [S('Crédito')] }]]) {
-    const u = await admin('POST', '/api/admin/usuarios', { nome, email, senha: 'Senha1234', ...extra });
+    const u = await admin('POST', '/api/admin/usuarios', { data_nascimento: '1990-05-10', data_admissao: '2024-02-01', nome, email, senha: 'Senha1234', ...extra });
     assert.equal(u.status, 201, u.texto);
   }
   await ctx.db.q('UPDATE usuarios SET trocar_senha = FALSE');
@@ -195,14 +195,14 @@ test('compara com a carteira e adiciona só os escolhidos, com ID Vouch e respon
 test('responsáveis: cada coordenador escolhe só o do setor dele', async () => {
   const setores = (await admin('GET', '/api/admin/usuarios')).json.setores;
   const cob = setores.find((x) => x.nome === 'Cobrança').id;
-  const u = await admin('POST', '/api/admin/usuarios', { nome: 'Caio Cobrança', email: 'caio@teste.com', senha: 'Senha1234', papel: 'coordenador', setores: [cob] });
+  const u = await admin('POST', '/api/admin/usuarios', { data_nascimento: '1990-05-10', data_admissao: '2024-02-01', nome: 'Caio Cobrança', email: 'caio@teste.com', senha: 'Senha1234', papel: 'coordenador', setores: [cob] });
   await ctx.db.q('UPDATE usuarios SET trocar_senha = FALSE WHERE id = $1', [u.json.id]);
   const caio = await entrar('caio@teste.com', 'Senha1234');
   assert.deepEqual((await caio('GET', '/api/carteira')).json.funcoes_editaveis, ['analista_cobranca']);
   const item = { nome: 'Vila Nova', comarca: 'RN', inicio_contrato: '10/2026' };
   let r = await caio('POST', '/api/carteira/implantacao/adicionar', { itens: [{ ...item, codigo: '601', assistente_credito: 'CARLA DIAS - 4003' }] });
   assert.equal(r.status, 400);
-  assert.match(r.json.erro, /coordenador\/supervisor do setor/);
+  assert.match(r.json.erro, /não tem permissão para escolher/);
   r = await caio('POST', '/api/carteira/implantacao/adicionar', { itens: [{ ...item, codigo: '601', analista_cobranca: 'ANA LIMA - 4001' }] });
   assert.equal(r.status, 201, r.texto);
   // coordenadora da Implantação adiciona, mas não escolhe responsável de Cobrança/Crédito

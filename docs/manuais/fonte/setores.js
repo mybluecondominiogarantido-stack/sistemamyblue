@@ -146,15 +146,26 @@ const FERRAMENTAS = {
     video: true,
     nome: 'Controle de Emissão de Boletos',
     descricao: 'Supervisão de Crédito: acompanhamento da emissão dos boletos de cada condomínio, por competência, com meta de 10 dias antes do vencimento.',
-    dados: 'Fica no banco do portal e é compartilhado por toda a equipe, ao vivo: o que uma pessoa marca aparece para as outras em poucos segundos. O histórico mostra quem fez cada alteração.',
-    obs: 'Faça o <b>fechamento da competência</b> todo mês: ele bloqueia os registros do mês e gera o Excel de arquivo. Use <b>Salvar backup</b> no fechamento.',
+    dados: 'Fica no banco do portal e é compartilhado por toda a equipe, ao vivo: o que uma pessoa marca aparece para as outras em poucos segundos. O histórico mostra quem fez cada alteração. Os condomínios vêm da <b>Carteira de condomínios</b> do portal.',
+    obs: 'Faça o <b>fechamento da competência</b> todo mês: ele bloqueia os registros do mês e gera o Excel de arquivo. Use <b>Salvar backup</b> no fechamento. Condomínio novo, distrato, responsável e vencimento se mudam na <b>Carteira</b>, não no Cadastro da ferramenta.',
     abas: [
       ['Painel', 'Números da competência: emitidos (e % da carteira), no prazo, emitidos com atraso, atrasados, meta em até 3 dias, pendentes e erros de emissão; o <b>fechamento da competência</b> e os emitidos por semana.'],
       ['Comparativo', 'Compara as competências fechadas entre si.'],
       ['Controle', 'A lista dos condomínios da competência: marcar a emissão (um a um ou em lote), desfazer, registrar erros de emissão e observações.'],
-      ['Cadastro', 'Os condomínios acompanhados, com a regra de vencimento de cada um.'],
+      ['Cadastro', 'Os condomínios acompanhados, com responsável, UF e regra de vencimento. Vêm da <b>Carteira de condomínios</b>: o que muda lá chega aqui sozinho (veja <i>Cadastro pela Carteira</i>). Um ajuste feito só aqui volta a ficar igual à Carteira quando ela mudar aquele dado.'],
+      ['Distratados', 'Os condomínios encerrados (distratados na Carteira), com a data em que saíram do controle e a última emissão registrada; os sem data aparecem em destaque.'],
       ['Feriados', 'Os feriados, que não contam como dia útil no cálculo da meta.'],
-      ['Histórico', 'Quem fez cada alteração e quando, com a opção de <b>desfazer</b>.'],
+      ['Histórico', 'Quem fez cada alteração e quando, com a opção de <b>desfazer</b>. O que veio da Carteira aparece como <i>Carteira: …</i>.'],
+    ],
+    comoUsar: [
+      { titulo: 'Cadastro pela Carteira de condomínios', quem: 'Coordenação do Crédito (ou administração)', onde: 'portal: Gestão do setor → Ferramentas do setor → Controle de Emissão de Boletos', passos: [
+        'Na janela da ferramenta, a seção <b>Cadastro pela Carteira de condomínios</b> compara o cadastro do controle com a Carteira. Cada condomínio fica vinculado pelo <b>ID Vouch</b>.',
+        '<b>Nomes parecidos</b> (mesmo condomínio com outra grafia): marque os que são o mesmo. Os de UF diferente vêm desmarcados; desmarcado fica para depois.',
+        '<b>Novos na Carteira</b> entram a partir da <b>primeira competência ainda sem emissão</b>, ou do mês seguinte à vigência, quando ela é mais recente (o 1º boleto sai pela Implantação).',
+        '<b>Mudanças da Carteira</b>: distrato, responsável, UF, vencimento ou nome. O distratado sai do controle a partir da mesma competência; os meses em andamento ficam como estão, inclusive o vencimento (marcado como <i>manual</i>).',
+        '<b>No controle e não na Carteira</b>: marque os que devem sair do controle.',
+        'Clique em <b>Aplicar no controle</b>. Na primeira vez, isso liga o automático.',
+      ], dica: 'Depois da primeira conferência, toda mudança na Carteira e toda competência criada (<i>Criar próximo mês</i>) chegam sozinhas ao controle. Nomes parecidos e condomínios fora da Carteira continuam esperando a conferência na janela.' },
     ],
   },
   sindicos: {
@@ -364,6 +375,7 @@ const SETORES = [
     papel: 'Prospecta e fecha novos condomínios clientes e cuida das propostas comerciais.',
     ferramentas: ['partnerchip'],
     tambem: [
+      '<b>Solicitação de Contrato</b> (menu do portal): fechada a negociação, o executivo pede a minuta a partir da análise liberada, com as condições e as objeções e solicitações do síndico. O Jurídico tem 72h úteis; a minuta vai e volta com os ajustes até a assinatura (acompanhe em <i>Jurídico → Acompanhamento de demandas Jurídicas</i>), e com o contrato assinado e as condições registradas pelo Jurídico você clica em <b>Solicitar implantação</b>, no próprio contrato: ela já vem com as condições fechadas.',
       '<b>Comissões de Novos Condomínios</b>: o condomínio fechado entra na Carteira com a <b>vigência</b> e o <b>executivo de negócios</b>. No início do mês a gestão comercial clica em <i>Puxar da carteira</i> e escolhe a vigência; cada executivo vê os condomínios dele, informa se tem parceiro (só da lista; parceiro novo é pedido ao Financeiro por ticket) e a gestão aprova. O passo a passo está no <b>Manual do Portal – Setor Administrativa/Financeira</b> (subárea Comissões de Novos Condomínios).',
     ],
     recebe: [
@@ -418,6 +430,9 @@ const SETORES = [
     papel: 'Coloca os novos condomínios em operação: cadastro, unidades, moradores e passagem para os setores.',
     ferramentas: [],
     tambem: [
+      '<b>Implantação</b> (menu do portal): só quem foi designada edita (outra pessoa, com autorização da coordenação); prazo de <b>3 dias úteis</b> para concluir depois de assumir, com pausa em pendência ou impedimento; documento recebido sem arquivo; o onboarding pode ficar para depois da conclusão, com justificativa se o prazo vencer.',
+      '<b>Ficha de repasse</b>: abre na conclusão já preenchida; a Implantação completa os campos em azul e envia ao Crédito em até <b>5 dias úteis</b>; devolução com pergunta, até 3 versões e PDF de cada versão no papel timbrado.',
+      '<b>Implantação → Acompanhamento</b> (menu do portal): painel, mês vigente, <b>Controle</b> (visão resumida, agrupada por mês, com filtro pelo mês do contrato, as etapas em selos, filtros de situação e o <b>Editar</b> para marcar as etapas e concluir; e a planilha completa, com Excel), metas de onboarding (30 dias do 1º vencimento) e de documentação (60 dias do envio do formulário), antecipações enviadas ao <b>Controle de Repasses</b>, fichas de repasse e os parâmetros, que a coordenação ajusta.',
       '<b>Carteira de condomínios → Adicionar novos</b>: o coordenador ou supervisor da Implantação envia o <i>Controle de Implantações</i> (.xlsx ou .csv, como está), escolhe a <b>vigência</b> e cadastra cada condomínio novo com <b>ID Vouch</b> (obrigatório), apelido, executivo de negócios e CNPJ. É dessa carteira que a Comissões de Novos Condomínios puxa os condomínios de cada vigência. O passo a passo está no <b>Manual do Portal – Geral</b>, capítulo da Carteira.',
     ],
     recebe: [
@@ -435,6 +450,9 @@ const SETORES = [
     nome: 'Jurídico', arquivo: 'juridico',
     papel: 'Contratos, cobrança judicial, notificações e pareceres.',
     ferramentas: [],
+    tambem: [
+      '<b>Solicitação de Contrato</b> (menu do portal): quem a administração marca em <i>Quem elabora</i> recebe os pedidos do comercial, assume da fila, redige a minuta em até 72h úteis, responde aos ajustes e, com o contrato assinado, registra as <b>condições fechadas</b> (em <i>Acompanhamento de Contratos → Assinaturas</i>); o executivo é avisado e solicita a implantação, que vem com elas. Os números ficam no <b>Dashboard Jurídico</b>. O que o manual reserva à diretoria passa por ela antes da minuta.',
+    ],
     recebe: [
       ['Análise / minuta de contrato', 27, 'media', 'Anexe o contrato ou a proposta e destaque os pontos de atenção.'],
       ['Cobrança judicial', 45, 'media', 'Unidade, débito atualizado e histórico de tentativas de acordo.'],

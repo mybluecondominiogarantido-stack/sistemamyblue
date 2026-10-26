@@ -9,12 +9,14 @@
     "dev": "node --watch server/index.js",
     "test": "node --test test/*.test.js",
     "importar-html": "node scripts/importar-html.js",
-    "criar-admin": "node scripts/criar-admin.js"
+    "criar-admin": "node scripts/criar-admin.js",
+    "restaurar-backup": "node scripts/restaurar-backup.js"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.131.0",
     "@electric-sql/pglite": "^0.5.8",
     "express": "^5.1.0",
     "nodemailer": "^10.0.15",

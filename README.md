@@ -60,30 +60,35 @@ npm run criar-admin -- seu.email@myblue.com.br "Seu Nome"
    npm run importar-html -- ./modulos-originais
    ```
 
-Para atualizar uma ferramenta, basta enviar o HTML novo no módulo dela. Toda versão anterior fica guardada e pode ser restaurada com um clique (*Versões anteriores*). Em *Versões anteriores*, **Baixar** devolve o HTML de qualquer versão exatamente como foi enviado (o administrador e o coordenador/supervisor do setor da ferramenta).
+Para atualizar uma ferramenta, basta enviar o HTML novo no módulo dela. Toda versão anterior fica guardada e pode ser restaurada com um clique (*Versões anteriores*). Em *Versões anteriores*, **Baixar** devolve o HTML de qualquer versão exatamente como foi enviado (o administrador e o coordenador/supervisor do setor da ferramenta). HTML enviado pela coordenação numa ferramenta **não isolada** só entra em uso depois que a administração aprovar (veja [Acessos](docs/acessos/LEIAME.md#html-novo-da-coordenação)).
 
-Para publicar uma ferramenta nova, use **Novo módulo**, escolha nome, setor e ícone e envie o HTML.
+Para publicar uma ferramenta nova, use **Novo módulo** (na tela da coordenação, **Nova ferramenta**), escolha nome, setor e ícone e envie o HTML. Ferramenta nova já nasce **isolada** (roda separada do portal, sem a sessão de quem abre).
 
 ## Usuários e permissões
 
-Tudo sai do **cadastro da pessoa** (*Usuários e acessos*): **perfil**, **setor(es)** e ferramentas liberadas. O setor também forma a equipe do setor na Central de Tickets.
+**A referência completa de acessos é [`docs/acessos/LEIAME.md`](docs/acessos/LEIAME.md)**: onde cada acesso é definido,
+os termos (perfil × papel, Supervisor × Supervisão da Central de Tickets, líder…), ferramentas, Carteira e isolamento.
+Para ver tudo o que uma pessoa acessa: *Usuários e acessos* → a pessoa → **Tudo o que acessa**.
 
-| | Usuário | Coordenador | Supervisor | Administrador |
-|---|---|---|---|---|
-| Ferramentas | as liberadas | todas dos setores dele + as liberadas | todas dos setores dele + as liberadas | todas |
-| Usuários | — | usuários comuns dos setores dele | usuários comuns dos setores dele | todos, todos os perfis |
-| Ferramentas do setor (HTML, versões, quem abre) | — | setores dele | setores dele | todas, mais *Módulos e dados* completo |
-| Equipe e tipos de demanda | — | líderes e tipos dos setores dele | líderes e tipos dos setores dele | todos os setores |
-| Tickets | conforme a equipe | líder nos setores dele | líder nos setores dele | todos |
-| Carteira | consulta | responsável do setor dele (editar e transferir) | responsável do setor dele (editar e transferir) | tudo |
-| Histórico, backup, setores, Central de Links | — | — | — | sim |
+Resumo por perfil:
 
-- **Coordenador e supervisor** têm os mesmos poderes, cada um nos setores do seu cadastro. Nenhum fica acima do outro: coordenadores, supervisores e administradores só o administrador cria e edita. Eles cuidam de **usuários comuns** que estão nos setores deles (ou que eles criaram), e o que a administração liberou de outros setores para a pessoa continua como está.
-- Na Carteira, o responsável de cada setor é: Cobrança → *analista de cobrança*; Crédito → *assistente de crédito*. O analista extrajudicial e os demais dados do condomínio ficam com a administração.
-- Marcações à parte, no cadastro: **Supervisão da Central de Tickets** (vê e direciona os tickets de **todos** os setores, ex.: Gerência) e **Marketing — Central de Links** (edita a Central de Links).
-- Ao criar um usuário (ou redefinir a senha), o portal mostra uma senha temporária. A pessoa cria a própria senha no primeiro acesso.
+| | Usuário | Coordenador e Supervisor (mesmos poderes, nos setores do cadastro) | Administrador |
+|---|---|---|---|
+| Ferramentas | as liberadas | todas dos setores dele + as liberadas | todas, com todos os papéis |
+| Usuários | — | usuários comuns dos setores dele | todos, todos os perfis |
+| Ferramentas do setor (HTML, versões, quem abre e papel) | — | setores dele (HTML novo em ferramenta não isolada aguarda aprovação) | todas, mais *Módulos e dados* completo |
+| Equipe e tipos de demanda | — | líderes e tipos dos setores dele | todos os setores |
+| Tickets | os do setor dele e os que abriu | todos os setores (a Supervisão da Central de Tickets vem com o perfil) | todos |
+| Carteira | consulta + o que estiver liberado em *Carteira: quem edita* | idem, e libera pessoas nas permissões do setor dele | tudo |
+| Histórico, backup, setores, Central de Links | — | — | sim |
+
+- Marcações à parte, no cadastro (só a administração): **Supervisão da Central de Tickets** (vê e direciona os tickets
+  de **todos** os setores; já vem com os perfis Coordenador e Supervisor, então se marca só para usuário comum, ex.:
+  Gerência) e **Marketing — Central de Links**.
+- Ao criar um usuário (ou redefinir a senha), o portal mostra uma senha temporária. A pessoa cria a própria senha no
+  primeiro acesso. A coordenação não redefine a senha de quem tem acesso fora dos setores dela (só a administração).
 - Desativar um usuário encerra na hora as sessões abertas dele.
-- Cada pessoa pode pôr uma **foto de perfil** em *Minha conta* (recortada e reduzida no navegador; fica no banco). Ela aparece no menu e na lista de usuários.
+- Cada pessoa pode pôr uma **foto de perfil** em *Minha conta* (recortada e reduzida no navegador; fica no banco).
 
 O acesso é conferido no servidor: quem não tem permissão não recebe o HTML da ferramenta nem consegue ler ou gravar os dados dela.
 
@@ -136,10 +141,10 @@ Menu **Carteira → Carteira de condomínios**. Reúne os condomínios atendidos
 | Assistente de crédito | ASSISTENTE CRÉDITO |
 
 - **Condomínios:** indicadores (ativos, comarcas, pessoas por função, ativos sem responsável), busca por nome, razão social, CNPJ ou ID, filtros por situação, UF, administradora e responsável, e ordenação por coluna. Clique no condomínio para ver a ficha completa e o histórico de alterações.
-- **Responsáveis:** quantos condomínios ativos cada pessoa tem, por UF. A administração usa **Transferir** para passar a carteira de uma pessoa (toda ou só alguns condomínios) para outra.
-- **Quem pode o quê:** todos que entram no portal consultam e exportam. Cadastrar, editar, remover, importar e transferir é da administração. Toda alteração fica no histórico do condomínio (o que mudou, quem e quando).
+- **Equipes:** quantos condomínios ativos cada pessoa tem, por UF. Quem pode transferir aquela função usa **Transferir** para passar a carteira de uma pessoa (toda ou só alguns condomínios) para outra.
+- **Quem pode o quê:** todos que entram no portal consultam (não há botão de exportar). Cadastrar, editar os dados, cada responsável, adicionar novos e transferir são permissões configuráveis em *Carteira: quem edita* (padrões e regras em [Acessos](docs/acessos/LEIAME.md#carteira-de-condomínios)). Toda alteração fica no histórico do condomínio (o que mudou, quem e quando).
 - **Adicionar novos** (aba da Carteira, para administrador, coordenador e supervisor): envie a planilha *Controle de Implantações* do jeito que ela é (.xlsx ou .csv), escolha a **vigência** (mês/ano tirado da coluna **DATA CONTRATO**) e confira a lista. O portal mostra só os condomínios que ainda não estão na carteira (os parecidos com um existente vêm desmarcados), ignora os marcados para desconsiderar, os repetidos e os sem data de contrato. Para cada um: digitar o **ID Vouch** (obrigatório) e conferir o apelido sugerido. Os responsáveis (analista de cobrança, analista extrajudicial, assistente de crédito) podem ser escolhidos ali: o administrador escolhe todos e cada coordenador/supervisor só o do setor dele; o que ficar em branco é preenchido depois na ficha. Entram como Ativo, com UF, vencimento, administradora, forma de envio, **executivo de negócios** (coluna EXECUTIVO), **CNPJ** (coluna CNPJ; o portal confere os dígitos e avisa quando o Excel cortou o número em notação científica, com um campo para digitar na hora) e o nº do formulário e quem implantou nas observações.
-- **Exportar:** o *Exportar CSV* gera a carteira no formato da planilha *Carteira de Condomínios*, que abre no Excel. Condomínios novos entram pela aba **Adicionar novos** (o antigo *Importar CSV* saiu da tela).
+- Condomínios novos entram pela aba **Adicionar novos** (o antigo *Importar CSV* e o *Exportar CSV* saíram da tela).
 - Os dados da carteira **não vão para o Git** (o repositório é público): entram só pelo portal. Arquivos `.csv` ficam fora do Git.
 
 Na Central de Tickets, a carteira define para quem vai o ticket de um condomínio (veja *Central de Tickets → Fluxo*).
@@ -154,7 +159,7 @@ Demandas internas entre os setores: quem precisa de algo de outro setor abre um 
 2. **Para quem vai:**
    - **Condomínio, setor Cobrança ou Crédito:** vai direto para a pessoa da carteira do condomínio (Cobrança → *analista de cobrança*, Crédito → *assistente de crédito*), que recebe o aviso por e-mail. A pessoa é encontrada pelo nome (sem acento e sem o ramal) entre a equipe do setor no portal; se não estiver cadastrada, o ticket vai para o líder e a equipe vê o aviso interno.
    - **Interna, ou setor que não usa a carteira:** entra na fila do setor sem responsável e os líderes recebem o aviso (sino, som e e-mail). Se o setor não tiver líder, a equipe inteira recebe.
-3. **Distribuir:** só o **líder do setor** (ou a gestão/supervisão) escolhe ou troca o responsável, a prioridade e o prazo para resposta.
+3. **Distribuir:** só o **líder do setor** (a coordenação/supervisão do setor já é líder), quem tem a **Supervisão da Central de Tickets** ou a administração escolhe ou troca o responsável, a prioridade e o prazo para resposta.
 4. **Iniciar:** o responsável clica em **Iniciar atendimento** e informa o **prazo para conclusão**. Sem ele o ticket não sai de *Novo*. Quem abriu é avisado e vê a previsão. Mudar a data depois exige o motivo, e quem abriu é avisado por e-mail.
 5. **Tratar:** o responsável muda a situação (*Em andamento*, *Aguardando*), conversa com quem abriu e registra **notas internas** (quem abriu não vê). Ao transferir para outro setor, o ticket vai para a pessoa da carteira de lá (se houver) ou para a fila, e a equipe nova define o próprio prazo para conclusão.
 6. **Resolver:** quem abriu é avisado e pode **reabrir** se não ficou resolvido. Também pode cancelar o próprio pedido.
@@ -174,11 +179,11 @@ O ticket fica **atrasado** quando passa do prazo para resposta sem nenhum retorn
 |---|---|
 | Qualquer pessoa | Abrir tickets, acompanhar os que abriu, comentar, anexar, cancelar ou reabrir os seus |
 | Equipe do setor | Ver a fila do setor, tratar os tickets, definir o prazo para conclusão dos que estão com ela, mudar a situação, transferir, notas internas |
-| Líder do setor (coordenação do setor) | Tudo da equipe, mais escolher e trocar o responsável, a prioridade e o prazo para resposta |
-| Supervisão / Coordenação | Ver e direcionar os tickets de **todos** os setores, com painel geral. Não dá acesso à administração do portal |
+| Líder do setor (marcado em *Equipes e tipos de demanda*; a coordenação/supervisão do setor já é líder) | Tudo da equipe, mais escolher e trocar o responsável, a prioridade e o prazo para resposta |
+| **Supervisão da Central de Tickets** (vem com os perfis Coordenador e Supervisor; para usuário comum, é uma marcação) | Ver e direcionar os tickets de **todos** os setores, com painel geral. Não dá acesso à administração do portal |
 | Administrador | Tudo, mais montar equipes e tipos de demanda |
 
-O perfil **Supervisão / Coordenação** é marcado no cadastro da pessoa, em *Usuários e acessos*. As equipes, os líderes e os **tipos de demanda** de cada setor (com prazo em horas e prioridade sugerida) ficam em *Administração → Equipes e tipos de demanda*. Os prazos contam só o **expediente: segunda a sexta, das 8h às 17h (horário de Brasília)**, ou seja, 9 h = 1 dia útil. Um ticket urgente aberto na sexta às 16h30 vence na segunda às 11h30. Sem tipo cadastrado, o prazo segue a prioridade: urgente 4 h, alta 1 dia útil, média 3 dias úteis e baixa 5 dias úteis. Feriados entram na variável `FERIADOS`.
+A **Supervisão da Central de Tickets** vem com os perfis Coordenador e Supervisor; para usuário comum, a administração marca no cadastro da pessoa, em *Usuários e acessos*. As equipes, os líderes e os **tipos de demanda** de cada setor (com prazo em horas e prioridade sugerida) ficam em *Administração → Equipes e tipos de demanda*. Os prazos contam só o **expediente: segunda a sexta, das 8h às 17h (horário de Brasília)**, ou seja, 9 h = 1 dia útil. Um ticket urgente aberto na sexta às 16h30 vence na segunda às 11h30. Sem tipo cadastrado, o prazo segue a prioridade: urgente 4 h, alta 1 dia útil, média 3 dias úteis e baixa 5 dias úteis. Feriados entram na variável `FERIADOS`.
 
 **Avisos**
 
@@ -296,8 +301,26 @@ Rode `npm ci --omit=dev` e `npm start` com um gerenciador de processos (pm2, sys
 
 ### Backup
 
-- Administração → *Módulos e dados* → **Backup do banco** baixa um JSON com todas as tabelas (sem as senhas). O Supabase e o Railway também fazem backup automático do Postgres.
-- Cada módulo tem **Exportar dados** (JSON) e CSV por aba da planilha interna.
+> **Atenção:** o Supabase só faz backup automático nos planos pagos (Pro, Team, Enterprise). No plano **Free não há backup
+> automático**: até migrar de plano, o único backup é o baixado pelo portal. O Postgres do Railway também não guarda cópias
+> sozinho (os backups do volume precisam ser ligados no painel).
+
+- **Backup do banco** (Administração → *Módulos e dados*): baixa `myblue-backup-AAAA-MM-DD.jsonl.gz` com **todas as tabelas**
+  (a lista vem do próprio banco, então tabela nova entra sozinha), inclusive HTMLs e versões, anexos dos tickets, fotos,
+  fundos da Central de Links, vídeos tutoriais, regras de acesso e demonstrativos. Ficam fora só as sessões abertas e a cópia
+  das bibliotecas das CDNs. O arquivo é uma fotografia do banco num instante e sai aos pedaços, sem pesar no servidor.
+- **Hashes de senha não vão para o backup.** O arquivo tem dados de negócio e pessoais: guarde em local com acesso restrito.
+- **Restaurar** (num banco novo ou, com cuidado, no mesmo):
+  ```bash
+  DATABASE_URL=postgres://… npm run restaurar-backup -- myblue-backup-2026-10-19.jsonl.gz
+  ```
+  O banco indicado é **apagado** antes (se já tiver usuários, o script pede `--apagar-o-que-existe`). Depois de restaurar,
+  as senhas de todos ficam bloqueadas e o script mostra uma senha temporária para cada administrador ativo, que entra e
+  redefine a senha das demais pessoas em *Usuários e acessos*. Backups antigos (`.json`, versão 4) também são lidos.
+- **Teste a restauração** de vez em quando: restaure o último backup num Postgres vazio (outro projeto do Supabase ou um
+  Postgres local), suba o portal apontando para ele e confira. Backup que nunca foi restaurado não é garantia.
+- As funções e os gatilhos do banco (Análise de Espólio) estão no código (`server/db.js`) e são recriados ao subir o portal.
+- Cada módulo continua com **Exportar dados** (JSON) e CSV por aba da planilha interna.
 
 ## Configuração (`.env`)
 
@@ -326,9 +349,15 @@ Rode `npm ci --omit=dev` e `npm start` com um gerenciador de processos (pm2, sys
 
 - Senhas com hash scrypt e sal individual. Senha mínima de 8 caracteres com letras e números.
 - Sessão em cookie `HttpOnly` e `SameSite=Lax`, guardada no banco só como hash. Logout, troca de senha e desativação encerram sessões.
-- Bloqueio temporário após 8 tentativas de login erradas.
+- Bloqueio temporário de 15 minutos após 8 tentativas de login erradas no mesmo e-mail, ou 30 no mesmo IP. A conferência
+  da senha roda fora da linha principal do servidor (não deixa o portal lento durante tentativas em série).
 - Proteção contra requisições de outros sites (CSRF) nas gravações, inclusive nas gravações via JSONP da planilha interna.
-- Permissão conferida no servidor em cada ferramenta e em cada leitura ou gravação de dados.
+- Permissão conferida no servidor em cada ferramenta e em cada leitura ou gravação de dados. Nas ferramentas que guardam
+  os papéis nelas mesmas, o servidor também confere quem muda os papéis.
+- **Ferramentas isoladas** (sandbox): o HTML roda numa origem própria, sem o cookie do portal, e só alcança os próprios
+  dados e o que precisa (veja [Acessos](docs/acessos/LEIAME.md#ferramentas-isoladas)). Ferramenta nova já nasce isolada.
+- As bibliotecas das CDNs servidas pelo portal (`/cdn`) são só scripts, estilos, fontes e afins: SVG e HTML vão direto
+  para a CDN, fora da origem do portal.
 - Histórico de atividades: logins, falhas de login, aberturas, gravações, importações, envios de HTML e mudanças de permissão.
 
 Os links de Apps Script que estão dentro dos HTMLs dão acesso de leitura e escrita às planilhas para quem tiver o arquivo. Depois de migrar para a planilha interna, vale desativar essas implantações do Apps Script.
@@ -339,7 +368,8 @@ Os links de Apps Script que estão dentro dos HTMLs dão acesso de leitura e esc
 server/
   index.js          configuração, montagem do app e primeiro administrador
   banco.js          conexão com o Postgres (Supabase/Railway) ou o Postgres embutido
-  db.js             esquema do banco e catálogo inicial
+  db.js             esquema do banco, funções/gatilhos e catálogo inicial
+  backup.js         backup de todas as tabelas (aos pedaços) e restauração
   catalogo.js       setores e módulos que já nascem cadastrados
   seguranca.js      senhas, sessões, permissões, CSRF, limite de tentativas, auditoria
   modulos.js        versões dos HTMLs, injeção da ponte e ligação com a planilha interna
@@ -356,3 +386,4 @@ test/               testes automatizados (npm test)
 ```
 
 Testes: `npm test` (usam HTMLs sintéticos e o Postgres embutido). Para testar num Postgres de verdade: `TEST_DATABASE_URL=postgres://… npm test` (o banco indicado é apagado).
+O GitHub roda os testes sozinho a cada push e pull request (aba *Actions*, `.github/workflows/testes.yml`): só publique no Railway o que estiver verde.

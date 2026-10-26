@@ -17,6 +17,15 @@
   lê `window.__MYBLUE__.usuario.papeis` e `.somente_leitura` (contrato e mapa das ferramentas em `docs/acessos/LEIAME.md`).
 - A administração tem todos os papéis em todas as ferramentas (o portal entrega isso ao HTML; não é preciso marcar).
 - Papel novo numa ferramenta → a administração cadastra os papéis dela no portal com o mesmo identificador usado no HTML.
+- Ferramenta nova nasce **isolada** (sandbox, sem a sessão de quem abre). O HTML precisa funcionar isolado: guardar dados
+  pelo portal (localStorage com "Banco do portal" ou `claude.use('db')`), chamar o portal só por `fetch`/XHR em `/api/...`,
+  sem IndexedDB, sem Web Worker carregado de endereço e sem `window.parent` (detalhes em `docs/acessos/LEIAME.md`,
+  seção Ferramentas isoladas). HTML da coordenação em ferramenta não isolada aguarda aprovação da administração.
+
+## Backup
+
+- O backup do portal (`server/backup.js`) pega todas as tabelas sozinho. Função ou gatilho de banco novo vai para
+  `FUNCOES` em `server/db.js`, nunca só direto no Supabase (senão some numa restauração).
 
 ## Dados
 

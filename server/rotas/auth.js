@@ -14,7 +14,7 @@ function rotasAuth({ db, seg }) {
     if (seg.bloqueado(chave)) return res.status(429).json({ erro: 'Muitas tentativas. Aguarde 15 minutos e tente de novo.' });
 
     const u = await db.um('SELECT id, nome, email, papel, ativo, trocar_senha, senha_hash FROM usuarios WHERE email = $1', [email]);
-    const ok = conferirSenha(senha, u ? u.senha_hash : HASH_FALSO);
+    const ok = await conferirSenha(senha, u ? u.senha_hash : HASH_FALSO);
     if (!u || !ok || !u.ativo) {
       seg.registrarFalha(chave);
       await seg.auditar(req, 'login_falha', null, { email, motivo: !u ? 'usuario_inexistente' : !ok ? 'senha' : 'inativo' }, null);
@@ -43,7 +43,7 @@ function rotasAuth({ db, seg }) {
     if (!req.usuario) return res.status(401).json({ erro: 'Faça login para continuar.' });
     const { atual, nova } = req.body || {};
     const u = await db.um('SELECT id, senha_hash FROM usuarios WHERE id = $1', [req.usuario.id]);
-    if (!conferirSenha(String(atual || '').trim(), u.senha_hash)) return res.status(400).json({ erro: 'A senha atual está incorreta.' });
+    if (!(await conferirSenha(String(atual || '').trim(), u.senha_hash))) return res.status(400).json({ erro: 'A senha atual está incorreta.' });
     const erro = validarNovaSenha(nova);
     if (erro) return res.status(400).json({ erro });
     if (String(nova) === String(atual || '').trim()) return res.status(400).json({ erro: 'A nova senha precisa ser diferente da atual.' });

@@ -8,7 +8,9 @@ const { criarSeguranca, hashSenha, senhaAleatoria } = require('./seguranca');
 const { criarServicoModulos } = require('./modulos');
 const { criarRegistros } = require('./registros');
 const { criarDocumentos } = require('./documentos');
+const { criarBoletosCarteira } = require('./boletos-carteira');
 const { criarAcessos } = require('./acessos');
+const { criarRegras } = require('./regras');
 const { criarNotificador } = require('./notificacoes');
 const { criarExpediente, lerExpediente } = require('./expediente');
 const { rotasAuth } = require('./rotas/auth');
@@ -20,6 +22,9 @@ const { rotasLinks } = require('./rotas/links');
 const { rotasTutoriais } = require('./rotas/tutoriais');
 const { rotasComissao } = require('./rotas/comissao');
 const { rotasCdn } = require('./rotas/cdn');
+const { rotasCredito } = require('./rotas/credito');
+const { rotasImplantacoes, criarRotinasImplantacao } = require('./rotas/implantacoes');
+const { rotasContratos, criarRotinasContratos } = require('./rotas/contratos');
 
 function carregarEnv(arquivo) {
   if (!fs.existsSync(arquivo)) return;
@@ -52,6 +57,7 @@ function lerConfig(sobrescrever = {}) {
     limiteAnexoMb: Number(e.LIMITE_ANEXO_MB) || 10,
     limiteFundoMb: Number(e.LIMITE_FUNDO_MB) || 8,
     limiteVideoMb: Number(e.LIMITE_VIDEO_MB) || 150,
+    limiteCreditoMb: Number(e.LIMITE_CREDITO_MB) || 30,
     silencioso: false,
     ...sobrescrever,
   };
@@ -83,7 +89,14 @@ async function criarApp(cfg) {
   const avisos = criarNotificador(db, cfg);
   const expediente = criarExpediente(lerExpediente());
   const acessos = criarAcessos({ db, seg, modulos, documentos });
-  const ctx = { db, seg, modulos, registros, documentos, avisos, expediente, acessos, cfg };
+  const regras = criarRegras(db);
+  // Controle de Emissão de Boletos: o cadastro acompanha a carteira de condomínios
+  const boletosCarteira = criarBoletosCarteira({ db, documentos, espera: cfg.esperaCarteiraMs ?? 3000 });
+  // Implantação: lembretes (fila sem designação, prazo para iniciar, documentos pendentes); o intervalo é ligado em iniciar()
+  const rotinasImplantacao = criarRotinasImplantacao({ db, seg, avisos, expediente });
+  // Solicitação de Contrato: prazo da minuta vencido
+  const rotinasContratos = criarRotinasContratos({ db, avisos, regras });
+  const ctx = { db, seg, modulos, registros, documentos, avisos, expediente, acessos, regras, boletosCarteira, rotinasImplantacao, rotinasContratos, cfg };
 
   const app = express();
   app.disable('x-powered-by');
@@ -93,12 +106,14 @@ async function criarApp(cfg) {
     res.set('X-Content-Type-Options', 'nosniff');
     res.set('X-Frame-Options', 'SAMEORIGIN');
     res.set('Referrer-Policy', 'same-origin');
+    if (req.secure) res.set('Strict-Transport-Security', 'max-age=31536000');
     next();
   });
   app.get('/saude', async (req, res) => {
     try { await db.q('SELECT 1'); res.json({ ok: true, banco: db.tipo }); } catch { res.status(503).json({ ok: false }); }
   });
   app.use(seg.identificar);
+  app.use(seg.escopoDaChave);
   app.use('/api', seg.mesmaOrigem);
 
   app.use(rotasAuth(ctx));
@@ -111,8 +126,14 @@ async function criarApp(cfg) {
   app.use(rotasTutoriais(ctx));
   app.use(rotasComissao(ctx));
   app.use(rotasCdn(ctx));
+  app.use(rotasCredito(ctx));
+  app.use(rotasImplantacoes(ctx));
+  app.use(rotasContratos(ctx));
 
   const publico = path.join(__dirname, '..', 'public');
+  // versão da tela (o ?v= do app.js no index.html): a página aberta compara e avisa que há versão nova para recarregar
+  const versaoTela = (fs.readFileSync(path.join(publico, 'index.html'), 'utf8').match(/app\.js\?v=([\w.-]+)/) || [])[1] || '';
+  app.get('/api/versao', (req, res) => { res.set('Cache-Control', 'no-store'); res.json({ versao: versaoTela }); });
   app.get('/login', (req, res) => res.sendFile(path.join(publico, 'login.html')));
   app.get('/', (req, res) => {
     if (!req.usuario) return res.redirect('/login');
@@ -146,9 +167,9 @@ function avisos(cfg) {
 
 async function iniciar(cfg = lerConfig()) {
   avisos(cfg);
-  let app, db;
+  let app, db, ctx;
   try {
-    ({ app, db } = await criarApp(cfg));
+    ({ app, db, ctx } = await criarApp(cfg));
   } catch (e) {
     console.error('\n[ERRO] Não foi possível abrir o banco de dados:', e.message);
     if (cfg.databaseUrl) console.error('Confira a variável DATABASE_URL (endereço, usuário e senha do Postgres).\n');
@@ -159,7 +180,14 @@ async function iniciar(cfg = lerConfig()) {
   servidor.listen(cfg.porta, () => {
     if (!cfg.silencioso) console.log(`Portal MyBlue rodando em http://localhost:${servidor.address().port}`);
   });
-  const fechar = () => servidor.close(async () => { await db.fechar(); process.exit(0); });
+  // rotinas da Implantação e da Solicitação de Contrato a cada 10 minutos (cada lembrete sai uma vez por dia útil)
+  const rodar = () => {
+    ctx.rotinasImplantacao.executar().catch((e) => console.error('[implantação] rotina:', e.message));
+    ctx.rotinasContratos.executar().catch((e) => console.error('[contratos] rotina:', e.message));
+  };
+  const rotinas = setInterval(rodar, 10 * 60 * 1000);
+  rotinas.unref();
+  const fechar = () => { clearInterval(rotinas); servidor.close(async () => { await db.fechar(); process.exit(0); }); };
   process.once('SIGTERM', fechar);
   process.once('SIGINT', fechar);
   return servidor;

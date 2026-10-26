@@ -32,7 +32,8 @@ const HISTORICO = [
   ['2.0', '09/10/2026', 'Manuais no padrão visual da MyBlue (timbrado, partes e capítulos); catálogo das ferramentas; Central de Patrocínio e Gestão de Viagens; Central de Ferramentas do Crédito com as sete automações; regra de excedente por boleto da Prestação de Contas (v7); regra de tutoriais sempre em dia.'],
   ['2.1', '13/10/2026', 'Títulos no padrão <b>Manual do Portal – Geral</b> e <b>Manual do Portal – Setor …</b>. Carteira: <i>Adicionar novos</i> pela planilha de implantação (ID Vouch, vigência, executivo de negócios e CNPJ), sem importação de CSV. Comissões de Novos Condomínios: a gestão <i>puxa da carteira</i> os condomínios da vigência, parceiro só da lista e cadastro de parceiro novo pelo financeiro. Pesquisa em Módulos e dados e em Ferramentas do setor.'],
   ['2.2', '15/10/2026', 'Menu <b>Premiações</b>: <b>Minhas Premiações</b> (demonstrativo de cada pessoa, só para leitura, <i>Estou ciente</i>, equipe para coordenação e gerência, diretoria) e a ferramenta <b>Gestão de Premiações</b> (antes Comissionamento MyBlue): planilhas do mês enviadas pelo coordenador do setor (um arquivo por pessoa e um aviso só para a gestão quando todas chegam), Comercial pela planilha de implantações e relatórios de garantia, coordenação comercial, boletos da Implantação e metas do Sucesso do Cliente.'],
-  ['2.3', '19/10/2026', 'Central de Tickets: a demanda passa a ser <b>Externa</b> (condomínio, síndico, propostas) ou <b>Interna</b> (demandas entre setores).'],
+  ['2.3', '19/10/2026', 'Acessos centralizados no portal (<i>Quem abre e com qual papel</i>: edita ou só consulta e papel em cada ferramenta; ferramenta nova cadastrada pela coordenação aguarda aprovação). Controle de Emissão de Boletos: aba <b>Distratados</b> e <b>cadastro pela Carteira de condomínios</b> (cada competência nova sai com os condomínios da carteira; conferência na janela da ferramenta).'],
+  ['2.4', '26/10/2026', 'Central de Tickets: a demanda passa a ser <b>Externa</b> (condomínio, síndico, propostas) ou <b>Interna</b> (demandas entre setores).'],
 ];
 const VERSOES = (doc) => capVersoes({
   titulo: `Manutenção e controle de versão deste manual`,
@@ -211,7 +212,7 @@ ${tabela(['Perfil', 'Para quem', 'O que faz'], [
 </ul>
 <h2>Marcações à parte</h2>
 ${tabela(['Marcação', 'O que libera'], [
-  ['<b>Supervisão da Central de Tickets</b>', 'Ver e direcionar os tickets de <b>todos</b> os setores, e o painel de todos. Para quem acompanha a empresa toda (ex.: Gerência).'],
+  ['<b>Supervisão da Central de Tickets</b>', 'Ver e direcionar os tickets de <b>todos</b> os setores, e o painel de todos. Já vem com os perfis Coordenador e Supervisor; para usuário comum que acompanha a empresa toda (ex.: Gerência), é marcada no cadastro.'],
   ['<b>Marketing — Central de Links</b>', 'Editar os links e o fundo da campanha da Central de Links.'],
 ])}
 ${fig('15b-usuario', 'Cadastro da pessoa: perfil, marcações, setor(es) e ferramentas liberadas.')}`;
@@ -255,9 +256,8 @@ const CARTEIRA = `
 <p class="intro">A <b>Carteira de condomínios</b> reúne os condomínios atendidos e quem cuida de cada um: <b>analista de cobrança</b>, <b>analista extrajudicial</b> (ApoioCob) e <b>assistente de crédito</b>.</p>
 <ul>
   <li><b>Condomínios:</b> indicadores (ativos, comarcas, pessoas por função, ativos sem responsável), busca por nome, razão social, CNPJ ou ID, filtros por situação, UF, administradora e responsável. Clique no condomínio para ver a ficha completa e o histórico de alterações.</li>
-  <li><b>Responsáveis:</b> quantos condomínios ativos cada pessoa tem, por UF. Clique no número para ver a lista.</li>
+  <li><b>Equipes:</b> quantos condomínios ativos cada pessoa tem, por UF. Clique no número para ver a lista.</li>
   <li><b>Adicionar novos:</b> a implantação envia o <i>Controle de Implantações</i> (.xlsx ou .csv, como está), escolhe a <b>vigência</b> (mês/ano da data do contrato) e confere os condomínios que ainda não estão na carteira.</li>
-  <li><b>Exportar CSV:</b> baixa a carteira no formato da planilha, que abre no Excel.</li>
 </ul>
 <h2>Cadastro do condomínio</h2>
 <ul>
@@ -275,12 +275,12 @@ ${passos([
 ])}
 ${fig('18-carteira', 'Carteira de condomínios: indicadores, filtros e a lista com os responsáveis.')}
 ${tabela(['Quem', 'O que pode'], [
-  ['Todos', 'Consultar e exportar.'],
-  ['Coordenador e supervisor de Cobrança ou Crédito', 'Alterar e <b>transferir</b> o responsável do setor deles (aba Responsáveis → Transferir).'],
+  ['Todos', 'Consultar.'],
+  ['Coordenador e supervisor de Cobrança ou Crédito', 'Alterar e <b>transferir</b> o responsável do setor deles (aba Equipes → Transferir).'],
   ['Coordenador e supervisor', '<b>Adicionar novos</b> pela planilha de implantação (os responsáveis só do setor deles).'],
   ['Administração', 'Cadastrar, editar, remover, adicionar novos e transferir qualquer função.'],
 ])}
-${dica('A carteira também decide para quem vai o ticket de condomínio em Cobrança e Crédito. Mantenha os responsáveis em dia.')}`;
+${dica('A carteira também decide para quem vai o ticket de condomínio em Cobrança e Crédito, e é dela que o <b>Controle de Emissão de Boletos</b> tira os condomínios de cada competência (novos, distratados, assistente de crédito e vencimento). Mantenha a carteira em dia.')}`;
 
 const COMISSOES = `
 <p class="intro">No menu <b>Premiações → Minhas Premiações</b> cada pessoa recebe o <b>demonstrativo de premiação</b> do mês, no mesmo formato da prestação de contas. Não vai mais por e-mail.</p>
@@ -496,7 +496,7 @@ function manualGeral() {
     ['Cadastrar ferramenta nova', '—', 'do setor (aguarda aprovação)', 'do setor (aguarda aprovação)', 'sim'],
     ['Aprovar ferramenta nova · definir os papéis de uma ferramenta', '—', '—', '—', 'sim'],
     ['Líderes e tipos de demanda', '—', 'do setor', 'do setor', 'todos'],
-    ['Carteira: consultar e exportar', 'sim', 'sim', 'sim', 'sim'],
+    ['Carteira: consultar', 'sim', 'sim', 'sim', 'sim'],
     ['Carteira: responsável do setor', '—', 'do setor', 'do setor', 'tudo'],
     ['Módulos e dados, setores, backup, histórico', '—', '—', '—', 'sim'],
     ['Central de Links: editar', 'com a marcação', 'com a marcação', 'com a marcação', 'sim'],
@@ -593,7 +593,7 @@ function manualSetor(s) {
   <ul>
     <li><b>Como abrir:</b> no menu (ou digite parte do nome na busca) e no cartão da tela inicial. <b>Nova aba</b> abre em tela cheia.</li>
     <li><b>Os dados:</b> ${f.dados}</li>
-    <li><b>Acesso:</b> quem tem a ferramenta liberada no cadastro, mais o coordenador e o supervisor do setor. Peça ao coordenador do setor ou à administração.</li>
+    <li><b>Acesso:</b> quem foi liberado na ferramenta (<i>Quem abre e com qual papel</i>, editando ou só consultando), mais o coordenador e o supervisor do setor. Peça ao coordenador do setor ou à administração.</li>
     <li><b>Atualizações:</b> quando a ferramenta mudar, o coordenador ou supervisor envia o HTML novo em <b>Gestão do setor → Ferramentas do setor</b>.</li>
     ${f.video ? '<li><b>Vídeo:</b> no menu <b>Tutoriais</b> há um vídeo com esta ferramenta sendo usada, passo a passo.</li>' : ''}
   </ul>

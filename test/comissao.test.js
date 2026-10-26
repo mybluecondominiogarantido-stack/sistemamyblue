@@ -34,7 +34,7 @@ async function entrar(email, senha) {
 let admin, gestor, ana, lia, dora, caio;
 const ids = {};
 async function criarPessoa(nome, email, modulos = []) {
-  const r = await admin('POST', '/api/admin/usuarios', { nome, email, papel: 'usuario', senha: 'Senha1234', modulos });
+  const r = await admin('POST', '/api/admin/usuarios', { data_nascimento: '1990-05-10', data_admissao: '2024-02-01', nome, email, papel: 'usuario', senha: 'Senha1234', modulos });
   assert.equal(r.status, 201, r.texto);
   await ctx.db.q('UPDATE usuarios SET trocar_senha = FALSE WHERE id = $1', [r.json.id]);
   ids[email] = r.json.id;
@@ -277,4 +277,15 @@ test('Minhas Premiações: o demonstrativo é só para ler (sem impressão)', as
   const v = await ana('GET', `/api/comissao/relatorios/${relAna}/ver`);
   assert.equal(v.status, 200);
   assert.match(v.texto, /@media print\{html,body\{display:none!important\}\}/);
+});
+
+test('quem só consulta a Gestão de Premiações vê, mas não envia demonstrativos nem pede planilhas', async () => {
+  const leitor = await criarPessoa('Leo Leitor', 'leo@teste.com', ['premiacoes']);
+  await ctx.db.q("UPDATE permissoes SET somente_leitura = TRUE WHERE usuario_id = $1 AND modulo_slug = 'premiacoes'", [ids['leo@teste.com']]);
+  assert.equal((await leitor('GET', '/api/comissao/usuarios?modulo=premiacoes')).status, 200);
+  const rel = { chave: 'z1', usuario_id: ids['ana@teste.com'], nome: 'Ana', html: doc('z') };
+  const r = await leitor('POST', '/api/comissao/relatorios', { modulo: 'premiacoes', competencia: '2026-11', relatorios: [rel] });
+  assert.equal(r.status, 403);
+  assert.match(r.json.erro, /só de consulta/);
+  assert.equal((await leitor('POST', '/api/comissao/planilhas', { modulo: 'premiacoes', competencia: '2026-11', pedidos: [] })).status, 403);
 });

@@ -41,7 +41,7 @@ async function logar(email, senha) {
 }
 
 async function criarUsuario(admin, email, extra = {}) {
-  const r = await admin('POST', '/api/admin/usuarios', { nome: email.split('@')[0], email, senha: 'Senha1234', ...extra });
+  const r = await admin('POST', '/api/admin/usuarios', { data_nascimento: '1990-05-10', data_admissao: '2024-02-01', nome: email.split('@')[0], email, senha: 'Senha1234', ...extra });
   assert.equal(r.status, 201);
   await ctx.db.q('UPDATE usuarios SET trocar_senha = FALSE WHERE id = $1', [r.json.id]);
   return logar(email, 'Senha1234');
@@ -199,9 +199,10 @@ test('campanhas: o fundo troca sozinho na data de início', async () => {
 });
 
 test('backup inclui a Central de Links com as imagens em base64', async () => {
-  const r = await admin('GET', '/api/admin/backup');
+  const r = await admin('GET', '/api/admin/backup', undefined, { bruto: true });
   assert.equal(r.status, 200);
-  const camp = r.json.tabelas.links_campanhas.find((c) => c.fundo);
+  const linhas = require('zlib').gunzipSync(r.buffer).toString().trim().split('\n').map((l) => JSON.parse(l));
+  const camp = linhas.find((l) => l.t === 'links_campanhas' && l.r.fundo).r;
   assert.equal(typeof camp.fundo, 'string');
-  assert.ok(Array.isArray(r.json.tabelas.links));
+  assert.ok(linhas.some((l) => l.t === 'links'));
 });

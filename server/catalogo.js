@@ -37,6 +37,8 @@ const SETORES = [
   // setores das ferramentas que já existiam antes da lista oficial
   { nome: 'Suprimentos', ordem: 12 },
   { nome: 'Parceiros', ordem: 13 },
+  // analistas da Análise de Crédito (diferente do setor Crédito)
+  { nome: 'Análise de Crédito', ordem: 14 },
 ];
 // nomes antigos → nome atual (renomeados uma vez em bancos já instalados)
 const SETORES_RENOMEADOS = { 'Sucesso do Cliente': 'CS' };

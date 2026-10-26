@@ -30,18 +30,21 @@ const SO_LEITURA = '<style>@media print{html,body{display:none!important}}html,b
 const semImpressao = (html) => (/<\/head>/i.test(html) ? html.replace(/<\/head>/i, SO_LEITURA + '</head>') : SO_LEITURA + html);
 const semScripts = (html) => String(html).replace(/<script\b[\s\S]*?<\/script\s*>/gi, '').replace(/<script\b[^>]*>/gi, '');
 
-function rotasComissao({ db, seg, cfg, avisos }) {
+function rotasComissao({ db, seg, cfg, avisos, acessos }) {
   const r = express.Router();
   r.use('/api/comissao', seg.exigirLogin);
   const json = express.json({ limit: `${cfg.limiteDadosMb}mb` });
   const erro = (res, status, msg) => res.status(status).json({ erro: msg });
 
-  /* quem envia: só quem abre um módulo marcado como ferramenta de comissão */
-  async function podeEnviar(u, slug) {
-    const m = await db.um('SELECT slug, config FROM modulos WHERE slug = $1', [String(slug || '')]);
+  /* quem envia: só quem abre um módulo marcado como ferramenta de comissão (gravar: e não só consulta) */
+  async function podeEnviar(u, slug, { gravar = false } = {}) {
+    const m = await db.um('SELECT slug, config, setor_id, pendente FROM modulos WHERE slug = $1', [String(slug || '')]);
     if (!m || !m.config || !m.config.relatorios_comissao) return false;
-    return seg.podeAcessar(u, m.slug);
+    if (!(await seg.podeAcessar(u, m.slug))) return false;
+    if (!gravar || !acessos) return true;
+    return !(await acessos.acessoDe(u, m, { comPapeis: false })).somente_leitura;
   }
+  const SO_CONSULTA = 'Seu acesso à Gestão de Premiações é só de consulta.';
 
   /* usuários do portal, para ligar cada pessoa da ferramenta ao login dela */
   r.get('/api/comissao/usuarios', async (req, res) => {
@@ -57,6 +60,7 @@ function rotasComissao({ db, seg, cfg, avisos }) {
     const b = req.body || {};
     const slug = String(b.modulo || '');
     if (!(await podeEnviar(req.usuario, slug))) return erro(res, 403, 'Só quem usa a Gestão de Premiações envia demonstrativos.');
+    if (!(await podeEnviar(req.usuario, slug, { gravar: true }))) return erro(res, 403, SO_CONSULTA);
     const comp = String(b.competencia || '');
     if (!COMP_RE.test(comp)) return erro(res, 400, 'Competência inválida (use aaaa-mm).');
     const lista = Array.isArray(b.relatorios) ? b.relatorios : [];
@@ -208,6 +212,7 @@ function rotasComissao({ db, seg, cfg, avisos }) {
     const b = req.body || {};
     const slug = String(b.modulo || '');
     if (!(await podeEnviar(req.usuario, slug))) return erro(res, 403, 'Só quem usa a Gestão de Premiações pede planilhas.');
+    if (!(await podeEnviar(req.usuario, slug, { gravar: true }))) return erro(res, 403, SO_CONSULTA);
     const comp = String(b.competencia || '');
     if (!COMP_RE.test(comp)) return erro(res, 400, 'Competência inválida (use aaaa-mm).');
     const lista = Array.isArray(b.pedidos) ? b.pedidos : [];
@@ -263,9 +268,10 @@ function rotasComissao({ db, seg, cfg, avisos }) {
     res.json({ planilhas: rows });
   });
 
-  async function pedidoDaGestao(req, res) {
+  async function pedidoDaGestao(req, res, { gravar = false } = {}) {
     const p = await db.um('SELECT * FROM comissao_planilhas WHERE id = $1 AND cancelado_em IS NULL', [Number(req.params.id) || 0]);
     if (!p || !(await podeEnviar(req.usuario, p.modulo_slug))) { erro(res, 404, 'Pedido não encontrado.'); return null; }
+    if (gravar && !(await podeEnviar(req.usuario, p.modulo_slug, { gravar: true }))) { erro(res, 403, SO_CONSULTA); return null; }
     return p;
   }
   // o arquivo é sempre baixado (nunca aberto no navegador)
@@ -280,14 +286,14 @@ function rotasComissao({ db, seg, cfg, avisos }) {
     res.send(p.arquivo);
   });
   r.post('/api/comissao/planilhas/:id/importado', async (req, res) => {
-    const p = await pedidoDaGestao(req, res);
+    const p = await pedidoDaGestao(req, res, { gravar: true });
     if (!p) return;
     if (!p.enviado_em) return erro(res, 409, 'A pessoa ainda não enviou a planilha.');
     await db.q('UPDATE comissao_planilhas SET importado_em = now(), importado_por = $2 WHERE id = $1', [p.id, req.usuario.id]);
     res.json({ ok: true });
   });
   r.delete('/api/comissao/planilhas/:id', async (req, res) => {
-    const p = await pedidoDaGestao(req, res);
+    const p = await pedidoDaGestao(req, res, { gravar: true });
     if (!p) return;
     await db.q('UPDATE comissao_planilhas SET cancelado_em = now() WHERE id = $1', [p.id]);
     // se era a última que faltava, as já enviadas por quem envia não podem ficar sem aviso

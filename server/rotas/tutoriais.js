@@ -57,16 +57,31 @@ function rotasTutoriais({ db, seg, cfg }) {
       if (ini > fim) { res.set('Content-Range', `bytes */${total}`); return res.status(416).end(); }
       fim = Math.min(fim, ini + PEDACO - 1);
     }
-    const { parte } = await db.um('SELECT substring(video from $1 for $2) AS parte FROM tutoriais WHERE slug = $3', [ini + 1, fim - ini + 1, t.slug]);
+    const ler = async (de, ate) => Buffer.from((await db.um('SELECT substring(video from $1 for $2) AS parte FROM tutoriais WHERE slug = $3', [de + 1, ate - de + 1, t.slug])).parte);
     res.status(intervalo ? 206 : 200);
     res.set({
-      'Content-Type': 'video/mp4', 'Accept-Ranges': 'bytes', 'Content-Length': String(parte.length),
+      'Content-Type': 'video/mp4', 'Accept-Ranges': 'bytes', 'Content-Length': String(fim - ini + 1),
       // o endereço muda a cada vídeo novo (?v=)
       'Cache-Control': 'private, max-age=604800',
       'Content-Security-Policy': "default-src 'none'",
     });
-    if (intervalo) res.set('Content-Range', `bytes ${ini}-${ini + parte.length - 1}/${total}`);
-    res.end(Buffer.from(parte));
+    if (intervalo) {
+      res.set('Content-Range', `bytes ${ini}-${fim}/${total}`);
+      return res.end(await ler(ini, fim));
+    }
+    // vídeo inteiro (sem Range): sai de 1 MB em 1 MB, sem carregar o arquivo todo na memória
+    let fechou = false;
+    res.on('close', () => { fechou = true; });
+    try {
+      for (let de = 0; de <= fim && !fechou; de += PEDACO) {
+        const parte = await ler(de, Math.min(fim, de + PEDACO - 1));
+        if (!res.write(parte) && !fechou) await new Promise((ok) => { res.once('drain', ok); res.once('close', ok); });
+      }
+      res.end();
+    } catch (e) {
+      console.error('[tutoriais]', e.message);
+      res.destroy();
+    }
   });
 
   r.get('/api/tutoriais/:slug/legendas', async (req, res) => {

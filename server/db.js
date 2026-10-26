@@ -1,6 +1,7 @@
 'use strict';
 const { conectar } = require('./banco');
 const { SETORES, SETORES_RENOMEADOS, MODULOS, CHAVES_DE_SISTEMA } = require('./catalogo');
+const { semearPolitica } = require('./credito/banco');
 
 /* Esquema em Postgres. Os HTMLs das ferramentas também ficam no banco (coluna conteudo),
    então o servidor não precisa de disco persistente. */
@@ -276,6 +277,14 @@ CREATE TABLE IF NOT EXISTS cdn_cache (
 );
 
 -- vídeos tutoriais (o catálogo, com título e para quem é, fica em server/tutoriais.js)
+-- quem edita o quê na Carteira (regras definidas em Ferramentas do setor e Módulos e dados, sem linha = padrão do portal)
+CREATE TABLE IF NOT EXISTS regras_acesso (
+  chave TEXT PRIMARY KEY,
+  regra JSONB NOT NULL,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
+);
+
 CREATE TABLE IF NOT EXISTS tutoriais (
   slug TEXT PRIMARY KEY,
   video BYTEA,
@@ -341,13 +350,441 @@ CREATE TABLE IF NOT EXISTS comissao_planilhas (
 );
 CREATE INDEX IF NOT EXISTS idx_comissao_plan_usuario ON comissao_planilhas(usuario_id, competencia);
 CREATE INDEX IF NOT EXISTS idx_comissao_plan_chave ON comissao_planilhas(modulo_slug, competencia, chave);
+
+-- Análise de Crédito: política versionada (parâmetros + faixas), executivos, análises e o que sai delas.
+-- O motor de regras (server/credito/motor.js) grava o resultado em analises.resultado_motor, e as tabelas
+-- de unidades, lançamentos, exclusões e alertas guardam o detalhe para auditoria e para o painel.
+CREATE TABLE IF NOT EXISTS parametros_politica (
+  versao TEXT PRIMARY KEY,
+  descricao TEXT NOT NULL DEFAULT '',
+  parametros JSONB NOT NULL,
+  ativa BOOLEAN NOT NULL DEFAULT FALSE,
+  vigente_desde TIMESTAMPTZ NOT NULL DEFAULT now(),
+  criado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_politica_ativa ON parametros_politica (ativa) WHERE ativa;
+
+CREATE TABLE IF NOT EXISTS faixas_precificacao (
+  versao TEXT NOT NULL REFERENCES parametros_politica(versao) ON DELETE CASCADE,
+  ordem INTEGER NOT NULL,
+  ate NUMERIC(6,2) NOT NULL,
+  taxa_adm NUMERIC(6,2) NOT NULL,
+  PRIMARY KEY (versao, ordem)
+);
+
+-- executivos de negócios: cadastrados no portal (nomes reais não ficam no código). boleto vazio = regra da política
+CREATE TABLE IF NOT EXISTS executivos (
+  id SERIAL PRIMARY KEY,
+  nome TEXT NOT NULL UNIQUE,
+  email TEXT,
+  uf TEXT NOT NULL DEFAULT '',
+  regiao TEXT NOT NULL DEFAULT '',
+  boleto NUMERIC(8,2),
+  usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  ativo BOOLEAN NOT NULL DEFAULT TRUE,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- contador do protocolo AC-AAAA-MM-DD-NN (um por dia, nunca repete)
+CREATE TABLE IF NOT EXISTS analise_protocolos (
+  dia DATE PRIMARY KEY,
+  ultimo INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS analises (
+  id SERIAL PRIMARY KEY,
+  protocolo TEXT UNIQUE,
+  origem_id INTEGER REFERENCES analises(id) ON DELETE SET NULL,
+  motivo_reanalise TEXT,
+  etapa TEXT NOT NULL DEFAULT 'rascunho' CHECK (etapa IN ('rascunho','pendencia','fila','em_analise','diretoria','validada','enviada','cancelada')),
+  resultado TEXT CHECK (resultado IN ('aprovada','ressalvas','reprovada','pendente')),
+  condominio TEXT NOT NULL DEFAULT '',
+  cnpj TEXT NOT NULL DEFAULT '',
+  uf TEXT NOT NULL DEFAULT '',
+  cidade TEXT NOT NULL DEFAULT '',
+  tipo_contratacao TEXT CHECK (tipo_contratacao IN ('nova','portabilidade')),
+  executivo_id INTEGER REFERENCES executivos(id) ON DELETE SET NULL,
+  solicitante_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  analista_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  formulario JSONB NOT NULL DEFAULT '{}'::jsonb,
+  dados_analista JSONB NOT NULL DEFAULT '{}'::jsonb,
+  resultado_motor JSONB,
+  politica_versao TEXT REFERENCES parametros_politica(versao),
+  inad_media NUMERIC(9,4),
+  taxa_adm NUMERIC(6,2),
+  boleto NUMERIC(8,2),
+  uh_escopo NUMERIC(10,4),
+  receita_liquida NUMERIC(14,2),
+  exposicao NUMERIC(14,2),
+  documentacao_completa_em TIMESTAMPTZ,
+  assumida_em TIMESTAMPTZ,
+  prazo_analista TIMESTAMPTZ,
+  prazo_executivo TIMESTAMPTZ,
+  chancela_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  chancela_em TIMESTAMPTZ,
+  chancela_obs TEXT,
+  liberada_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  liberada_em TIMESTAMPTZ,
+  enviada_em TIMESTAMPTZ,
+  validade_ate DATE,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_analises_etapa ON analises(etapa, prazo_analista);
+CREATE INDEX IF NOT EXISTS idx_analises_solicitante ON analises(solicitante_id);
+CREATE INDEX IF NOT EXISTS idx_analises_origem ON analises(origem_id);
+
+-- anexos (convenção, relatório, atas…) e os retornos gerados (PDF), com o que a IA extraiu de cada um
+CREATE TABLE IF NOT EXISTS analise_documentos (
+  id SERIAL PRIMARY KEY,
+  analise_id INTEGER NOT NULL REFERENCES analises(id) ON DELETE CASCADE,
+  tipo TEXT NOT NULL CHECK (tipo IN ('convencao','relatorio','ata_extra','retomadas','historico','dre','retorno_pdf','outro')),
+  nome TEXT NOT NULL,
+  mime TEXT NOT NULL DEFAULT 'application/pdf',
+  tamanho INTEGER NOT NULL DEFAULT 0,
+  sha256 TEXT,
+  conteudo BYTEA,
+  paginas INTEGER,
+  tem_texto BOOLEAN,
+  ocr_confianca NUMERIC(4,3),
+  extracao JSONB,
+  extraido_em TIMESTAMPTZ,
+  enviado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  enviado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  substituido_em TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_analise_docs ON analise_documentos(analise_id, tipo);
+
+-- unidades e lançamentos lidos do relatório (fonte = página e trecho, para conferir no painel)
+CREATE TABLE IF NOT EXISTS analise_unidades (
+  id SERIAL PRIMARY KEY,
+  analise_id INTEGER NOT NULL REFERENCES analises(id) ON DELETE CASCADE,
+  unidade TEXT NOT NULL,
+  titular TEXT NOT NULL DEFAULT '',
+  documento TEXT NOT NULL DEFAULT '',
+  tipo_pessoa TEXT NOT NULL DEFAULT '' CHECK (tipo_pessoa IN ('PF','PJ','')),
+  flag TEXT,
+  espolio BOOLEAN NOT NULL DEFAULT FALSE,
+  fonte JSONB
+);
+CREATE INDEX IF NOT EXISTS idx_analise_unidades ON analise_unidades(analise_id);
+
+CREATE TABLE IF NOT EXISTS analise_lancamentos (
+  id SERIAL PRIMARY KEY,
+  unidade_id INTEGER NOT NULL REFERENCES analise_unidades(id) ON DELETE CASCADE,
+  competencia TEXT NOT NULL,
+  vencimento DATE,
+  tipo TEXT NOT NULL CHECK (tipo IN ('ordinaria','extra','agua_gas','acordo','multa','juros','correcao','honorarios','fundo_reserva','outro')),
+  valor NUMERIC(14,2) NOT NULL,
+  fonte JSONB
+);
+CREATE INDEX IF NOT EXISTS idx_analise_lanc ON analise_lancamentos(unidade_id, competencia);
+
+CREATE TABLE IF NOT EXISTS analise_exclusoes (
+  id SERIAL PRIMARY KEY,
+  analise_id INTEGER NOT NULL REFERENCES analises(id) ON DELETE CASCADE,
+  unidade TEXT NOT NULL,
+  motivo TEXT NOT NULL CHECK (motivo IN ('espolio','retomada','abandono')),
+  detalhe TEXT NOT NULL DEFAULT '',
+  debito NUMERIC(14,2) NOT NULL DEFAULT 0,
+  origem TEXT NOT NULL DEFAULT 'analista' CHECK (origem IN ('relatorio','analista'))
+);
+CREATE INDEX IF NOT EXISTS idx_analise_exclusoes ON analise_exclusoes(analise_id);
+
+CREATE TABLE IF NOT EXISTS analise_alertas (
+  id SERIAL PRIMARY KEY,
+  analise_id INTEGER NOT NULL REFERENCES analises(id) ON DELETE CASCADE,
+  codigo TEXT NOT NULL,
+  nivel TEXT NOT NULL DEFAULT 'atencao' CHECK (nivel IN ('info','atencao','critico')),
+  mensagem TEXT NOT NULL,
+  dados JSONB,
+  visto_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  visto_em TIMESTAMPTZ,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_analise_alertas ON analise_alertas(analise_id);
+
+-- trilha de auditoria: envio, pendência, extração, ajustes (quem, quando, justificativa), motor, diretoria, liberação, reemissão
+CREATE TABLE IF NOT EXISTS analise_eventos (
+  id SERIAL PRIMARY KEY,
+  analise_id INTEGER NOT NULL REFERENCES analises(id) ON DELETE CASCADE,
+  usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  tipo TEXT NOT NULL,
+  detalhe JSONB NOT NULL DEFAULT '{}'::jsonb,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_analise_eventos ON analise_eventos(analise_id, criado_em);
+
+-- ===== Implantação (server/rotas/implantacoes.js) =====
+-- do contrato assinado à Carteira: o comercial pede, o setor Implantação conduz, a coordenação confirma na Carteira.
+-- origem: análise do portal, PDF de análise feita antes do portal, ou condomínio de entrega (diretoria aprova taxa e boleto)
+CREATE TABLE IF NOT EXISTS implantacao_protocolos (
+  dia DATE PRIMARY KEY,
+  ultimo INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS implantacoes (
+  id SERIAL PRIMARY KEY,
+  protocolo TEXT UNIQUE,
+  etapa TEXT NOT NULL DEFAULT 'rascunho' CHECK (etapa IN ('rascunho','diretoria','fila','em_implantacao','pendencia','concluida','na_carteira','cancelada')),
+  origem TEXT NOT NULL CHECK (origem IN ('analise','pdf','entrega','planilha')),
+  analise_id INTEGER REFERENCES analises(id) ON DELETE SET NULL,
+  analise_protocolo TEXT,
+  condominio TEXT NOT NULL DEFAULT '',
+  cnpj TEXT NOT NULL DEFAULT '',
+  uf TEXT NOT NULL DEFAULT '',
+  executivo_id INTEGER REFERENCES executivos(id) ON DELETE SET NULL,
+  solicitante_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  responsavel_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  designado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  designado_em TIMESTAMPTZ,
+  prazo_inicio TIMESTAMPTZ,
+  iniciado_em TIMESTAMPTZ,
+  formulario JSONB NOT NULL DEFAULT '{}'::jsonb,
+  referencia JSONB NOT NULL DEFAULT '{}'::jsonb,
+  etapas JSONB NOT NULL DEFAULT '{}'::jsonb,
+  enviado_em TIMESTAMPTZ,
+  concluido_em TIMESTAMPTZ,
+  condominio_id INTEGER REFERENCES condominios(id) ON DELETE SET NULL,
+  aviso_docs_em DATE,
+  lembrete_fila_em TIMESTAMPTZ,
+  aviso_prazo_em TIMESTAMPTZ,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_implantacoes_etapa ON implantacoes(etapa);
+CREATE INDEX IF NOT EXISTS idx_implantacoes_analise ON implantacoes(analise_id);
+CREATE INDEX IF NOT EXISTS idx_implantacoes_executivo ON implantacoes(executivo_id);
+
+CREATE TABLE IF NOT EXISTS implantacao_documentos (
+  id SERIAL PRIMARY KEY,
+  implantacao_id INTEGER NOT NULL REFERENCES implantacoes(id) ON DELETE CASCADE,
+  tipo TEXT NOT NULL,
+  nome TEXT NOT NULL,
+  mime TEXT NOT NULL DEFAULT 'application/octet-stream',
+  tamanho INTEGER NOT NULL DEFAULT 0,
+  sha256 TEXT,
+  conteudo BYTEA,
+  enviado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  enviado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  substituido_em TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_implantacao_docs ON implantacao_documentos(implantacao_id, tipo);
+
+CREATE TABLE IF NOT EXISTS implantacao_eventos (
+  id SERIAL PRIMARY KEY,
+  implantacao_id INTEGER NOT NULL REFERENCES implantacoes(id) ON DELETE CASCADE,
+  usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  tipo TEXT NOT NULL,
+  detalhe JSONB NOT NULL DEFAULT '{}'::jsonb,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_implantacao_eventos ON implantacao_eventos(implantacao_id, criado_em);
+
+-- análise liberada há mais dias que a política permite: o gestor da Análise de Crédito libera (ou não) para implantar
+-- (análise do portal: analise_id. PDF de análise anterior ao portal: protocolo, condomínio e data lidos do PDF)
+CREATE TABLE IF NOT EXISTS implantacao_liberacoes (
+  id SERIAL PRIMARY KEY,
+  analise_id INTEGER REFERENCES analises(id) ON DELETE CASCADE,
+  protocolo TEXT,
+  condominio TEXT,
+  data_analise DATE,
+  pedido_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  pedido_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  motivo TEXT NOT NULL DEFAULT '',
+  decidido_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  decidido_em TIMESTAMPTZ,
+  aprovado BOOLEAN,
+  observacao TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_implantacao_liberacoes ON implantacao_liberacoes(analise_id);
+
+-- metas do acompanhamento (prazo do onboarding e da documentação, meta da carteira, virada do mês vigente, data-marco,
+-- documentos da meta). Cada mudança vale a partir de uma data: os meses anteriores seguem com a regra da época
+CREATE TABLE IF NOT EXISTS implantacao_parametros (
+  id SERIAL PRIMARY KEY,
+  valores JSONB NOT NULL,
+  vale_desde DATE NOT NULL,
+  alterado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  alterado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- quem edita: a designada. Outra pessoa da equipe só com autorização da coordenação (pedida ou dada direto), com escopo e prazo
+CREATE TABLE IF NOT EXISTS implantacao_autorizacoes (
+  id SERIAL PRIMARY KEY,
+  implantacao_id INTEGER NOT NULL REFERENCES implantacoes(id) ON DELETE CASCADE,
+  usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  situacao TEXT NOT NULL DEFAULT 'pedida' CHECK (situacao IN ('pedida','ativa','recusada','revogada')),
+  escopo TEXT NOT NULL DEFAULT 'tudo' CHECK (escopo IN ('tudo','etapas','documentos')),
+  ate DATE,
+  motivo TEXT NOT NULL DEFAULT '',
+  resposta TEXT NOT NULL DEFAULT '',
+  pedida_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  decidida_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  decidida_em TIMESTAMPTZ,
+  revogada_em TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_implantacao_autorizacoes ON implantacao_autorizacoes(implantacao_id, usuario_id);
+
+-- pausas do prazo para concluir: pendência com o comercial (abre e fecha sozinha) ou impedimento marcado pela assistente
+CREATE TABLE IF NOT EXISTS implantacao_pausas (
+  id SERIAL PRIMARY KEY,
+  implantacao_id INTEGER NOT NULL REFERENCES implantacoes(id) ON DELETE CASCADE,
+  tipo TEXT NOT NULL CHECK (tipo IN ('pendencia','impedimento')),
+  motivo TEXT NOT NULL DEFAULT '',
+  detalhe TEXT NOT NULL DEFAULT '',
+  inicio TIMESTAMPTZ NOT NULL DEFAULT now(),
+  fim TIMESTAMPTZ,
+  resolucao TEXT NOT NULL DEFAULT '',
+  por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  encerrada_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  lembrete_em DATE
+);
+CREATE INDEX IF NOT EXISTS idx_implantacao_pausas ON implantacao_pausas(implantacao_id);
+
+-- ficha de repasse: abre na conclusão, a Implantação completa os campos azuis e envia à assistente de crédito
+-- (ou à supervisora de crédito, que escolhe). Cada envio é uma versão (até 3, mais só com a liberação da coordenação)
+CREATE TABLE IF NOT EXISTS implantacao_fichas (
+  implantacao_id INTEGER PRIMARY KEY REFERENCES implantacoes(id) ON DELETE CASCADE,
+  aberta_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  prazo DATE,
+  dados JSONB NOT NULL DEFAULT '{}'::jsonb,
+  situacao TEXT NOT NULL DEFAULT 'a_enviar' CHECK (situacao IN ('a_enviar','enviada','devolvida','recebida')),
+  destino_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  com_supervisao BOOLEAN NOT NULL DEFAULT FALSE,
+  versao INTEGER NOT NULL DEFAULT 0,
+  versoes_extra INTEGER NOT NULL DEFAULT 0,
+  primeiro_envio_em TIMESTAMPTZ,
+  aviso_prazo_em DATE,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS implantacao_ficha_versoes (
+  id SERIAL PRIMARY KEY,
+  implantacao_id INTEGER NOT NULL REFERENCES implantacoes(id) ON DELETE CASCADE,
+  versao INTEGER NOT NULL,
+  conteudo JSONB NOT NULL,
+  motivo TEXT NOT NULL DEFAULT '',
+  enviada_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  enviada_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  para_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  confirmada_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  confirmada_em TIMESTAMPTZ,
+  UNIQUE (implantacao_id, versao)
+);
+
+-- importação do histórico das planilhas (Formulário e Controle Implantações): cada importação é um lote, que dá para desfazer
+CREATE TABLE IF NOT EXISTS implantacao_importacoes (
+  id SERIAL PRIMARY KEY,
+  criado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  resumo JSONB NOT NULL DEFAULT '{}'::jsonb,
+  fora JSONB NOT NULL DEFAULT '[]'::jsonb,
+  desfeita_em TIMESTAMPTZ,
+  desfeita_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
+);
+
+-- antecipação enviada ao Controle de Repasses: o Gestor de lá cadastra a regra (com ajuste ou não) ou devolve
+CREATE TABLE IF NOT EXISTS implantacao_antecipacoes (
+  implantacao_id INTEGER PRIMARY KEY REFERENCES implantacoes(id) ON DELETE CASCADE,
+  situacao TEXT NOT NULL CHECK (situacao IN ('enviada','cadastrada','devolvida')),
+  atualizacao BOOLEAN NOT NULL DEFAULT FALSE,
+  enviado JSONB NOT NULL,
+  antes JSONB,
+  enviada_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  enviada_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  regra_id TEXT,
+  cadastrado JSONB,
+  ajuste JSONB,
+  decidida_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  decidida_em TIMESTAMPTZ,
+  motivo TEXT NOT NULL DEFAULT ''
+);
+
+-- ===== Solicitação de Contrato (server/rotas/contratos.js) =====
+-- o comercial pede a minuta a partir da análise liberada, quem elabora (Jurídico) redige em até 72h úteis, o comercial
+-- leva ao síndico, pede ajustes e anexa o contrato assinado, a advogada registra as condições fechadas e elas seguem para a Implantação.
+-- origem: análise do portal, PDF de análise feita antes do portal, ou condomínio de entrega (a diretoria aprova taxa e boleto)
+CREATE TABLE IF NOT EXISTS contrato_protocolos (
+  dia DATE PRIMARY KEY,
+  ultimo INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS contratos (
+  id SERIAL PRIMARY KEY,
+  protocolo TEXT UNIQUE,
+  etapa TEXT NOT NULL DEFAULT 'rascunho' CHECK (etapa IN ('rascunho','fila','em_elaboracao','pendencia','minuta_enviada','para_assinar','em_assinatura','conferencia','assinado','cancelada')),
+  origem TEXT NOT NULL CHECK (origem IN ('analise','pdf','entrega')),
+  analise_id INTEGER REFERENCES analises(id) ON DELETE SET NULL,
+  analise_protocolo TEXT,
+  condominio TEXT NOT NULL DEFAULT '',
+  cnpj TEXT NOT NULL DEFAULT '',
+  uf TEXT NOT NULL DEFAULT '',
+  executivo_id INTEGER REFERENCES executivos(id) ON DELETE SET NULL,
+  solicitante_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  responsavel_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  assumido_em TIMESTAMPTZ,
+  formulario JSONB NOT NULL DEFAULT '{}'::jsonb,
+  referencia JSONB NOT NULL DEFAULT '{}'::jsonb,
+  -- itens que dependem da diretoria e a decisão: { itens, aprovado, observacao, por, decidido_em }
+  diretoria JSONB NOT NULL DEFAULT '{}'::jsonb,
+  enviado_em TIMESTAMPTZ,
+  prazo TIMESTAMPTZ,
+  aviso_prazo_em TIMESTAMPTZ,
+  minuta_enviada_em TIMESTAMPTZ,
+  ajustes INTEGER NOT NULL DEFAULT 0,
+  ultimo_ajuste_em TIMESTAMPTZ,
+  assinado_em TIMESTAMPTZ,
+  -- condições fechadas no contrato assinado, registradas pela advogada (vão para a Implantação)
+  fechado JSONB NOT NULL DEFAULT '{}'::jsonb,
+  fechado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  fechado_em TIMESTAMPTZ,
+  concluido_em TIMESTAMPTZ,
+  aviso_docs_em DATE,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_contratos_etapa ON contratos(etapa);
+CREATE INDEX IF NOT EXISTS idx_contratos_analise ON contratos(analise_id);
+CREATE INDEX IF NOT EXISTS idx_contratos_executivo ON contratos(executivo_id);
+
+CREATE TABLE IF NOT EXISTS contrato_documentos (
+  id SERIAL PRIMARY KEY,
+  contrato_id INTEGER NOT NULL REFERENCES contratos(id) ON DELETE CASCADE,
+  tipo TEXT NOT NULL,
+  nome TEXT NOT NULL,
+  mime TEXT NOT NULL DEFAULT 'application/octet-stream',
+  tamanho INTEGER NOT NULL DEFAULT 0,
+  sha256 TEXT,
+  conteudo BYTEA,
+  enviado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  enviado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  substituido_em TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_contrato_docs ON contrato_documentos(contrato_id, tipo);
+
+CREATE TABLE IF NOT EXISTS contrato_eventos (
+  id SERIAL PRIMARY KEY,
+  contrato_id INTEGER NOT NULL REFERENCES contratos(id) ON DELETE CASCADE,
+  usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  tipo TEXT NOT NULL,
+  detalhe JSONB NOT NULL DEFAULT '{}'::jsonb,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_contrato_eventos ON contrato_eventos(contrato_id, criado_em);
 `;
 
 /* Supabase publica o schema "public" pela API dele (PostgREST). Com RLS ligado e sem
    políticas, ninguém lê nem grava por lá; o portal conecta como dono das tabelas e não é afetado. */
 const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 'permissoes', 'armazenamento', 'colecoes', 'registros', 'documentos', 'auditoria',
   'setor_membros', 'ticket_categorias', 'tickets', 'ticket_eventos', 'ticket_anexos', 'notificacoes', 'condominios',
-  'links_pagina', 'links', 'links_campanhas', 'tutoriais', 'comissao_relatorios', 'comissao_leitores', 'comissao_planilhas', 'cdn_cache'];
+  'links_pagina', 'links', 'links_campanhas', 'tutoriais', 'comissao_relatorios', 'comissao_leitores', 'comissao_planilhas', 'cdn_cache', 'regras_acesso',
+  'parametros_politica', 'faixas_precificacao', 'executivos', 'analise_protocolos', 'analises', 'analise_documentos', 'analise_unidades',
+  'analise_lancamentos', 'analise_exclusoes', 'analise_alertas', 'analise_eventos',
+  'implantacao_protocolos', 'implantacoes', 'implantacao_documentos', 'implantacao_eventos', 'implantacao_liberacoes', 'implantacao_parametros',
+  'implantacao_autorizacoes', 'implantacao_pausas', 'implantacao_fichas', 'implantacao_ficha_versoes', 'implantacao_antecipacoes', 'implantacao_importacoes',
+  'contrato_protocolos', 'contratos', 'contrato_documentos', 'contrato_eventos'];
 const RLS = TABELAS.map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`).join(';\n');
 
 /* Ajustes em bancos já existentes (rodam a cada início e não fazem nada se já estiverem aplicados). */
@@ -390,8 +827,135 @@ ALTER TABLE permissoes ADD COLUMN IF NOT EXISTS somente_leitura BOOLEAN NOT NULL
 ALTER TABLE permissoes ADD COLUMN IF NOT EXISTS papeis TEXT[] NOT NULL DEFAULT '{}';
 -- ferramenta nova cadastrada pela coordenação: fica aguardando a aprovação da administração
 ALTER TABLE modulos ADD COLUMN IF NOT EXISTS pendente BOOLEAN NOT NULL DEFAULT FALSE;
-ALTER TABLE modulos ADD COLUMN IF NOT EXISTS criado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
+ALTER TABLE modulos ADD COLUMN IF NOT EXISTS criado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL;
+-- HTML novo enviado pela coordenação numa ferramenta não isolada: fica guardado, aguardando a aprovação da administração
+ALTER TABLE modulo_versoes ADD COLUMN IF NOT EXISTS aprovada BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE modulos ADD COLUMN IF NOT EXISTS versao_pendente_id INTEGER;
+-- implantação aberta de uma análise que já tem contrato: os dados e o contrato assinado vêm de lá
+ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS contrato_id INTEGER REFERENCES contratos(id) ON DELETE SET NULL;
+-- meta de documentação marcada à mão pela coordenação ({resultado: bateu|faltou, motivo, por, em}) e cobranças ao executivo
+ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS meta_doc_manual JSONB;
+ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS cobranca_doc_em TIMESTAMPTZ;
+ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS lembrete_doc_em TIMESTAMPTZ;
+-- cadastro da pessoa: nascimento e admissão (obrigatórios ao criar ou editar, e quem já existia completa na próxima edição)
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS data_nascimento DATE;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS data_admissao DATE;
+-- documento da implantação que veio da análise ou do contrato: não se troca nem se remove ali
+ALTER TABLE implantacao_documentos ADD COLUMN IF NOT EXISTS vinculado BOOLEAN NOT NULL DEFAULT FALSE;
+UPDATE implantacao_documentos SET vinculado = TRUE WHERE tipo = 'analise_credito' AND NOT vinculado;
+-- e-mail de cada aviso: quando saiu ou por que falhou (para conferir quando alguém diz que não recebeu)
+ALTER TABLE notificacoes ADD COLUMN IF NOT EXISTS email_enviado_em TIMESTAMPTZ;
+ALTER TABLE notificacoes ADD COLUMN IF NOT EXISTS email_erro TEXT;
+-- documento recebido sem arquivo (em papel, já no CPD): a assistente marca, com observação, e desfazer tira da contagem
+ALTER TABLE implantacao_documentos ADD COLUMN IF NOT EXISTS sem_arquivo BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE implantacao_documentos ADD COLUMN IF NOT EXISTS observacao TEXT NOT NULL DEFAULT '';
+ALTER TABLE implantacao_documentos ADD COLUMN IF NOT EXISTS desfeito_em TIMESTAMPTZ;
+ALTER TABLE implantacao_documentos ADD COLUMN IF NOT EXISTS desfeito_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL;
+-- Obs. da aba Controle (escrita pela equipe), justificativa do onboarding fora do prazo e os avisos diários dos prazos
+ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS obs_controle JSONB;
+ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS onboarding_justificativa JSONB;
+ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS aviso_concluir_em DATE;
+ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS aviso_onboarding_em DATE;
+-- implantação importada das planilhas: lote, Nº do formulário e o que veio de lá (fonte, avisos, nomes não achados no portal)
+ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS importacao_id INTEGER REFERENCES implantacao_importacoes(id) ON DELETE SET NULL;
+ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS numero_planilha INTEGER;
+ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS importacao JSONB;
+ALTER TABLE implantacoes DROP CONSTRAINT IF EXISTS implantacoes_origem_check;
+ALTER TABLE implantacoes ADD CONSTRAINT implantacoes_origem_check CHECK (origem IN ('analise','pdf','entrega','planilha'));
+-- Solicitação de Contrato: o executivo pede a assinatura e a advogada envia para assinar (etapas para_assinar e em_assinatura)
+ALTER TABLE contratos DROP CONSTRAINT IF EXISTS contratos_etapa_check;
+ALTER TABLE contratos ADD CONSTRAINT contratos_etapa_check CHECK (etapa IN ('rascunho','fila','em_elaboracao','pendencia','minuta_enviada','para_assinar','em_assinatura','conferencia','assinado','cancelada'));
+ALTER TABLE contratos ADD COLUMN IF NOT EXISTS assinatura_pedida_em TIMESTAMPTZ;
+ALTER TABLE contratos ADD COLUMN IF NOT EXISTS em_assinatura_em TIMESTAMPTZ;
+ALTER TABLE contratos ADD COLUMN IF NOT EXISTS assinatura_plataforma TEXT NOT NULL DEFAULT ''
 `;
+
+/* Funções e gatilhos do banco (cada item é um comando inteiro: o corpo das funções tem ";").
+   Análise de Espólio (ferramenta feita como artefato do Claude, documentos em "documentos"):
+   - a coleção "carteira" acompanha a Carteira de condomínios (a cada mudança em condominios);
+   - avisos no sino: solicitação nova para quem tem o papel Gestão; concluída ou devolvida para quem pediu;
+   - o contador de protocolos nunca volta nem repete número (duas pessoas gravando ao mesmo tempo).
+   Se o módulo não existir, nada acontece, e um erro aqui nunca impede a gravação. */
+const ESPOLIO = 'analise-de-espolio';
+const FUNCOES = [
+  `CREATE OR REPLACE FUNCTION espolio_carteira_json() RETURNS jsonb LANGUAGE sql STABLE SET search_path = pg_catalog, public AS $f$
+  SELECT jsonb_build_object(
+    'origem', 'banco',
+    'atualizadoEm', to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+    'assinatura', 'banco:' || count(*) || ':' || coalesce(max(atualizado_em)::text, ''),
+    'itens', coalesce(jsonb_agg(jsonb_build_object(
+      'codigo', codigo, 'nome', nome, 'razao_social', razao_social, 'cnpj', cnpj, 'comarca', comarca, 'situacao', situacao,
+      'inicio_contrato', inicio_contrato, 'assistente_credito', assistente_credito, 'analista_cobranca', analista_cobranca,
+      'analista_extrajudicial', analista_extrajudicial, 'executivo', executivo, 'administradora', administradora
+    ) ORDER BY nome), '[]'::jsonb))
+  FROM public.condominios
+$f$`,
+  `CREATE OR REPLACE FUNCTION espolio_atualizar_carteira() RETURNS void LANGUAGE plpgsql SET search_path = pg_catalog, public AS $f$
+DECLARE
+  alvo text := '${ESPOLIO}';
+  novo_seq bigint;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.modulos WHERE slug = alvo) THEN RETURN; END IF;
+  SELECT coalesce(max(seq), 0) + 1 INTO novo_seq FROM public.documentos WHERE modulo_slug = alvo;
+  INSERT INTO public.documentos (modulo_slug, colecao, doc_id, dados, seq, atualizado_em)
+  VALUES (alvo, 'carteira', 'atual', public.espolio_carteira_json(), novo_seq, now())
+  ON CONFLICT (modulo_slug, colecao, doc_id) DO UPDATE SET dados = excluded.dados, seq = excluded.seq, atualizado_em = now();
+EXCEPTION WHEN others THEN
+  RAISE WARNING 'espolio_atualizar_carteira: %', sqlerrm;
+END $f$`,
+  `CREATE OR REPLACE FUNCTION espolio_carteira_trigger() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, public AS $f$
+BEGIN PERFORM public.espolio_atualizar_carteira(); RETURN NULL; END $f$`,
+  `CREATE OR REPLACE FUNCTION espolio_notificar() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, public AS $f$
+DECLARE
+  st_antigo text := CASE WHEN tg_op = 'UPDATE' THEN coalesce(old.dados->>'status', '') ELSE '' END;
+  st_novo   text := coalesce(new.dados->>'status', '');
+  cond      text := coalesce(new.dados->'condominio'->>'nome', '');
+  solic     text := coalesce(new.dados->>'solicitanteNome', '');
+  solic_id  int  := CASE WHEN coalesce(new.dados->>'solicitanteId', '') ~ '^(mb-)?[0-9]+$' THEN regexp_replace(new.dados->>'solicitanteId', '^mb-', '')::int END;
+BEGIN
+  IF new.modulo_slug <> '${ESPOLIO}' OR new.colecao <> 'solicitacoes' THEN RETURN new; END IF;
+  IF tg_op = 'INSERT' OR (st_antigo <> 'nova' AND st_novo = 'nova') THEN
+    INSERT INTO public.notificacoes (usuario_id, tipo, titulo, texto, link)
+    SELECT u.id, 'espolio', solic || ' solicitou análise de espólio · ' || cond, 'Abra a aba Solicitações do módulo Análise de Espólio.', '#/m/${ESPOLIO}'
+    FROM public.usuarios u
+    WHERE u.ativo AND u.id::text IN (SELECT regexp_replace(doc_id, '^mb-', '') FROM public.documentos
+      WHERE modulo_slug = '${ESPOLIO}' AND colecao = 'perfis' AND dados->'papeis' ? 'gestao');
+  END IF;
+  IF tg_op = 'UPDATE' AND st_antigo <> st_novo AND st_novo IN ('concluida', 'devolvida') AND solic_id IS NOT NULL THEN
+    INSERT INTO public.notificacoes (usuario_id, tipo, titulo, texto, link) VALUES (solic_id, 'espolio',
+      CASE WHEN st_novo = 'concluida' THEN 'Análise de espólio concluída · ' || cond || ' · ' || coalesce(new.dados->>'protocolo', '') ELSE 'Solicitação de análise devolvida · ' || cond END,
+      CASE WHEN st_novo = 'concluida' THEN 'A ficha está disponível em Minhas solicitações.' ELSE coalesce(new.dados->>'motivoDevolucao', '') END, '#/m/${ESPOLIO}');
+  END IF;
+  RETURN new;
+EXCEPTION WHEN others THEN
+  RAISE WARNING 'espolio_notificar: %', sqlerrm;
+  RETURN new;
+END $f$`,
+  `CREATE OR REPLACE FUNCTION espolio_protocolo_guarda() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, public AS $f$
+DECLARE
+  ano text; v_old bigint; v_new bigint; subiu boolean := false;
+BEGIN
+  IF new.modulo_slug <> '${ESPOLIO}' OR new.colecao <> 'meta' OR new.doc_id <> 'estado' THEN RETURN new; END IF;
+  IF old.dados IS NULL OR old.dados->'seq' IS NULL THEN RETURN new; END IF;
+  IF new.dados IS NULL OR new.dados->'seq' IS NULL THEN
+    RAISE EXCEPTION 'protocolo_conflito: o contador de protocolos não pode ser apagado';
+  END IF;
+  FOR ano IN SELECT jsonb_object_keys(old.dados->'seq') LOOP
+    v_old := coalesce((old.dados->'seq'->>ano)::bigint, 0);
+    v_new := coalesce((new.dados->'seq'->>ano)::bigint, 0);
+    IF v_new < v_old THEN RAISE EXCEPTION 'protocolo_conflito: contador de % voltaria de % para %', ano, v_old, v_new; END IF;
+  END LOOP;
+  FOR ano IN SELECT jsonb_object_keys(new.dados->'seq') LOOP
+    IF coalesce((new.dados->'seq'->>ano)::bigint, 0) > coalesce((old.dados->'seq'->>ano)::bigint, 0) THEN subiu := true; END IF;
+  END LOOP;
+  IF NOT subiu THEN RAISE EXCEPTION 'protocolo_conflito: número já usado, buscar o próximo'; END IF;
+  RETURN new;
+END $f$`,
+  'CREATE OR REPLACE TRIGGER espolio_carteira AFTER INSERT OR DELETE OR UPDATE ON condominios FOR EACH STATEMENT EXECUTE FUNCTION espolio_carteira_trigger()',
+  'CREATE OR REPLACE TRIGGER espolio_notificar AFTER INSERT OR UPDATE OF dados ON documentos FOR EACH ROW EXECUTE FUNCTION espolio_notificar()',
+  `CREATE OR REPLACE TRIGGER espolio_protocolo_guarda BEFORE UPDATE ON documentos FOR EACH ROW
+  WHEN (new.modulo_slug = '${ESPOLIO}' AND new.colecao = 'meta' AND new.doc_id = 'estado') EXECUTE FUNCTION espolio_protocolo_guarda()`,
+];
 
 async function abrir(cfg) {
   const db = await conectar(cfg);
@@ -399,12 +963,21 @@ async function abrir(cfg) {
     // evita que duas instâncias subindo juntas criem o esquema ao mesmo tempo
     await t.q('SELECT pg_advisory_xact_lock(7240513)');
     for (const cmd of (SCHEMA + ';' + RLS + ';' + AJUSTES).split(';').map((s) => s.trim()).filter(Boolean)) await t.q(cmd);
+    // uma função que não puder ser recriada (ex.: dono diferente no banco) não impede o portal de subir
+    for (const cmd of FUNCOES) {
+      await t.q('SAVEPOINT funcao');
+      try { await t.q(cmd); await t.q('RELEASE SAVEPOINT funcao'); } catch (e) {
+        await t.q('ROLLBACK TO SAVEPOINT funcao');
+        console.warn('[banco] não foi possível criar/atualizar:', cmd.slice(0, 80).replace(/\s+/g, ' '), '→', e.message);
+      }
+    }
     await semear(t);
     await renomearPremiacoes(t); // antes de semear os módulos novos do catálogo
     await semearSetores(t);
     await semearNovosModulos(t);
     await sincronizarCatalogo(t);
     await migrarCarteira(t);
+    await semearPolitica(t);
   });
   return db;
 }
@@ -502,4 +1075,4 @@ async function renomearPremiacoes(t) {
   await t.q("UPDATE notificacoes SET link = replace(replace(link, '#/m/comissionamento', '#/m/premiacoes'), '#/comissoes', '#/premiacoes') WHERE link LIKE '#/m/comissionamento%' OR link LIKE '#/comissoes%'");
 }
 
-module.exports = { abrir, SCHEMA, RLS };
+module.exports = { abrir, SCHEMA, RLS, FUNCOES };

@@ -12,6 +12,15 @@
  *   supervisao  supervisão da Central de Tickets (marcação no cadastro)
  *   links       quem edita a Central de Links
  *   admin       só a administração
+ *   credito     quem usa a Análise de Crédito (executivos cadastrados, analistas e diretoria)
+ *   credito_analise  analistas (setor da política) e diretoria da Análise de Crédito
+ *   implantacao      quem usa a Implantação (executivos cadastrados, setor Implantação e diretoria)
+ *   implantacao_setor  o setor Implantação
+ *   implantacao_acompanhar  quem vê o Acompanhamento (setor Implantação e diretoria)
+ *   contrato    quem usa a Solicitação de Contrato (executivos cadastrados, quem elabora e diretoria)
+ *   contrato_juridico  quem elabora os contratos (Solicitação de Contrato → Quem elabora)
+ *   jornada_executivo  executivos de negócios cadastrados (o caminho inteiro, pelo executivo)
+ *   jornada_equipe     analistas e diretoria da Análise de Crédito, quem elabora os contratos e o setor Implantação
  *   { modulo }  quem abre aquela ferramenta
  * O administrador vê todos.
  */
@@ -21,6 +30,10 @@ const GRUPOS = ['Primeiros passos', 'Central de Tickets', 'Central de Links', 'F
 const ROTULO_PUBLICO = {
   todos: 'Para todos', equipe: 'Para quem atende tickets', lider: 'Para líderes de setor', gestor: 'Para coordenadores e supervisores',
   supervisao: 'Para a supervisão de tickets', links: 'Para quem edita a Central de Links', admin: 'Para a administração',
+  credito: 'Para executivos de negócios e a Análise de Crédito', credito_analise: 'Para analistas de crédito e a diretoria',
+  implantacao: 'Para executivos de negócios e o setor Implantação', implantacao_setor: 'Para o setor Implantação', implantacao_acompanhar: 'Para o setor Implantação e a diretoria',
+  contrato: 'Para executivos de negócios e o Jurídico', contrato_juridico: 'Para quem elabora os contratos (Jurídico)',
+  jornada_executivo: 'Para executivos de negócios', jornada_equipe: 'Para a Análise de Crédito, o Jurídico e a Implantação',
 };
 
 const TUTORIAIS = [
@@ -64,6 +77,26 @@ const TUTORIAIS = [
     descricao: 'Registrar renegociações, acompanhar a perda de receita e os tickets do CS.' },
   { slug: 'ferramenta-partnerchip', grupo: 'Ferramentas', publico: { modulo: 'partnerchip-resultados' }, titulo: 'PartnerChip — Resultados',
     descricao: 'O painel de resultados dos parceiros.' },
+  { slug: 'jornada-credito-implantacao', grupo: 'Ferramentas', publico: 'jornada_executivo', titulo: 'Da Análise de Crédito à Implantação — pelo executivo',
+    descricao: 'O caminho do executivo: pedir a análise e receber o retorno, pedir o contrato, levar a minuta ao síndico, pedir a assinatura, solicitar a implantação e acompanhar até a Carteira.' },
+  { slug: 'jornada-credito-implantacao-equipe', grupo: 'Ferramentas', publico: 'jornada_equipe', titulo: 'Da Análise de Crédito à Implantação — por quem executa',
+    descricao: 'O mesmo caminho pelas mãos de quem executa: a analista de crédito libera o retorno, a advogada redige, manda assinar e registra as condições, a coordenação designa, a assistente conduz e a coordenação confirma na Carteira.' },
+  { slug: 'credito-solicitar', grupo: 'Ferramentas', publico: 'credito', titulo: 'Análise de Crédito — pedir e acompanhar',
+    descricao: 'Preencher a solicitação, anexar a convenção e o relatório, enviar, responder pendências, abrir o retorno e pedir reanálise.' },
+  { slug: 'credito-analisar', grupo: 'Ferramentas', publico: 'credito_analise', titulo: 'Análise de Crédito — analisar e liberar',
+    descricao: 'Assumir da fila, lançar o relatório, conferir a convenção, calcular, ver a prévia, levar à diretoria e liberar o retorno.' },
+  { slug: 'implantacao-solicitar', grupo: 'Ferramentas', publico: 'implantacao', titulo: 'Implantação — pedir e acompanhar',
+    descricao: 'Abrir a implantação a partir da análise (ou de um PDF antigo, ou de um condomínio de entrega), preencher o formulário, anexar os documentos, enviar e acompanhar.' },
+  { slug: 'implantacao-conduzir', grupo: 'Ferramentas', publico: 'implantacao_setor', titulo: 'Implantação — designar, conduzir e levar à Carteira',
+    descricao: 'Designar quem conduz, quem edita, as 5 etapas e o prazo de 3 dias úteis (com impedimento), as conferências, devolver com pendência, concluir e confirmar a entrada na Carteira.' },
+  { slug: 'implantacao-ficha-repasse', grupo: 'Ferramentas', publico: 'implantacao_setor', titulo: 'Implantação — ficha de repasse',
+    descricao: 'A ficha que abre na conclusão já preenchida: completar os campos em azul, enviar ao Crédito em 5 dias úteis, responder a devolução, novas versões e o PDF no papel timbrado.' },
+  { slug: 'implantacao-acompanhar', grupo: 'Ferramentas', publico: 'implantacao_acompanhar', titulo: 'Implantação — acompanhamento e metas',
+    descricao: 'Painel, mês vigente, Controle (filtro por mês, editar as etapas e concluir, visão resumida e a planilha completa, com Excel), metas de onboarding e de documentação, antecipações para o Controle de Repasses, fichas de repasse e os parâmetros.' },
+  { slug: 'contrato-solicitar', grupo: 'Ferramentas', publico: 'contrato', titulo: 'Solicitação de Contrato — pedir e acompanhar',
+    descricao: 'Pedir o contrato a partir da análise, preencher as condições e os pedidos do síndico, enviar ao Jurídico, pedir ajuste na minuta ou a assinatura, acompanhar os contratos e, assinado, solicitar a implantação.' },
+  { slug: 'contrato-elaborar', grupo: 'Ferramentas', publico: 'contrato_juridico', titulo: 'Solicitação de Contrato — elaborar e registrar as condições fechadas',
+    descricao: 'Assumir da fila, ver os pedidos com a resposta padrão, anexar e enviar a minuta, responder ao ajuste, marcar a assinatura e registrar as condições fechadas (o executivo solicita a implantação com elas).' },
   { slug: 'gestao-usuarios', grupo: 'Gestão do setor', publico: 'gestor', titulo: 'Usuários do setor',
     descricao: 'Criar o acesso de alguém do setor, liberar ferramentas e redefinir a senha.' },
   { slug: 'gestao-ferramentas', grupo: 'Gestão do setor', publico: 'gestor', titulo: 'Ferramentas do setor',
@@ -88,6 +121,16 @@ async function visibilidade(db, seg, u) {
   const gestor = seg.GESTORES_DE_SETOR.includes(u.papel);
   const sup = !!u.supervisor_tickets;
   const mods = await seg.modulosDoUsuario(u);
+  // Análise de Crédito: analistas (setor da política), diretoria (regra de acesso) e executivos cadastrados
+  const pol = await db.um('SELECT parametros->>\'setor_analistas\' AS setor FROM parametros_politica WHERE ativa');
+  const analista = !!(await db.um('SELECT 1 FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id WHERE sm.usuario_id = $1 AND s.nome = $2', [u.id, pol ? pol.setor : 'Análise de Crédito']));
+  const dir = await db.um("SELECT regra->'pessoas' AS p FROM regras_acesso WHERE chave = 'credito.diretoria'");
+  const diretoria = !!(dir && Array.isArray(dir.p) && dir.p.includes(u.id));
+  const executivo = !!(await db.um('SELECT 1 FROM executivos WHERE usuario_id = $1 AND ativo', [u.id]));
+  const setorImplantacao = !!(await db.um("SELECT 1 FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id WHERE sm.usuario_id = $1 AND s.nome = 'Implantação'", [u.id]));
+  // Solicitação de Contrato: quem elabora (pessoas marcadas na regra "Elaborar as minutas de contrato")
+  const elab = await db.um("SELECT regra->'pessoas' AS p FROM regras_acesso WHERE chave = 'contratos.elaborar'");
+  const elaborador = !!(elab && Array.isArray(elab.p) && elab.p.includes(u.id));
   const regra = {
     todos: true,
     equipe: membro.length > 0 || sup,
@@ -95,6 +138,15 @@ async function visibilidade(db, seg, u) {
     gestor,
     supervisao: sup,
     links: !!u.editor_links,
+    credito: analista || diretoria || executivo,
+    credito_analise: analista || diretoria,
+    implantacao: executivo || setorImplantacao || diretoria,
+    implantacao_setor: setorImplantacao,
+    implantacao_acompanhar: setorImplantacao || diretoria,
+    contrato: executivo || elaborador || diretoria,
+    contrato_juridico: elaborador,
+    jornada_executivo: executivo,
+    jornada_equipe: analista || diretoria || setorImplantacao || elaborador,
     admin: false,
   };
   return (t) => (typeof t.publico === 'string' ? !!regra[t.publico] : mods.has(t.publico.modulo));

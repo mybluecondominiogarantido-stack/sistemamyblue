@@ -1,15 +1,19 @@
 'use strict';
 const express = require('express');
 const { hostsDoPortal } = require('../seguranca');
+const { MODULO: MODULO_BOLETOS } = require('../boletos-carteira');
 
 const CALLBACK_RE = /^[A-Za-z_$][\w$]{0,80}$/;
 const COLECAO_RE = /^[A-Za-z0-9_-]{1,40}$/;
+
+// o que a ferramenta isolada pode fazer na página dela (sem allow-same-origin: não alcança o portal)
+const SANDBOX = 'sandbox allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads';
 
 const paginaSimples = (titulo, msg) => `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${titulo}</title><link rel="stylesheet" href="/estilos.css"></head><body class="pagina-aviso"><div class="aviso-card"><img src="/img/logo.png" alt="MyBlue" height="40">
 <h1>${titulo}</h1><p>${msg}</p><a class="btn primary" href="/" target="_top">Voltar ao início</a></div></body></html>`;
 
-function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, cfg }) {
+function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, boletosCarteira, cfg }) {
   const r = express.Router();
 
   /* ---------- lista de ferramentas do usuário ---------- */
@@ -18,7 +22,7 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, cf
     const lista = (await modulos.listar())
       .filter((m) => (m.ativo || req.usuario.papel === 'admin') && (!permitidos || permitidos.has(m.slug)))
       .map((m) => ({ slug: m.slug, nome: m.nome, descricao: m.descricao, setor: m.setor_nome || 'Outros', setor_ordem: m.setor_ordem ?? 999,
-        icone: m.icone, ativo: m.ativo, tem_arquivo: m.tem_arquivo, versao_em: m.versao_em }));
+        icone: m.icone, ativo: m.ativo, tem_arquivo: m.tem_arquivo, versao_em: m.versao_em, isolada: !!m.config.isolada || m.pendente }));
     const { rows: recentes } = await db.q(`SELECT modulo_slug, MAX(quando) AS quando FROM auditoria
       WHERE usuario_id = $1 AND acao = 'modulo_aberto' GROUP BY modulo_slug ORDER BY quando DESC LIMIT 6`, [req.usuario.id]);
     res.json({ modulos: lista, recentes: recentes.map((x) => x.modulo_slug) });
@@ -33,13 +37,27 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, cf
     const m = await modulos.obter(slug);
     if (!m || (!m.ativo && req.usuario.papel !== 'admin')) return res.status(404).send(paginaSimples('Ferramenta não encontrada', 'Esta ferramenta não existe ou foi desativada.'));
     if (!(await seg.podeAcessar(req.usuario, slug))) return res.status(403).send(paginaSimples('Sem acesso', 'Você não tem permissão para esta ferramenta. Peça acesso à administração.'));
-    if (!m.tem_arquivo) {
+    if (!m.tem_arquivo && !req.query.versao) {
       return res.status(404).send(paginaSimples('Ferramenta ainda sem arquivo',
         req.usuario.papel === 'admin' ? 'Envie o HTML desta ferramenta em Administração → Módulos.' : 'A administração ainda não publicou o arquivo desta ferramenta.'));
     }
-    const html = await modulos.montarHtml(m, req.usuario, await acessos.paraFerramenta(req.usuario, m));
-    await seg.auditar(req, 'modulo_aberto', slug, null);
+    // prévia de uma versão que aguarda aprovação (?versao=<id>): administração e coordenação/supervisão do setor
+    let versao = null;
+    if (req.query.versao) {
+      const gestor = req.usuario.papel === 'admin' || (await acessos.gestoresDoSetor(m.setor_id)).includes(req.usuario.id);
+      const v = gestor && await db.um('SELECT id FROM modulo_versoes WHERE id = $1 AND modulo_slug = $2', [Number(req.query.versao) || 0, slug]);
+      if (!v) return res.status(404).send(paginaSimples('Versão não encontrada', 'Esta versão não existe ou você não pode vê-la.'));
+      versao = v.id;
+    }
+    // isolada: o navegador põe a página numa origem própria (sandbox), sem o cookie nem a API do portal.
+    // Ferramenta aguardando aprovação e prévia de versão nova saem sempre isoladas: são HTML que a administração ainda não aprovou.
+    const isolada = !!m.config.isolada || m.pendente || !!versao;
+    const chave = isolada ? seg.chaveFerramenta(req, slug) : null;
+    const html = await modulos.montarHtml(m, req.usuario, await acessos.paraFerramenta(req.usuario, m), { chave, versao });
+    if (html == null) return res.status(404).send(paginaSimples('Versão não encontrada', 'Esta versão não existe.'));
+    await seg.auditar(req, 'modulo_aberto', slug, versao ? { previa: versao } : null);
     res.set('Cache-Control', 'no-store');
+    if (isolada) res.set('Content-Security-Policy', SANDBOX);
     res.type('html').send(html);
   });
 
@@ -112,6 +130,11 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, cf
     const corpo = req.body || {};
     if ((corpo.set && typeof corpo.set !== 'object') || (corpo.del && !Array.isArray(corpo.del))) return res.status(400).json({ erro: 'Formato inválido.' });
     if (corpo.base && typeof corpo.base !== 'object') return res.status(400).json({ erro: 'Formato inválido.' });
+    const recusa = await acessos.conferirPapeisNoArmazenamento(req.usuario, x.m, corpo);
+    if (recusa) {
+      await seg.auditar(req, 'papeis_recusados', x.m.slug, { chaves: Object.keys(corpo.set || {}).slice(0, 20) });
+      return res.status(403).json({ erro: recusa, recusado: true });
+    }
     const r = await gravarArmazenamento(x.m.slug, x.escopo, corpo, req.usuario.id);
     if (r.conflito) {
       await seg.auditar(req, 'dados_conflito', x.m.slug, { chaves: Object.keys(r.conflito).slice(0, 20) });
@@ -157,8 +180,15 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, cf
     if (await soConsulta(req, m)) return res.status(403).json({ code: 'permission_denied', erro: MSG_CONSULTA });
     try {
       const ops = (req.body || {}).ops;
+      const recusa = await acessos.conferirPapeisNosDocumentos(req.usuario, m, ops);
+      if (recusa) {
+        await seg.auditar(req, 'papeis_recusados', m.slug, { ops: (ops || []).slice(0, 10).map((o) => `${o && o.op} ${o && o.path}`) });
+        return res.status(403).json({ code: 'permission_denied', erro: recusa });
+      }
       const r2 = await documentos.gravar(m.slug, ops, pessoaDe(req.usuario), req.usuario.id);
       await seg.auditar(req, 'documento_gravado', m.slug, { ops: ops.slice(0, 10).map((o) => `${o.op} ${o.path}`) });
+      // competência criada no Controle de Emissão de Boletos: o cadastro puxa da carteira
+      if (m.slug === MODULO_BOLETOS && boletosCarteira && ops.some((o) => o && o.op === 'set' && /^meses\//.test(o.path))) boletosCarteira.agendar(req.usuario);
       res.json(r2);
     } catch (e) { falhaDoc(res, e); }
   });
@@ -168,6 +198,12 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, cf
     if (!m) return;
     try {
       const b = req.body || {};
+      if (b.data) {
+        if (await soConsulta(req, m)) return res.status(403).json({ code: 'permission_denied', erro: MSG_CONSULTA });
+        const existe = await documentos.ler(m.slug, String(b.path || ''));
+        const recusa = await acessos.conferirPapeisNosDocumentos(req.usuario, m, [{ op: existe ? 'update' : 'set', path: b.path, data: b.data }]);
+        if (recusa) return res.status(403).json({ code: 'permission_denied', erro: recusa });
+      }
       res.json(await documentos.adquirir(m.slug, b.path, b, pessoaDe(req.usuario), req.usuario.id));
     } catch (e) { falhaDoc(res, e); }
   });
@@ -304,7 +340,8 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, cf
     const colecao = String(p.sheet || m.config.colecao_padrao || '');
     if (!COLECAO_RE.test(colecao)) return responder(res, cb, { ok: false, error: 'Aba inválida.' }, 400);
     const acao = p.action ? String(p.action) : null;
-    if (acao && req.method === 'GET' && !getDoProprioSite(req)) return responder(res, cb, { ok: false, error: 'Origem não permitida.' }, 403);
+    // gravação por GET e leitura por JSONP (<script> que outro site poderia incluir) só a partir do próprio portal
+    if ((acao || cb) && req.method === 'GET' && !getDoProprioSite(req)) return responder(res, cb, { ok: false, error: 'Origem não permitida.' }, 403);
 
     if (acao && await soConsulta(req, m)) return responder(res, cb, { ok: false, error: MSG_CONSULTA }, 403);
     const uid = req.usuario.id;
@@ -395,4 +432,4 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, cf
   return r;
 }
 
-module.exports = { rotasFerramentas, paginaSimples };
+module.exports = { rotasFerramentas, paginaSimples, SANDBOX };

@@ -31,7 +31,7 @@ async function entrar(email, senha) {
   return c;
 }
 async function criar(nome, email, extra = {}) {
-  const r = await admin('POST', '/api/admin/usuarios', { nome, email, senha: 'Senha1234', ...extra });
+  const r = await admin('POST', '/api/admin/usuarios', { data_nascimento: '1990-05-10', data_admissao: '2024-02-01', nome, email, senha: 'Senha1234', ...extra });
   assert.equal(r.status, 201, r.texto);
   await ctx.db.q('UPDATE usuarios SET trocar_senha = FALSE WHERE id = $1', [r.json.id]);
   ids[email] = r.json.id;
@@ -194,4 +194,52 @@ test('Análise de Espólio: os papéis acompanham a versão do HTML', async () =
   assert.deepEqual(conf((await admin('GET', '/m/espolio-teste/')).texto).usuario.papeis, ['gestao', 'implantacao', 'avulso']);
   const o = await entrar('olga@teste.com', 'Senha1234');
   assert.ok(!(await o('GET', '/api/db/espolio-teste')).json.docs.some((d) => d.id === `mb-${adm.id}`));
+});
+
+test('papéis conferidos no servidor: quem edita a ferramenta não se dá o papel Gestão', async () => {
+  const ivo = ids['ivo@teste.com'];
+  const olga = ids['olga@teste.com'];
+  assert.equal((await admin('PUT', '/api/admin/modulos/comissoes-teste/acesso', { acessos: [
+    { usuario_id: ivo, papeis: ['executivo'] }, { usuario_id: olga, papeis: ['financeiro'] }] })).status, 200);
+  const i = await entrar('ivo@teste.com', 'Senha1234');
+  const valor = async (uid) => JSON.parse((await i('GET', '/api/armazenamento/comissoes-teste')).json.dados[`cnp:p:${uid}`]);
+  const meu = await valor(ivo);
+  // pela aba Acessos da ferramenta (gravação direta nos dados): recusado
+  let r = await i('POST', '/api/armazenamento/comissoes-teste', { set: { [`cnp:p:${ivo}`]: JSON.stringify({ ...meu, papeis: ['executivo', 'gestor'] }) } });
+  assert.equal(r.status, 403);
+  assert.equal(r.json.recusado, true);
+  assert.match(r.json.erro, /Gestão/);
+  assert.deepEqual((await valor(ivo)).papeis, ['executivo']);
+  // apagar o registro de outra pessoa ou limpar tudo também mexe nos papéis
+  assert.equal((await i('POST', '/api/armazenamento/comissoes-teste', { del: [`cnp:p:${olga}`] })).status, 403);
+  assert.equal((await i('POST', '/api/armazenamento/comissoes-teste', { limpar: true })).status, 403);
+  // o resto do registro (e os outros dados da ferramenta) grava normalmente
+  assert.equal((await i('POST', '/api/armazenamento/comissoes-teste', { set: { [`cnp:p:${ivo}`]: JSON.stringify({ ...meu, executivo: 'IVO NOVO' }), 'cnp:respostas': '[]' } })).status, 200);
+  assert.equal((await valor(ivo)).executivo, 'IVO NOVO');
+  // com o papel Gestão dado pelo portal, distribui os papéis pela própria ferramenta
+  assert.equal((await admin('PUT', '/api/admin/modulos/comissoes-teste/acesso', { acessos: [
+    { usuario_id: ivo, papeis: ['executivo', 'gestor'] }, { usuario_id: olga, papeis: ['financeiro'] }] })).status, 200);
+  const deOlga = await valor(olga);
+  r = await i('POST', '/api/armazenamento/comissoes-teste', { set: { [`cnp:p:${olga}`]: JSON.stringify({ ...deOlga, papeis: ['financeiro', 'executivo'] }) } });
+  assert.equal(r.status, 200, r.texto);
+  assert.ok((await ctx.db.um("SELECT 1 FROM auditoria WHERE acao = 'papeis_recusados' AND modulo_slug = 'comissoes-teste'")));
+});
+
+test('papéis conferidos no servidor: Análise de Espólio (banco de documentos)', async () => {
+  const olga = ids['olga@teste.com'];
+  const o = await entrar('olga@teste.com', 'Senha1234');
+  const caminho = `perfis/mb-${olga}`;
+  let r = await o('POST', '/api/db/espolio-teste', { ops: [{ op: 'update', path: caminho, data: { papeis: ['gestao'] } }] });
+  assert.equal(r.status, 403);
+  assert.equal(r.json.code, 'permission_denied');
+  r = await o('POST', '/api/db/espolio-teste', { ops: [{ op: 'set', path: `perfis/mb-${olga + 1000}`, data: { papeis: ['gestao'] } }] });
+  assert.equal(r.status, 403, 'nem criando um perfil novo');
+  r = await o('POST', '/api/db/espolio-teste/trava', { path: caminho, holder: 'x', data: { papeis: ['gestao'] } });
+  assert.equal(r.status, 403, 'nem pela trava');
+  // o resto do perfil grava
+  r = await o('POST', '/api/db/espolio-teste', { ops: [{ op: 'update', path: caminho, data: { nomeCarteira: 'OLGA NOVA' } }] });
+  assert.equal(r.status, 200, r.texto);
+  const doc = await ctx.documentos.ler('espolio-teste', caminho);
+  assert.deepEqual(doc.papeis, ['implantacao']);
+  assert.equal(doc.nomeCarteira, 'OLGA NOVA');
 });
