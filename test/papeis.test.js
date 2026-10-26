@@ -278,6 +278,26 @@ test('coordenador não redefine a senha de quem tem acesso além dos setores del
   assert.equal((await admin('POST', `/api/admin/usuarios/${soCredito}/senha`, {})).status, 200);
 });
 
+test('coordenador não redefine a senha de quem foi liberado individualmente ou lê premiações que ele não lê', async () => {
+  const id = await criar('Teodoro do Crédito', 'teodoro@teste.com', { setores: [S('Crédito')] });
+  assert.equal((await coord('POST', `/api/admin/usuarios/${id}/senha`, {})).status, 200);
+  // chancela da diretoria liberada só para ele: com a senha, a coordenação chancelaria análises
+  assert.equal((await admin('PUT', '/api/admin/carteira/acessos/credito.diretoria', { pessoas: [id] })).status, 200);
+  let r = await coord('POST', `/api/admin/usuarios/${id}/senha`, {});
+  assert.equal(r.status, 403);
+  assert.match(r.json.erro, /chancelar análises de crédito/);
+  assert.equal((await admin('PUT', '/api/admin/carteira/acessos/credito.diretoria', { pessoas: [] })).status, 200);
+  assert.equal((await coord('POST', `/api/admin/usuarios/${id}/senha`, {})).status, 200);
+  // demonstrativo de premiação dele, que a coordenação não lê
+  const rel = await ctx.db.um("INSERT INTO comissao_relatorios (modulo_slug, competencia, chave, usuario_id, nome, html) VALUES ('premiacoes', '2026-09', 'x', $1, 'Teo', '<p>x</p>') RETURNING id", [id]);
+  r = await coord('POST', `/api/admin/usuarios/${id}/senha`, {});
+  assert.equal(r.status, 403);
+  assert.match(r.json.erro, /premiação/);
+  // a coordenação que é líder (lê o demonstrativo) redefine
+  await ctx.db.q('INSERT INTO comissao_leitores (relatorio_id, usuario_id) VALUES ($1, $2)', [rel.id, coordId]);
+  assert.equal((await coord('POST', `/api/admin/usuarios/${id}/senha`, {})).status, 200);
+});
+
 test('tudo o que uma pessoa acessa, num lugar só', async () => {
   const ivo = ids['ivo@teste.com'];
   let r = await admin('GET', `/api/admin/usuarios/${ivo}/acessos`);

@@ -262,8 +262,8 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     });
   });
 
-  async function acessosForaDoEscopo(id, esc) {
-    const u = await db.um('SELECT supervisor_tickets, editor_links FROM usuarios WHERE id = $1', [id]);
+  async function acessosForaDoEscopo(id, esc, quemPede) {
+    const u = await db.um('SELECT id, papel, supervisor_tickets, editor_links FROM usuarios WHERE id = $1', [id]);
     const motivos = [];
     if (u.supervisor_tickets) motivos.push('vê os tickets de todos os setores');
     if (u.editor_links) motivos.push('edita a Central de Links');
@@ -273,6 +273,17 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     const mods = (await db.q('SELECT m.slug, m.nome FROM permissoes p JOIN modulos m ON m.slug = p.modulo_slug WHERE p.usuario_id = $1', [id])).rows;
     const deFora = mods.filter((m) => !esc.modulos.has(m.slug)).map((m) => m.nome);
     if (deFora.length) motivos.push('abre ' + deFora.join(', '));
+    // permissões que a pessoa tem e quem pede não tem (ex.: chancela da diretoria, elaborar contratos, carteira)
+    const minhas = await regras.permissoesDe(quemPede);
+    const permsDeFora = [...(await regras.permissoesDe(u)).keys()].filter((k) => !minhas.has(k));
+    if (permsDeFora.length) motivos.push('tem ' + permsDeFora.map((k) => regras.PERMISSOES.find((p) => p.chave === k).rotulo.toLowerCase()).join(', '));
+    // demonstrativos de premiação (dela ou que ela lê como líder) que quem pede não lê
+    const rels = (await db.q(`SELECT DISTINCT r.id, r.modulo_slug FROM comissao_relatorios r WHERE (r.usuario_id = $1 OR EXISTS
+      (SELECT 1 FROM comissao_leitores l WHERE l.relatorio_id = r.id AND l.usuario_id = $1)) AND r.usuario_id <> $2 AND NOT EXISTS
+      (SELECT 1 FROM comissao_leitores l WHERE l.relatorio_id = r.id AND l.usuario_id = $2)`, [id, quemPede.id])).rows;
+    const ferramentas = new Map();
+    for (const x of rels) if (!ferramentas.has(x.modulo_slug)) ferramentas.set(x.modulo_slug, await seg.podeAcessar(quemPede, x.modulo_slug));
+    if (rels.some((x) => !ferramentas.get(x.modulo_slug))) motivos.push('tem demonstrativos de premiação que você não lê');
     return motivos;
   }
 
@@ -282,7 +293,7 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     if ((esc && !esc.gerencia(id)) || !(await db.um('SELECT 1 FROM usuarios WHERE id = $1', [id]))) return erro(res, 404, 'Usuário não encontrado.');
     // quem tem acesso além dos setores de quem pede (outro setor, ferramenta de fora, marcações da administração) só tem
     // a senha redefinida pela administração: com a senha temporária, quem pede entraria com os acessos da pessoa
-    const fora = esc ? await acessosForaDoEscopo(id, esc) : [];
+    const fora = esc ? await acessosForaDoEscopo(id, esc, req.usuario) : [];
     if (fora.length) return erro(res, 403, `Esta pessoa tem acessos fora dos seus setores (${fora.join('; ')}). Peça à administração para redefinir a senha dela.`);
     let senha = req.body && req.body.senha ? String(req.body.senha) : '';
     if (senha) { const e = validarNovaSenha(senha); if (e) return erro(res, 400, e); } else senha = senhaAleatoria();
