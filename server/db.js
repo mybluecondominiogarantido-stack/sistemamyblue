@@ -528,7 +528,7 @@ CREATE TABLE IF NOT EXISTS implantacao_protocolos (
 CREATE TABLE IF NOT EXISTS implantacoes (
   id SERIAL PRIMARY KEY,
   protocolo TEXT UNIQUE,
-  etapa TEXT NOT NULL DEFAULT 'rascunho' CHECK (etapa IN ('rascunho','diretoria','fila','em_implantacao','pendencia','concluida','na_carteira','cancelada')),
+  etapa TEXT NOT NULL DEFAULT 'rascunho' CHECK (etapa IN ('rascunho','diretoria','juridico','fila','em_implantacao','pendencia','concluida','na_carteira','cancelada')),
   origem TEXT NOT NULL CHECK (origem IN ('analise','pdf','entrega','planilha')),
   analise_id INTEGER REFERENCES analises(id) ON DELETE SET NULL,
   analise_protocolo TEXT,
@@ -867,7 +867,11 @@ ALTER TABLE contratos DROP CONSTRAINT IF EXISTS contratos_etapa_check;
 ALTER TABLE contratos ADD CONSTRAINT contratos_etapa_check CHECK (etapa IN ('rascunho','fila','em_elaboracao','pendencia','minuta_enviada','para_assinar','em_assinatura','conferencia','assinado','cancelada'));
 ALTER TABLE contratos ADD COLUMN IF NOT EXISTS assinatura_pedida_em TIMESTAMPTZ;
 ALTER TABLE contratos ADD COLUMN IF NOT EXISTS em_assinatura_em TIMESTAMPTZ;
-ALTER TABLE contratos ADD COLUMN IF NOT EXISTS assinatura_plataforma TEXT NOT NULL DEFAULT ''
+ALTER TABLE contratos ADD COLUMN IF NOT EXISTS assinatura_plataforma TEXT NOT NULL DEFAULT '';
+-- contrato assinado fora do portal: a implantação espera com o Jurídico (etapa juridico) até a advogada registrar as condições
+ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS assinado_fora BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE implantacoes DROP CONSTRAINT IF EXISTS implantacoes_etapa_check;
+ALTER TABLE implantacoes ADD CONSTRAINT implantacoes_etapa_check CHECK (etapa IN ('rascunho','diretoria','juridico','fila','em_implantacao','pendencia','concluida','na_carteira','cancelada'))
 `;
 
 /* Funções e gatilhos do banco (cada item é um comando inteiro: o corpo das funções tem ";").

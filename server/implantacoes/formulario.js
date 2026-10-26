@@ -77,10 +77,15 @@ function daAnalise(a) {
 /* condomínio de entrega (em enxoval): os documentos obrigatórios ainda não existem, então podem chegar depois */
 const docsObrigatorios = (origem) => (origem === 'entrega' ? [] : Object.keys(DOCUMENTOS).filter((t) => DOCUMENTOS[t].obrigatorio));
 
-/* o que falta para enviar ao setor (bloqueia o envio) */
-function faltas(f, { docs = new Set(), origem, executivoId, referencia = {} } = {}) {
+/* contrato assinado fora do portal: o que vem do contrato assinado e a advogada registra (o executivo não preenche) */
+const DA_ADVOGADA = ['taxa_adm', 'boleto', 'desconto_tipo', 'desconto_valor', 'inicio_contrato', 'honorarios'];
+
+/* o que falta para enviar ao setor (bloqueia o envio). assinadoFora: contrato assinado fora do portal, que vai antes ao
+   Jurídico; semCondicoes: a advogada ainda não registrou as condições (não se cobra o que é dela) */
+function faltas(f, { docs = new Set(), origem, executivoId, referencia = {}, assinadoFora = false, semCondicoes = false } = {}) {
   const l = [];
-  const exige = (cond, msg) => { if (!cond) l.push(msg); };
+  const cobra = (cond, msg) => { if (!cond) l.push(msg); };
+  const exige = (cond, msg, campo) => { if (!(semCondicoes && DA_ADVOGADA.includes(campo))) cobra(cond, msg); };
   exige(texto(f.nome), 'Informar o nome do condomínio.');
   if (f.sem_cnpj) exige(f.entrega || origem === 'entrega', 'Só condomínio de entrega pode seguir sem CNPJ.');
   else exige(cnpjOk(f.cnpj), 'Informar um CNPJ válido (condomínio de entrega sem CNPJ: marque "Ainda não tem CNPJ").');
@@ -94,11 +99,11 @@ function faltas(f, { docs = new Set(), origem, executivoId, referencia = {} } = 
   exige(cpfValido(f.sindico_cpf), 'Informar um CPF do síndico válido.');
   exige(emailOk(f.sindico_email), 'Informar o e-mail do síndico ou do condomínio.');
   exige(digitos(f.sindico_telefone).length >= 10, 'Informar o telefone do síndico (com DDD).');
-  exige(num(f.taxa_adm) > 0, 'Informar a taxa administrativa.');
-  exige(num(f.boleto) > 0, 'Informar o valor do boleto.');
-  if (['percentual', 'valor'].includes(f.desconto_tipo)) exige(num(f.desconto_valor) > 0, 'Informar o valor do desconto de pontualidade.');
-  exige(/^\d{4}-\d{2}-\d{2}$/.test(texto(f.inicio_contrato)), 'Informar a data de início do contrato.');
-  exige(num(f.honorarios) > 0, 'Informar o percentual de honorários de cobrança extrajudicial.');
+  exige(num(f.taxa_adm) > 0, 'Informar a taxa administrativa.', 'taxa_adm');
+  exige(num(f.boleto) > 0, 'Informar o valor do boleto.', 'boleto');
+  if (['percentual', 'valor'].includes(f.desconto_tipo)) exige(num(f.desconto_valor) > 0, 'Informar o valor do desconto de pontualidade.', 'desconto_valor');
+  exige(/^\d{4}-\d{2}-\d{2}$/.test(texto(f.inicio_contrato)), 'Informar a data de início do contrato.', 'inicio_contrato');
+  exige(num(f.honorarios) > 0, 'Informar o percentual de honorários de cobrança extrajudicial.', 'honorarios');
   exige((f.garantias || []).length || texto(f.garantia_outra), 'Marcar o que será garantido.');
   exige(['sim', 'nao'].includes(f.parceria), 'Dizer se há contrato de parceria.');
   if (f.parceria === 'sim') exige((f.parceiros || []).some((p) => texto(p.nome)), 'Escolher o parceiro.');
@@ -117,20 +122,7 @@ function faltas(f, { docs = new Set(), origem, executivoId, referencia = {} } = 
   exige(executivoId, 'Escolher o executivo de negócios.');
   if (origem === 'entrega' && !(referencia && referencia.aprovado_em)) l.unshift('Pedir a aprovação da diretoria (taxa administrativa e boleto).');
   for (const tipo of docsObrigatorios(origem)) if (!docs.has(tipo)) l.push(`Anexar: ${DOCUMENTOS[tipo].nome}.`);
-  return l;
-}
-
-/* condomínio de entrega: o mínimo para a diretoria aprovar taxa e boleto */
-function faltasEntrega(f) {
-  const l = [];
-  if (!texto(f.nome)) l.push('Informar o nome do condomínio.');
-  if (!f.sem_cnpj && !cnpjOk(f.cnpj)) l.push('Informar um CNPJ válido, ou marcar "Ainda não tem CNPJ".');
-  if (!/^[A-Z]{2}$/.test(texto(f.uf))) l.push('Informar o estado do contrato.');
-  if (!(num(f.uh_total) > 0)) l.push('Informar o número de unidades.');
-  if (!(num(f.taxa_ordinaria) > 0)) l.push('Informar a taxa ordinária prevista.');
-  if (!texto(f.construtora)) l.push('Informar a construtora.');
-  if (!(num(f.taxa_adm) > 0)) l.push('Informar a taxa administrativa proposta.');
-  if (!(num(f.boleto) > 0)) l.push('Informar o valor do boleto proposto.');
+  if (assinadoFora && !docs.has('contrato')) l.push(`Anexar: ${DOCUMENTOS.contrato.nome}.`);
   return l;
 }
 
@@ -244,5 +236,5 @@ function doPdf(r) {
   };
 }
 
-module.exports = { DOCUMENTOS, GARANTIAS, RECEITAS_CASHBACK, ONBOARDING, ENVIO, ENVIO_CARTEIRA, cpfValido, cnpjOk, daAnalise, doPdf, faltas, faltasEntrega, pendencias, diferencas, docsObrigatorios,
+module.exports = { DOCUMENTOS, DA_ADVOGADA, GARANTIAS, RECEITAS_CASHBACK, ONBOARDING, ENVIO, ENVIO_CARTEIRA, cpfValido, cnpjOk, daAnalise, doPdf, faltas, pendencias, diferencas, docsObrigatorios,
   normalizarEtapas, faltasEtapas, faltasConcluir, onboardingFeito, conferirCadastro };

@@ -1,24 +1,22 @@
 'use strict';
 /*
- * Implantação: do contrato assinado à Carteira. O comercial (executivo de negócios) pede a implantação a partir de uma
- * análise de crédito liberada, preenche o formulário e anexa os documentos; o setor Implantação conduz; a coordenação
- * confirma a entrada na Carteira.
+ * Implantação: do contrato assinado à Carteira. Toda implantação começa de um contrato: o comercial (executivo de negócios)
+ * escolhe um contrato concluído no portal (Solicitação de Contrato, com as condições fechadas) ou anexa o contrato
+ * assinado fora do portal com o retorno da análise; preenche o formulário e anexa os documentos; o setor Implantação
+ * conduz; a coordenação confirma a entrada na Carteira.
  *
  * Etapas: rascunho → fila (enviada, aguardando designação) → em_implantacao → concluida → na_carteira.
- *         pendencia: devolvida ao comercial. diretoria: condomínio de entrega aguardando a aprovação de taxa e boleto. cancelada.
+ *         juridico: contrato assinado fora do portal, com a advogada para registrar as condições (depois segue sozinha
+ *         para a fila). pendencia: devolvida ao comercial. cancelada. (diretoria: só nas antigas de condomínio de entrega.)
  *
  * Quem faz o quê (definido no portal, nunca no código):
  *  - comercial: quem está ligado a um cadastro de executivo (Análise de Crédito → Pessoas e papéis); vê e pede as suas;
  *  - equipe: quem é do setor Implantação; coordenação: o gestor do setor (líder, coordenação ou supervisão);
- *  - gestor da Análise de Crédito: o gestor do setor dos analistas; libera análises além do prazo da política para implantar;
+ *  - quem elabora contratos (Jurídico): registra as condições do contrato assinado fora do portal;
  *  - diretoria: quem chancela análises de crédito; administração: tudo.
- *
- * A análise abre implantação até implantacao_validade_dias (política de crédito, padrão 90) depois da liberação do
- * retorno; depois disso, só com a liberação do gestor da Análise de Crédito.
  */
 const express = require('express');
 const crypto = require('crypto');
-const { politicaAtiva } = require('../credito/banco');
 const { lerPlanilha } = require('../planilha');
 const { normalizar: normalizarCarteira, semAcento } = require('../carteira');
 const { apelido } = require('../implantacao');
@@ -35,9 +33,8 @@ const { rotasSetor, criarRotinaPrazos, prazoConcluir, autorizacaoAtiva, autoriza
 const { criarPrazos } = require('../implantacoes/prazos');
 
 const SETOR = 'Implantação';
-const ETAPAS = ['rascunho', 'diretoria', 'fila', 'em_implantacao', 'pendencia', 'concluida', 'na_carteira', 'cancelada'];
+const ETAPAS = ['rascunho', 'diretoria', 'juridico', 'fila', 'em_implantacao', 'pendencia', 'concluida', 'na_carteira', 'cancelada'];
 const ORIGEM = { analise: 'Análise de Crédito', pdf: 'Análise anterior ao portal', entrega: 'Condomínio de entrega' };
-const DIA_MS = 24 * 3600 * 1000;
 
 const texto = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
 const diaBrasilia = (d = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
@@ -177,6 +174,126 @@ async function abrirDoContrato(t, ct, usuarioId) {
   return id;
 }
 
+/* envia ao setor Implantação: protocolo, fila (ou volta a quem conduz, no reenvio depois de pendência) e os avisos.
+   autor: quem enviou (o executivo; no contrato assinado fora do portal, a advogada que registrou as condições).
+   retomada: no reenvio, o texto do prazo que voltou a contar (calculado depois que a pausa da pendência fecha) */
+async function enviarAoSetor({ db, seg, avisos }, i, autor, { retomada = async () => '' } = {}) {
+  const docs = await tiposVigentes(db, i.id);
+  const pend = F.pendencias(i.formulario, docs, i.origem);
+  const reenvio = i.etapa === 'pendencia';
+  const doJuridico = i.etapa === 'juridico';
+  const protocolo = i.protocolo || await proximoProtocolo(db);
+  const etapa = i.responsavel_id ? 'em_implantacao' : 'fila';
+  await db.tx(async (t) => {
+    // o lembrete diário de pendências começa no próximo dia útil (no envio vai o aviso no sino)
+    await t.q(`UPDATE implantacoes SET protocolo = $2, etapa = $3, enviado_em = COALESCE(enviado_em, now()), aviso_docs_em = $4::date, lembrete_fila_em = now(),
+      atualizado_em = now() WHERE id = $1`, [i.id, protocolo, etapa, diaBrasilia()]);
+    await t.q('INSERT INTO implantacao_eventos (implantacao_id, usuario_id, tipo, detalhe) VALUES ($1, $2, $3, $4::jsonb)',
+      [i.id, autor.id, reenvio ? 'reenviada' : 'enviada', JSON.stringify({ protocolo, pendentes: pend, ...(doJuridico ? { do_juridico: true } : {}) })]);
+    // a pendência pausou o prazo para concluir: o reenvio retoma de onde parou
+    if (reenvio) await t.q("UPDATE implantacao_pausas SET fim = now(), resolucao = 'Pendência respondida pelo comercial', encerrada_por = $2 WHERE implantacao_id = $1 AND tipo = 'pendencia' AND fim IS NULL", [i.id, autor.id]);
+  });
+  const resumoPend = pend.length ? ` ${pend.length} documento(s)/dado(s) ainda pendente(s): ${pend.join('; ')}.` : '';
+  if (reenvio && i.responsavel_id) {
+    await avisos.notificar([i.responsavel_id], { link: `#/implantacao/${i.id}`, autor_id: autor.id, tipo: 'implantacao', email: true,
+      titulo: `Pendência respondida · ${protocolo} · ${i.condominio}`, texto: `${autor.nome} respondeu a pendência da implantação de ${i.condominio}.${resumoPend}${await retomada()}` });
+  } else {
+    const setor = await pessoasDoSetor(db, seg, SETOR);
+    const origem = i.assinado_fora ? 'contrato assinado fora do portal' : i.origem === 'analise' ? `análise ${i.analise_protocolo}`
+      : i.origem === 'pdf' ? `análise anterior ao portal ${i.analise_protocolo}` : ORIGEM[i.origem].toLowerCase();
+    const quem = doJuridico ? `${autor.nome} registrou as condições do contrato de ${i.condominio} (${origem}) e a implantação seguiu para o setor`
+      : `${autor.nome} enviou ${i.condominio} (${origem}) para implantação`;
+    await avisos.notificar(setor.gestores.length ? setor.gestores : await administradores(db), { link: `#/implantacao/${i.id}`, autor_id: autor.id, tipo: 'implantacao', email: true,
+      titulo: `Nova implantação · ${protocolo} · ${i.condominio}`, texto: `${quem}. Aguardando designação.${resumoPend}` });
+    await avisos.notificar(setor.equipe, { link: `#/implantacao/${i.id}`, autor_id: autor.id, tipo: 'implantacao', email: true,
+      titulo: `Chegou uma nova implantação · ${protocolo} · ${i.condominio}`, texto: `${quem}. A coordenação vai designar quem conduz.` });
+  }
+  if (pend.length) {
+    // aviso no sino para o executivo (inclusive quando foi ele quem enviou); o e-mail diário vem pela rotina
+    await avisos.notificar(await donos(db, i), { link: `#/implantacao/${i.id}`, autor_id: null, tipo: 'implantacao', email: false,
+      titulo: `Pendências da implantação · ${protocolo} · ${i.condominio}`,
+      texto: `Enviada ao setor Implantação. Ainda falta enviar: ${pend.join('; ')}. Você recebe um lembrete por e-mail a cada dia útil até chegarem.` });
+  }
+  return { protocolo, etapa, pendencias: pend };
+}
+
+/* contrato assinado fora do portal: o envio leva o contrato ao Jurídico (direto para registrar as condições, sem minuta)
+   e a implantação espera lá (etapa juridico); com as condições registradas, segue sozinha para o setor (seguirDoJuridico) */
+async function enviarAoJuridico({ db, avisos, regras }, i, autor) {
+  const CT = require('./contratos'); // aqui, e não no topo: contratos.js também usa este arquivo
+  const f = i.formulario || {};
+  const protocolo = i.protocolo || await proximoProtocolo(db);
+  const ctProtocolo = await CT.proximoProtocolo(db);
+  // o pedido do contrato é o formulário da implantação: a advogada parte dele (e do retorno da análise) para registrar o assinado
+  const pedido = { ...f, pedidos: [], assinado_fora: true, implantacao_protocolo: protocolo };
+  const ct = await db.tx(async (t) => {
+    const { id } = await t.um(`INSERT INTO contratos (protocolo, etapa, origem, analise_protocolo, condominio, cnpj, uf, executivo_id, solicitante_id, formulario, referencia, enviado_em, assinado_em)
+      VALUES ($1, 'conferencia', 'pdf', $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, now(), now()) RETURNING id`,
+    [ctProtocolo, i.analise_protocolo || null, i.condominio || f.nome || '', f.sem_cnpj ? '' : i.cnpj || '', i.uf || '', i.executivo_id, i.solicitante_id, JSON.stringify(pedido), JSON.stringify(i.referencia || {})]);
+    for (const [de, para] of [['contrato', 'contrato_assinado'], ['analise_credito', 'analise_credito'], ['convencao', 'convencao']]) {
+      await t.q(`INSERT INTO contrato_documentos (contrato_id, tipo, nome, mime, tamanho, sha256, conteudo, enviado_por, enviado_em)
+        SELECT $1, $2, nome, mime, tamanho, sha256, conteudo, enviado_por, enviado_em FROM implantacao_documentos
+        WHERE id = (SELECT MAX(id) FROM implantacao_documentos WHERE implantacao_id = $3 AND tipo = $4 AND substituido_em IS NULL AND conteudo IS NOT NULL)`, [id, para, i.id, de]);
+    }
+    await t.q('INSERT INTO contrato_eventos (contrato_id, usuario_id, tipo, detalhe) VALUES ($1, $2, $3, $4::jsonb)',
+      [id, autor.id, 'assinado_fora', JSON.stringify({ protocolo: ctProtocolo, implantacao: protocolo })]);
+    // o contrato e o retorno que a advogada confere ficam presos à implantação
+    await t.q("UPDATE implantacao_documentos SET vinculado = TRUE WHERE implantacao_id = $1 AND tipo IN ('contrato','analise_credito') AND substituido_em IS NULL", [i.id]);
+    await t.q("UPDATE implantacoes SET protocolo = $2, etapa = 'juridico', contrato_id = $3, atualizado_em = now() WHERE id = $1", [i.id, protocolo, id]);
+    await t.q('INSERT INTO implantacao_eventos (implantacao_id, usuario_id, tipo, detalhe) VALUES ($1, $2, $3, $4::jsonb)',
+      [i.id, autor.id, 'juridico', JSON.stringify({ protocolo, contrato: ctProtocolo })]);
+    return { id, protocolo: ctProtocolo };
+  });
+  const elaboram = await regras.pessoasCom(CT.PERMISSAO);
+  await avisos.notificar(elaboram.length ? elaboram : await administradores(db), { link: `#/contratos/${ct.id}`, autor_id: autor.id, tipo: 'contrato', email: true,
+    titulo: `Contrato assinado fora do portal · ${ct.protocolo} · ${i.condominio}`,
+    texto: `${autor.nome} pediu a implantação de ${i.condominio} (${protocolo}) com um contrato assinado fora do portal. Confira a via assinada e registre as condições fechadas: com elas, a implantação segue para o setor Implantação.` });
+  return { protocolo, etapa: 'juridico', contrato: ct.protocolo, pendencias: [] };
+}
+
+/* a advogada registrou as condições do contrato assinado fora do portal: elas entram na implantação e ela segue para o setor
+   (se ainda faltar algo do executivo, volta para ele completar e enviar) */
+async function seguirDoJuridico({ db, seg, avisos }, implantacaoId, ct, autor) {
+  const i = await db.um('SELECT * FROM implantacoes WHERE id = $1', [implantacaoId]);
+  if (!i || i.etapa !== 'juridico') return null;
+  const doContrato = FC.paraImplantacao(ct);
+  const f = { ...(i.formulario || {}) };
+  for (const k of FC.CAMPOS_FECHADOS_IMPLANTACAO) if (doContrato[k] !== undefined) f[k] = doContrato[k];
+  await db.q('UPDATE implantacoes SET formulario = $2::jsonb, atualizado_em = now() WHERE id = $1', [i.id, JSON.stringify(f)]);
+  i.formulario = f;
+  const fmt = (n) => Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const resumo = `${fmt(f.taxa_adm)}% de taxa administrativa, boleto de R$ ${fmt(f.boleto)}${f.inicio_contrato ? `, vigência a partir de ${f.inicio_contrato.split('-').reverse().join('/')}` : ''}`;
+  const falta = F.faltas(f, { docs: await tiposVigentes(db, i.id), origem: i.origem, executivoId: i.executivo_id, referencia: i.referencia, assinadoFora: true });
+  if (falta.length) {
+    await db.q("UPDATE implantacoes SET etapa = 'rascunho', atualizado_em = now() WHERE id = $1", [i.id]);
+    await avisos.notificar(await donos(db, i), { link: `#/implantacao/${i.id}`, autor_id: autor.id, tipo: 'implantacao', email: true,
+      titulo: `Condições registradas: complete a implantação · ${i.protocolo} · ${i.condominio}`,
+      texto: `${autor.nome} registrou as condições do contrato de ${i.condominio}: ${resumo}. Para seguir ao setor Implantação, ainda falta: ${falta.join(' ')} Complete e envie.` });
+    return { etapa: 'rascunho', faltas: falta };
+  }
+  const r = await enviarAoSetor({ db, seg, avisos }, i, autor);
+  await avisos.notificar(await donos(db, i), { link: `#/implantacao/${i.id}`, autor_id: autor.id, tipo: 'implantacao', email: true,
+    titulo: `Condições registradas · ${r.protocolo} · ${i.condominio}`,
+    texto: `${autor.nome} registrou as condições do contrato de ${i.condominio}: ${resumo}. A implantação seguiu para o setor Implantação.` });
+  return r;
+}
+
+/* o Jurídico cancelou o contrato assinado fora do portal: a implantação volta para o executivo */
+async function voltarDoJuridico({ db, avisos }, ct, autor, motivo) {
+  const i = await db.um("SELECT * FROM implantacoes WHERE contrato_id = $1 AND etapa = 'juridico'", [ct.id]);
+  if (!i) return;
+  await db.tx(async (t) => {
+    await t.q("UPDATE implantacoes SET etapa = 'rascunho', contrato_id = NULL, atualizado_em = now() WHERE id = $1", [i.id]);
+    // o contrato anexado volta a poder ser trocado (o retorno da análise continua vinculado, como veio do PDF)
+    await t.q("UPDATE implantacao_documentos SET vinculado = FALSE WHERE implantacao_id = $1 AND tipo = 'contrato'", [i.id]);
+    await t.q('INSERT INTO implantacao_eventos (implantacao_id, usuario_id, tipo, detalhe) VALUES ($1, $2, $3, $4::jsonb)',
+      [i.id, autor.id, 'juridico_cancelou', JSON.stringify({ contrato: ct.protocolo, motivo })]);
+  });
+  await avisos.notificar(await donos(db, i), { link: `#/implantacao/${i.id}`, autor_id: autor.id, tipo: 'implantacao', email: true,
+    titulo: `O Jurídico não seguiu com o contrato · ${i.protocolo} · ${i.condominio}`,
+    texto: `${autor.nome} cancelou a conferência do contrato assinado de ${i.condominio}.${motivo ? ` Motivo: ${motivo}` : ''} A implantação voltou para você: confira o contrato anexado e envie de novo, ou cancele.` });
+}
+
 const HORAS_PARA_INICIAR = 8;
 const normal = (s) => semAcento(s).toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -192,16 +309,14 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
 
   /* ---------- quem é a pessoa na Implantação ---------- */
   async function perfil(u) {
-    const politica = await politicaAtiva(db);
     const admin = u.papel === 'admin';
     const meus = new Map((await db.q('SELECT s.nome, sm.lider FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id WHERE sm.usuario_id = $1', [u.id])).rows.map((x) => [x.nome, !!x.lider]));
     const gestorPapel = seg.GESTORES_DE_SETOR.includes(u.papel);
     const equipe = meus.has(SETOR);
     const executivo = await db.um('SELECT id, nome, uf FROM executivos WHERE usuario_id = $1 AND ativo', [u.id]);
     return {
-      admin, equipe, executivo, politica,
+      admin, equipe, executivo,
       coordenacao: admin || (equipe && (meus.get(SETOR) || gestorPapel)),
-      gestorCredito: admin || (meus.has(politica.setor_analistas) && (meus.get(politica.setor_analistas) || gestorPapel)),
       diretoria: admin || (await regras.pode(u, 'credito.diretoria')),
     };
   }
@@ -220,11 +335,10 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     const conduz = i.etapa === 'em_implantacao' && !!i.iniciado_em && (doSetor || autEtapas);
     const depois = ['concluida', 'na_carteira'].includes(i.etapa);
     const onbPendente = !F.onboardingFeito(i.etapas);
-    const aprovada = !!(i.referencia && i.referencia.aprovado_em);
     // importada das planilhas (histórico): consulta, Obs., documentos e, se ficou em andamento, as etapas e concluir (sem avisos)
     if (i.importacao_id) {
       const emAndamento = i.etapa === 'em_implantacao' && (doSetor || autEtapas);
-      const nada = { pedir_diretoria: false, decidir_diretoria: false, designar: false, iniciar: false, pendencia: false, carteira: false, editar: false, tirar_documentos: false, enviar: false,
+      const nada = { designar: false, iniciar: false, pendencia: false, carteira: false, editar: false, tirar_documentos: false, enviar: false,
         cancelar: false, impedimento: false, onboarding: false, justificar_onboarding: false, pedir_autorizacao: false, autorizar: false };
       return { ...nada, ver: interno, interno, etapas: emAndamento, concluir: emAndamento, documentos: doSetor || autDocs, marcar_documentos: doSetor || autDocs,
         // concluída fora da Carteira: a coordenação confirma a entrada (com a conferência de ID e CNPJ repetidos)
@@ -232,8 +346,6 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
         obs_controle: doSetor || autTudo, editar_setor: doSetor || autTudo, importada: true };
     }
     return {
-      pedir_diretoria: i.origem === 'entrega' && i.etapa === 'rascunho' && !aprovada && (dono || p.admin),
-      decidir_diretoria: p.diretoria && i.etapa === 'diretoria',
       designar: p.coordenacao && ['fila', 'em_implantacao', 'pendencia'].includes(i.etapa),
       iniciar: responsavel && i.etapa === 'em_implantacao' && !i.iniciado_em,
       etapas: conduz,
@@ -241,21 +353,22 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
       concluir: conduz,
       carteira: p.coordenacao && i.etapa === 'concluida',
       ver: dono || interno,
-      interno: interno || (p.diretoria && i.etapa === 'diretoria'),
+      interno,
       editar: editavel && (dono || p.admin),
       // documentos: o comercial (dono), a coordenação e, na equipe, só quem conduz ou tem autorização
       documentos: aberta && (dono || doSetor || autDocs),
-      marcar_documentos: !['rascunho', 'diretoria', 'cancelada'].includes(i.etapa) && !!i.responsavel_id && (doSetor || autDocs),
+      marcar_documentos: !['rascunho', 'diretoria', 'juridico', 'cancelada'].includes(i.etapa) && !!i.responsavel_id && (doSetor || autDocs),
       impedimento: i.etapa === 'em_implantacao' && !!i.iniciado_em && (doSetor || autEtapas),
       onboarding: depois && onbPendente && (doSetor || autEtapas),
       justificar_onboarding: ['em_implantacao', 'pendencia', 'concluida', 'na_carteira'].includes(i.etapa) && !!i.responsavel_id && (doSetor || autEtapas),
-      obs_controle: !['rascunho', 'diretoria', 'cancelada'].includes(i.etapa) && !!i.enviado_em && (doSetor || autTudo),
+      obs_controle: !['rascunho', 'diretoria', 'juridico', 'cancelada'].includes(i.etapa) && !!i.enviado_em && (doSetor || autTudo),
       pedir_autorizacao: p.equipe && !doSetor && !aut && !!i.responsavel_id && ['em_implantacao', 'pendencia', 'concluida', 'na_carteira'].includes(i.etapa),
-      autorizar: (p.coordenacao || p.admin) && !!i.responsavel_id && !['rascunho', 'diretoria', 'cancelada'].includes(i.etapa),
+      autorizar: (p.coordenacao || p.admin) && !!i.responsavel_id && !['rascunho', 'diretoria', 'juridico', 'cancelada'].includes(i.etapa),
       editar_setor: doSetor || autTudo,
       tirar_documentos: editavel && (dono || p.admin),
       enviar: editavel && (dono || p.admin),
-      cancelar: (editavel && dono) || (p.coordenacao && aberta),
+      // com o Jurídico, o executivo ainda desiste (a conferência do contrato é cancelada junto)
+      cancelar: ((editavel || i.etapa === 'juridico') && dono) || (p.coordenacao && aberta),
     };
   }
 
@@ -272,38 +385,28 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
   }
   const P = criarPrazos((d) => expediente.ehDiaUtil(d));
 
-  /* ---------- análises que podem virar implantação ---------- */
-  async function analisesDisponiveis(p, u, analiseId = null) {
+  /* ---------- contratos concluídos que podem virar implantação (os do executivo; a administração vê todos) ---------- */
+  async function contratosDisponiveis(p, u) {
     const args = [];
     const v = (x) => { args.push(x); return '$' + args.length; };
-    const where = ["a.etapa = 'enviada'", "a.resultado IN ('aprovada','ressalvas')",
-      // a reanálise enviada substitui a análise de origem
-      "NOT EXISTS (SELECT 1 FROM analises x WHERE x.origem_id = a.id AND x.etapa = 'enviada')",
-      "NOT EXISTS (SELECT 1 FROM implantacoes i WHERE i.analise_id = a.id AND i.etapa <> 'cancelada')"];
-    if (!p.admin) where.push(`(a.solicitante_id = ${v(u.id)} OR a.executivo_id = ${v(p.executivo ? p.executivo.id : 0)})`);
-    if (analiseId) where.push(`a.id = ${v(analiseId)}`);
-    const { rows } = await db.q(`SELECT a.id, a.protocolo, a.condominio, a.cnpj, a.uf, a.resultado, a.taxa_adm, a.boleto, a.executivo_id,
-        COALESCE(a.liberada_em, a.enviada_em) AS liberada_em, e.nome AS executivo_nome,
-        l.id AS liberacao_id, l.aprovado AS liberacao_aprovada, l.pedido_em AS liberacao_pedida_em, l.observacao AS liberacao_obs
-      FROM analises a LEFT JOIN executivos e ON e.id = a.executivo_id
-      LEFT JOIN LATERAL (SELECT * FROM implantacao_liberacoes WHERE analise_id = a.id ORDER BY id DESC LIMIT 1) l ON TRUE
-      WHERE ${where.join(' AND ')} ORDER BY COALESCE(a.liberada_em, a.enviada_em) DESC LIMIT 200`, args);
-    const dias = p.politica.implantacao_validade_dias;
-    return rows.map((a) => {
-      const limite = new Date(new Date(a.liberada_em).getTime() + dias * DIA_MS);
-      const dentro = new Date() <= limite;
-      const situacao = dentro ? 'valida' : a.liberacao_aprovada === true ? 'liberada' : a.liberacao_aprovada === false ? 'recusada' : a.liberacao_id ? 'aguardando_gestor' : 'vencida';
-      return { ...a, taxa_adm: a.taxa_adm == null ? null : Number(a.taxa_adm), boleto: a.boleto == null ? null : Number(a.boleto), limite, situacao, disponivel: ['valida', 'liberada'].includes(situacao) };
-    });
+    const where = ["c.etapa = 'assinado'", 'c.fechado_em IS NOT NULL',
+      `NOT EXISTS (SELECT 1 FROM implantacoes i WHERE i.etapa <> 'cancelada' AND (i.contrato_id = c.id OR (i.contrato_id IS NULL
+        AND ((i.analise_id IS NOT NULL AND i.analise_id = c.analise_id) OR (i.analise_protocolo IS NOT NULL AND i.analise_protocolo = c.analise_protocolo)))))`];
+    if (!p.admin) where.push(`(c.solicitante_id = ${v(u.id)} OR c.executivo_id = ${v(p.executivo ? p.executivo.id : 0)})`);
+    const { rows } = await db.q(`SELECT c.id, c.protocolo, c.origem, c.condominio, c.uf, c.analise_protocolo, c.fechado, c.fechado_em, c.diretoria, c.formulario->>'cidade' AS cidade,
+        e.nome AS executivo_nome FROM contratos c LEFT JOIN executivos e ON e.id = c.executivo_id
+      WHERE ${where.join(' AND ')} ORDER BY c.fechado_em DESC LIMIT 200`, args);
+    return rows.map(({ fechado, diretoria, ...c }) => ({ ...c, taxa_adm: fechado.taxa_adm ?? null, boleto: fechado.boleto ?? null, inicio_contrato: fechado.inicio_contrato || null,
+      primeiro_vencimento: fechado.primeiro_vencimento || null, entrega_aprovada: c.origem === 'entrega' && !!(diretoria && diretoria.aprovado && diretoria.decidido_em) }));
   }
 
   /* ===================== perfil, contadores e listas auxiliares ===================== */
   r.get('/api/implantacoes/meta', async (req, res) => {
     const p = await perfil(req.usuario);
     res.json({
-      perfil: { admin: p.admin, equipe: p.equipe, coordenacao: p.coordenacao, gestor_credito: p.gestorCredito, diretoria: p.diretoria, executivo: p.executivo },
+      perfil: { admin: p.admin, equipe: p.equipe, coordenacao: p.coordenacao, diretoria: p.diretoria, executivo: p.executivo },
       executivos: p.admin ? (await db.q('SELECT id, nome, uf FROM executivos WHERE ativo ORDER BY nome')).rows : p.executivo ? [p.executivo] : [],
-      validade_dias: p.politica.implantacao_validade_dias,
+      da_advogada: F.DA_ADVOGADA,
       documentos: Object.entries(F.DOCUMENTOS).map(([tipo, d]) => ({ tipo, ...d })),
       garantias: F.GARANTIAS, receitas_cashback: F.RECEITAS_CASHBACK, origens: ORIGEM, onboarding: F.ONBOARDING, envio: F.ENVIO,
       horas_para_iniciar: HORAS_PARA_INICIAR,
@@ -314,7 +417,7 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
 
   r.get('/api/implantacoes/resumo', async (req, res) => {
     const p = await perfil(req.usuario);
-    const out = { acesso: !!(p.executivo || p.equipe || p.coordenacao || p.diretoria || p.gestorCredito), acompanhamento: !!(p.admin || p.equipe || p.coordenacao || p.diretoria) };
+    const out = { acesso: !!(p.executivo || p.equipe || p.coordenacao || p.diretoria), acompanhamento: !!(p.admin || p.equipe || p.coordenacao || p.diretoria) };
     if (!out.acesso) return res.json(out);
     if (p.equipe || p.coordenacao) {
       Object.assign(out, await db.um(`SELECT COUNT(*) FILTER (WHERE etapa = 'fila')::int AS fila,
@@ -322,8 +425,6 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
         COUNT(*) FILTER (WHERE etapa = 'concluida')::int AS carteira FROM implantacoes WHERE importacao_id IS NULL`, [req.usuario.id]));
       if (!p.coordenacao) out.carteira = 0;
     }
-    if (p.gestorCredito) out.liberacoes = (await db.um('SELECT COUNT(*)::int AS n FROM implantacao_liberacoes WHERE aprovado IS NULL')).n;
-    if (p.diretoria) out.diretoria = (await db.um("SELECT COUNT(*)::int AS n FROM implantacoes WHERE etapa = 'diretoria'")).n;
     if (p.executivo || !p.equipe) {
       out.pendencias = (await db.um("SELECT COUNT(*)::int AS n FROM implantacoes WHERE etapa = 'pendencia' AND (solicitante_id = $1 OR executivo_id = $2)",
         [req.usuario.id, p.executivo ? p.executivo.id : 0])).n;
@@ -345,58 +446,11 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
       : 'A base de parceiros ainda está na planilha Google: passe a ferramenta de Prestação de Contas para o banco do portal para a lista aparecer aqui.' });
   });
 
-  /* ===================== análises disponíveis e liberação pelo gestor ===================== */
-  r.get('/api/implantacoes/analises', async (req, res) => {
+  /* ===================== contratos concluídos, para a Nova implantação ===================== */
+  r.get('/api/implantacoes/contratos', async (req, res) => {
     const p = await perfil(req.usuario);
     if (!p.executivo && !p.admin) return erro(res, 403, 'Só executivos de negócios cadastrados pedem implantação.');
-    res.json({ validade_dias: p.politica.implantacao_validade_dias, analises: await analisesDisponiveis(p, req.usuario) });
-  });
-
-  r.post('/api/implantacoes/liberacoes', json, async (req, res) => {
-    const p = await perfil(req.usuario);
-    if (!p.executivo && !p.admin) return erro(res, 403, 'Só executivos de negócios cadastrados pedem implantação.');
-    const [a] = await analisesDisponiveis(p, req.usuario, Number(req.body && req.body.analise_id) || -1);
-    if (!a) return erro(res, 404, 'Análise não encontrada.');
-    if (a.situacao !== 'vencida') return erro(res, 409, a.situacao === 'aguardando_gestor' ? 'O pedido já está com o gestor da Análise de Crédito.' : 'Esta análise não precisa de liberação.');
-    const motivo = texto(req.body && req.body.motivo, 1000);
-    await db.q('INSERT INTO implantacao_liberacoes (analise_id, pedido_por, motivo) VALUES ($1, $2, $3)', [a.id, req.usuario.id, motivo]);
-    const dias = Math.floor((Date.now() - new Date(a.liberada_em).getTime()) / DIA_MS);
-    const gestores = (await pessoasDoSetor(db, seg, p.politica.setor_analistas)).gestores;
-    await avisos.notificar(gestores.length ? gestores : await administradores(db), { link: '#/implantacao/liberacoes', autor_id: req.usuario.id, tipo: 'implantacao', email: true,
-      titulo: `Liberar análise para implantação · ${a.protocolo} · ${a.condominio}`,
-      texto: `${req.usuario.nome} quer implantar ${a.condominio}: a análise ${a.protocolo} foi liberada há ${dias} dias (a política permite ${p.politica.implantacao_validade_dias}).${motivo ? ` Motivo: ${motivo}` : ''}` });
-    await seg.auditar(req, 'implantacao_liberacao_pedida', null, { analise: a.id, protocolo: a.protocolo });
-    res.status(201).json({ ok: true });
-  });
-
-  r.get('/api/implantacoes/liberacoes', async (req, res) => {
-    const p = await perfil(req.usuario);
-    if (!p.gestorCredito) return erro(res, 403, 'Só o gestor da Análise de Crédito libera análises para implantação.');
-    const { rows } = await db.q(`SELECT l.*, COALESCE(a.protocolo, l.protocolo) AS protocolo, COALESCE(a.condominio, l.condominio) AS condominio, a.cnpj, a.uf, a.resultado, a.taxa_adm, a.boleto,
-        COALESCE(a.liberada_em, a.enviada_em, l.data_analise) AS liberada_em, (l.analise_id IS NULL) AS do_pdf,
-        up.nome AS pedido_por_nome, ud.nome AS decidido_por_nome, e.nome AS executivo_nome
-      FROM implantacao_liberacoes l LEFT JOIN analises a ON a.id = l.analise_id LEFT JOIN usuarios up ON up.id = l.pedido_por LEFT JOIN usuarios ud ON ud.id = l.decidido_por
-      LEFT JOIN executivos e ON e.id = a.executivo_id ORDER BY (l.aprovado IS NULL) DESC, l.id DESC LIMIT 100`);
-    res.json({ liberacoes: rows });
-  });
-
-  r.post('/api/implantacoes/liberacoes/:lid/decidir', json, async (req, res) => {
-    const p = await perfil(req.usuario);
-    if (!p.gestorCredito) return erro(res, 403, 'Só o gestor da Análise de Crédito libera análises para implantação.');
-    const l = await db.um(`SELECT l.*, COALESCE(a.protocolo, l.protocolo) AS protocolo, COALESCE(a.condominio, l.condominio) AS condominio
-      FROM implantacao_liberacoes l LEFT JOIN analises a ON a.id = l.analise_id WHERE l.id = $1`, [Number(req.params.lid) || 0]);
-    if (!l) return erro(res, 404, 'Pedido não encontrado.');
-    if (l.aprovado !== null) return erro(res, 409, 'Este pedido já foi decidido.');
-    const aprovar = req.body && req.body.aprovar === true;
-    const obs = texto(req.body && req.body.observacao, 1000);
-    if (!aprovar && !obs) return erro(res, 400, 'Diga o motivo de não liberar.');
-    await db.q('UPDATE implantacao_liberacoes SET aprovado = $2, observacao = $3, decidido_por = $4, decidido_em = now() WHERE id = $1', [l.id, aprovar, obs, req.usuario.id]);
-    await avisos.notificar([l.pedido_por], { link: '#/implantacao/minhas', autor_id: req.usuario.id, tipo: 'implantacao', email: true,
-      titulo: `${aprovar ? 'Análise liberada' : 'Análise não liberada'} para implantação · ${l.protocolo}`,
-      texto: aprovar ? `${req.usuario.nome} liberou a análise de ${l.condominio} para implantação. Já dá para abrir a implantação no portal.${obs ? ` Observação: ${obs}` : ''}`
-        : `${req.usuario.nome} não liberou a análise de ${l.condominio} para implantação: ${obs} O caminho é pedir reanálise.` });
-    await seg.auditar(req, 'implantacao_liberacao_decidida', null, { liberacao: l.id, analise: l.analise_id, aprovado: aprovar });
-    res.json({ ok: true });
+    res.json({ contratos: await contratosDisponiveis(p, req.usuario) });
   });
 
   rotasAcompanhamento(r, { db, seg, avisos, perfil, erro, evento, json, fichas: () => fichaRotas.resumo() });
@@ -420,69 +474,24 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     // as importadas das planilhas são histórico: aparecem em Todas e no Acompanhamento, não nas filas
     if (vis === 'minhas') where.push(`(i.solicitante_id = ${v(u.id)} OR i.executivo_id = ${v(p.executivo ? p.executivo.id : 0)}) AND i.importacao_id IS NULL`);
     else if (vis === 'fila') { if (!setor) return erro(res, 403, 'A fila é do setor Implantação.'); where.push("i.etapa IN ('fila','em_implantacao','pendencia') AND i.importacao_id IS NULL"); }
-    else if (vis === 'diretoria') { if (!p.diretoria) return erro(res, 403, 'Só a diretoria aprova taxa e boleto de condomínio de entrega.'); where.push("i.etapa = 'diretoria'"); }
     else if (vis === 'carteira') { if (!setor) return erro(res, 403, 'Só o setor Implantação.'); where.push("i.etapa = 'concluida'"); }
     else if (vis === 'todas') { if (!setor && !p.diretoria) return erro(res, 403, 'O histórico é do setor Implantação e da diretoria.'); where.push("i.etapa <> 'rascunho'"); }
     else return erro(res, 400, 'Visão inválida.');
     const busca = texto(req.query.q, 100);
     if (busca) where.push(`(i.condominio ILIKE ${v('%' + busca + '%')} OR i.protocolo ILIKE $${args.length} OR i.cnpj ILIKE $${args.length})`);
-    const { rows } = await db.q(`SELECT i.id, i.protocolo, i.etapa, i.origem, i.analise_id, i.analise_protocolo, i.condominio, i.cnpj, i.uf, i.formulario,
+    const { rows } = await db.q(`SELECT i.id, i.protocolo, i.etapa, i.origem, i.assinado_fora, i.analise_id, i.analise_protocolo, ct.protocolo AS contrato_protocolo, i.condominio, i.cnpj, i.uf, i.formulario,
         i.enviado_em, i.prazo_inicio, i.iniciado_em, i.criado_em, i.atualizado_em, i.responsavel_id, i.numero_planilha, i.importacao_id,
         COALESCE(e.nome, NULLIF(i.importacao->>'executivo', '')) AS executivo_nome, COALESCE(ur.nome, NULLIF(i.importacao->>'implantado_por', '')) AS responsavel_nome,
         (SELECT array_agg(DISTINCT d.tipo) FROM implantacao_documentos d WHERE d.implantacao_id = i.id AND d.substituido_em IS NULL) AS tipos
-      FROM implantacoes i LEFT JOIN executivos e ON e.id = i.executivo_id LEFT JOIN usuarios ur ON ur.id = i.responsavel_id
+      FROM implantacoes i LEFT JOIN executivos e ON e.id = i.executivo_id LEFT JOIN usuarios ur ON ur.id = i.responsavel_id LEFT JOIN contratos ct ON ct.id = i.contrato_id
       WHERE ${where.join(' AND ')}
       ORDER BY (i.etapa IN ('fila','em_implantacao','pendencia')) DESC, i.enviado_em NULLS LAST, i.atualizado_em DESC LIMIT 300`, args);
     res.json({ implantacoes: rows.map(({ formulario, tipos, ...x }) => ({ ...x, uh_total: formulario.uh_total ?? null,
-      pendentes: ['rascunho', 'diretoria', 'cancelada'].includes(x.etapa) ? [] : F.pendencias(formulario, new Set(tipos || []), x.origem) })) });
+      pendentes: ['rascunho', 'diretoria', 'juridico', 'cancelada'].includes(x.etapa) ? [] : F.pendencias(formulario, new Set(tipos || []), x.origem) })) });
   });
 
-  /* ===================== criar (rascunho) ===================== */
-  r.post('/api/implantacoes', json, async (req, res) => {
-    const u = req.usuario;
-    const p = await perfil(u);
-    if (!p.executivo && !p.admin) return erro(res, 403, 'Só executivos de negócios cadastrados pedem implantação.');
-    const b = req.body || {};
-    if (b.origem === 'entrega') {
-      // condomínio de entrega: a diretoria aprova taxa e boleto antes; o executivo é quem pede (a administração escolhe)
-      let executivoId = p.executivo ? p.executivo.id : null;
-      if (p.admin && b.executivo_id) executivoId = ((await db.um('SELECT id FROM executivos WHERE id = $1 AND ativo', [Number(b.executivo_id) || 0])) || {}).id || null;
-      const id = await db.tx(async (t) => {
-        const { id: novo } = await t.um(`INSERT INTO implantacoes (etapa, origem, executivo_id, solicitante_id, formulario) VALUES ('rascunho', 'entrega', $1, $2, $3::jsonb) RETURNING id`,
-          [executivoId, u.id, JSON.stringify({ entrega: true })]);
-        await evento(t, novo, u.id, 'criada', { origem: 'entrega' });
-        return novo;
-      });
-      return res.status(201).json({ id });
-    }
-    if (b.origem !== 'analise') return erro(res, 400, 'Origem inválida.');
-    const [disp] = await analisesDisponiveis(p, u, Number(b.analise_id) || -1);
-    if (!disp) return erro(res, 404, 'Análise não encontrada, ou já tem implantação aberta.');
-    if (!disp.disponivel) {
-      return erro(res, 409, disp.situacao === 'aguardando_gestor' ? 'A análise passou do prazo e o pedido de liberação está com o gestor da Análise de Crédito.'
-        : disp.situacao === 'recusada' ? 'O gestor da Análise de Crédito não liberou esta análise: peça reanálise.'
-          : `A análise foi liberada há mais de ${p.politica.implantacao_validade_dias} dias: peça a liberação ao gestor da Análise de Crédito.`);
-    }
-    const a = await db.um('SELECT * FROM analises WHERE id = $1', [disp.id]);
-    const { formulario: daAnalise, referencia } = F.daAnalise(a);
-    const ct = await contratoDaAnalise(db, { analiseId: a.id, protocolo: a.protocolo });
-    const formulario = ct ? { ...daAnalise, ...FC.paraImplantacao(ct) } : daAnalise;
-    const id = await db.tx(async (t) => {
-      const { id: novo } = await t.um(`INSERT INTO implantacoes (etapa, origem, analise_id, analise_protocolo, condominio, cnpj, uf, executivo_id, solicitante_id, formulario, referencia)
-        VALUES ('rascunho', 'analise', $1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb) RETURNING id`,
-      [a.id, a.protocolo, formulario.nome, formulario.cnpj, formulario.uf, a.executivo_id, u.id, JSON.stringify(formulario), JSON.stringify(referencia)]);
-      // a convenção e o retorno da análise vêm junto
-      for (const [de, para] of [['convencao', 'convencao'], ['retorno_pdf', 'analise_credito']]) {
-        await t.q(`INSERT INTO implantacao_documentos (implantacao_id, tipo, nome, mime, tamanho, sha256, conteudo, enviado_por, enviado_em, vinculado)
-          SELECT $1, $2, nome, mime, tamanho, sha256, conteudo, enviado_por, enviado_em, TRUE FROM analise_documentos
-          WHERE id = (SELECT MAX(id) FROM analise_documentos WHERE analise_id = $3 AND tipo = $4 AND substituido_em IS NULL)`, [novo, para, a.id, de]);
-      }
-      if (ct) await trazerDoContrato(t, novo, ct);
-      await evento(t, novo, u.id, 'criada', { origem: 'analise', analise: a.protocolo, contrato: ct ? ct.protocolo : null });
-      return novo;
-    });
-    res.status(201).json({ id });
-  });
+  /* contrato assinado fora do portal cujas condições a advogada ainda não registrou */
+  const semCondicoes = (i, ct) => !!i.assinado_fora && !(ct && ct.fechado_em);
 
   /* ===================== detalhe ===================== */
   r.get('/api/implantacoes/:id', async (req, res) => {
@@ -535,9 +544,10 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
       implantacao: { ...i, ...info, etapas: F.normalizarEtapas(i.etapas) }, documentos, eventos, pode: pd, contrato, setor,
       faltas_etapas: pd.interno && i.etapa === 'em_implantacao' ? faltasParaConcluir(i) : [],
       onboarding_pendente: !F.onboardingFeito(i.etapas),
-      conferencias: pd.interno && !['rascunho', 'diretoria'].includes(i.etapa) ? await conferencias(i, docs) : null,
-      faltas: pd.enviar ? F.faltas(i.formulario, { docs, origem: i.origem, executivoId: i.executivo_id, referencia: i.referencia }) : [],
-      faltas_diretoria: pd.pedir_diretoria ? F.faltasEntrega(i.formulario) : [],
+      conferencias: pd.interno && !['rascunho', 'diretoria', 'juridico'].includes(i.etapa) ? await conferencias(i, docs) : null,
+      // contrato assinado fora do portal, sem as condições registradas: a advogada preenche as condições
+      condicoes_do_juridico: semCondicoes(i, ct),
+      faltas: pd.enviar ? F.faltas(i.formulario, { docs, origem: i.origem, executivoId: i.executivo_id, referencia: i.referencia, assinadoFora: i.assinado_fora, semCondicoes: semCondicoes(i, ct) }) : [],
       documentos_obrigatorios: F.docsObrigatorios(i.origem),
       pendencias: F.pendencias(i.formulario, docs, i.origem),
       diferencas: F.diferencas(i.formulario, i.referencia),
@@ -552,7 +562,8 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     const info = await db.um(`SELECT e.nome AS executivo_nome, ur.nome AS responsavel_nome FROM implantacoes i LEFT JOIN executivos e ON e.id = i.executivo_id
       LEFT JOIN usuarios ur ON ur.id = i.responsavel_id WHERE i.id = $1`, [i.id]);
     const documentos = (await db.q('SELECT tipo, nome, enviado_em, substituido_em FROM implantacao_documentos WHERE implantacao_id = $1 ORDER BY id', [i.id])).rows;
-    const origemTexto = i.origem === 'analise' ? `Análise de Crédito ${i.analise_protocolo || ''}` : i.origem === 'pdf' ? `análise anterior ao portal ${i.analise_protocolo || ''}` : 'condomínio de entrega';
+    const origemTexto = i.assinado_fora ? `contrato assinado fora do portal (análise ${i.analise_protocolo || ''})` : i.origem === 'analise' ? `Análise de Crédito ${i.analise_protocolo || ''}`
+      : i.origem === 'pdf' ? `análise anterior ao portal ${i.analise_protocolo || ''}` : 'condomínio de entrega';
     let pdf;
     try {
       pdf = await formularioPdf.gerarPdf(formularioPdf.montarDados(i, { executivo: info.executivo_nome, responsavel: info.responsavel_nome, documentos,
@@ -669,108 +680,26 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     return s && s.vence ? ` O prazo para concluir voltou a contar: até ${s.vence.split('-').reverse().join('/')}.` : '';
   }
 
-  /* ===================== enviar ao setor ===================== */
+  /* ===================== enviar ao setor (ou, no contrato assinado fora do portal, antes ao Jurídico) ===================== */
   r.post('/api/implantacoes/:id/enviar', json, async (req, res) => {
     const c = await carregar(req, res);
     if (!c) return;
     const { i, pd } = c;
     if (!pd.enviar) return erro(res, 409, 'Esta implantação já foi enviada.');
+    const ct = i.contrato_id ? await db.um('SELECT id, fechado_em FROM contratos WHERE id = $1', [i.contrato_id]) : null;
+    const juridico = semCondicoes(i, ct);
     const docs = await tiposVigentes(db, i.id);
-    const lista = F.faltas(i.formulario, { docs, origem: i.origem, executivoId: i.executivo_id, referencia: i.referencia });
+    const lista = F.faltas(i.formulario, { docs, origem: i.origem, executivoId: i.executivo_id, referencia: i.referencia, assinadoFora: i.assinado_fora, semCondicoes: juridico });
     if (lista.length) return erro(res, 400, 'Faltam informações ou documentos para enviar.', { faltas: lista });
-    const pend = F.pendencias(i.formulario, docs, i.origem);
-    const reenvio = i.etapa === 'pendencia';
-    const protocolo = i.protocolo || await proximoProtocolo(db);
-    const etapa = i.responsavel_id ? 'em_implantacao' : 'fila';
-    await db.tx(async (t) => {
-      // o lembrete diário de pendências começa no próximo dia útil (no envio vai o aviso no sino)
-      await t.q(`UPDATE implantacoes SET protocolo = $2, etapa = $3, enviado_em = COALESCE(enviado_em, now()), aviso_docs_em = $4::date, lembrete_fila_em = now(),
-        atualizado_em = now() WHERE id = $1`, [i.id, protocolo, etapa, diaBrasilia()]);
-      await evento(t, i.id, req.usuario.id, reenvio ? 'reenviada' : 'enviada', { protocolo, pendentes: pend });
-      // a pendência pausou o prazo para concluir: o reenvio retoma de onde parou
-      if (reenvio) await t.q("UPDATE implantacao_pausas SET fim = now(), resolucao = 'Pendência respondida pelo comercial', encerrada_por = $2 WHERE implantacao_id = $1 AND tipo = 'pendencia' AND fim IS NULL", [i.id, req.usuario.id]);
-    });
-    await seg.auditar(req, 'implantacao_enviada', null, { implantacao: i.id, protocolo, condominio: i.condominio });
-    const resumoPend = pend.length ? ` ${pend.length} documento(s)/dado(s) ainda pendente(s): ${pend.join('; ')}.` : '';
-    if (reenvio && i.responsavel_id) {
-      await avisos.notificar([i.responsavel_id], { link: link(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: true,
-        titulo: `Pendência respondida · ${protocolo} · ${i.condominio}`, texto: `${req.usuario.nome} respondeu a pendência da implantação de ${i.condominio}.${resumoPend}${await prazoRetomado(i)}` });
-    } else {
-      const setor = await pessoasDoSetor(db, seg, SETOR);
-      const origem = i.origem === 'analise' ? `análise ${i.analise_protocolo}` : i.origem === 'pdf' ? `análise anterior ao portal ${i.analise_protocolo}` : ORIGEM[i.origem].toLowerCase();
-      await avisos.notificar(setor.gestores.length ? setor.gestores : await administradores(db), { link: link(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: true,
-        titulo: `Nova implantação · ${protocolo} · ${i.condominio}`,
-        texto: `${req.usuario.nome} enviou ${i.condominio} (${origem}) para implantação. Aguardando designação.${resumoPend}` });
-      await avisos.notificar(setor.equipe, { link: link(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: true,
-        titulo: `Chegou uma nova implantação · ${protocolo} · ${i.condominio}`,
-        texto: `${req.usuario.nome} enviou ${i.condominio} para implantação. A coordenação vai designar quem conduz.` });
-    }
-    if (pend.length) {
-      // aviso no sino para o executivo (inclusive quando foi ele quem enviou); o e-mail diário vem pela rotina
-      await avisos.notificar(await donos(db, i), { link: link(i.id), autor_id: null, tipo: 'implantacao', email: false,
-        titulo: `Pendências da implantação · ${protocolo} · ${i.condominio}`,
-        texto: `Enviada ao setor Implantação. Ainda falta enviar: ${pend.join('; ')}. Você recebe um lembrete por e-mail a cada dia útil até chegarem.` });
-    }
-    res.json({ protocolo, etapa, pendencias: pend });
+    const out = juridico ? await enviarAoJuridico({ db, avisos, regras }, i, req.usuario)
+      : await enviarAoSetor({ db, seg, avisos }, i, req.usuario, { retomada: () => prazoRetomado(i) });
+    await seg.auditar(req, juridico ? 'implantacao_enviada_juridico' : 'implantacao_enviada', null, { implantacao: i.id, protocolo: out.protocolo, condominio: i.condominio });
+    res.json(out);
   });
 
-  /* ===================== condomínio de entrega: a diretoria aprova taxa e boleto ===================== */
-  async function diretores() {
-    const pessoas = (await regras.regras()).get('credito.diretoria').pessoas;
-    return pessoas.length ? pessoas : administradores(db);
-  }
-
-  r.post('/api/implantacoes/:id/diretoria', json, async (req, res) => {
-    const c = await carregar(req, res);
-    if (!c) return;
-    const { i, pd } = c;
-    if (!pd.pedir_diretoria) return erro(res, 409, 'Só condomínio de entrega em rascunho, ainda sem aprovação, vai à diretoria.');
-    const lista = F.faltasEntrega(i.formulario);
-    if (lista.length) return erro(res, 400, 'Faltam informações para a diretoria avaliar.', { faltas: lista });
-    const f = i.formulario;
-    await db.tx(async (t) => {
-      await t.q("UPDATE implantacoes SET etapa = 'diretoria', atualizado_em = now() WHERE id = $1", [i.id]);
-      await evento(t, i.id, req.usuario.id, 'diretoria_pedida', { taxa_adm: f.taxa_adm, boleto: f.boleto });
-    });
-    const fmt = (n) => Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    await avisos.notificar(await diretores(), { link: link(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: true,
-      titulo: `Aprovar taxa e boleto · condomínio de entrega · ${i.condominio}`,
-      texto: `${req.usuario.nome} pede a aprovação de ${fmt(f.taxa_adm)}% de taxa administrativa e boleto de R$ ${fmt(f.boleto)} para ${i.condominio} (${f.uh_total} unidades, construtora ${f.construtora}).` });
-    res.json({ ok: true });
-  });
-
-  r.post('/api/implantacoes/:id/aprovacao', json, async (req, res) => {
-    const c = await carregar(req, res);
-    if (!c) return;
-    const { i, pd } = c;
-    if (!pd.decidir_diretoria) return erro(res, 403, 'Só a diretoria aprova taxa e boleto de condomínio de entrega.');
-    const b = req.body || {};
-    const aprovar = b.aprovar === true;
-    const obs = texto(b.observacao, 1000);
-    const f = { ...i.formulario };
-    let ref = { ...(i.referencia || {}) };
-    if (aprovar) {
-      const taxa = Number(b.taxa_adm), boleto = Number(b.boleto);
-      if (!(taxa > 0) || !(boleto > 0)) return erro(res, 400, 'Informe a taxa administrativa e o boleto aprovados.');
-      ref = { taxa_adm: taxa, boleto, proposta: { taxa_adm: f.taxa_adm, boleto: f.boleto }, aprovado_por: req.usuario.nome, aprovado_em: new Date().toISOString(), observacao: obs };
-      f.taxa_adm = taxa;
-      f.boleto = boleto;
-    } else {
-      if (!obs) return erro(res, 400, 'Diga o motivo de não aprovar.');
-      ref = { recusa: { por: req.usuario.nome, em: new Date().toISOString(), observacao: obs } };
-    }
-    await db.tx(async (t) => {
-      await t.q("UPDATE implantacoes SET etapa = 'rascunho', formulario = $2::jsonb, referencia = $3::jsonb, atualizado_em = now() WHERE id = $1", [i.id, JSON.stringify(f), JSON.stringify(ref)]);
-      await evento(t, i.id, req.usuario.id, aprovar ? 'diretoria_aprovou' : 'diretoria_recusou', aprovar ? { taxa_adm: ref.taxa_adm, boleto: ref.boleto, observacao: obs } : { observacao: obs });
-    });
-    await avisos.notificar(await donos(db, i), { link: link(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: true,
-      titulo: `${aprovar ? 'Taxa e boleto aprovados' : 'Taxa e boleto não aprovados'} · ${i.condominio}`,
-      texto: aprovar ? `${req.usuario.nome} aprovou ${ref.taxa_adm.toLocaleString('pt-BR')}% de taxa administrativa e boleto de R$ ${ref.boleto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}. Com o contrato assinado, complete o formulário e envie ao setor Implantação.${obs ? ` Observação: ${obs}` : ''}`
-        : `${req.usuario.nome} não aprovou a proposta para ${i.condominio}: ${obs} Ajuste e peça de novo, ou cancele.` });
-    res.json({ ok: true });
-  });
-
-  /* ===================== análise feita antes do portal (PDF do retorno) ===================== */
+  /* ===================== contrato assinado fora do portal: o PDF do retorno da análise ===================== */
+  /* ler: confere o retorno; criar: abre a implantação em rascunho, com o PDF vinculado (o contrato assinado vem em
+     seguida, em Documentos); no envio, o contrato vai ao Jurídico registrar as condições */
   r.post('/api/implantacoes/pdf', corpoDoc, async (req, res) => {
     const u = req.usuario;
     const p = await perfil(u);
@@ -783,49 +712,28 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     if (!lido.protocolo || !lido.data) return erro(res, 400, 'Não achei o protocolo e a data da análise no PDF.');
     const existente = await db.um("SELECT id, protocolo FROM implantacoes WHERE analise_protocolo = $1 AND etapa <> 'cancelada' LIMIT 1", [lido.protocolo]);
     const noPortal = await db.um("SELECT id FROM analises WHERE protocolo = $1 AND etapa = 'enviada'", [lido.protocolo]);
-    const dias = p.politica.implantacao_validade_dias;
-    const limite = new Date(new Date(`${lido.data}T12:00:00-03:00`).getTime() + dias * DIA_MS);
-    const lib = await db.um('SELECT aprovado FROM implantacao_liberacoes WHERE analise_id IS NULL AND protocolo = $1 ORDER BY id DESC LIMIT 1', [lido.protocolo]);
-    const situacao = new Date() <= limite ? 'valida' : !lib ? 'vencida' : lib.aprovado === true ? 'liberada' : lib.aprovado === false ? 'recusada' : 'aguardando_gestor';
+    const ct = await contratoDaAnalise(db, { protocolo: lido.protocolo });
     const acao = String(req.query.acao || 'ler');
-    const resumo = { lido, situacao, limite, validade_dias: dias, existente: existente ? existente.protocolo || 'rascunho' : null, no_portal: !!noPortal };
+    const resumo = { lido, existente: existente ? existente.protocolo || 'rascunho' : null, no_portal: !!noPortal, contrato: ct ? ct.protocolo || 'em rascunho' : null };
     if (acao === 'ler') return res.json(resumo);
-    if (acao === 'liberar') {
-      if (situacao !== 'vencida') return erro(res, 409, situacao === 'aguardando_gestor' ? 'O pedido já está com o gestor da Análise de Crédito.' : 'Esta análise não precisa de liberação.');
-      let motivo = '';
-      try { motivo = texto(decodeURIComponent(String(req.headers['x-motivo'] || '')), 1000); } catch { /* sem motivo */ }
-      await db.q('INSERT INTO implantacao_liberacoes (protocolo, condominio, data_analise, pedido_por, motivo) VALUES ($1, $2, $3, $4, $5)',
-        [lido.protocolo, texto(lido.razao_social, 200), lido.data, u.id, motivo]);
-      const gestores = (await pessoasDoSetor(db, seg, p.politica.setor_analistas)).gestores;
-      const passou = Math.floor((Date.now() - new Date(`${lido.data}T12:00:00-03:00`).getTime()) / DIA_MS);
-      await avisos.notificar(gestores.length ? gestores : await administradores(db), { link: '#/implantacao/liberacoes', autor_id: u.id, tipo: 'implantacao', email: true,
-        titulo: `Liberar análise para implantação · ${lido.protocolo} · ${lido.razao_social}`,
-        texto: `${u.nome} quer implantar ${lido.razao_social} com uma análise feita antes do portal (${lido.protocolo}), de ${passou} dias atrás (a política permite ${dias}).${motivo ? ` Motivo: ${motivo}` : ''}` });
-      return res.status(201).json({ ok: true });
-    }
     if (acao !== 'criar') return erro(res, 400, 'Ação inválida.');
     if (existente) return erro(res, 409, `A análise ${lido.protocolo} já tem implantação (${existente.protocolo || 'em rascunho'}).`);
-    if (noPortal) return erro(res, 409, `A análise ${lido.protocolo} está no portal: use a origem "A partir de uma Análise de Crédito".`);
+    // análise do portal: o próximo passo é a Solicitação de Contrato (contrato no portal: escolha em "No portal")
+    if (noPortal) return erro(res, 409, `A análise ${lido.protocolo} está no portal: o contrato é pedido em Solicitação de Contrato.`);
+    if (ct) return erro(res, 409, `A análise ${lido.protocolo} já tem contrato no portal (${resumo.contrato}): quando ele estiver concluído, escolha-o em "No portal".`);
     if (['reprovada', 'pendente'].includes(lido.resultado) || !lido.resultado) return erro(res, 409, 'Só análise aprovada ou aprovada com ressalvas abre implantação.');
-    if (!['valida', 'liberada'].includes(situacao)) {
-      return erro(res, 409, situacao === 'aguardando_gestor' ? 'O pedido de liberação está com o gestor da Análise de Crédito.' : situacao === 'recusada' ? 'O gestor da Análise de Crédito não liberou esta análise: peça reanálise.'
-        : `A análise é de mais de ${dias} dias atrás: peça a liberação ao gestor da Análise de Crédito.`);
-    }
     let executivoId = p.executivo ? p.executivo.id : null;
     if (!executivoId && lido.executivo) executivoId = ((await db.um('SELECT id FROM executivos WHERE ativo AND lower(nome) = lower($1)', [lido.executivo])) || {}).id || null;
-    const { formulario: doPdf, referencia } = F.doPdf(lido);
-    const ct = await contratoDaAnalise(db, { protocolo: lido.protocolo });
-    const formulario = ct ? { ...doPdf, ...FC.paraImplantacao(ct), observacoes: [doPdf.observacoes, FC.paraImplantacao(ct).observacoes].filter(Boolean).join('\n').slice(0, 4000) } : doPdf;
+    const { formulario, referencia } = F.doPdf(lido);
     const id = await db.tx(async (t) => {
-      const { id: novo } = await t.um(`INSERT INTO implantacoes (etapa, origem, analise_protocolo, condominio, cnpj, uf, executivo_id, solicitante_id, formulario, referencia)
-        VALUES ('rascunho', 'pdf', $1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb) RETURNING id`,
+      const { id: novo } = await t.um(`INSERT INTO implantacoes (etapa, origem, assinado_fora, analise_protocolo, condominio, cnpj, uf, executivo_id, solicitante_id, formulario, referencia)
+        VALUES ('rascunho', 'pdf', TRUE, $1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb) RETURNING id`,
       [lido.protocolo, formulario.nome, formulario.cnpj, formulario.uf, executivoId, u.id, JSON.stringify(formulario), JSON.stringify(referencia)]);
       let nome = 'analise.pdf';
       try { nome = decodeURIComponent(String(req.headers['x-nome-arquivo'] || nome)).replace(/[\\/\r\n"]/g, '_').slice(0, 200) || nome; } catch { /* mantém */ }
       await t.q(`INSERT INTO implantacao_documentos (implantacao_id, tipo, nome, mime, tamanho, sha256, conteudo, enviado_por, vinculado) VALUES ($1, 'analise_credito', $2, 'application/pdf', $3, $4, $5, $6, TRUE)`,
         [novo, nome, buf.length, crypto.createHash('sha256').update(buf).digest('hex'), buf, u.id]);
-      if (ct) await trazerDoContrato(t, novo, ct);
-      await evento(t, novo, u.id, 'criada', { origem: 'pdf', analise: lido.protocolo, contrato: ct ? ct.protocolo : null });
+      await evento(t, novo, u.id, 'criada', { origem: 'pdf', assinado_fora: true, analise: lido.protocolo });
       return novo;
     });
     res.status(201).json({ id, ...resumo });
@@ -1088,14 +996,25 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     const c = await carregar(req, res);
     if (!c) return;
     if (!c.pd.cancelar) return erro(res, 403, 'Esta implantação não pode ser cancelada.');
+    const motivo = texto(req.body && req.body.motivo, 1000);
+    const ct = c.i.etapa === 'juridico' && c.i.contrato_id ? await db.um("SELECT id, protocolo, condominio FROM contratos WHERE id = $1 AND etapa = 'conferencia'", [c.i.contrato_id]) : null;
     await db.tx(async (t) => {
       await t.q("UPDATE implantacoes SET etapa = 'cancelada', atualizado_em = now() WHERE id = $1", [c.i.id]);
-      await evento(t, c.i.id, req.usuario.id, 'cancelada', { motivo: texto(req.body && req.body.motivo, 1000) });
+      await evento(t, c.i.id, req.usuario.id, 'cancelada', { motivo });
+      if (ct) {
+        await t.q("UPDATE contratos SET etapa = 'cancelada', atualizado_em = now() WHERE id = $1", [ct.id]);
+        await t.q('INSERT INTO contrato_eventos (contrato_id, usuario_id, tipo, detalhe) VALUES ($1, $2, $3, $4::jsonb)', [ct.id, req.usuario.id, 'cancelada', JSON.stringify({ motivo, pela_implantacao: c.i.protocolo })]);
+      }
     });
+    if (ct) {
+      const elaboram = await regras.pessoasCom('contratos.elaborar');
+      await avisos.notificar(elaboram.length ? elaboram : await administradores(db), { link: `#/contratos/${ct.id}`, autor_id: req.usuario.id, tipo: 'contrato', email: false,
+        titulo: `Implantação cancelada · ${ct.protocolo} · ${ct.condominio}`, texto: `${req.usuario.nome} cancelou a implantação de ${ct.condominio}: o contrato não precisa mais das condições registradas.${motivo ? ` Motivo: ${motivo}` : ''}` });
+    }
     res.json({ ok: true });
   });
 
   return r;
 }
 
-module.exports = { rotasImplantacoes, criarRotinasImplantacao, abrirDoContrato, proximoProtocolo, ETAPAS, ORIGEM, SETOR };
+module.exports = { rotasImplantacoes, criarRotinasImplantacao, abrirDoContrato, seguirDoJuridico, voltarDoJuridico, proximoProtocolo, ETAPAS, ORIGEM, SETOR };

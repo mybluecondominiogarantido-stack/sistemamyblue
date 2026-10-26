@@ -34,6 +34,7 @@ const HISTORICO = [
   ['2.2', '15/10/2026', 'Menu <b>Premiações</b>: <b>Minhas Premiações</b> (demonstrativo de cada pessoa, só para leitura, <i>Estou ciente</i>, equipe para coordenação e gerência, diretoria) e a ferramenta <b>Gestão de Premiações</b> (antes Comissionamento MyBlue): planilhas do mês enviadas pelo coordenador do setor (um arquivo por pessoa e um aviso só para a gestão quando todas chegam), Comercial pela planilha de implantações e relatórios de garantia, coordenação comercial, boletos da Implantação e metas do Sucesso do Cliente.'],
   ['2.3', '19/10/2026', 'Acessos centralizados no portal (<i>Quem abre e com qual papel</i>: edita ou só consulta e papel em cada ferramenta; ferramenta nova cadastrada pela coordenação aguarda aprovação). Controle de Emissão de Boletos: aba <b>Distratados</b> e <b>cadastro pela Carteira de condomínios</b> (cada competência nova sai com os condomínios da carteira; conferência na janela da ferramenta).'],
   ['2.4', '26/10/2026', 'Central de Tickets: a demanda passa a ser <b>Externa</b> (condomínio, síndico, propostas) ou <b>Interna</b> (demandas entre setores).'],
+  ['2.5', '26/10/2026', 'Implantação: toda implantação começa de um <b>contrato assinado</b> (no portal, ou fora dele com o retorno da análise, e aí o Jurídico registra as condições antes de seguir ao setor).'],
 ];
 const VERSOES = (doc) => capVersoes({
   titulo: `Manutenção e controle de versão deste manual`,

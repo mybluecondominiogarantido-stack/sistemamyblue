@@ -71,9 +71,14 @@ async function assumida(nome, extra = {}) {
   for (const tipo of ['convencao', 'retorno_pdf']) {
     await ctx.db.q("INSERT INTO analise_documentos (analise_id, tipo, nome, mime, tamanho, conteudo) VALUES ($1, $2, $3, 'application/pdf', $4, $5)", [aid, tipo, `${tipo}.pdf`, PDF.length, PDF]);
   }
-  const r = await exec('POST', '/api/implantacoes', { origem: 'analise', analise_id: aid });
+  // a implantação começa do contrato concluído (as condições fechadas são as do formulário)
+  const fechado = { taxa_adm: 3, boleto: 2, desconto_tipo: 'nenhum', garantias: ['Taxa ordinária'], cashback: 'nao', inicio_contrato: '2026-11-01', honorarios: 12, foro: 'Fortaleza/CE', prazo_contestacao: 15, clausulas: [] };
+  const { id: ct } = await ctx.db.um(`INSERT INTO contratos (protocolo, etapa, origem, analise_id, analise_protocolo, condominio, cnpj, uf, executivo_id, solicitante_id, formulario, fechado, fechado_em, concluido_em)
+    SELECT 'CT-' || a.protocolo, 'assinado', 'analise', a.id, a.protocolo, a.condominio, a.cnpj, a.uf, a.executivo_id, a.solicitante_id, $1::jsonb, $2::jsonb, now(), now() FROM analises a WHERE a.id = $3 RETURNING id`,
+  [JSON.stringify({ nome, uf: 'CE' }), JSON.stringify(fechado), aid]);
+  const r = await exec('POST', `/api/contratos/${ct}/implantacao`, {});
   assert.equal(r.status, 201, r.texto);
-  const id = r.json.id;
+  const id = r.json.implantacao;
   assert.equal((await exec('PATCH', `/api/implantacoes/${id}`, { formulario: { ...FORM, nome, ...extra } })).status, 200);
   for (const tipo of ['cadastro_moradores', 'ata_eleicao', 'ata_orcamento']) assert.equal((await anexar(exec, id, tipo)).status, 201);
   { const x = await exec('POST', `/api/implantacoes/${id}/enviar`, {}); assert.equal(x.status, 200, x.texto); }
