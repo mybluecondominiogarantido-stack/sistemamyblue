@@ -89,8 +89,8 @@ A-101;Fulano de Tal;111.111.111-11;07/2026;Taxa ordinária;1.840,00;10/07/2026
 A-101;Fulano de Tal;111.111.111-11;07/2026;Multa;36,80;
 B-203;;;08/2026;Taxa ordinária;1.840,00;10/08/2026
 [observacoes_analise]
-Tendência da inadimplência mês a mês em palavras e em reais (subiu, caiu, estável), unidades recorrentes, acordos e o
-que mais o analista precisa saber, em 2 a 4 frases. Sem percentual de inadimplência nem faixa: o portal calcula.
+Em 2 a 4 frases, só o que o relatório mostra: unidades recorrentes, débitos antigos, acordos, concentração em poucas
+unidades. Isso vai para a página 1 do retorno, ao lado do que o portal calcula.
 [avisos]
 - Unidade C-305 em acordo (flag "A"): sai da base.
 [assertiva]
@@ -101,6 +101,9 @@ que mais o analista precisa saber, em 2 a 4 frases. Sem percentual de inadimplê
 - `periodo_inicio`: o **início do período que o relatório abrange** (o filtro "de … até" do cabeçalho), não o primeiro
   mês com débito. Se o relatório não disser o período, deixe vazio. Um mês sem débito não é mês faltando: o portal
   tira da média o mês-base sem inadimplência.
+- `[observacoes_analise]`: **não** escreva meses-base ou "janela", receita, percentual, faixa, mínimo da política nem
+  aprovação; não diga que um mês "entra" ou "fica fora". O portal calcula isso com a data de emissão do relatório e
+  os dados do formulário, e um número diferente no texto contradiz o retorno.
 - `[lancamentos]`: um lançamento por linha, ponto e vírgula, valores no formato brasileiro (1.840,00), CPF/CNPJ como
   estão no relatório (vazio se não houver), vencimento dd/mm/aaaa ou vazio. Mesmo texto de unidade em todas as linhas
   da mesma unidade (o portal agrupa por ele). Sem nomes no relatório, titular e documento vazios.
