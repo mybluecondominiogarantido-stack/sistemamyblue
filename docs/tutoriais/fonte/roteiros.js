@@ -446,7 +446,7 @@ module.exports = [
       await t.legenda('Em <b>Para qual setor?</b>, escolha quem vai atender. Em <b>Tipo de demanda</b>, o assunto.', { etapa: E, ms: 1500 });
       await t.escolher('#tSetor', 'Cobrança');
       await t.escolher('#tCat', '2ª via de boleto', { depois: 900 });
-      await t.legenda('Marque se a demanda é de <b>um condomínio</b> ou <b>interna</b>.', { etapa: E, ms: 1300 });
+      await t.legenda('Marque se a demanda é <b>externa</b> (condomínio, síndico, propostas) ou <b>interna</b> (entre setores).', { etapa: E, ms: 1300 });
       await t.clicar('input[name=tOrigem][value=condominio]', { depois: 500 });
       await t.legenda('Digite e escolha o condomínio da lista. O portal já mostra <b>para quem o ticket vai</b>.', { etapa: E, ms: 600 });
       await t.digitar('#tCond', 'Cond. Vila Rica · PE', { atraso: 45, depois: 2600 });

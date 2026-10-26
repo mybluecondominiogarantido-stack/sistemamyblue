@@ -1603,8 +1603,8 @@
         meta.setores.map(function (s) { return '<option value="' + s.id + '">' + esc(s.nome) + '</option>'; }).join('') + '</select></div>' +
         '<div><label class="rot" for="tCat">Tipo de demanda</label><select class="campo" id="tCat" disabled><option value="">Escolha o setor primeiro</option></select></div></div>' +
         '<div><label class="rot">A demanda é de</label><div class="grade-2">' +
-        '<label class="opcao-radio" style="margin:0"><input type="radio" name="tOrigem" value="condominio"><div><b>Um condomínio</b><span>Vai direto para o responsável pelo condomínio no setor</span></div></label>' +
-        '<label class="opcao-radio" style="margin:0"><input type="radio" name="tOrigem" value="interna"><div><b>Interna</b><span>Não é de um condomínio: vai para o líder do setor</span></div></label></div></div>' +
+        '<label class="opcao-radio" style="margin:0"><input type="radio" name="tOrigem" value="condominio"><div><b>Externo</b><span>Condomínio, síndico, propostas</span></div></label>' +
+        '<label class="opcao-radio" style="margin:0"><input type="radio" name="tOrigem" value="interna"><div><b>Interna</b><span>Demandas entre setores</span></div></label></div></div>' +
         '<div id="tCondBloco" hidden><label class="rot" for="tCond">Condomínio</label><input class="campo" id="tCond" list="tCondLista" autocomplete="off" placeholder="Digite o nome do condomínio">' +
         '<datalist id="tCondLista">' + conds.map(function (c) { return '<option value="' + esc(c.rotulo) + '"></option>'; }).join('') + '</datalist></div>' +
         '<div class="ajuda" id="tDestino" hidden></div>' +
@@ -1664,7 +1664,7 @@
       var bt = this;
       var msg = $('#tMsg', m);
       if (!$('#tSetor', m).value) { msg.textContent = 'Escolha o setor que vai atender.'; msg.hidden = false; return; }
-      if (!origem()) { msg.textContent = 'Diga se a demanda é de um condomínio ou interna.'; msg.hidden = false; return; }
+      if (!origem()) { msg.textContent = 'Diga se a demanda é externa ou interna.'; msg.hidden = false; return; }
       var cond = origem() === 'condominio' ? condominio() : null;
       if (origem() === 'condominio' && !cond) { msg.textContent = 'Escolha o condomínio da lista.'; msg.hidden = false; return; }
       if (!$('#tTitulo', m).value.trim()) { msg.textContent = 'Informe o assunto.'; msg.hidden = false; return; }

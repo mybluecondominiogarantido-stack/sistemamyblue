@@ -33,6 +33,7 @@ const HISTORICO = [
   ['2.1', '13/10/2026', 'Títulos no padrão <b>Manual do Portal – Geral</b> e <b>Manual do Portal – Setor …</b>. Carteira: <i>Adicionar novos</i> pela planilha de implantação (ID Vouch, vigência, executivo de negócios e CNPJ), sem importação de CSV. Comissões de Novos Condomínios: a gestão <i>puxa da carteira</i> os condomínios da vigência, parceiro só da lista e cadastro de parceiro novo pelo financeiro. Pesquisa em Módulos e dados e em Ferramentas do setor.'],
   ['2.2', '15/10/2026', 'Menu <b>Premiações</b>: <b>Minhas Premiações</b> (demonstrativo de cada pessoa, só para leitura, <i>Estou ciente</i>, equipe para coordenação e gerência, diretoria) e a ferramenta <b>Gestão de Premiações</b> (antes Comissionamento MyBlue): planilhas do mês enviadas pelo coordenador do setor (um arquivo por pessoa e um aviso só para a gestão quando todas chegam), Comercial pela planilha de implantações e relatórios de garantia, coordenação comercial, boletos da Implantação e metas do Sucesso do Cliente.'],
   ['2.3', '19/10/2026', 'Acessos centralizados no portal (<i>Quem abre e com qual papel</i>: edita ou só consulta e papel em cada ferramenta; ferramenta nova cadastrada pela coordenação aguarda aprovação). Controle de Emissão de Boletos: aba <b>Distratados</b> e <b>cadastro pela Carteira de condomínios</b> (cada competência nova sai com os condomínios da carteira; conferência na janela da ferramenta).'],
+  ['2.4', '26/10/2026', 'Central de Tickets: a demanda passa a ser <b>Externa</b> (condomínio, síndico, propostas) ou <b>Interna</b> (demandas entre setores).'],
 ];
 const VERSOES = (doc) => capVersoes({
   titulo: `Manutenção e controle de versão deste manual`,
@@ -59,7 +60,7 @@ const CONCEITOS = `
 ${tabela(['Termo', 'O que significa'], [
   ['<b>Ticket</b>', 'Uma demanda registrada: o que precisa ser feito, por quem pediu e para qual setor. Cada ticket tem um número (ex.: #128).'],
   ['<b>Setor</b>', 'Quem vai atender. A equipe do setor é formada por quem tem aquele setor no cadastro.'],
-  ['<b>Demanda de condomínio ou interna</b>', 'De condomínio: escolhida na Carteira de condomínios. Em Cobrança e Crédito, vai direto para a pessoa responsável pelo condomínio. Interna: vai para o líder do setor, que distribui.'],
+  ['<b>Demanda externa ou interna</b>', 'Externa (condomínio, síndico, propostas): o condomínio é escolhido na Carteira de condomínios. Em Cobrança e Crédito, vai direto para a pessoa responsável pelo condomínio. Interna (demandas entre setores): vai para o líder do setor, que distribui.'],
   ['<b>Tipo de demanda</b>', 'Assuntos padronizados de cada setor (ex.: "2ª via de boleto"). Cada tipo já tem prazo e prioridade sugeridos.'],
   ['<b>Responsável</b>', 'A pessoa do setor que está cuidando do ticket. Sem responsável = está na fila esperando o líder distribuir.'],
   ['<b>Prioridade</b>', `${etq('Urgente', 'vermelha')} ${etq('Alta', 'ambar')} ${etq('Média', 'azul')} ${etq('Baixa', 'cinza')}`],
@@ -90,14 +91,14 @@ const ABRIR = `
 ${passos([
   'Clique em <b>Novo ticket</b> (na tela inicial ou em <b>Tickets</b>).',
   'Em <b>Para qual setor?</b>, escolha quem vai atender e, em <b>Tipo de demanda</b>, o assunto. Se nenhum servir, deixe <i>Outro / não sei</i>.',
-  'Em <b>A demanda é de</b>, marque <b>Um condomínio</b> (e escolha o condomínio da lista) ou <b>Interna</b>. Logo abaixo o portal mostra para quem o ticket vai.',
+  'Em <b>A demanda é de</b>, marque <b>Externo</b> (condomínio, síndico, propostas — escolha o condomínio da lista) ou <b>Interna</b> (demandas entre setores). Logo abaixo o portal mostra para quem o ticket vai.',
   'Escreva um <b>Assunto</b> curto e claro, por exemplo: "2ª via — apto 51".',
   'Na <b>Descrição</b>, coloque tudo o que o setor precisa: unidade, valores, datas, contatos.',
   'Confira a <b>Prioridade</b>. Abaixo dela aparece o prazo para resposta.',
   'Se tiver arquivos (boleto, print, planilha), anexe em <b>Anexos</b>.',
   'Clique em <b>Abrir ticket</b>. Quem vai atender recebe o aviso na hora.',
 ])}
-${fig('04-novo-ticket', 'Abrindo um ticket de condomínio: o portal mostra que ele vai direto para o responsável pelo condomínio no setor.')}
+${fig('04-novo-ticket', 'Abrindo um ticket externo, de um condomínio: o portal mostra que ele vai direto para o responsável pelo condomínio no setor.')}
 ${dica('Em <b>Cobrança</b> e <b>Crédito</b>, o ticket de condomínio vai direto para a pessoa da carteira (analista de cobrança ou assistente de crédito). Se essa pessoa ainda não estiver no setor no portal, o ticket vai para o líder.')}
 ${atencao('Use <b>Urgente</b> só quando realmente for para o mesmo dia. Se tudo for urgente, nada é urgente.')}`;
 
@@ -421,8 +422,8 @@ function manualGeral() {
   cap('Central de Tickets: como funciona', `
   <p class="intro">A Central de Tickets organiza as demandas entre os setores: <b>quem precisa pede</b>, o ticket vai <b>para o responsável</b> (ou para a fila do setor), quem atende <b>inicia o atendimento com um prazo</b>, trata e <b>quem pediu é avisado</b>.</p>
   ${tabela(['Etapa', 'Quem faz', 'O que acontece'], [
-    ['1. Abrir', 'Qualquer pessoa', 'Escolhe o setor, o tipo, se é de um condomínio ou interna, descreve e anexa arquivos.'],
-    ['2. Para quem vai', 'Sistema', 'De condomínio, em Cobrança ou Crédito: direto para a pessoa da carteira. Interna ou outros setores: fila do setor, e os líderes são avisados.'],
+    ['1. Abrir', 'Qualquer pessoa', 'Escolhe o setor, o tipo, se é externa (condomínio, síndico, propostas) ou interna (entre setores), descreve e anexa arquivos.'],
+    ['2. Para quem vai', 'Sistema', 'Externa, em Cobrança ou Crédito: direto para a pessoa da carteira. Interna ou outros setores: fila do setor, e os líderes são avisados.'],
     ['3. Distribuir', 'Líder (ou coordenador/supervisor do setor)', 'Define ou troca o responsável. A pessoa é avisada.'],
     ['4. Iniciar', 'Responsável', 'Clica em <b>Iniciar atendimento</b> e informa o prazo para conclusão.'],
     ['5. Tratar', 'Responsável', 'Atualiza a situação, conversa, registra notas internas, transfere se não for do setor.'],
