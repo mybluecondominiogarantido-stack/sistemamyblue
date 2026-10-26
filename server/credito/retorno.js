@@ -112,6 +112,7 @@ function proximosPassos(r, ctx) {
   if (cod.has('convencao_sem_registro_ri')) passos.push('Regularizar o registro da convenção no Cartório de Registro de Imóveis em até 90 dias.');
   if (f.custo_boleto_atual === undefined || f.custo_boleto_atual === null || f.custo_boleto_atual === '') passos.push('Confirmar o custo de boleto praticado hoje pelo condomínio (o comparativo considerou R$ 2,50 por unidade).');
   for (const x of f.taxas_extras || []) if (x.fim) passos.push(`Confirmar a permanência da taxa extra "${x.descricao || 'sem descrição'}" após ${String(x.fim).split('-').reverse().join('/')}.`);
+  if (f.sem_cnpj) passos.push('Regularizar o CNPJ do condomínio em até 90 dias da primeira arrecadação; até lá, o repasse vai para a conta da administradora.');
   if (f.tipo_contratacao === 'portabilidade') passos.push('Alinhar com a garantidora atual a data de desligamento e as ações jurídicas em curso.');
   if (r.escopo.exclusoes.some((x) => x.motivo === 'espolio')) passos.push('Orientar o condomínio a direcionar a cobrança dos espólios ao inventário.');
   passos.push('Alinhar com o jurídico do condomínio as cobranças em andamento e o envio da carteira à MyBlue.');
@@ -134,7 +135,7 @@ function montarDados(r, ctx) {
     protocolo: ctx.protocolo,
     data_analise: dataBR(r.hoje),
     razao_social: esc(f.razao_social || ''),
-    cnpj: esc(f.cnpj || ''),
+    cnpj: f.sem_cnpj ? 'Ainda não tem (em constituição)' : esc(f.cnpj || ''),
     executivo: esc(ctx.executivo || f.executivo?.nome || ''),
     status: r.status.rotulo,
     taxa_adm: p ? fmtPct(p.taxa_adm) : '—',

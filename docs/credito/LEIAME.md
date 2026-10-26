@@ -71,6 +71,12 @@ Depois do envio o executivo não muda mais o formulário. O analista que assumiu
 executivo** (ex.: taxa ordinária digitada errada) e clica em *Salvar correção do formulário* (ou *Salvar e calcular*,
 que também salva). O histórico registra cada campo corrigido, de → para.
 
+## Condomínio ainda sem CNPJ
+
+No formulário, **Ainda não tem CNPJ** (ex.: entrega de construtora) dispensa o CNPJ no envio. O cálculo gera o alerta
+"regularizar em até 90 dias da primeira arrecadação; até lá, o repasse vai para a conta da administradora" (a mesma regra
+do contrato), o retorno mostra "Ainda não tem (em constituição)" no lugar do CNPJ e põe o prazo nos próximos passos.
+
 ## Relatórios grandes
 
 O cálculo grava as unidades e os lançamentos do relatório num comando por tabela. Antes era um comando por lançamento:

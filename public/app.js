@@ -3447,7 +3447,8 @@
     var execSel = m.perfil.analista && !dis ? selCr('fExec', 'Executivo de negócios', a.executivo_id, m.executivos.map(function (e) { return [e.id, e.nome + (e.uf ? ' — ' + e.uf : '')]; }))
       : campoCr('fExecV', 'Executivo de negócios', a.executivo_nome ? a.executivo_nome + (a.executivo_uf ? ' — ' + a.executivo_uf : '') : '—', { dis: true });
     return '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">1</span>Identificação do condomínio</h2></div><div class="corpo pilha">' +
-      '<div class="grade-3">' + campoCr('fRs', 'Razão social', f.razao_social, { span: 2 }) + campoCr('fCnpj', 'CNPJ', f.cnpj, { ph: '00.000.000/0000-00' }) +
+      '<div class="grade-3">' + campoCr('fRs', 'Razão social', f.razao_social, { span: 2 }) + '<div><label class="rot" for="fCnpj">CNPJ</label><input class="campo" id="fCnpj" value="' + esc(f.sem_cnpj ? '' : f.cnpj || '') + '" placeholder="00.000.000/0000-00"' + (f.sem_cnpj ? ' disabled' : '') + '>' +
+        '<label class="linha" style="font-weight:700;font-size:13px;margin-top:6px"><input type="checkbox" id="fSemCnpj"' + (f.sem_cnpj ? ' checked' : '') + '> Ainda não tem CNPJ</label></div>' +
       campoCr('fUf', 'UF', f.uf, { ph: 'CE' }) + campoCr('fCid', 'Cidade', f.cidade) + campoCr('fAdm', 'Administradora', f.administradora) +
       campoCr('fSis', 'Sistema de gestão condominial', f.sistema_gestao, { ph: 'Superlógica, Gestart, ClasseCon…' }) + campoCr('fGar', 'Garantidora atual (se houver)', f.garantidora_atual) +
       campoCr('fVig', 'Vigência do contrato atual', f.vigencia_atual) + execSel + '</div>' +
@@ -3478,7 +3479,7 @@
     var tipo = $('input[name=fTipo]:checked');
     var outrosP = numCr(v('fOutP'));
     return {
-      razao_social: v('fRs'), cnpj: v('fCnpj'), uf: v('fUf').toUpperCase(), cidade: v('fCid'), administradora: v('fAdm'), sistema_gestao: v('fSis'),
+      razao_social: v('fRs'), cnpj: $('#fSemCnpj') && $('#fSemCnpj').checked ? '' : v('fCnpj'), sem_cnpj: !!($('#fSemCnpj') && $('#fSemCnpj').checked), uf: v('fUf').toUpperCase(), cidade: v('fCid'), administradora: v('fAdm'), sistema_gestao: v('fSis'),
       garantidora_atual: v('fGar'), vigencia_atual: v('fVig'), tipo_contratacao: tipo ? tipo.value : '',
       uh_total: numCr(v('fUh')), taxa_ordinaria: numCr(v('fOrd')), dia_vencimento: numCr(v('fVenc')),
       desconto_pontualidade: { tipo: v('fDescT'), valor: numCr(v('fDescV')) },
@@ -3511,7 +3512,7 @@
   function faltasCr(f, temExec, docs) {
     var l = [];
     if (!f.razao_social) l.push('Informar a razão social do condomínio.');
-    if (!cnpjValidoCr(f.cnpj)) l.push('Informar um CNPJ válido.');
+    if (!f.sem_cnpj && !cnpjValidoCr(f.cnpj)) l.push('Informar um CNPJ válido, ou marcar que o condomínio ainda não tem CNPJ.');
     if (!f.uf) l.push('Informar a UF do condomínio.');
     if (['nova', 'portabilidade'].indexOf(f.tipo_contratacao) < 0) l.push('Escolher o tipo de contratação.');
     if (!(f.uh_total > 0)) l.push('Informar a quantidade de unidades.');
@@ -3757,7 +3758,7 @@
       d.reanalises.map(function (x) { return '<a class="etiqueta cinza" href="#/credito/' + x.id + '">reanálise: ' + esc(x.protocolo || 'rascunho') + '</a>'; }).join('') +
       (d.contrato ? '<a class="etiqueta azul" href="#/contratos/' + d.contrato.id + '">contrato ' + esc(d.contrato.protocolo || 'em rascunho') + '</a>' : '') +
       (d.implantacao ? '<a class="etiqueta azul" href="#/implantacao/' + d.implantacao.id + '">implantação ' + esc(d.implantacao.protocolo || 'em rascunho') + '</a>' : '') + '</div>' +
-      '<h1>' + esc(a.condominio || 'Nova solicitação') + '</h1><p class="sub" style="margin:0">' + esc([a.cnpj, [a.cidade, a.uf].filter(Boolean).join('/'), a.executivo_nome ? 'Executivo: ' + a.executivo_nome : '', a.analista_nome ? 'Analista: ' + a.analista_nome : ''].filter(Boolean).join(' · ')) + '</p></div>' +
+      '<h1>' + esc(a.condominio || 'Nova solicitação') + '</h1><p class="sub" style="margin:0">' + esc([f.sem_cnpj ? 'ainda sem CNPJ' : a.cnpj, [a.cidade, a.uf].filter(Boolean).join('/'), a.executivo_nome ? 'Executivo: ' + a.executivo_nome : '', a.analista_nome ? 'Analista: ' + a.analista_nome : ''].filter(Boolean).join(' · ')) + '</p></div>' +
       '<dl class="info-ticket" style="min-width:260px">' + (a.protocolo ? '<dt>Protocolo</dt><dd>' + esc(a.protocolo) + '</dd>' : '') +
       (a.documentacao_completa_em ? '<dt>Documentação completa</dt><dd>' + dataHoraCr(a.documentacao_completa_em) + '</dd>' : '') +
       (a.prazo_executivo && ['enviada', 'cancelada'].indexOf(a.etapa) < 0 ? '<dt>Resposta ao executivo</dt><dd>' + prazoCr(a.prazo_executivo, a.etapa) + '</dd>' : '') +
@@ -3803,6 +3804,8 @@
     if (!pd.editar && !pd.analisar) ligarDocsCredito(a, recarregar);
     if ($('#formExecCr') && !pd.analisar) $$('#formExecCr input, #formExecCr select, #formExecCr button').forEach(function (el) { el.disabled = true; });
     var ligarTirar = function () { $$('#tbExtras [data-tirar]').forEach(function (b) { b.onclick = function () { b.closest('tr').remove(); $('#conteudo .pagina').dispatchEvent(new Event('change')); }; }); };
+    // condomínio ainda sem CNPJ (ex.: entrega de construtora): o campo fica vazio e travado
+    if ($('#fSemCnpj')) $('#fSemCnpj').addEventListener('change', function () { $('#fCnpj').disabled = this.checked; if (this.checked) $('#fCnpj').value = ''; });
     if ($('#btExtra') && (pd.editar || pd.analisar)) { $('#btExtra').onclick = function () { $('#tbExtras').insertAdjacentHTML('beforeend', linhaExtraCr()); ligarTirar(); }; ligarTirar(); }
 
     if (pd.editar) {

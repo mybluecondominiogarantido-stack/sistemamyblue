@@ -9,7 +9,7 @@
  * pelo valor calculado; o arredondamento a 2 casas é só para exibir (fmtPct).
  *
  * Entrada (campos ausentes = não informado):
- *  formulario: { razao_social, cnpj, uf, cidade, tipo_contratacao: 'nova'|'portabilidade', garantidora_atual,
+ *  formulario: { razao_social, cnpj, sem_cnpj (condomínio ainda sem CNPJ, ex.: entrega de construtora), uf, cidade, tipo_contratacao: 'nova'|'portabilidade', garantidora_atual,
  *    executivo: { nome, uf, boleto }, uh_total, taxa_ordinaria, dia_vencimento,
  *    desconto_pontualidade: { tipo: 'nenhum'|'percentual'|'valor', valor },
  *    agua_gas: { total_mensal, por_unidade, compoe_boleto }, fundo_reserva_compoe_ordinaria,
@@ -269,6 +269,7 @@ function analisar(entrada, politica = POLITICA_PADRAO, opcoes = {}) {
     if (conv.foro && f.cidade && !semAcento(conv.foro).includes(semAcento(f.cidade))) alerta('foro', 'atencao', `Foro eleito na convenção (${conv.foro}) diferente da cidade do condomínio.`);
     if (conv.clausula_restritiva) alerta('clausula_restritiva', 'atencao', `Convenção com cláusula que limita garantidora ou empresa de cobrança${typeof conv.clausula_restritiva === 'string' ? `: ${conv.clausula_restritiva}` : ''}.`);
   }
+  if (f.sem_cnpj) alerta('sem_cnpj', 'atencao', 'Condomínio ainda sem CNPJ: regularizar em até 90 dias da primeira arrecadação; até lá, o repasse vai para a conta da administradora.');
   if (f.tipo_contratacao === 'portabilidade') alerta('portabilidade', 'info', `Portabilidade${f.garantidora_atual ? ` (garantidora atual: ${f.garantidora_atual})` : ''}: alinhar a data de desligamento e as ações jurídicas em curso.`);
 
   /* ---------- janela de meses-base ---------- */
