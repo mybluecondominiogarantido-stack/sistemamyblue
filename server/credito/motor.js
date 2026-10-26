@@ -189,7 +189,7 @@ function analisar(entrada, politica = POLITICA_PADRAO, opcoes = {}) {
     const a = ajustes[campo];
     if (!a) return valor;
     ajustesAplicados.push({ campo, de: valor, para: a.valor, justificativa: a.justificativa });
-    observacoes.push(`${descricao} ajustado na análise (${a.justificativa.trim()}).`);
+    observacoes.push(`${descricao} ajustado na análise (${a.justificativa.trim().replace(/[.;:,\s]+$/, '')}).`);
     return a.valor;
   };
 
@@ -439,8 +439,9 @@ function analisar(entrada, politica = POLITICA_PADRAO, opcoes = {}) {
   let indicadores = null, comparativo = null;
   if (taxaAdm !== null && receitaLiquida !== null && inadMediaC !== null) {
     const recMyBlue = Math.round(receitaLiquida * taxaAdm / 100) + Math.round(uhEscopo * cent(boleto));
-    const exposicao = inadMediaC - recMyBlue;
-    indicadores = { receita_myblue: reais(recMyBlue), valor_antecipado: reais(receitaLiquida - recMyBlue), exposicao: reais(exposicao) };
+    // receita MyBlue maior que a inadimplência média: não há exposição (não fica negativa)
+    const exposicao = Math.max(0, inadMediaC - recMyBlue);
+    indicadores = { receita_myblue: reais(recMyBlue), valor_antecipado: reais(receitaLiquida - recMyBlue), exposicao: reais(exposicao), sem_exposicao: exposicao === 0 };
     const custoAtual = num(f.custo_boleto_atual) ?? P.custo_boleto_mercado;
     const boletosSem = Math.round(uhEscopo * cent(custoAtual));
     const recebeSem = receitaLiquida - inadMediaC - boletosSem;
@@ -474,6 +475,20 @@ function analisar(entrada, politica = POLITICA_PADRAO, opcoes = {}) {
   if (reprovacoes.length) codigo = 'reprovada';
   else if (pendencias.length) codigo = 'pendente';
   else if (ressalvas.length) codigo = 'ressalvas';
+
+  // taxa do formulário diferente da do relatório: refaz a conta com a do relatório e avisa se o resultado muda
+  let sensibilidadeTaxa = null;
+  const divTaxa = divergencias.find((d) => d.campo === 'taxa_ordinaria');
+  if (!opcoes.semSensibilidade && divTaxa && !ajustes.taxa_ordinaria && codigo !== 'pendente') {
+    const alt = analisar({ ...entrada, formulario: { ...f, taxa_ordinaria: divTaxa.valores.relatorio } }, P, { ...opcoes, semSensibilidade: true });
+    const taxaAlt = alt.precificacao ? alt.precificacao.taxa_adm : null;
+    if (alt.status.codigo !== codigo || taxaAlt !== taxaAdm) {
+      sensibilidadeTaxa = { formulario: divTaxa.valores.formulario, relatorio: divTaxa.valores.relatorio, status: alt.status.rotulo, codigo: alt.status.codigo, taxa_adm: taxaAlt,
+        motivo: alt.reprovacoes.map((x) => x.texto.replace(/\.$/, '')).join('; ') };
+      const resultado = alt.status.codigo === 'reprovada' ? `${alt.status.rotulo} (${sensibilidadeTaxa.motivo})` : taxaAlt !== null ? `${alt.status.rotulo}, com ${fmtPct(taxaAlt)} de taxa ADM` : alt.status.rotulo;
+      alerta('sensibilidade_taxa', 'atencao', `Com a taxa ordinária do relatório (${fmtBRL(divTaxa.valores.relatorio)}) no lugar da do formulário (${fmtBRL(divTaxa.valores.formulario)}), a análise sairia ${resultado}. Confirmar a taxa vigente antes de liberar.`);
+    }
+  }
 
   /* ---------- desconto de pontualidade (observação obrigatória) ---------- */
   const temDesconto = ['percentual', 'valor'].includes(f.desconto_pontualidade?.tipo) && num(f.desconto_pontualidade.valor) > 0;
@@ -542,6 +557,7 @@ function analisar(entrada, politica = POLITICA_PADRAO, opcoes = {}) {
     indicadores: codigo === 'pendente' ? null : indicadores,
     comparativo: codigo === 'pendente' ? null : comparativo,
     assertiva,
+    sensibilidade_taxa: sensibilidadeTaxa,
     diretoria,
     prazo_horas: diretoria ? P.sla_horas_diretoria : P.sla_horas,
     validade_ate: somarDias(hoje, P.validade_dias),

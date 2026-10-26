@@ -78,7 +78,9 @@ function observacoesStatus(r, ctx) {
     ? `Trata-se de portabilidade${f.garantidora_atual ? ` da garantidora ${esc(f.garantidora_atual)}` : ''}.`
     : 'Trata-se de nova contratação, sem garantidora anterior.');
   if (r.valores.receita_liquida !== null && r.indicadores) {
-    partes.push(`A receita líquida mensal é de ${fmtBRL(r.valores.receita_liquida)} e a exposição de caixa mensal estimada é de ${fmtBRL(r.indicadores.exposicao)}.`);
+    partes.push(r.indicadores.sem_exposicao
+      ? `A receita líquida mensal é de ${fmtBRL(r.valores.receita_liquida)} e não há exposição de caixa: a receita MyBlue cobre a inadimplência média.`
+      : `A receita líquida mensal é de ${fmtBRL(r.valores.receita_liquida)} e a exposição de caixa mensal estimada é de ${fmtBRL(r.indicadores.exposicao)}.`);
   }
   partes.push(esc(r.assertiva.texto));
   const conc = r.alertas.find((a) => a.codigo === 'concentracao');
@@ -111,10 +113,31 @@ function observacoesJuridicas(r) {
   return itens.map(esc);
 }
 
+/* passos que o portal sempre põe, mesmo quando a skill escreve os próximos passos: [como reconhecer na lista da skill, texto] */
+function passosObrigatorios(r, ctx) {
+  const f = ctx.formulario || {};
+  const l = [];
+  if (r.diretoria) l.push([/diretoria/i, 'Aguardar a chancela da diretoria (CEO e Diretor Comercial) antes da apresentação ao condomínio.']);
+  const s = r.sensibilidade_taxa;
+  if (s) l.push([/sairia (reprovad|aprovad)/i, `Confirmar a taxa ordinária vigente (${fmtBRL(s.formulario)} no formulário × ${fmtBRL(s.relatorio)} no relatório): com a do relatório, a análise sairia ${s.codigo === 'reprovada' ? 'REPROVADA' : `${s.status}${s.taxa_adm !== null ? ` com ${fmtPct(s.taxa_adm)} ADM` : ''}`}.`]);
+  if (f.sem_cnpj) l.push([/cnpj/i, 'Regularizar o CNPJ do condomínio em até 90 dias da primeira arrecadação; até lá, o repasse vai para a conta da administradora.']);
+  if (f.tipo_contratacao === 'portabilidade') l.push([/garantidora atual|portabilidade|desligamento/i, 'Alinhar com a garantidora atual a data de desligamento e as ações jurídicas em curso.']);
+  if (r.escopo.exclusoes.some((x) => x.motivo === 'espolio')) l.push([/esp[oó]lio|invent[aá]rio/i, 'Orientar o condomínio a direcionar a cobrança dos espólios ao inventário.']);
+  l.push([/validade|assinar o contrato/i, `Assinar o contrato dentro da validade da proposta (até ${dataBR(r.validade_ate)}).`]);
+  return l;
+}
+
+/* passos da skill (ou do analista) + os obrigatórios que ela não trouxe; a validade fica por último */
+function juntarPassos(dela, r, ctx) {
+  const extra = passosObrigatorios(r, ctx).filter(([re]) => !dela.some((p) => re.test(p))).map(([, t]) => t);
+  return [...dela, ...extra];
+}
+
 function proximosPassos(r, ctx) {
   const f = ctx.formulario || {};
   const passos = [];
   if (r.diretoria) passos.push('Aguardar a chancela da diretoria (CEO e Diretor Comercial) antes da apresentação ao condomínio.');
+  if (r.sensibilidade_taxa) passos.push(passosObrigatorios(r, ctx).find(([re]) => re.test('sairia reprovada'))[1]);
   const cod = new Set(r.ressalvas.map((x) => x.codigo));
   if (cod.has('convencao_ausente')) passos.push('Entregar a convenção do condomínio antes da assinatura do contrato.');
   if (cod.has('convencao_sem_registro_ri')) passos.push('Regularizar o registro da convenção no Cartório de Registro de Imóveis em até 90 dias.');
@@ -177,7 +200,7 @@ function montarDados(r, ctx) {
     unidades_excluidas: r.escopo.exclusoes.map((x) => [esc(x.unidade), esc(motivoExclusao(x)), fmtBRL(x.debito)]),
     texto_sem_exclusoes: esc(`Nenhum espólio, unidade retomada ou em abandono foi identificado entre as ${uh(r.escopo.uh_total)} unidades. ${r.assertiva.texto}`),
     observacoes_juridicas: ad.observacoes_juridicas ? ad.observacoes_juridicas.map(esc) : observacoesJuridicas(r),
-    proximos_passos: ad.proximos_passos ? ad.proximos_passos.map(esc) : proximosPassos(r, ctx),
+    proximos_passos: ad.proximos_passos ? juntarPassos(ad.proximos_passos, r, ctx).map(esc) : proximosPassos(r, ctx),
     analista: esc(ctx.analista || 'Setor Análise de Crédito'),
   };
   return dados;

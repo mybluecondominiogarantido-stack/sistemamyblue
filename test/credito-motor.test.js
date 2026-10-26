@@ -74,7 +74,7 @@ test('§9.1 caso A (jul/2026): janela abr/mai/jun, 14,31%, APROVADA 3,00% + R$ 2
   assert.equal(r.status.rotulo, 'APROVADA');
   assert.equal(r.precificacao.taxa_adm, 3.00);
   assert.equal(r.precificacao.boleto, 2.00);
-  assert.deepEqual(r.indicadores, { receita_myblue: 1798.6, valor_antecipado: 56621.4, exposicao: 6561.4 });
+  assert.deepEqual(r.indicadores, { receita_myblue: 1798.6, valor_antecipado: 56621.4, exposicao: 6561.4, sem_exposicao: false });
   assert.equal(r.comparativo.sem_myblue.custo_boleto, 2.5);
   assert.equal(r.comparativo.ganho_mensal, 6618.9);
   assert.equal(r.comparativo.ganho_anual, 79426.8);
@@ -385,4 +385,21 @@ test('primeira competência do relatório depois dos meses-base é aviso para o 
   assert.notEqual(r.status.codigo, 'pendente');
   assert.ok(!r.pendencias.some((p) => p.codigo === 'competencia_faltante'));
   assert.match(r.alertas.find((a) => a.codigo === 'competencia_faltante').mensagem, /devolva ao executivo pedindo o relatório desde abr\/2026; se só não há débito neles, apague o campo/);
+});
+
+test('exposição não fica negativa e a taxa do relatório refaz a conta quando difere do formulário', () => {
+  // inadimplência baixa: receita MyBlue cobre a inadimplência → sem exposição
+  const baixa = rodar({ pct: 1 });
+  assert.equal(baixa.indicadores.exposicao, 0);
+  assert.equal(baixa.indicadores.sem_exposicao, true);
+  // formulário R$ 1.000 × relatório R$ 40: com a do relatório a receita fica abaixo do mínimo → reprovada
+  const { entrada, opcoes } = casoSimples({ pct: 1, uh: 100, ordinaria: 1000 });
+  entrada.relatorio.unidades.push({ unidade: '202', titular: 'Outro Fictício', lancamentos: ['2026-04', '2026-05', '2026-06'].map((c) => lanc(c, 'ordinaria', 40, 5)) },
+    { unidade: '303', titular: 'Mais Fictício', lancamentos: ['2026-04', '2026-05', '2026-06'].map((c) => lanc(c, 'ordinaria', 40, 5)) });
+  entrada.relatorio.unidades[0].lancamentos = ['2026-04', '2026-05', '2026-06'].map((c) => lanc(c, 'ordinaria', 40, 5));
+  const r = analisar(entrada, POLITICA_PADRAO, opcoes);
+  assert.equal(r.divergencias.find((d) => d.campo === 'taxa_ordinaria').valores.relatorio, 40);
+  assert.equal(r.sensibilidade_taxa.codigo, 'reprovada');
+  assert.match(r.alertas.find((a) => a.codigo === 'sensibilidade_taxa').mensagem, /sairia REPROVADA \(Receita líquida de R\$ 4\.000,00, abaixo do mínimo/);
+  assert.notEqual(r.status.codigo, 'reprovada'); // vale o formulário; o aviso é para confirmar
 });
