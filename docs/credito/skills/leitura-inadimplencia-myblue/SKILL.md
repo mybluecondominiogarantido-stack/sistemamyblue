@@ -98,6 +98,9 @@ que mais o analista precisa saber, em 2 a 4 frases. Sem percentual de inadimplê
 #FIM
 ```
 
+- `periodo_inicio`: o **início do período que o relatório abrange** (o filtro "de … até" do cabeçalho), não o primeiro
+  mês com débito. Se o relatório não disser o período, deixe vazio. Um mês sem débito não é mês faltando: o portal
+  tira da média o mês-base sem inadimplência.
 - `[lancamentos]`: um lançamento por linha, ponto e vírgula, valores no formato brasileiro (1.840,00), CPF/CNPJ como
   estão no relatório (vazio se não houver), vencimento dd/mm/aaaa ou vazio. Mesmo texto de unidade em todas as linhas
   da mesma unidade (o portal agrupa por ele). Sem nomes no relatório, titular e documento vazios.

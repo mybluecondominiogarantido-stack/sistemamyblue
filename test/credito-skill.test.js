@@ -89,7 +89,7 @@ test('formatos que o Claude também usa: resumo em tabela, lançamentos em tabel
   assert.equal(r.relatorio.data_emissao, '2026-10-16');
   assert.equal(r.relatorio.tem_competencia, true);
   assert.equal(r.relatorio.tem_nomes, false);
-  assert.equal(r.relatorio.periodo_inicio, '2011-01');
+  assert.equal(r.relatorio.periodo_inicio, undefined); // "período coberto" do resumo é o período dos débitos, não o início do relatório
   assert.equal(r.lancamentos.linhas, 3, JSON.stringify(r.lancamentos.erros));
   const ap = r.lancamentos.unidades.find((u) => u.unidade === 'AP 0704');
   assert.equal(ap.titular, 'Titular Fictício');
