@@ -294,16 +294,14 @@ test('contrato concluído: quem elabora corrige as condições com o motivo; o h
   assert.equal(di.contrato.fechado.foro, 'Fortaleza/CE');
 });
 
-test('implantação aberta antes do contrato fechar: passa a mostrar as condições e o setor é avisado', async () => {
+test('Nova implantação: só aparece o contrato concluído, do executivo, ainda sem implantação', async () => {
   const a2 = await analiseLiberada(2, 'Edifício Fictício Horizonte');
-  const { id: imp } = (await exec('POST', '/api/implantacoes', { origem: 'analise', analise_id: a2 })).json;
-  let d = (await exec('GET', `/api/implantacoes/${imp}`)).json;
-  assert.equal(d.contrato, null);
+  const disponiveis = async (c) => (await c('GET', '/api/implantacoes/contratos')).json.contratos.map((x) => x.id);
   const { id } = (await exec('POST', '/api/contratos', { origem: 'analise', analise_id: a2 })).json;
   assert.equal((await exec('PATCH', `/api/contratos/${id}`, { formulario: { ...FORM, nome: 'Edifício Fictício Horizonte', pedidos: [] } })).status, 200);
   assert.equal((await exec('POST', `/api/contratos/${id}/enviar`, {})).status, 200);
-  d = (await exec('GET', `/api/implantacoes/${imp}`)).json;
-  assert.equal(d.contrato.etapa, 'fila'); // em andamento: a implantação mostra a situação
+  assert.ok(!(await disponiveis(exec)).includes(id)); // em andamento: ainda não implanta
+  assert.equal((await outro('GET', '/api/implantacoes/contratos')).status, 403);
   await adv('POST', `/api/contratos/${id}/assumir`, {});
   await anexar(adv, id, 'minuta');
   await adv('POST', `/api/contratos/${id}/minuta`, {});
@@ -313,8 +311,13 @@ test('implantação aberta antes do contrato fechar: passa a mostrar as condiç�
   const x = (await adv('GET', `/api/contratos/${id}`)).json.contrato.fechado;
   const r = await adv('PUT', `/api/contratos/${id}/fechado`, { condicoes: { ...x, honorarios: 12, inicio_contrato: '2026-12-01' }, concluir: true });
   assert.equal(r.status, 200, r.texto);
-  assert.equal(r.json.implantacao, imp);
-  d = (await exec('GET', `/api/implantacoes/${imp}`)).json;
+  const item = (await exec('GET', '/api/implantacoes/contratos')).json.contratos.find((c) => c.id === id);
+  assert.deepEqual([item.condominio, item.inicio_contrato, item.entrega_aprovada], ['Edifício Fictício Horizonte', '2026-12-01', false]);
+  assert.ok((await disponiveis(admin)).includes(id)); // a administração vê os de todos
+  const sol = await exec('POST', `/api/contratos/${id}/implantacao`, {});
+  assert.equal(sol.status, 201, sol.texto);
+  assert.ok(!(await disponiveis(exec)).includes(id)); // com implantação, sai da lista
+  const d = (await exec('GET', `/api/implantacoes/${sol.json.implantacao}`)).json;
   assert.deepEqual([d.implantacao.contrato_id, d.contrato.etapa, d.contrato.fechado.foro], [id, 'assinado', 'Fortaleza/CE']); // sem pedido de foro: o padrão
 });
 
@@ -429,12 +432,13 @@ test('condomínio de entrega: sem análise, a diretoria aprova taxa e boleto ant
   const x = (await adv('GET', `/api/contratos/${id}`)).json.contrato.fechado;
   const r = await adv('PUT', `/api/contratos/${id}/fechado`, { condicoes: { ...x, honorarios: 12, inicio_contrato: '2026-12-01' }, concluir: true });
   assert.equal(r.status, 200, r.texto);
+  // na Nova implantação, o contrato de entrega aparece com a taxa aprovada pela diretoria
+  assert.equal((await exec('GET', '/api/implantacoes/contratos')).json.contratos.find((c) => c.id === id).entrega_aprovada, true);
   const sol = await exec('POST', `/api/contratos/${id}/implantacao`, {});
   assert.equal(sol.status, 201, sol.texto);
   let di = (await exec('GET', `/api/implantacoes/${sol.json.implantacao}`)).json;
   assert.deepEqual([di.implantacao.origem, di.implantacao.contrato_id, di.implantacao.formulario.taxa_adm, di.implantacao.formulario.sem_cnpj], ['entrega', id, 3.5, true]);
   assert.ok(di.implantacao.referencia.aprovado_em);
-  assert.equal(di.pode.pedir_diretoria, false); // a diretoria já aprovou no contrato
   assert.deepEqual(di.documentos.map((d) => d.tipo).sort(), ['contrato', 'outro']); // o contrato assinado e a ata da assembleia
   // implantação cancelada: o executivo solicita outra pelo contrato
   assert.equal((await exec('POST', `/api/implantacoes/${sol.json.implantacao}/cancelar`, {})).status, 200);

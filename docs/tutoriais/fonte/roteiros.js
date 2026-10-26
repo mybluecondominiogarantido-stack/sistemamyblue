@@ -99,12 +99,13 @@ const FORM_IMP = {
   sindico_telefone: '(85) 90000-0000', taxa_adm: 3, boleto: 2, desconto_tipo: 'nenhum', inicio_contrato: diaUtil(10), honorarios: 12, garantias: ['Taxa ordinária'],
   parceria: 'nao', cashback: 'nao', antecipacao: 'nao', administradora: 'Administradora Exemplo', consultor_nome: 'Consultor Fictício', consultor_telefone: '(85) 90000-0001',
 };
-/* implantação aberta pela executiva (Vera) a partir de uma análise liberada e enviada ao setor; com "responsavel", já designada e iniciada */
+/* implantação aberta pela executiva (Vera) a partir de um contrato concluído e enviada ao setor; com "responsavel", já designada e iniciada */
 async function implantacaoTut(base, nome, { responsavel, etapas, extra, concluir } = {}) {
-  const aid = await analiseCr(base, { ...FORM_CR, razao_social: nome }, { liberar: true });
+  const ct = await contratoTut(base, nome, { ate: 'concluido' });
   const vera = await sessaoCr(base, 'vera@myblue.com.br');
-  const { id } = await vera('POST', '/api/implantacoes', { origem: 'analise', analise_id: aid });
-  await vera('PATCH', `/api/implantacoes/${id}`, { formulario: { ...FORM_IMP, nome, ...(extra || {}) } });
+  const { implantacao: id } = await vera('POST', `/api/contratos/${ct}/implantacao`, {});
+  const d = await vera('GET', `/api/implantacoes/${id}`);
+  await vera('PATCH', `/api/implantacoes/${id}`, { formulario: { ...FORM_IMP, ...d.implantacao.formulario, nome, ...(extra || {}) } });
   const pdf = Buffer.from('%PDF-1.4\n% exemplo\n%%EOF\n');
   const cadastro = Buffer.from(['Unidade;Nome;CPF', ...Array.from({ length: 24 }, (_, k) => `${101 + k};Morador Fictício ${k + 1};111.444.777-35`)].join('\n'));
   await vera('POST', `/api/implantacoes/${id}/documentos`, cadastro, { 'x-tipo': 'cadastro_moradores', 'x-nome-arquivo': 'cadastro.csv', 'content-type': 'text/csv' });
@@ -120,6 +121,29 @@ async function implantacaoTut(base, nome, { responsavel, etapas, extra, concluir
     if (concluir) await conduz('POST', `/api/implantacoes/${id}/concluir`, {});
   }
   return id;
+}
+/* retorno de análise de crédito em PDF, de uma análise feita antes do portal (o modelo de 4 páginas, com dados fictícios) */
+async function retornoTut(protocolo, nome) {
+  const R = require('../../../server/credito/retorno');
+  const { analisar } = require('../../../server/credito/motor');
+  const formulario = { ...FORM_CR, razao_social: nome, executivo: { nome: 'Vera Campos', uf: 'CE' } };
+  const meses = [3, 2, 1].map((k) => { const d = new Date(); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - k); return d.toISOString().slice(0, 7); });
+  const r = analisar({ formulario, convencao: { presente: true, registro: 'RI', uh: FORM_CR.uh_total }, relatorio: { presente: true, data_emissao: hoje(), tem_competencia: true, tem_nomes: true,
+    unidades: [{ unidade: '101', titular: 'Titular Fictício', lancamentos: meses.map((c) => ({ competencia: c, vencimento: `${c}-10`, tipo: 'ordinaria', valor: FORM_CR.taxa_ordinaria })) }] } }, undefined, { hoje: hoje() });
+  return (await R.gerarPdf(R.montarDados(r, { formulario, protocolo, analista: 'Analista Fictício', emissao: hoje() }))).pdf;
+}
+/* contrato assinado fora do portal: a executiva (Vera) anexa o contrato e o retorno, preenche e envia; fica com o Jurídico */
+async function implantacaoForaTut(base, nome, protocolo) {
+  const vera = await sessaoCr(base, 'vera@myblue.com.br');
+  const r = await vera('POST', '/api/implantacoes/pdf?acao=criar', await retornoTut(protocolo, nome), { 'content-type': 'application/pdf', 'x-nome-arquivo': 'Retorno_analise_exemplo.pdf' });
+  if (r.erro) throw new Error(`implantação fora do portal: ${r.erro}`);
+  const pdf = Buffer.from('%PDF-1.4\n% exemplo\n%%EOF\n');
+  for (const tipo of ['contrato', 'convencao', 'cadastro_moradores', 'ata_eleicao', 'ata_orcamento']) await vera('POST', `/api/implantacoes/${r.id}/documentos`, pdf, { 'x-tipo': tipo, 'x-nome-arquivo': tipo + '.pdf' });
+  const d = await vera('GET', `/api/implantacoes/${r.id}`);
+  await vera('PATCH', `/api/implantacoes/${r.id}`, { formulario: { ...d.implantacao.formulario, ...FORM_IMP, nome, taxa_adm: null, boleto: null, inicio_contrato: '', honorarios: null } });
+  const e = await vera('POST', `/api/implantacoes/${r.id}/enviar`, {});
+  if (e.erro) throw new Error(`enviar ao Jurídico: ${e.erro} ${JSON.stringify(e.faltas || '')}`);
+  return r.id;
 }
 function pdfsImp() {
   const pasta = path.join(os.tmpdir(), 'tutoriais-recursos');
@@ -140,7 +164,8 @@ const FORM_CT = {
   inicio_contrato: dia1(), primeiro_vencimento: dia10(), pedidos: ['contestacao_30', 'foro_capital'], pedidos_detalhe: { contestacao_30: '30', foro_capital: 'Fortaleza/CE' },
   minucias: 'Primeiro repasse adiantado em 5 dias.',
 };
-/* solicitação pedida pela executiva (Vera) e enviada ao Jurídico; "ate" leva até a minuta enviada ou até o contrato assinado */
+/* solicitação pedida pela executiva (Vera) e enviada ao Jurídico; "ate" leva até a minuta enviada, até o contrato assinado
+   ou até o contrato concluído (a advogada registrou as condições) */
 async function contratoTut(base, nome, { ate } = {}) {
   const aid = await analiseCr(base, { ...FORM_CR, razao_social: nome }, { liberar: true });
   const vera = await sessaoCr(base, 'vera@myblue.com.br');
@@ -157,9 +182,15 @@ async function contratoTut(base, nome, { ate } = {}) {
   await vera('POST', `/api/contratos/${id}/pedir-assinatura`, {});
   if (ate === 'para_assinar') return id;
   await lara('POST', `/api/contratos/${id}/em-assinatura`, { plataforma: 'Clicksign' });
-  if (ate === 'assinado') {
+  if (ate === 'assinado' || ate === 'concluido') {
     await lara('POST', `/api/contratos/${id}/documentos`, pdf, { 'x-tipo': 'contrato_assinado', 'x-nome-arquivo': 'Contrato_assinado_exemplo.pdf' });
     await lara('POST', `/api/contratos/${id}/assinado`, {});
+  }
+  if (ate === 'concluido') {
+    const d = await lara('GET', `/api/contratos/${id}`);
+    const r = await lara('PUT', `/api/contratos/${id}/fechado`, { condicoes: { ...d.contrato.fechado, honorarios: 12,
+      clausulas: (d.contrato.fechado.clausulas || []).map((c) => ({ ...c, resultado: 'aceito' })) }, concluir: true });
+    if (r.erro) throw new Error(`concluir o contrato: ${r.erro} ${JSON.stringify(r.faltas || '')}`);
   }
   return id;
 }
@@ -947,38 +978,37 @@ module.exports = [
     inicio: '#/implantacao',
     async preparar(cen, base) {
       cen.pdfsImp = pdfsImp();
-      cen.analiseImp = await analiseCr(base, FORM_CR, { liberar: true });
+      cen.ctImp = await contratoTut(base, 'Condomínio Residencial Jardim das Acácias', { ate: 'concluido' });
+      // já enviada ao Jurídico: aparece na lista "Com o Jurídico"
+      await implantacaoForaTut(base, 'Residencial Vila Serena', 'AC-2025-0412');
+      // para mostrar na janela o caminho "Fora do portal"
+      cen.pdfsImp.contrato_fora = path.join(path.dirname(cen.pdfsImp.ata_eleicao), 'Contrato_assinado_exemplo.pdf');
+      fs.writeFileSync(cen.pdfsImp.contrato_fora, '%PDF-1.4\n% arquivo de exemplo dos tutoriais\n%%EOF\n');
+      cen.pdfsImp.retorno_fora = path.join(path.dirname(cen.pdfsImp.ata_eleicao), 'Retorno_analise_exemplo.pdf');
+      fs.writeFileSync(cen.pdfsImp.retorno_fora, await retornoTut('AC-2025-0533', 'Edifício Brisa do Mar'));
     },
-    abertura: ['Do contrato assinado ao setor Implantação.', ['De onde vem: análise, PDF antigo ou entrega', 'O formulário, com a análise ao lado', 'Documentos obrigatórios e pendentes', 'Enviar e acompanhar']],
+    abertura: ['Do contrato assinado ao setor Implantação.', ['Toda implantação começa de um contrato', 'O formulário, com as condições do contrato', 'Documentos obrigatórios e pendentes', 'Enviar e acompanhar', 'Contrato assinado fora do portal']],
     async gravar(t, cen) {
       const A = '1 · Nova implantação';
       await t.legenda('No menu, <b>Implantação</b> mostra as suas solicitações e a situação de cada uma.', { etapa: A, ms: 600 });
       await t.mostrar(menu('#/implantacao'), 1800, { dx: 0.3 });
-      await t.legenda('Clique em <b>Nova implantação</b> e diga de onde vem o condomínio.', { etapa: A, ms: 400 });
+      await t.legenda('Clique em <b>Nova implantação</b>. Toda implantação começa de um <b>contrato assinado</b>.', { etapa: A, ms: 400 });
       await t.clicar('#btNovaImp', { depois: 1400 });
-      await t.legenda('<b>Análise de Crédito</b> do portal, <b>análise feita antes do portal</b> (anexando o PDF do retorno) ou <b>condomínio de entrega</b>, que passa antes pela diretoria.', { etapa: A, ms: 600 });
-      await t.mostrar('.modal .grade-3', 3600, { dx: 0.5 });
-      await t.legenda('Aparecem as análises aprovadas ou com ressalvas de até 90 dias. Mais antigas vão ao <b>gestor da Análise de Crédito</b> para liberar.', { etapa: A, ms: 500 });
-      await t.clicar('input[name=anImp]', { depois: 900 });
+      await t.legenda('<b>No portal</b>: aparecem os seus contratos concluídos pelo Jurídico que ainda não têm implantação.', { etapa: A, ms: 600 });
+      await t.mostrar('.modal [data-orig=portal]', 3400, { dx: 0.5 });
+      await t.legenda('Escolha o contrato: as condições fechadas, o contrato assinado, a convenção e o retorno da análise vêm junto.', { etapa: A, ms: 500 });
+      await t.clicar('input[name=ctImp]', { depois: 900 });
       await t.clicar('#mImpOk', { depois: 2200 });
 
       const B = '2 · Formulário';
-      await t.legenda('O formulário já vem com os dados da análise, e tudo pode ser ajustado. Embaixo de cada campo fica o valor da análise, para comparar.', { etapa: B, ms: 600 });
-      await t.mostrar('#i_uh_total', 2600);
-      await t.legenda('Complete o síndico: nome, <b>CPF</b> (o portal confere na hora), e-mail e telefone.', { etapa: B, ms: 400 });
-      await t.digitar('#i_sindico_nome', 'Síndico Fictício', { atraso: 35 });
-      await t.digitar('#i_sindico_cpf', '111.444.777-35', { atraso: 55 });
-      await t.digitar('#i_sindico_email', 'sindico@exemplo.com', { atraso: 30 });
-      await t.digitar('#i_sindico_telefone', '(85) 90000-0000', { atraso: 45 });
-      await t.legenda('Mudou a <b>taxa administrativa</b> ou o <b>boleto</b> na negociação? Pode alterar: a diferença fica destacada para o setor e o gestor.', { etapa: B, ms: 500 });
-      await t.mostrar('#i_taxa_adm', 2400);
-      await t.legenda('Data de início do contrato, honorários e o que será garantido.', { etapa: B, ms: 400 });
-      await t.preencherCampo('#i_inicio_contrato', diaUtil(10));
-      await t.clicar('input[name=i_honorarios_op][value="12"]', { depois: 500 });
-      await t.clicar('[data-marca=garantias][value="Taxa ordinária"]', { depois: 500 });
+      await t.legenda('O formulário já vem com o contrato e a análise. As <b>condições do contrato</b> ficam travadas: valem as do contrato assinado.', { etapa: B, ms: 600 });
+      await t.mostrar('#i_taxa_adm', 3000);
+      await t.legenda('O que será garantido e o <b>1º vencimento</b> você ainda ajusta, se o síndico pedir.', { etapa: B, ms: 500 });
+      await t.mostrar('#i_primeiro_vencimento', 2400);
+      await t.legenda('Confira o síndico: nome, <b>CPF</b> (o portal confere na hora), e-mail e telefone.', { etapa: B, ms: 400 });
+      await t.mostrar('#i_sindico_cpf', 2200);
       await t.legenda('Parceria: só diga se há e escolha o parceiro da base de comissão; o percentual é do setor Parceiros.', { etapa: B, ms: 500 });
       await t.clicar('input[name=i_parceria][value=nao]', { depois: 500 });
-      await t.clicar('input[name=i_cashback][value=nao]', { depois: 400 });
       await t.clicar('input[name=i_antecipacao][value=nao]', { depois: 600 });
       await t.legenda('Administradora e contatos: o consultor do condomínio e, no <b>+</b>, quantos contatos precisar.', { etapa: B, ms: 400 });
       await t.digitar('#i_consultor_nome', 'Consultor Fictício', { atraso: 35 });
@@ -997,9 +1027,23 @@ module.exports = [
       await t.clicar('#btEnviarImp', { depois: 2800 });
       await t.legenda('No botão <b>PDF</b> sai o formulário completo, para guardar ou enviar.', { etapa: D, ms: 400 });
       await t.mostrar('#acoesBarra a[href$="formulario.pdf"]', 2600);
-      await t.legenda('Se o setor devolver com pendência, você recebe a lista no sino e por e-mail: ajuste e reenvie.', { etapa: D, ms: 3200 });
+      await t.legenda('Se o setor devolver com pendência, você recebe a lista no sino e por e-mail: ajuste e reenvie.', { etapa: D, ms: 3000 });
+
+      const E = '5 · Contrato assinado fora do portal';
+      await t.ir('#/implantacao/minhas', 1400);
+      await t.legenda('Contrato assinado <b>fora do portal</b>? Em <b>Nova implantação</b>, escolha <b>Fora do portal</b>.', { etapa: E, ms: 500 });
+      await t.clicar('#btNovaImp', { depois: 1200 });
+      await t.clicar('input[name=origImp][value=fora]', { depois: 1000 });
+      await t.legenda('Anexe o <b>contrato assinado</b> e o <b>retorno da análise</b>: o portal lê o retorno e preenche o formulário.', { etapa: E, ms: 400 });
+      await t.enviarArquivo('label:has(#arqCtFora)', '#arqCtFora', cen.pdfsImp.contrato_fora, { depois: 1200 });
+      await t.enviarArquivo('label:has(#arqPdfImp)', '#arqPdfImp', cen.pdfsImp.retorno_fora, { depois: 2600 });
+      await t.legenda('Você preenche o formulário e envia. A <b>advogada</b> registra as condições do contrato (taxa, boleto, desconto, vigência e honorários).', { etapa: E, ms: 600 });
+      await t.mostrar('.modal [data-orig=fora] .msg', 3800);
+      await t.clicar('.modal [data-fechar]', { depois: 1000 });
+      await t.legenda('Enquanto isso, a implantação fica <b>Com o Jurídico</b>. Com as condições registradas, ela segue sozinha para o setor Implantação, e você é avisado.', { etapa: E, ms: 600 });
+      await t.mostrar('#tbImp tr:has(td:has-text("Vila Serena"))', 4200);
     },
-    resumo: ['<b>Nova implantação</b> · escolha a origem', 'Complete o formulário: a análise fica ao lado para comparar', 'Anexe os obrigatórios · <b>Enviar ao setor Implantação</b>'],
+    resumo: ['<b>Nova implantação</b> · escolha o contrato assinado', 'Complete o formulário: as condições vêm do contrato', 'Anexe os obrigatórios · <b>Enviar ao setor Implantação</b>', 'Fora do portal: a advogada registra as condições'],
   },
   {
     nome: 'implantacao-conduzir',

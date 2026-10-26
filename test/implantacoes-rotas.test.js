@@ -1,5 +1,5 @@
 'use strict';
-/* Implantação pelo portal: da análise liberada ao envio ao setor, com liberação do gestor, avisos e lembretes (dados fictícios). */
+/* Implantação pelo portal: do contrato assinado (no portal ou fora dele) ao envio ao setor, com avisos e lembretes (dados fictícios). */
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('http');
@@ -46,7 +46,7 @@ const noSetor = async (setor, email, lider) => {
   const s = await ctx.db.um('SELECT id FROM setores WHERE nome = $1', [setor]);
   await ctx.db.q('INSERT INTO setor_membros (setor_id, usuario_id, lider) VALUES ($1, $2, $3)', [s.id, ids[email], lider]);
 };
-const avisosDe = async (email) => (await ctx.db.q('SELECT titulo, texto, link FROM notificacoes WHERE usuario_id = $1 ORDER BY id', [ids[email]])).rows;
+const avisosDe = async (email) => (await ctx.db.q('SELECT n.titulo, n.texto, n.link FROM notificacoes n JOIN usuarios u ON u.id = n.usuario_id WHERE u.email = $1 ORDER BY n.id', [email])).rows;
 const emailsPara = (email) => emails.filter((m) => m.para.email === email);
 const PDF = Buffer.from('%PDF-1.4\n% documento fictício\n');
 const anexar = (c, id, tipo, nome = `${tipo}.pdf`) => c('POST', `/api/implantacoes/${id}/documentos`, PDF, { headers: { 'x-tipo': tipo, 'x-nome-arquivo': encodeURIComponent(nome) } });
@@ -69,6 +69,20 @@ async function analiseLiberada(dias, nome = 'Condomínio Residencial Fictício')
   }
   return id;
 }
+/* contrato concluído no portal (a advogada já registrou as condições), de uma análise liberada, com a via assinada */
+let seqCt = 0;
+const FECHADO = { taxa_adm: 3.5, boleto: 2, desconto_tipo: 'nenhum', garantias: ['Taxa ordinária', 'Taxa extraordinária'], cashback: '5', cashback_receitas: ['Taxa administrativa'],
+  inicio_contrato: '2026-11-01', honorarios: 12, foro: 'Fortaleza/CE', prazo_contestacao: 15, clausulas: [] };
+async function contratoConcluido(nome = 'Condomínio Residencial Fictício') {
+  const aid = await analiseLiberada(5, nome);
+  seqCt++;
+  const { id } = await ctx.db.um(`INSERT INTO contratos (protocolo, etapa, origem, analise_id, analise_protocolo, condominio, cnpj, uf, executivo_id, solicitante_id, formulario, fechado, fechado_em, concluido_em, assinado_em, enviado_em)
+    SELECT $1, 'assinado', 'analise', a.id, a.protocolo, a.condominio, a.cnpj, a.uf, a.executivo_id, a.solicitante_id, $2::jsonb, $3::jsonb, now(), now(), now(), now() FROM analises a WHERE a.id = $4 RETURNING id`,
+  [`CT-2026-01-01-${String(seqCt).padStart(2, '0')}`, JSON.stringify({ nome, cnpj: '11.222.333/0001-81', uf: 'CE', cidade: 'Fortaleza', garantias: FECHADO.garantias }), JSON.stringify(FECHADO), aid]);
+  await ctx.db.q("INSERT INTO contrato_documentos (contrato_id, tipo, nome, mime, tamanho, conteudo) VALUES ($1, 'contrato_assinado', 'contrato-assinado.pdf', 'application/pdf', $2, $3)", [id, PDF.length, PDF]);
+  return { aid, ct: id };
+}
+const abrir = async (ct) => (await exec('POST', `/api/contratos/${ct}/implantacao`, {})).json.implantacao;
 
 before(async () => {
   const cfg = lerConfig({ dataDir: ':memoria:', databaseUrl: '', adminEmail: 'admin@teste.com', adminSenha: 'Admin1234', silencioso: true, porta: 0,
@@ -94,61 +108,38 @@ before(async () => {
 });
 after(async () => { servidor.close(); await ctx.db.fechar(); });
 
-test('perfis: comercial, equipe, coordenação, gestor da Análise de Crédito e quem não tem acesso', async () => {
+test('perfis: comercial, equipe, coordenação e quem não tem acesso', async () => {
   const p = async (c) => (await c('GET', '/api/implantacoes/meta')).json.perfil;
   assert.equal((await p(exec)).executivo.id, ids.executivo);
   assert.deepEqual([(await p(coord)).coordenacao, (await p(coord)).equipe], [true, true]);
   assert.deepEqual([(await p(equipe)).coordenacao, (await p(equipe)).equipe], [false, true]);
-  assert.equal((await p(gestorCr)).gestor_credito, true);
-  assert.equal((await p(exec)).gestor_credito, false);
   assert.equal((await outro('GET', '/api/implantacoes/resumo')).json.acesso, false);
-  assert.equal((await outro('GET', '/api/implantacoes/analises')).status, 403);
+  assert.equal((await outro('GET', '/api/implantacoes/contratos')).status, 403);
   assert.equal((await exec('GET', '/api/implantacoes?vis=fila')).status, 403);
-  assert.equal((await gestorCr('GET', '/api/implantacoes/resumo')).json.acesso, true);
+  // a análise de crédito não abre mais implantação: o gestor do crédito não tem o que fazer aqui
+  assert.equal((await gestorCr('GET', '/api/implantacoes/resumo')).json.acesso, false);
 });
 
 let idI;
-test('a partir da análise: formulário preenchido, convenção e retorno vêm junto, e a análise sai da lista', async () => {
-  const aid = await analiseLiberada(5);
-  const lista = (await exec('GET', '/api/implantacoes/analises')).json;
-  assert.equal(lista.validade_dias, 90);
-  const a = lista.analises.find((x) => x.id === aid);
-  assert.equal(a.situacao, 'valida');
-  const r = await exec('POST', '/api/implantacoes', { origem: 'analise', analise_id: aid });
+test('a partir do contrato concluído: as condições fechadas, o contrato, a convenção e o retorno vêm junto', async () => {
+  const { aid, ct } = await contratoConcluido();
+  assert.ok((await exec('GET', '/api/implantacoes/contratos')).json.contratos.some((x) => x.id === ct));
+  assert.equal((await exec('POST', '/api/implantacoes', { origem: 'analise', analise_id: aid })).status, 404); // a análise sozinha não abre implantação
+  const r = await exec('POST', `/api/contratos/${ct}/implantacao`, {});
   assert.equal(r.status, 201, r.texto);
-  idI = r.json.id;
+  idI = r.json.implantacao;
   const d = (await exec('GET', `/api/implantacoes/${idI}`)).json;
   assert.equal(d.implantacao.etapa, 'rascunho');
   assert.equal(d.implantacao.formulario.nome, 'Condomínio Residencial Fictício');
-  assert.equal(d.implantacao.formulario.taxa_adm, 3);
+  assert.equal(d.implantacao.formulario.taxa_adm, 3.5);
   assert.equal(d.implantacao.referencia.boleto, 2);
-  assert.deepEqual(d.documentos.map((x) => x.tipo).sort(), ['analise_credito', 'convencao']);
-  assert.ok(!(await exec('GET', '/api/implantacoes/analises')).json.analises.some((x) => x.id === aid));
-  assert.equal((await exec('POST', '/api/implantacoes', { origem: 'analise', analise_id: aid })).status, 404);
+  assert.equal(d.condicoes_do_juridico, false);
+  assert.deepEqual(d.documentos.map((x) => x.tipo).sort(), ['analise_credito', 'contrato', 'convencao']);
+  assert.ok(!(await exec('GET', '/api/implantacoes/contratos')).json.contratos.some((x) => x.id === ct));
+  assert.equal((await exec('POST', `/api/contratos/${ct}/implantacao`, {})).status, 409);
   // a análise mostra a implantação aberta a partir dela
   assert.equal((await exec('GET', `/api/credito/analises/${aid}`)).json.implantacao.id, idI);
   assert.equal((await outro('GET', `/api/implantacoes/${idI}`)).status, 404);
-});
-
-test('análise com mais de 90 dias: o gestor da Análise de Crédito libera antes', async () => {
-  const aid = await analiseLiberada(100, 'Edifício Teste Horizonte');
-  const sit = async () => (await exec('GET', '/api/implantacoes/analises')).json.analises.find((x) => x.id === aid).situacao;
-  assert.equal(await sit(), 'vencida');
-  assert.equal((await exec('POST', '/api/implantacoes', { origem: 'analise', analise_id: aid })).status, 409);
-  assert.equal((await exec('POST', '/api/implantacoes/liberacoes', { analise_id: aid, motivo: 'Contrato assinado com atraso' })).status, 201);
-  assert.equal((await exec('POST', '/api/implantacoes/liberacoes', { analise_id: aid })).status, 409);
-  assert.equal(await sit(), 'aguardando_gestor');
-  const aviso = (await avisosDe('gestorcr@teste.com')).pop();
-  assert.match(aviso.titulo, /Liberar análise para implantação/);
-  assert.match(aviso.texto, /há 100 dias/);
-  assert.equal((await gestorCr('GET', '/api/implantacoes/resumo')).json.liberacoes, 1);
-  const lib = (await gestorCr('GET', '/api/implantacoes/liberacoes')).json.liberacoes[0];
-  assert.equal((await exec('POST', `/api/implantacoes/liberacoes/${lib.id}/decidir`, { aprovar: true })).status, 403);
-  assert.equal((await gestorCr('POST', `/api/implantacoes/liberacoes/${lib.id}/decidir`, { aprovar: false })).status, 400); // recusa pede motivo
-  assert.equal((await gestorCr('POST', `/api/implantacoes/liberacoes/${lib.id}/decidir`, { aprovar: true })).status, 200);
-  assert.match((await avisosDe('exec@teste.com')).pop().titulo, /Análise liberada para implantação/);
-  assert.equal(await sit(), 'liberada');
-  assert.equal((await exec('POST', '/api/implantacoes', { origem: 'analise', analise_id: aid })).status, 201);
 });
 
 const FORM = {
@@ -229,11 +220,11 @@ test('parceiros da base de comissão para a lista suspensa', async () => {
 });
 
 test('cancelar: o executivo cancela o rascunho; a coordenação cancela depois do envio', async () => {
-  const aid = await analiseLiberada(1, 'Residencial Fictício Aurora');
-  const { id } = (await exec('POST', '/api/implantacoes', { origem: 'analise', analise_id: aid })).json;
+  const { ct } = await contratoConcluido('Residencial Fictício Aurora');
+  const id = await abrir(ct);
   assert.equal((await equipe('POST', `/api/implantacoes/${id}/cancelar`, {})).status, 403); // rascunho é só do executivo
   assert.equal((await exec('POST', `/api/implantacoes/${id}/cancelar`, {})).status, 200);
-  assert.ok((await exec('GET', '/api/implantacoes/analises')).json.analises.some((x) => x.id === aid)); // a análise volta a ficar disponível
+  assert.ok((await exec('GET', '/api/implantacoes/contratos')).json.contratos.some((x) => x.id === ct)); // o contrato volta para a lista
   assert.equal((await exec('POST', `/api/implantacoes/${idI}/cancelar`, {})).status, 403);
 });
 
@@ -255,8 +246,7 @@ test('designar: só a coordenação, para alguém do setor; prazo de 8h úteis p
 });
 
 test('rotinas: lembrete à coordenação a cada 4h úteis sem designação e aviso de prazo estourado (uma vez)', async () => {
-  const aid = await analiseLiberada(2, 'Edifício Fictício Horizonte');
-  idI2 = (await exec('POST', '/api/implantacoes', { origem: 'analise', analise_id: aid })).json.id;
+  idI2 = await abrir((await contratoConcluido('Edifício Fictício Horizonte')).ct);
   assert.equal((await exec('PATCH', `/api/implantacoes/${idI2}`, { formulario: { ...FORM, nome: 'Edifício Fictício Horizonte' } })).status, 200);
   for (const tipo of ['cadastro_moradores', 'ata_eleicao', 'ata_orcamento']) await anexar(exec, idI2, tipo);
   assert.equal((await exec('POST', `/api/implantacoes/${idI2}/enviar`, {})).status, 200);
@@ -345,45 +335,7 @@ test('Carteira: a coordenação confere os dados (ID Vouch e envio vêm das etap
   assert.equal((await equipe('PATCH', `/api/implantacoes/${idI2}/etapas`, { etapas: { vouch: { id: '90001' } } })).status, 409);
 });
 
-/* ===================== parte 3: condomínio de entrega e análise anterior ao portal ===================== */
-let diretor;
-test('condomínio de entrega: a diretoria aprova taxa e boleto; sem CNPJ e documentos chegam depois', async () => {
-  diretor = await pessoa('Diretor Fictício', 'diretor@teste.com');
-  assert.equal((await admin('PUT', '/api/credito/diretoria', { pessoas: [ids['diretor@teste.com']] })).status, 200);
-  const { id } = (await exec('POST', '/api/implantacoes', { origem: 'entrega' })).json;
-  let d = (await exec('GET', `/api/implantacoes/${id}`)).json;
-  assert.equal(d.implantacao.origem, 'entrega');
-  assert.ok(d.pode.pedir_diretoria);
-  assert.deepEqual(d.documentos_obrigatorios, []);
-  assert.ok(d.faltas[0].startsWith('Pedir a aprovação da diretoria'));
-  let r = await exec('POST', `/api/implantacoes/${id}/diretoria`, {});
-  assert.equal(r.status, 400);
-  assert.ok(r.json.faltas.some((f) => /construtora/.test(f)));
-  const ENTREGA = { ...FORM, nome: 'Condomínio Modelo Fictício', cnpj: '', sem_cnpj: true, entrega: true, construtora: 'Construtora Exemplo', construtora_contato: 'contato@exemplo.com',
-    uh_total: 120, taxa_ordinaria: 650, taxa_adm: 3.5, boleto: 2 };
-  assert.equal((await exec('PATCH', `/api/implantacoes/${id}`, { formulario: ENTREGA })).status, 200);
-  assert.equal((await exec('POST', `/api/implantacoes/${id}/diretoria`, {})).status, 200);
-  assert.match((await avisosDe('diretor@teste.com')).pop().titulo, /^Aprovar taxa e boleto · condomínio de entrega/);
-  assert.equal((await exec('PATCH', `/api/implantacoes/${id}`, { formulario: ENTREGA })).status, 403); // com a diretoria não muda
-  assert.equal((await diretor('GET', '/api/implantacoes?vis=diretoria')).json.implantacoes[0].id, id);
-  assert.equal((await diretor('GET', '/api/implantacoes/resumo')).json.diretoria, 1);
-  assert.equal((await exec('POST', `/api/implantacoes/${id}/aprovacao`, { aprovar: true, taxa_adm: 3, boleto: 2 })).status, 403);
-  assert.equal((await diretor('POST', `/api/implantacoes/${id}/aprovacao`, { aprovar: false })).status, 400);
-  r = await diretor('POST', `/api/implantacoes/${id}/aprovacao`, { aprovar: true, taxa_adm: 3.25, boleto: 2 });
-  assert.equal(r.status, 200, r.texto);
-  assert.match((await avisosDe('exec@teste.com')).pop().titulo, /^Taxa e boleto aprovados/);
-  d = (await exec('GET', `/api/implantacoes/${id}`)).json;
-  assert.equal(d.implantacao.etapa, 'rascunho');
-  assert.equal(d.implantacao.formulario.taxa_adm, 3.25);
-  assert.deepEqual(d.diferencas, []);
-  // sem CNPJ e sem os documentos de enxoval: envia, e tudo vira pendência
-  const env = await exec('POST', `/api/implantacoes/${id}/enviar`, {});
-  assert.equal(env.status, 200, env.texto);
-  assert.equal(env.json.pendencias[0], 'CNPJ do condomínio');
-  assert.ok(env.json.pendencias.includes('Convenção do condomínio'));
-  assert.match((await avisosDe('coord@teste.com')).find((x) => /Condomínio Modelo Fictício/.test(x.titulo)).texto, /condomínio de entrega/);
-});
-
+/* ===================== parte 3: contrato assinado fora do portal ===================== */
 const temLeitor = (() => { try { require('child_process').execFileSync('pdftotext', ['-v'], { stdio: 'ignore' }); require('child_process').execFileSync('python3', ['-c', 'import reportlab'], { stdio: 'ignore' }); return true; } catch { return false; } })();
 async function retornoFicticio(protocolo) {
   const R = require('../server/credito/retorno');
@@ -398,46 +350,82 @@ async function retornoFicticio(protocolo) {
   return (await R.gerarPdf(R.montarDados(r, { formulario, protocolo, analista: 'Analista Fictício', emissao: hoje }))).pdf;
 }
 
-test('análise anterior ao portal: o portal lê o PDF do retorno, confere e abre a implantação', { skip: !temLeitor && 'pdftotext ou reportlab não instalados' }, async () => {
+test('contrato assinado fora do portal: o executivo preenche e envia; a advogada registra as condições e segue ao setor', { skip: !temLeitor && 'pdftotext ou reportlab não instalados' }, async () => {
   const pdf = await retornoFicticio('AC-2026-0915');
-  const enviar = (c, acao, extra = {}) => c('POST', `/api/implantacoes/pdf?acao=${acao}`, pdf, { headers: { 'content-type': 'application/pdf', 'x-nome-arquivo': 'retorno.pdf', ...extra } });
+  const enviar = (c, acao) => c('POST', `/api/implantacoes/pdf?acao=${acao}`, pdf, { headers: { 'content-type': 'application/pdf', 'x-nome-arquivo': 'retorno.pdf' } });
   assert.equal((await outro('POST', '/api/implantacoes/pdf?acao=ler', pdf)).status, 403);
   assert.equal((await exec('POST', '/api/implantacoes/pdf?acao=ler', Buffer.from('não é pdf'))).status, 400);
   const lido = (await enviar(exec, 'ler')).json;
-  assert.equal(lido.situacao, 'valida');
   assert.deepEqual([lido.lido.protocolo, lido.lido.razao_social, lido.lido.cnpj, lido.lido.resultado, lido.lido.uh_total, lido.lido.taxa_ordinaria],
     ['AC-2026-0915', 'Residencial Fictício Antigo', '11.444.777/0001-61', 'aprovada', 30, 500]);
   assert.ok(lido.lido.taxa_adm > 0 && lido.lido.boleto === 2);
   const r = await enviar(exec, 'criar');
   assert.equal(r.status, 201, r.texto);
-  const d = (await exec('GET', `/api/implantacoes/${r.json.id}`)).json;
-  assert.equal(d.implantacao.origem, 'pdf');
-  assert.equal(d.implantacao.analise_protocolo, 'AC-2026-0915');
+  const id = r.json.id;
+  let d = (await exec('GET', `/api/implantacoes/${id}`)).json;
+  assert.deepEqual([d.implantacao.origem, d.implantacao.assinado_fora, d.implantacao.analise_protocolo, d.condicoes_do_juridico], ['pdf', true, 'AC-2026-0915', true]);
   assert.equal(d.implantacao.formulario.taxa_ordinaria, 500);
-  assert.equal(d.implantacao.referencia.taxa_adm, lido.lido.taxa_adm);
-  assert.deepEqual(d.documentos.map((x) => x.tipo), ['analise_credito']);
   assert.match(d.implantacao.formulario.observacoes, /Próximos passos da análise/);
   assert.equal((await enviar(exec, 'criar')).status, 409); // o mesmo PDF não abre duas
+  // o executivo preenche o que é dele: a taxa, o boleto, o desconto, a vigência e os honorários são da advogada
+  const FORA = { ...FORM, nome: 'Residencial Fictício Antigo', cnpj: '11.444.777/0001-61', uf: 'PB', uh_total: 30, parceria: 'nao', parceiros: [],
+    taxa_adm: null, boleto: null, inicio_contrato: '', honorarios: null };
+  assert.equal((await exec('PATCH', `/api/implantacoes/${id}`, { formulario: FORA })).status, 200);
+  for (const tipo of ['cadastro_moradores', 'ata_eleicao', 'ata_orcamento', 'convencao']) await anexar(exec, id, tipo);
+  let env = await exec('POST', `/api/implantacoes/${id}/enviar`, {});
+  assert.equal(env.status, 400);
+  assert.deepEqual(env.json.faltas, ['Anexar: Contrato assinado.']); // nada das condições do contrato
+  assert.equal((await anexar(exec, id, 'contrato', 'contrato-assinado.pdf')).status, 201);
+  env = await exec('POST', `/api/implantacoes/${id}/enviar`, {});
+  assert.equal(env.status, 200, env.texto);
+  assert.deepEqual([env.json.etapa, /^IMP-/.test(env.json.protocolo), /^CT-/.test(env.json.contrato)], ['juridico', true, true]);
+  d = (await exec('GET', `/api/implantacoes/${id}`)).json;
+  assert.deepEqual([d.implantacao.etapa, d.contrato.etapa, d.pode.editar, d.pode.cancelar], ['juridico', 'conferencia', false, true]);
+  assert.ok(!(await coord('GET', '/api/implantacoes?vis=fila')).json.implantacoes.some((x) => x.id === id)); // ainda não chegou ao setor
+  // o contrato entra nas Assinaturas do Jurídico, com a via assinada, o retorno e a convenção; quem elabora é avisado
+  const ct = d.contrato.id;
+  const c = (await admin('GET', `/api/contratos/${ct}`)).json;
+  assert.deepEqual([c.contrato.origem, c.contrato.formulario.assinado_fora, c.pode.registrar], ['pdf', true, true]);
+  assert.deepEqual(c.documentos.map((x) => x.tipo).sort(), ['analise_credito', 'contrato_assinado', 'convencao']);
+  assert.ok((await admin('GET', '/api/contratos?vis=assinaturas')).json.contratos.some((x) => x.id === ct && x.assinado_fora));
+  assert.match((await avisosDe('admin@teste.com')).pop().titulo, /^Contrato assinado fora do portal · CT-/);
+  // a advogada registra as condições do contrato assinado: a implantação segue sozinha para o setor
+  const x = c.contrato.fechado;
+  const fe = await admin('PUT', `/api/contratos/${ct}/fechado`, { condicoes: { ...x, taxa_adm: 3.25, boleto: 2.5, honorarios: 15, inicio_contrato: '2026-12-01' }, concluir: true });
+  assert.equal(fe.status, 200, fe.texto);
+  assert.equal(fe.json.implantacao_etapa, 'fila');
+  d = (await exec('GET', `/api/implantacoes/${id}`)).json;
+  assert.deepEqual([d.implantacao.etapa, d.implantacao.formulario.taxa_adm, d.implantacao.formulario.boleto, d.implantacao.formulario.honorarios, d.implantacao.formulario.inicio_contrato, d.condicoes_do_juridico],
+    ['fila', 3.25, 2.5, 15, '2026-12-01', false]);
+  assert.ok(d.implantacao.enviado_em);
+  assert.match((await avisosDe('exec@teste.com')).pop().titulo, /^Condições registradas · IMP-/);
+  assert.ok((await avisosDe('coord@teste.com')).some((a) => /^Nova implantação · /.test(a.titulo) && /contrato assinado fora do portal/.test(a.texto)));
 });
 
-test('análise anterior ao portal com mais de 90 dias: liberação do gestor pelo próprio PDF', { skip: !temLeitor && 'pdftotext ou reportlab não instalados' }, async () => {
-  const pdf = await retornoFicticio('AC-2025-0101');
-  // a data do retorno é a de hoje; para simular uma análise antiga, o pedido vai com a data de 100 dias atrás
-  const leitor = require('../server/implantacoes/pdf');
-  const original = leitor.lerRetorno;
-  const antiga = new Date(Date.now() - 100 * 24 * 3600 * 1000).toISOString().slice(0, 10);
-  leitor.lerRetorno = (t) => ({ ...original(t), data: antiga });
-  try {
-    const enviar = (acao, extra = {}) => exec('POST', `/api/implantacoes/pdf?acao=${acao}`, pdf, { headers: { 'content-type': 'application/pdf', ...extra } });
-    assert.equal((await enviar('ler')).json.situacao, 'vencida');
-    assert.equal((await enviar('criar')).status, 409);
-    assert.equal((await enviar('liberar', { 'x-motivo': encodeURIComponent('Contrato assinado depois') })).status, 201);
-    assert.equal((await enviar('ler')).json.situacao, 'aguardando_gestor');
-    const lib = (await gestorCr('GET', '/api/implantacoes/liberacoes')).json.liberacoes.find((x) => x.protocolo === 'AC-2025-0101');
-    assert.equal(lib.do_pdf, true);
-    assert.equal((await gestorCr('POST', `/api/implantacoes/liberacoes/${lib.id}/decidir`, { aprovar: true })).status, 200);
-    assert.equal((await enviar('criar')).status, 201);
-  } finally { leitor.lerRetorno = original; }
+test('contrato assinado fora do portal: análise do portal não entra por aqui; o Jurídico cancela e a implantação volta', { skip: !temLeitor && 'pdftotext ou reportlab não instalados' }, async () => {
+  // análise feita no portal: o contrato é pedido em Solicitação de Contrato
+  const aid = await analiseLiberada(1, 'Residencial Fictício do Portal');
+  const prot = (await ctx.db.um('SELECT protocolo FROM analises WHERE id = $1', [aid])).protocolo;
+  const doPortal = await retornoFicticio(prot);
+  const r0 = await exec('POST', '/api/implantacoes/pdf?acao=criar', doPortal, { headers: { 'content-type': 'application/pdf' } });
+  assert.equal(r0.status, 409);
+  assert.match(r0.json.erro, /Solicitação de Contrato/);
+  // o Jurídico cancela a conferência: volta ao executivo em rascunho
+  const pdf = await retornoFicticio('AC-2026-0916');
+  const { id } = (await exec('POST', '/api/implantacoes/pdf?acao=criar', pdf, { headers: { 'content-type': 'application/pdf' } })).json;
+  assert.equal((await exec('PATCH', `/api/implantacoes/${id}`, { formulario: { ...FORM, nome: 'Residencial Fictício Antigo', cnpj: '11.444.777/0001-61', uf: 'PB', parceria: 'nao', parceiros: [] } })).status, 200);
+  for (const tipo of ['cadastro_moradores', 'ata_eleicao', 'ata_orcamento', 'convencao', 'contrato']) await anexar(exec, id, tipo);
+  assert.equal((await exec('POST', `/api/implantacoes/${id}/enviar`, {})).json.etapa, 'juridico');
+  const ct = (await exec('GET', `/api/implantacoes/${id}`)).json.contrato.id;
+  assert.equal((await admin('POST', `/api/contratos/${ct}/cancelar`, { motivo: 'Via assinada ilegível' })).status, 200);
+  const d = (await exec('GET', `/api/implantacoes/${id}`)).json;
+  assert.deepEqual([d.implantacao.etapa, d.implantacao.contrato_id, d.pode.editar, d.condicoes_do_juridico], ['rascunho', null, true, true]);
+  assert.match((await avisosDe('exec@teste.com')).pop().texto, /Via assinada ilegível/);
+  // o executivo desiste com a implantação no Jurídico: a conferência do contrato é cancelada junto
+  assert.equal((await exec('POST', `/api/implantacoes/${id}/enviar`, {})).json.etapa, 'juridico');
+  const ct2 = (await exec('GET', `/api/implantacoes/${id}`)).json.contrato.id;
+  assert.equal((await exec('POST', `/api/implantacoes/${id}/cancelar`, {})).status, 200);
+  assert.equal((await admin('GET', `/api/contratos/${ct2}`)).json.contrato.etapa, 'cancelada');
 });
 
 test('formulário em PDF: quem vê a implantação exporta, com as seções, a parceria e o andamento do setor', { skip: !temLeitor && 'pdftotext ou reportlab não instalados' }, async () => {

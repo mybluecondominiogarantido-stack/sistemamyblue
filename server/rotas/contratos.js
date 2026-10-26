@@ -26,7 +26,7 @@ const leitorPdf = require('../implantacoes/pdf');
 const { gerarPdf } = require('../implantacoes/formulario-pdf');
 const F = require('../contratos/formulario');
 const C = require('../contratos/clausulas');
-const { abrirDoContrato } = require('./implantacoes');
+const { abrirDoContrato, seguirDoJuridico, voltarDoJuridico } = require('./implantacoes');
 
 const ETAPAS = ['rascunho', 'fila', 'em_elaboracao', 'pendencia', 'minuta_enviada', 'para_assinar', 'em_assinatura', 'conferencia', 'assinado', 'cancelada'];
 const ORIGEM = { analise: 'Análise de Crédito', pdf: 'Análise anterior ao portal', entrega: 'Condomínio de entrega' };
@@ -335,7 +335,7 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
     const busca = texto(req.query.q, 100);
     if (busca) where.push(`(c.condominio ILIKE ${v('%' + busca + '%')} OR c.protocolo ILIKE $${args.length} OR c.cnpj ILIKE $${args.length})`);
     const { rows } = await db.q(`SELECT c.id, c.protocolo, c.etapa, c.origem, c.analise_id, c.analise_protocolo, c.condominio, c.cnpj, c.uf, c.enviado_em, c.prazo,
-        c.minuta_enviada_em, c.ajustes, c.assinado_em, c.fechado_em, c.criado_em, c.atualizado_em, c.diretoria, c.executivo_id, e.nome AS executivo_nome, ur.nome AS responsavel_nome,
+        c.minuta_enviada_em, c.ajustes, c.assinado_em, c.fechado_em, c.criado_em, c.atualizado_em, c.diretoria, c.executivo_id, (c.formulario->>'assinado_fora') = 'true' AS assinado_fora, e.nome AS executivo_nome, ur.nome AS responsavel_nome,
         c.assinatura_pedida_em, c.em_assinatura_em, c.assinatura_plataforma,
         (SELECT MIN(ev.criado_em) FROM contrato_eventos ev WHERE ev.contrato_id = c.id AND ev.tipo = 'minuta_enviada') AS primeira_minuta_em,
         (SELECT array_agg(DISTINCT d.tipo) FROM contrato_documentos d WHERE d.contrato_id = c.id AND d.substituido_em IS NULL) AS tipos
@@ -824,7 +824,7 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
       if (lista.length) return erro(res, 400, 'Faltam condições para concluir.', { faltas: lista });
     }
     // implantação já aberta para a mesma análise, ainda sem contrato: passa a mostrar estas condições
-    const imp = concluir ? await db.um(`SELECT id, protocolo, responsavel_id FROM implantacoes WHERE etapa <> 'cancelada' AND (contrato_id = $3 OR (contrato_id IS NULL
+    const imp = concluir ? await db.um(`SELECT id, protocolo, etapa, responsavel_id FROM implantacoes WHERE etapa <> 'cancelada' AND (contrato_id = $3 OR (contrato_id IS NULL
       AND ((analise_id IS NOT NULL AND analise_id = $1) OR (analise_protocolo IS NOT NULL AND analise_protocolo = $2)))) ORDER BY id DESC LIMIT 1`, [c.analise_id, c.analise_protocolo, c.id]) : null;
     await db.tx(async (t) => {
       if (concluir) {
@@ -840,6 +840,11 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
     });
     if (!concluir) return res.json({ ok: true, faltas: F.faltasFechado(fechado) });
     await seg.auditar(req, 'contrato_fechado', null, { contrato: c.id, protocolo: c.protocolo, condominio: c.condominio });
+    // contrato assinado fora do portal: a implantação esperava as condições e segue para o setor (ela avisa o executivo)
+    if (imp && imp.etapa === 'juridico') {
+      const r = await seguirDoJuridico({ db, seg, avisos }, imp.id, await db.um('SELECT * FROM contratos WHERE id = $1', [c.id]), req.usuario);
+      return res.json({ ok: true, implantacao: imp.id, implantacao_etapa: r ? r.etapa : null });
+    }
     await avisos.notificar(await donos(db, c), { link: link(c.id), autor_id: req.usuario.id, tipo: 'contrato', email: true,
       titulo: imp ? `Contrato concluído · ${c.protocolo} · ${c.condominio}` : `Contrato assinado: solicite a implantação · ${c.condominio}`,
       texto: imp ? `${req.usuario.nome} registrou as condições fechadas de ${c.condominio}. Elas já aparecem na implantação ${imp.protocolo || 'em rascunho'}.`
@@ -911,6 +916,8 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
       await t.q("UPDATE contratos SET etapa = 'cancelada', atualizado_em = now() WHERE id = $1", [c.id]);
       await evento(t, c.id, req.usuario.id, 'cancelada', { motivo });
     });
+    // contrato assinado fora do portal: a implantação que esperava as condições volta para o executivo
+    await voltarDoJuridico({ db, avisos }, c, req.usuario, motivo);
     if (c.etapa !== 'rascunho') {
       await avisos.notificar([...(await donos(db, c)), c.responsavel_id], { link: link(c.id), autor_id: req.usuario.id, tipo: 'contrato', email: false,
         titulo: `Solicitação de contrato cancelada · ${c.protocolo} · ${c.condominio}`, texto: `${req.usuario.nome} cancelou a solicitação de contrato de ${c.condominio}.${motivo ? ` Motivo: ${motivo}` : ''}` });

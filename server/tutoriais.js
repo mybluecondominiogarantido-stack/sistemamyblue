@@ -86,7 +86,7 @@ const TUTORIAIS = [
   { slug: 'credito-analisar', grupo: 'Ferramentas', publico: 'credito_analise', titulo: 'Análise de Crédito — analisar e liberar',
     descricao: 'Assumir da fila, lançar o relatório, conferir a convenção, calcular, ver a prévia, levar à diretoria e liberar o retorno.' },
   { slug: 'implantacao-solicitar', grupo: 'Ferramentas', publico: 'implantacao', titulo: 'Implantação — pedir e acompanhar',
-    descricao: 'Abrir a implantação a partir da análise (ou de um PDF antigo, ou de um condomínio de entrega), preencher o formulário, anexar os documentos, enviar e acompanhar.' },
+    descricao: 'Abrir a implantação a partir do contrato assinado (no portal, ou fora dele com o retorno da análise), preencher o formulário, anexar os documentos, enviar e acompanhar.' },
   { slug: 'implantacao-conduzir', grupo: 'Ferramentas', publico: 'implantacao_setor', titulo: 'Implantação — designar, conduzir e levar à Carteira',
     descricao: 'Designar quem conduz, quem edita, as 5 etapas e o prazo de 3 dias úteis (com impedimento), as conferências, devolver com pendência, concluir e confirmar a entrada na Carteira.' },
   { slug: 'implantacao-ficha-repasse', grupo: 'Ferramentas', publico: 'implantacao_setor', titulo: 'Implantação — ficha de repasse',

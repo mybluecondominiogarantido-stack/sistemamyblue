@@ -115,8 +115,14 @@ todo, datas em Brasília):
   implantação abre em rascunho, ligada ao contrato (`abrirDoContrato` em `server/rotas/implantacoes.js`): o formulário
   vem da análise (ou do PDF do retorno, ou da entrega, já com a aprovação da diretoria) com as condições fechadas por
   cima, e entram o contrato assinado, a convenção e o retorno da análise. Ele completa e envia ao setor Implantação.
-  Também pode abrir pela própria Implantação (Nova implantação → a análise), que traz o contrato do mesmo jeito. Se o
-  condomínio já tinha implantação quando o contrato foi concluído, ela só é ligada ao contrato.
+  Também pode abrir pela própria Implantação (Nova implantação → No portal → o contrato), do mesmo jeito: toda
+  implantação começa de um contrato. Se o condomínio já tinha implantação quando o contrato foi concluído, ela só é ligada
+  ao contrato.
+- **Contrato assinado fora do portal:** começa na Implantação (Nova implantação → Fora do portal). No envio, o portal cria
+  o contrato direto em **Assinaturas → registrar as condições** (etapa `conferencia`), com `formulario.assinado_fora`, a
+  via assinada, o retorno da análise e a convenção, e avisa quem elabora. Não tem minuta: a advogada confere a via
+  assinada e registra as condições fechadas; concluído, a implantação segue sozinha para o setor Implantação. Cancelado
+  aqui, a implantação volta ao executivo. Detalhes em `docs/implantacao/LEIAME.md`.
 - A implantação aberta de uma análise (ou do PDF) que tem solicitação de contrato traz os dados do contrato: as
   **condições fechadas valem sobre o pedido**. O contrato assinado entra nos documentos da implantação como "Contrato
   assinado", e a convenção, se a implantação ainda não tiver (documentos do síndico anexados antes também vão, nos tipos

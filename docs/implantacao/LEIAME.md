@@ -1,7 +1,8 @@
 # Implantação
 
-Do contrato assinado à Carteira. O comercial abre a implantação a partir de uma análise de crédito liberada, preenche o
-formulário (o antigo Formulário de Implantação do Microsoft Forms) e anexa os documentos; o setor **Implantação** conduz;
+Do contrato assinado à Carteira. **Toda implantação começa de um contrato assinado**: o comercial escolhe um contrato
+concluído no portal (Solicitação de Contrato) ou anexa o contrato assinado fora do portal com o retorno da análise,
+preenche o formulário (o antigo Formulário de Implantação do Microsoft Forms) e anexa os documentos; o setor **Implantação** conduz;
 a coordenação confirma a entrada na Carteira. Tela própria do portal (menu **Implantação**), com os mesmos padrões da
 Análise de Crédito.
 
@@ -9,9 +10,9 @@ Análise de Crédito.
 
 | Parte | Arquivo |
 |---|---|
-| Rotas (perfil, análises disponíveis, liberação pelo gestor, formulário, documentos, envio, avisos) | `server/rotas/implantacoes.js` |
+| Rotas (perfil, contratos disponíveis, contrato assinado fora do portal, formulário, documentos, envio ao setor ou ao Jurídico, avisos) | `server/rotas/implantacoes.js` |
 | Regras do formulário: o que vem da análise, o que falta, o que fica pendente, o comparativo | `server/implantacoes/formulario.js` |
-| Tabelas `implantacoes`, `implantacao_documentos`, `implantacao_eventos`, `implantacao_liberacoes`, `implantacao_protocolos` | `server/db.js` |
+| Tabelas `implantacoes`, `implantacao_documentos`, `implantacao_eventos`, `implantacao_protocolos` (`implantacao_liberacoes` guarda só o histórico das liberações antigas) | `server/db.js` |
 | Lembretes: fila sem designação (4h úteis), prazo para iniciar vencido, pendências do executivo (uma vez por dia útil) — roda a cada 10 min | `criarRotinasImplantacao` em `server/rotas/implantacoes.js`, ligado em `server/index.js` |
 | Setor no dia a dia: quem edita (autorizações), pausas e prazo para concluir, onboarding depois de concluir, documento recebido sem arquivo, Obs. do Controle, Cobrar e a rotina dos prazos | `server/rotas/implantacoes-setor.js`; prazos em dias úteis em `server/implantacoes/prazos.js`; tabelas `implantacao_autorizacoes` e `implantacao_pausas` |
 | Ficha de repasse (montagem, envio, devolução, versões, PDF e rotina do prazo) | `server/implantacoes/ficha.js` e `server/rotas/implantacoes-ficha.js`; tabelas `implantacao_fichas` e `implantacao_ficha_versoes` |
@@ -22,11 +23,15 @@ Análise de Crédito.
 
 ## Regras
 
-- **De onde vem:** análise do portal enviada, aprovada ou com ressalvas, sem reanálise enviada depois e sem implantação
-  aberta. Abre implantação até `implantacao_validade_dias` (política de crédito, padrão **90**) depois da liberação do
-  retorno. Depois disso, o comercial pede a liberação ao **gestor da Análise de Crédito** (sino e e-mail); liberada, abre
-  normalmente; recusada, o caminho é a reanálise. (Os 30 dias de validade da proposta, no retorno, continuam iguais.)
-- **Formulário:** vem preenchido com a análise e tudo pode ser ajustado. A análise fica ao lado de cada campo, e o que
+- **De onde vem (Nova implantação → "Onde o contrato foi assinado?"):**
+  - **No portal:** a lista (`GET /api/implantacoes/contratos`) traz os contratos concluídos (assinados, com as condições
+    fechadas registradas pela advogada) do executivo que ainda não têm implantação; a administração vê os de todos. O
+    de condomínio de entrega vem marcado "Entrega · taxa aprovada pela diretoria". Escolhido o contrato, a implantação abre
+    por `POST /api/contratos/:id/implantacao` (o mesmo botão **Solicitar implantação** do contrato).
+  - **Fora do portal:** contrato assinado fora do portal (veja abaixo). A análise de crédito sozinha não abre mais
+    implantação, nem há prazo de 90 dias ou liberação do gestor da Análise de Crédito: análise do portal segue para a
+    Solicitação de Contrato.
+- **Formulário:** vem preenchido com o contrato e a análise. A análise fica ao lado de cada campo, e o que
   mudar (taxa administrativa, boleto, unidades, taxa ordinária, vencimento, desconto, isenção do síndico) aparece como
   diferença para o setor e o gestor. A convenção e o retorno da análise (PDF) entram nos documentos.
 - **Obrigatórios para enviar:** os dados do formulário e quatro documentos: convenção, cadastro de moradores (Excel),
@@ -186,22 +191,38 @@ vencimento. Os documentos
 que vieram da análise ou do contrato (convenção, retorno da análise, contrato assinado) ficam marcados `vinculado`: não
 se trocam nem se removem na implantação. O retorno da análise é obrigatório para enviar (no condomínio de entrega, não). Sem contrato assinado no portal, a implantação continua abrindo, com um aviso.
 
-## Outras origens
+## Contrato assinado fora do portal
 
-- **Condomínio de entrega** (construtora entregando, em enxoval): o comercial preenche o condomínio, a construtora, as
-  unidades e a taxa ordinária previstas e a taxa administrativa e o boleto propostos, e pede a **aprovação da
-  diretoria** (quem chancela análises de crédito; sino e e-mail). A diretoria aprova (podendo mudar os valores) ou não
-  (com motivo). Aprovado, os valores viram a referência do comparativo; com o contrato assinado, o comercial completa o
-  formulário e envia. Pode seguir **sem CNPJ** ("Ainda não tem CNPJ") e sem os documentos de enxoval: CNPJ e os quatro
-  documentos obrigatórios viram pendências, com o alerta diário ao executivo.
-- **Análise feita antes do portal:** o comercial anexa o PDF do Retorno de Análise de Crédito (o modelo de 4 páginas
-  do mesmo gerador). O portal lê (`server/implantacoes/pdf.js`, com o `pdftotext` do pacote `poppler-utils`, no
-  Dockerfile): protocolo e data, razão social, CNPJ, executivo, status, taxa administrativa, boleto, unidades e taxa
-  ordinária (memória de cálculo), síndico e cidade/UF (do texto, para conferir), observações jurídicas e próximos
-  passos (vão para as observações da implantação). O prazo de 90 dias conta da data do PDF; depois, a liberação do
-  gestor da Análise de Crédito é pedida pelo próprio PDF. Reprovada ou pendente não abre; o mesmo protocolo não abre
-  duas implantações; análise que está no portal usa a origem do portal. O PDF entra nos documentos como "Análise de
-  Crédito".
+O comercial anexa o **contrato assinado** e o **PDF do Retorno de Análise de Crédito** (o modelo de 4 páginas do mesmo
+gerador) e preenche o formulário; quem registra as condições do contrato é a advogada.
+
+- **Leitura do retorno** (`POST /api/implantacoes/pdf?acao=ler|criar`): o portal lê (`server/implantacoes/pdf.js`, com o
+  `pdftotext` do pacote `poppler-utils`, no Dockerfile) protocolo e data, razão social, CNPJ, executivo, status, taxa
+  administrativa, boleto, unidades e taxa ordinária (memória de cálculo), síndico e cidade/UF (do texto, para conferir),
+  observações jurídicas e próximos passos (vão para as observações da implantação). Reprovada ou pendente não abre; o
+  mesmo protocolo não abre duas implantações; análise que está no portal não entra por aqui (o contrato é pedido em
+  Solicitação de Contrato), nem análise que já tem contrato no portal. O PDF entra nos documentos como "Análise de
+  Crédito"; o contrato assinado sobe em seguida, como "Contrato assinado". A implantação fica marcada `assinado_fora`.
+- **Formulário:** taxa administrativa, boleto, desconto de pontualidade, vigência e honorários (`DA_ADVOGADA` em
+  `server/implantacoes/formulario.js`) ficam travados com a etiqueta "a advogada preenche" e não são cobrados no envio; o
+  resto é do executivo, como sempre (o que será garantido, o 1º vencimento e o cashback inclusive). O contrato assinado é
+  obrigatório para enviar.
+- **Envio → Jurídico:** sai o protocolo IMP e a implantação vai para a etapa **juridico** ("Com o Jurídico · condições do
+  contrato"): o portal cria o contrato direto na etapa `conferencia` (sem minuta, sem síndico, sem envio para assinatura),
+  com o pedido igual ao formulário (`formulario.assinado_fora`), a via assinada, o retorno e a convenção, e avisa quem
+  elabora contratos (sino e e-mail). O contrato assinado e o retorno ficam vinculados à implantação.
+- **Condições registradas → setor:** quando a advogada conclui o contrato (`PUT /api/contratos/:id/fechado`), as condições
+  entram no formulário (`seguirDoJuridico`) e a implantação **segue sozinha para o setor Implantação**, com os avisos de
+  sempre; o executivo recebe "Condições registradas" (sino e e-mail). Se ainda faltar algo dele, ela volta para rascunho
+  com a lista.
+- **Desistência:** o Jurídico cancelando o contrato, a implantação volta ao executivo em rascunho, com o motivo
+  (`voltarDoJuridico`). O executivo cancelando a implantação com o Jurídico, a conferência do contrato é cancelada junto.
+
+## Implantações antigas
+
+As abertas antes desta regra continuam como estão: pela análise do portal, pelo PDF do retorno (com o prazo de 90 dias e
+a liberação do gestor da Análise de Crédito) ou de condomínio de entrega com a aprovação da diretoria na própria
+implantação (etapa `diretoria`). Elas aparecem com a origem de antes; as rotas que as abriam não existem mais.
 
 ## Formulário em PDF
 
