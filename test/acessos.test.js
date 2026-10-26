@@ -85,6 +85,41 @@ test('coordenação cadastra ferramenta nova no setor dela, que aguarda a aprova
   assert.ok((await olga('GET', '/api/modulos')).json.modulos.some((m) => m.slug === 'agenda-credito'));
 });
 
+test('HTML da coordenação enviado com a ferramenta isolada só roda fora do isolamento depois de revisado', async () => {
+  const versaoEmUso = async (slug) => (await ctx.db.um('SELECT versao_id FROM modulos WHERE slug = $1', [slug])).versao_id;
+  assert.equal((await coord('POST', '/api/admin/modulos', { nome: 'Painel do Crédito', slug: 'painel-credito', setor_id: S('Crédito') })).status, 201);
+  assert.equal((await coord('PUT', '/api/admin/modulos/painel-credito/arquivo', html('Painel', 'v1'))).status, 200);
+  const v1 = await versaoEmUso('painel-credito');
+  assert.equal((await coord('PUT', '/api/admin/modulos/painel-credito/arquivo', html('Painel', 'v2'))).status, 200);
+  const v2 = await versaoEmUso('painel-credito');
+  assert.notEqual(v1, v2);
+  // aprovada continuando isolada: nada roda com a sessão de quem abre, então não pede revisão
+  assert.equal((await admin('POST', '/api/admin/modulos/painel-credito/aprovar')).status, 200);
+  // desligar o isolamento pede a revisão do HTML em uso
+  const r = await admin('PATCH', '/api/admin/modulos/painel-credito', { isolada: false });
+  assert.equal(r.status, 409, r.texto);
+  assert.equal(r.json.code, 'revisar_versao');
+  assert.equal(r.json.versao, v2);
+  assert.equal((await ctx.db.um("SELECT config FROM modulos WHERE slug = 'painel-credito'")).config.isolada, true, 'sem a revisão nada muda');
+  assert.equal((await admin('PATCH', '/api/admin/modulos/painel-credito?revisada=1', { isolada: false })).status, 200);
+  // a coordenação não volta para a v1, que ninguém revisou; a administração só com a confirmação
+  assert.equal((await coord('POST', `/api/admin/modulos/painel-credito/versoes/${v1}/usar`)).status, 403);
+  assert.equal((await admin('POST', `/api/admin/modulos/painel-credito/versoes/${v1}/usar`)).status, 409);
+  assert.equal(await versaoEmUso('painel-credito'), v2);
+  assert.equal((await admin('POST', `/api/admin/modulos/painel-credito/versoes/${v1}/usar?revisada=1`)).status, 200);
+  assert.equal(await versaoEmUso('painel-credito'), v1);
+  // revisada, a coordenação pode voltar a ela
+  assert.equal((await coord('POST', `/api/admin/modulos/painel-credito/versoes/${v2}/usar`)).status, 200);
+
+  // ferramenta ainda aguardando aprovação com o isolamento desligado: aprovar pede a revisão
+  assert.equal((await coord('POST', '/api/admin/modulos', { nome: 'Mural do Crédito', slug: 'mural-credito', setor_id: S('Crédito') })).status, 201);
+  assert.equal((await coord('PUT', '/api/admin/modulos/mural-credito/arquivo', html('Mural'))).status, 200);
+  assert.equal((await admin('PATCH', '/api/admin/modulos/mural-credito', { isolada: false })).status, 200, 'pendente continua isolada');
+  assert.equal((await admin('POST', '/api/admin/modulos/mural-credito/aprovar')).status, 409);
+  assert.equal((await admin('POST', '/api/admin/modulos/mural-credito/aprovar?revisada=1')).status, 200);
+  assert.equal((await ctx.db.um("SELECT revisada FROM modulo_versoes WHERE id = $1", [await versaoEmUso('mural-credito')])).revisada, true);
+});
+
 test('só consulta: abre, mas o servidor não grava', async () => {
   const ivo = await entrar('ivo@teste.com', 'Senha1234');
   const olga = await entrar('olga@teste.com', 'Senha1234');

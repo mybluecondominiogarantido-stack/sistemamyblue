@@ -220,7 +220,9 @@ test('ferramentas do setor: HTML, versões e quem pode abrir', async () => {
   r = await coord('PUT', '/api/admin/modulos/boletos/arquivo', html('Boletos v3'));
   assert.equal(r.json.aguardando_aprovacao, undefined);
   assert.equal((await emUso()).versao_id, r.json.versao);
-  await admin('PATCH', '/api/admin/modulos/boletos', { isolada: false });
+  // desligar o isolamento com o HTML da coordenação em uso: a administração precisa confirmar que o revisou
+  assert.equal((await admin('PATCH', '/api/admin/modulos/boletos', { isolada: false })).status, 409);
+  assert.equal((await admin('PATCH', '/api/admin/modulos/boletos?revisada=1', { isolada: false })).status, 200);
   assert.equal((await coord('PUT', '/api/admin/modulos/cobranca/arquivo', html('Cobrança'))).status, 403, 'outro setor');
   const v = await coord('GET', '/api/admin/modulos/boletos/versoes');
   assert.equal(v.json.versoes.length, 2);

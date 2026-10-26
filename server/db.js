@@ -867,7 +867,17 @@ ALTER TABLE contratos DROP CONSTRAINT IF EXISTS contratos_etapa_check;
 ALTER TABLE contratos ADD CONSTRAINT contratos_etapa_check CHECK (etapa IN ('rascunho','fila','em_elaboracao','pendencia','minuta_enviada','para_assinar','em_assinatura','conferencia','assinado','cancelada'));
 ALTER TABLE contratos ADD COLUMN IF NOT EXISTS assinatura_pedida_em TIMESTAMPTZ;
 ALTER TABLE contratos ADD COLUMN IF NOT EXISTS em_assinatura_em TIMESTAMPTZ;
-ALTER TABLE contratos ADD COLUMN IF NOT EXISTS assinatura_plataforma TEXT NOT NULL DEFAULT ''
+ALTER TABLE contratos ADD COLUMN IF NOT EXISTS assinatura_plataforma TEXT NOT NULL DEFAULT '';
+-- HTML revisado pela administração: só uma versão revisada roda fora do isolamento (com a sessão de quem abre).
+-- As que já existiam: revisadas se a administração enviou ou aprovou, ou se já estão em uso numa ferramenta não isolada.
+ALTER TABLE modulo_versoes ADD COLUMN IF NOT EXISTS revisada BOOLEAN;
+UPDATE modulo_versoes v SET revisada = (
+  EXISTS (SELECT 1 FROM usuarios u WHERE u.id = v.enviado_por AND u.papel = 'admin')
+  OR EXISTS (SELECT 1 FROM modulos m WHERE m.versao_id = v.id AND NOT m.pendente AND NOT COALESCE((m.config->>'isolada')::boolean, FALSE))
+  OR EXISTS (SELECT 1 FROM auditoria a WHERE a.acao = 'versao_aprovada' AND a.modulo_slug = v.modulo_slug AND a.detalhe->>'versao' = v.id::text)
+) WHERE v.revisada IS NULL;
+ALTER TABLE modulo_versoes ALTER COLUMN revisada SET DEFAULT FALSE;
+ALTER TABLE modulo_versoes ALTER COLUMN revisada SET NOT NULL
 `;
 
 /* Funções e gatilhos do banco (cada item é um comando inteiro: o corpo das funções tem ";").

@@ -43,6 +43,23 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
 
   const erro = (res, status, msg) => res.status(status).json({ erro: msg });
 
+  /* HTML que a administração ainda não revisou passaria a rodar com a sessão de quem abre (fora do isolamento):
+     a administração confirma que conferiu (?revisada=1) ou a ação para aqui. Devolve true quando pode seguir. */
+  async function conferirRevisao(req, res, m, versaoId) {
+    const v = versaoId && await modulos.obterVersao(m.slug, versaoId);
+    if (!v || v.revisada) return true;
+    if (req.query.revisada === '1') {
+      await modulos.marcarRevisada(v.id);
+      await seg.auditar(req, 'versao_revisada', m.slug, { versao: v.id });
+      return true;
+    }
+    const quando = new Date(v.enviado_em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' });
+    res.status(409).json({ code: 'revisar_versao', versao: v.id,
+      erro: `O HTML ${v.enviado_por ? `enviado por ${v.enviado_por} ` : ''}em ${quando} ainda não foi revisado pela administração. ` +
+        'Fora do isolamento, ele roda com a sessão de quem abre a ferramenta (inclusive a da administração).' });
+    return false;
+  }
+
   /* link do Apps Script que veio embutido no HTML original (ajuda na importação) */
   async function urlPlanilhaDoHtml(m) {
     try {
@@ -383,6 +400,8 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     if (Array.isArray(req.body.chaves_livres)) config.chaves_livres = expressoes(req.body.chaves_livres);
     if (typeof req.body.google_url === 'string') config.google_url = req.body.google_url.trim();
     if (typeof req.body.isolada === 'boolean') config.isolada = req.body.isolada;
+    // desligar o isolamento: o HTML em uso precisa ter sido revisado pela administração
+    if (modulos.rodaNoPortal(m, !!config.isolada) && !modulos.rodaNoPortal(m) && !(await conferirRevisao(req, res, m, m.versao_id))) return;
     await db.q(`UPDATE modulos SET nome = $1, descricao = $2, setor_id = $3, icone = $4, ordem = $5, ativo = $6, armazenamento = $7, fonte_dados = $8,
       config = $9::jsonb, atualizado_em = now() WHERE slug = $10`, [nome, String(b.descricao || ''), b.setor_id ? Number(b.setor_id) : null,
       ICONES.includes(b.icone) ? b.icone : m.icone, Number(b.ordem) || 0, !!b.ativo, arm, fonte, JSON.stringify(config), m.slug]);
@@ -451,8 +470,8 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     const reconhecido = await modulos.reconhecer(buf);
     // HTML da coordenação numa ferramenta já aprovada e não isolada: roda com a sessão de quem abre (inclusive a
     // administração), então só entra em uso depois que a administração aprovar. Isolada, entra na hora.
-    const aguardar = req.usuario.papel !== 'admin' && !m.pendente && !m.config.isolada;
-    const id = await modulos.salvarVersao(m.slug, buf, nomeOriginal, req.usuario.id, { aguardar });
+    const aguardar = req.usuario.papel !== 'admin' && modulos.rodaNoPortal(m);
+    const id = await modulos.salvarVersao(m.slug, buf, nomeOriginal, req.usuario.id, { aguardar, revisada: req.usuario.papel === 'admin' });
     await seg.auditar(req, aguardar ? 'arquivo_aguardando' : 'arquivo_enviado', m.slug, { versao: id, nome: nomeOriginal, bytes: buf.length });
     // aviso se o arquivo parece ser de outra ferramenta
     const aviso = reconhecido && reconhecido !== m.slug ? `Atenção: este arquivo parece ser da ferramenta "${(await modulos.obter(reconhecido)).nome}".` : null;
@@ -473,7 +492,7 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     const m = await modulos.obter(req.params.slug);
     const v = m && await db.um('SELECT id, conteudo, enviado_por FROM modulo_versoes WHERE id = $1 AND modulo_slug = $2 AND NOT aprovada', [Number(req.params.id) || 0, m.slug]);
     if (!v) return erro(res, 404, 'Não há versão aguardando aprovação com este número.');
-    await modulos.restaurarVersao(m.slug, v.id);
+    await modulos.restaurarVersao(m.slug, v.id, { revisada: true });
     const { avisoPatch, fonteAutomatica } = await ajustarPeloHtml(req, m, Buffer.from(v.conteudo));
     await seg.auditar(req, 'versao_aprovada', m.slug, { versao: v.id });
     if (avisos && v.enviado_por) {
@@ -616,6 +635,8 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     if (!m) return erro(res, 404, 'Módulo não encontrado.');
     if (!m.pendente) return erro(res, 400, 'Esta ferramenta não está aguardando aprovação.');
     if (!m.tem_arquivo) return erro(res, 400, 'Esta ferramenta ainda não tem HTML. Peça para enviarem o arquivo antes de aprovar.');
+    // aprovada sem isolamento, passa a rodar com a sessão de quem abre: o HTML em uso precisa ter sido revisado
+    if (!m.config.isolada && !(await conferirRevisao(req, res, m, m.versao_id))) return;
     await db.q('UPDATE modulos SET pendente = FALSE, atualizado_em = now() WHERE slug = $1', [m.slug]);
     await seg.auditar(req, 'modulo_aprovado', m.slug, { nome: m.nome });
     if (avisos) {
@@ -655,6 +676,13 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
 
   r.post('/api/admin/modulos/:slug/versoes/:id/usar', async (req, res) => {
     const soAprovadas = req.usuario.papel !== 'admin';
+    // ferramenta não isolada: a versão roda com a sessão de quem abre, então só entra em uso se a administração a revisou
+    const m = await modulos.obter(req.params.slug);
+    const v = m && await modulos.obterVersao(m.slug, req.params.id);
+    if (v && !v.revisada && modulos.rodaNoPortal(m)) {
+      if (!soAprovadas) { if (!(await conferirRevisao(req, res, m, v.id))) return; }
+      else if (v.aprovada) return erro(res, 403, 'Esta versão não foi revisada pela administração. Como a ferramenta não é isolada, só a administração pode pô-la em uso.');
+    }
     if (!(await modulos.restaurarVersao(req.params.slug, Number(req.params.id), { soAprovadas }))) {
       return erro(res, 404, soAprovadas ? 'Versão não encontrada ou aguardando a aprovação da administração.' : 'Versão não encontrada.');
     }

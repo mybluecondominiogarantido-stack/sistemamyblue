@@ -11,7 +11,7 @@ const BRIDGE_JS = fs.readFileSync(path.join(__dirname, 'bridge.js'), 'utf8');
 const jsonEmScript = (v) => JSON.stringify(v).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
 
 function criarServicoModulos(db, cfg) {
-  const COLUNAS = `m.*, s.nome AS setor_nome, s.ordem AS setor_ordem, v.enviado_em AS versao_em, v.tamanho, v.nome_original,
+  const COLUNAS = `m.*, s.nome AS setor_nome, s.ordem AS setor_ordem, v.enviado_em AS versao_em, v.tamanho, v.nome_original, v.revisada AS versao_revisada,
     pv.enviado_em AS pendente_em, pv.nome_original AS pendente_nome, pu.nome AS pendente_por
     FROM modulos m LEFT JOIN setores s ON s.id = m.setor_id LEFT JOIN modulo_versoes v ON v.id = m.versao_id
     LEFT JOIN modulo_versoes pv ON pv.id = m.versao_pendente_id LEFT JOIN usuarios pu ON pu.id = pv.enviado_por`;
@@ -32,12 +32,13 @@ function criarServicoModulos(db, cfg) {
   }
 
   /* Grava um novo HTML como versão do módulo (no banco) e passa a usá-lo.
-     aguardar: fica guardado como versão aguardando a aprovação da administração (a versão em uso não muda). */
-  async function salvarVersao(slug, buf, nomeOriginal, usuarioId, { aguardar = false } = {}) {
+     aguardar: fica guardado como versão aguardando a aprovação da administração (a versão em uso não muda).
+     revisada: a administração enviou ou conferiu este HTML; só versão revisada roda fora do isolamento. */
+  async function salvarVersao(slug, buf, nomeOriginal, usuarioId, { aguardar = false, revisada = false } = {}) {
     const sha = crypto.createHash('sha256').update(buf).digest('hex');
     return db.tx(async (t) => {
-      const v = await t.um(`INSERT INTO modulo_versoes (modulo_slug, conteudo, nome_original, tamanho, sha256, enviado_por, aprovada)
-        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`, [slug, buf, nomeOriginal ? String(nomeOriginal).slice(0, 200) : null, buf.length, sha, usuarioId || null, !aguardar]);
+      const v = await t.um(`INSERT INTO modulo_versoes (modulo_slug, conteudo, nome_original, tamanho, sha256, enviado_por, aprovada, revisada)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`, [slug, buf, nomeOriginal ? String(nomeOriginal).slice(0, 200) : null, buf.length, sha, usuarioId || null, !aguardar, !!revisada]);
       if (aguardar) {
         // uma versão aguardando por vez: a anterior que ainda não tinha sido aprovada sai
         await t.q('DELETE FROM modulo_versoes WHERE modulo_slug = $1 AND NOT aprovada AND id <> $2', [slug, v.id]);
@@ -49,12 +50,16 @@ function criarServicoModulos(db, cfg) {
     });
   }
 
-  /* volta a uma versão guardada (soAprovadas: a coordenação não põe em uso a que aguarda aprovação) */
-  async function restaurarVersao(slug, versaoId, { soAprovadas = false } = {}) {
+  const obterVersao = (slug, versaoId) => db.um(`SELECT v.id, v.aprovada, v.revisada, v.enviado_em, v.nome_original, u.nome AS enviado_por
+    FROM modulo_versoes v LEFT JOIN usuarios u ON u.id = v.enviado_por WHERE v.id = $1 AND v.modulo_slug = $2`, [Number(versaoId) || 0, slug]);
+
+  /* volta a uma versão guardada (soAprovadas: a coordenação não põe em uso a que aguarda aprovação;
+     revisada: a administração conferiu o HTML, que fica marcado como revisado) */
+  async function restaurarVersao(slug, versaoId, { soAprovadas = false, revisada = false } = {}) {
     const v = await db.um('SELECT id, aprovada FROM modulo_versoes WHERE id = $1 AND modulo_slug = $2', [versaoId, slug]);
     if (!v || (soAprovadas && !v.aprovada)) return false;
     await db.tx(async (t) => {
-      await t.q('UPDATE modulo_versoes SET aprovada = TRUE WHERE id = $1', [v.id]);
+      await t.q('UPDATE modulo_versoes SET aprovada = TRUE, revisada = revisada OR $2 WHERE id = $1', [v.id, !!revisada]);
       await t.q('UPDATE modulos SET versao_id = $1, versao_pendente_id = CASE WHEN versao_pendente_id = $1 THEN NULL ELSE versao_pendente_id END, atualizado_em = now() WHERE slug = $2', [v.id, slug]);
     });
     return true;
@@ -67,7 +72,12 @@ function criarServicoModulos(db, cfg) {
     return v;
   }
 
-  const listarVersoes = async (slug) => (await db.q(`SELECT v.id, v.nome_original, v.tamanho, v.sha256, v.enviado_em, v.aprovada, u.nome AS enviado_por
+  const marcarRevisada = (versaoId) => db.q('UPDATE modulo_versoes SET revisada = TRUE WHERE id = $1', [versaoId]);
+
+  /* a ferramenta roda na origem do portal, com a sessão de quem abre (não isolada nem aguardando aprovação) */
+  const rodaNoPortal = (m, isolada = !!m.config.isolada) => !m.pendente && !isolada;
+
+  const listarVersoes = async (slug) => (await db.q(`SELECT v.id, v.nome_original, v.tamanho, v.sha256, v.enviado_em, v.aprovada, v.revisada, u.nome AS enviado_por
     FROM modulo_versoes v LEFT JOIN usuarios u ON u.id = v.enviado_por WHERE v.modulo_slug = $1 ORDER BY v.id DESC`, [slug])).rows;
 
   // cache do HTML por versão (uma versão nunca muda, então o cache é sempre válido)
@@ -178,7 +188,7 @@ function criarServicoModulos(db, cfg) {
     return null;
   }
 
-  return { SLUG_RE, obter, listar, validarHtml, salvarVersao, restaurarVersao, recusarVersao, listarVersoes, lerHtml, cabecalhoDoHtml, montarHtml, reconhecer };
+  return { SLUG_RE, obter, listar, validarHtml, salvarVersao, obterVersao, restaurarVersao, recusarVersao, marcarRevisada, rodaNoPortal, listarVersoes, lerHtml, cabecalhoDoHtml, montarHtml, reconhecer };
 }
 
 module.exports = { criarServicoModulos, SLUG_RE };

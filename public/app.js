@@ -37,7 +37,7 @@
     if (r.status === 401) { sessaoExpirada(); throw new Error('Sua sessão expirou.'); }
     var j = {};
     try { j = await r.json(); } catch (e) { /* sem JSON */ }
-    if (!r.ok) throw new Error(j.erro || ('Erro ' + r.status));
+    if (!r.ok) { var falha = new Error(j.erro || ('Erro ' + r.status)); falha.dados = j; throw falha; }
     return j;
   }
 
@@ -94,6 +94,18 @@
       });
       $('#mOk', m).addEventListener('click', function () { ok = true; m.fechar(); });
     });
+  }
+
+  /* HTML que a administração ainda não revisou passaria a rodar com a sessão de quem abre: mostra a prévia isolada e pede
+     a confirmação antes de seguir. chamar(revisada) faz o pedido; devolve null se a pessoa desistir. */
+  async function comRevisao(slug, chamar) {
+    try { return await chamar(false); } catch (e) {
+      if (!e.dados || e.dados.code !== 'revisar_versao') throw e;
+      var texto = esc(e.message) + '<br><br><a href="/m/' + esc(slug) + '/?versao=' + Number(e.dados.versao) + '" target="_blank" rel="noopener">Abrir a prévia isolada</a> ' +
+        'e confira o HTML antes de confirmar. Na dúvida, baixe a versão em Versões anteriores e revise o código.';
+      if (!(await confirmar('Revisar o HTML antes', texto, 'Revisei, pode rodar', true))) return null;
+      return chamar(true);
+    }
   }
 
   /* ======================= ícones ======================= */
@@ -746,11 +758,16 @@
         var emUso = v.id === mod.versao_id;
         return '<div class="linha" style="padding:8px 12px;border-bottom:1px solid var(--border)"><span style="flex:1;color:var(--ink-2)"><b>' + quando(v.enviado_em) + '</b> · ' + tamanho(v.tamanho) + (v.nome_original ? ' · ' + esc(v.nome_original) : '') + (v.enviado_por ? ' · por ' + esc(v.enviado_por) : '') + '</span>' +
           '<a class="btn ghost sm" href="/api/admin/modulos/' + esc(mod.slug) + '/versoes/' + v.id + '/arquivo" title="Baixar este HTML">' + IC.baixar + 'Baixar</a>' +
+          (v.aprovada && !v.revisada ? '<span class="etiqueta cinza" title="Enviada pela coordenação com a ferramenta isolada: a administração ainda não conferiu este HTML.">não revisada</span>' : '') +
           (emUso ? '<span class="etiqueta verde">em uso</span>' : !v.aprovada ? '<span class="etiqueta ambar">aguardando aprovação</span>' : '<button class="btn ghost sm" data-versao="' + v.id + '">Usar esta</button>') + '</div>';
       }).join('') + '</div>';
       $$('[data-versao]', el).forEach(function (b) {
         b.onclick = async function () {
-          try { await api('POST', '/api/admin/modulos/' + mod.slug + '/versoes/' + b.getAttribute('data-versao') + '/usar'); toast('Versão restaurada.', 'ok'); m.fechar(); recarregarQuadro(mod.slug); paginaModulos(); } catch (e) { toast(e.message, 'erro'); }
+          try {
+            var url = '/api/admin/modulos/' + mod.slug + '/versoes/' + b.getAttribute('data-versao') + '/usar';
+            if (!(await comRevisao(mod.slug, function (rev) { return api('POST', url + (rev ? '?revisada=1' : '')); }))) return;
+            toast('Versão restaurada.', 'ok'); m.fechar(); recarregarQuadro(mod.slug); paginaModulos();
+          } catch (e) { toast(e.message, 'erro'); }
         };
       });
     }).catch(function () {}); }
@@ -1256,7 +1273,10 @@
       if ($('#edCarteira', m)) secaoCarteiraBoletos($('#edCarteira', m), mod.slug);
       editorAcessos($('#edAcessos', m), mod.slug);
       if ($('#btAprovarMod', m)) $('#btAprovarMod', m).onclick = async function () {
-        try { await api('POST', '/api/admin/modulos/' + mod.slug + '/aprovar'); toast('Ferramenta aprovada. As pessoas liberadas já a veem.', 'ok'); m.fechar(); paginaModulos(); recarregarModulosUsuario(); } catch (e) { toast(e.message, 'erro'); }
+        try {
+          if (!(await comRevisao(mod.slug, function (rev) { return api('POST', '/api/admin/modulos/' + mod.slug + '/aprovar' + (rev ? '?revisada=1' : '')); }))) return;
+          toast('Ferramenta aprovada. As pessoas liberadas já a veem.', 'ok'); m.fechar(); paginaModulos(); recarregarModulosUsuario();
+        } catch (e) { toast(e.message, 'erro'); }
       };
 
       // importação dos dados de uma ferramenta do Claude
@@ -1321,13 +1341,14 @@
         if (fonte && fonte !== mod.fonte_dados) avisos.push(fonte === 'interno' ? 'A ferramenta passará a gravar no banco do portal. Confira se os dados da planilha Google já foram importados.' : 'A ferramenta voltará a gravar na planilha Google. O que foi lançado no banco do portal não é enviado para a planilha.');
         if (avisos.length && !(await confirmar('Confirmar mudança', avisos.join('<br><br>'), 'Salvar mesmo assim'))) return;
         try {
-          await api('PATCH', '/api/admin/modulos/' + mod.slug, {
+          var dadosMod = {
             nome: $('#mNome', m).value, descricao: $('#mDesc', m).value, setor_id: $('#mSetor', m).value || null,
             icone: $('#mIcone', m).value, ordem: Number($('#mOrdem', m).value) || 0, ativo: $('#mAtivo', m).checked,
             armazenamento: arm, fonte_dados: fonte, isolada: $('#mIsolada', m).checked,
             chaves_locais: $('#mLocais', m).value.split(',').map(function (s) { return s.trim(); }).filter(Boolean),
             chaves_livres: $('#mLivres', m).value.split(',').map(function (s) { return s.trim(); }).filter(Boolean),
-          });
+          };
+          if (!(await comRevisao(mod.slug, function (rev) { return api('PATCH', '/api/admin/modulos/' + mod.slug + (rev ? '?revisada=1' : ''), dadosMod); }))) return;
           m.fechar(); toast('Módulo salvo.', 'ok');
           if (arm !== mod.armazenamento || fonte !== mod.fonte_dados || $('#mIsolada', m).checked !== !!(mod.config && mod.config.isolada)) {
             // o sandbox do quadro só muda criando o quadro de novo

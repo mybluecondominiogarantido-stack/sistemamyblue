@@ -37,7 +37,7 @@ const { criarServicoModulos } = require('../server/modulos');
     if (problema) { console.log(`✗ ${path.basename(arq)}: ${problema}`); continue; }
     const slug = forcado || (await modulos.reconhecer(buf));
     if (!slug || !(await modulos.obter(slug))) { console.log(`? ${path.basename(arq)}: não reconheci o módulo (use --modulo=slug)`); continue; }
-    await modulos.salvarVersao(slug, buf, path.basename(arq), null);
+    await modulos.salvarVersao(slug, buf, path.basename(arq), null, { revisada: true }); // quem importa tem acesso ao banco
     await db.q("INSERT INTO auditoria (acao, modulo_slug, detalhe) VALUES ('arquivo_enviado', $1, $2::jsonb)",
       [slug, JSON.stringify({ nome: path.basename(arq), bytes: buf.length, via: 'linha de comando' })]);
     console.log(`✓ ${path.basename(arq)} → ${slug}`);

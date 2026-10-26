@@ -254,6 +254,10 @@ rotas da comissão. Nada de administração, de outras ferramentas ou dos ticket
   e-mail); a versão atual continua em uso. Na janela da ferramenta aparecem **Ver prévia** (sempre isolada, com os
   dados reais), **Aprovar e usar** e **Recusar** (a versão é apagada e quem enviou é avisado).
 - A coordenação só volta a versões já aprovadas.
+- **HTML revisado.** O que a coordenação envia com a ferramenta isolada (ou aguardando aprovação) fica marcado **não
+  revisada** em *Versões anteriores*. Antes de esse HTML rodar com a sessão de quem abre (desligar o isolamento, aprovar
+  a ferramenta sem isolamento ou pôr a versão em uso numa ferramenta não isolada), o portal mostra a prévia isolada e
+  pede que a administração confirme que o revisou. Numa ferramenta não isolada, a coordenação só volta a versões revisadas.
 
 ## Mapa das ferramentas (outubro/2026)
 
