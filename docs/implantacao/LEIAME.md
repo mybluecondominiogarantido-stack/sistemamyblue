@@ -162,7 +162,12 @@ confere e mostra a prévia antes de gravar. Regras (`server/implantacoes/importa
 As importadas ficam com `origem = 'planilha'`, o **Nº** do formulário e a etiqueta *planilha*. São histórico: contam no
 Painel e nas metas da época (onboarding "REALIZADO" sem data conta como batido), mas não geram avisos, prazos, cobranças,
 ficha de repasse nem envio ao Controle de Repasses, e não entram na fila nem em "minhas". A que ficou em andamento dá para
-atualizar e concluir (sem avisos). Cada importação é um lote (`implantacao_importacoes`): **Desfazer importação** apaga o
+atualizar e concluir (sem avisos), também pelo **Editar** da aba Controle (quem conduz e a coordenação); a data do
+onboarding não é exigida. Ao concluir, o portal procura o condomínio na Carteira (ligado na importação, ID Vouch, CNPJ
+ou nome): achou, a implantação só é ligada ao cadastro (nada é criado, não duplica); não achou (ex.: contratos que
+ainda vão começar), fica **Concluída · aguardando a Carteira** e a coordenação confirma a entrada, com a conferência de
+ID e CNPJ repetidos. O ID "planilha-N" é provisório (a planilha só dizia que o Vouch foi feito) e não vai para a Carteira.
+Cada importação é um lote (`implantacao_importacoes`): **Desfazer importação** apaga o
 que ninguém editou no portal. Os arquivos não ficam guardados: só o que foi importado.
 
 ## Contrato

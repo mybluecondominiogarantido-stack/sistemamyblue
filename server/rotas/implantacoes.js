@@ -227,6 +227,8 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
       const nada = { pedir_diretoria: false, decidir_diretoria: false, designar: false, iniciar: false, pendencia: false, carteira: false, editar: false, tirar_documentos: false, enviar: false,
         cancelar: false, impedimento: false, onboarding: false, justificar_onboarding: false, pedir_autorizacao: false, autorizar: false };
       return { ...nada, ver: interno, interno, etapas: emAndamento, concluir: emAndamento, documentos: doSetor || autDocs, marcar_documentos: doSetor || autDocs,
+        // concluída fora da Carteira: a coordenação confirma a entrada (com a conferência de ID e CNPJ repetidos)
+        carteira: p.coordenacao && i.etapa === 'concluida',
         obs_controle: doSetor || autTudo, editar_setor: doSetor || autTudo, importada: true };
     }
     return {
@@ -531,7 +533,7 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     }
     res.json({
       implantacao: { ...i, ...info, etapas: F.normalizarEtapas(i.etapas) }, documentos, eventos, pode: pd, contrato, setor,
-      faltas_etapas: pd.interno && i.etapa === 'em_implantacao' ? F.faltasConcluir(i.etapas) : [],
+      faltas_etapas: pd.interno && i.etapa === 'em_implantacao' ? faltasParaConcluir(i) : [],
       onboarding_pendente: !F.onboardingFeito(i.etapas),
       conferencias: pd.interno && !['rascunho', 'diretoria'].includes(i.etapa) ? await conferencias(i, docs) : null,
       faltas: pd.enviar ? F.faltas(i.formulario, { docs, origem: i.origem, executivoId: i.executivo_id, referencia: i.referencia }) : [],
@@ -892,7 +894,8 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     const etapas = F.normalizarEtapas(req.body && req.body.etapas);
     // quem fez o onboarding: começa com quem é responsável pela implantação
     if (['marcado', 'realizado'].includes(etapas.onboarding.situacao) && !etapas.onboarding.por) etapas.onboarding.por = i.responsavel_id || req.usuario.id;
-    if (etapas.vouch.id && etapas.vouch.id !== antes.vouch.id && await db.um('SELECT 1 FROM condominios WHERE codigo = $1', [etapas.vouch.id])) {
+    // importada das planilhas: o condomínio em geral já está na Carteira com esse ID
+    if (!i.importacao_id && etapas.vouch.id && etapas.vouch.id !== antes.vouch.id && await db.um('SELECT 1 FROM condominios WHERE codigo = $1', [etapas.vouch.id])) {
       return erro(res, 409, `O ID Vouch ${etapas.vouch.id} já está na Carteira.`);
     }
     await db.tx(async (t) => {
@@ -959,21 +962,52 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     return out;
   }
 
+  /* o que falta para concluir; na importada das planilhas a data do onboarding não é exigida (o Controle não a registrava) */
+  function faltasParaConcluir(i) {
+    return F.faltasConcluir(i.etapas).filter((x) => !(i.importacao_id && /^Informar a data em que o onboarding/.test(x)));
+  }
+  /* importada: o condomínio já está na Carteira? (ligado na importação, pelo ID Vouch, pelo CNPJ ou pelo nome) */
+  async function jaNaCarteira(i) {
+    if (i.condominio_id) {
+      const c = await db.um('SELECT id, codigo FROM condominios WHERE id = $1', [i.condominio_id]);
+      if (c) return c;
+    }
+    const f = i.formulario || {};
+    const vouch = F.normalizarEtapas(i.etapas).vouch.id;
+    if (vouch && !/^planilha-/.test(vouch)) {
+      const c = await db.um('SELECT id, codigo FROM condominios WHERE codigo = $1', [vouch]);
+      if (c) return c;
+    }
+    const cnpj = String(f.sem_cnpj ? '' : f.cnpj || i.cnpj || '').replace(/\D/g, '');
+    if (cnpj.length === 14) {
+      const c = await db.um("SELECT id, codigo FROM condominios WHERE regexp_replace(cnpj, '\\D', '', 'g') = $1 ORDER BY id LIMIT 1", [cnpj]);
+      if (c) return c;
+    }
+    const norm = (s) => semAcento(s).toLowerCase().replace(/\s+/g, ' ').trim();
+    const nome = norm(f.nome || i.condominio);
+    if (!nome) return null;
+    return (await db.q('SELECT id, codigo, nome, razao_social FROM condominios ORDER BY id')).rows.find((c) => norm(c.nome) === nome || norm(c.razao_social) === nome) || null;
+  }
+
   r.post('/api/implantacoes/:id/concluir', json, async (req, res) => {
     const c = await carregar(req, res);
     if (!c) return;
     const { i, pd } = c;
     if (!pd.concluir) return erro(res, 403, 'Só quem conduz a implantação (depois de iniciar) ou a coordenação conclui.');
-    const lista = F.faltasConcluir(i.etapas);
+    const lista = faltasParaConcluir(i);
     if (lista.length) return erro(res, 400, 'Faltam etapas para concluir.', { faltas: lista });
     const semOnboarding = !F.onboardingFeito(i.etapas);
     if (i.importacao_id) {
-      // histórico das planilhas: conclui sem avisos, sem ficha e sem passar pela Carteira
+      // histórico das planilhas: conclui sem avisos e sem ficha. Já na Carteira: só liga ao cadastro (nada é criado,
+      // então não duplica). Fora da Carteira (ex.: contratos que ainda vão começar): fica concluída, e a coordenação
+      // confirma a entrada na Carteira, com a conferência de ID e CNPJ repetidos.
+      const cart = await jaNaCarteira(i);
       await db.tx(async (t) => {
-        await t.q("UPDATE implantacoes SET etapa = 'na_carteira', concluido_em = now(), atualizado_em = now() WHERE id = $1", [i.id]);
-        await evento(t, i.id, req.usuario.id, 'concluida', { importada: true });
+        if (cart) await t.q("UPDATE implantacoes SET etapa = 'na_carteira', condominio_id = $2, concluido_em = now(), atualizado_em = now() WHERE id = $1", [i.id, cart.id]);
+        else await t.q("UPDATE implantacoes SET etapa = 'concluida', concluido_em = now(), atualizado_em = now() WHERE id = $1", [i.id]);
+        await evento(t, i.id, req.usuario.id, 'concluida', { importada: true, carteira: cart ? { condominio_id: cart.id, codigo: cart.codigo } : null });
       });
-      return res.json({ ok: true, parceiros: null });
+      return res.json({ ok: true, parceiros: null, carteira: cart ? 'ja_estava' : 'confirmar' });
     }
     await db.tx(async (t) => {
       await t.q("UPDATE implantacoes SET etapa = 'concluida', concluido_em = now(), atualizado_em = now() WHERE id = $1", [i.id]);
@@ -997,10 +1031,10 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     const e = F.normalizarEtapas(i.etapas);
     const ex = i.executivo_id ? await db.um('SELECT nome FROM executivos WHERE id = $1', [i.executivo_id]) : null;
     return {
-      codigo: e.vouch.id, nome: apelido(f.nome || i.condominio), situacao: 'ATIVO', comarca: texto(f.uf, 2).toUpperCase(), vencimento: f.dia_vencimento ? String(f.dia_vencimento) : '',
+      codigo: /^planilha-/.test(e.vouch.id) ? '' : e.vouch.id, nome: apelido(f.nome || i.condominio), situacao: 'ATIVO', comarca: texto(f.uf, 2).toUpperCase(), vencimento: f.dia_vencimento ? String(f.dia_vencimento) : '',
       administradora: texto(f.administradora, 120).toUpperCase(), forma_envio: F.ENVIO_CARTEIRA[e.envio.forma] || '', executivo: ex ? ex.nome.toUpperCase() : '',
       inicio_contrato: texto(f.inicio_contrato, 10), razao_social: texto(f.nome || i.condominio, 200), cnpj: f.sem_cnpj ? '' : texto(f.cnpj, 20),
-      observacoes: [`Implantação ${i.protocolo}`, i.analise_protocolo ? `análise ${i.analise_protocolo}` : '', f.administracao_interna ? 'administração interna' : ''].filter(Boolean).join(' · '),
+      observacoes: [i.protocolo ? `Implantação ${i.protocolo}` : `Implantação Nº ${i.numero_planilha || ''} (histórico das planilhas)`, i.analise_protocolo ? `análise ${i.analise_protocolo}` : '', f.administracao_interna ? 'administração interna' : ''].filter(Boolean).join(' · '),
     };
   }
   async function duplicados(d) {
@@ -1042,10 +1076,10 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
       await evento(t, i.id, req.usuario.id, 'carteira', { condominio_id: novo, codigo: d.codigo, nome: d.nome });
       return novo;
     });
-    await seg.auditar(req, 'condominio_criado', null, { id, nome: d.nome, codigo: d.codigo, origem: `implantação ${i.protocolo}` });
+    await seg.auditar(req, 'condominio_criado', null, { id, nome: d.nome, codigo: d.codigo, origem: i.protocolo ? `implantação ${i.protocolo}` : `implantação Nº ${i.numero_planilha} (planilha)` });
     // o Controle de Emissão de Boletos acompanha a carteira
     if (boletosCarteira) boletosCarteira.agendar(req.usuario);
-    await avisos.notificar([...(await donos(db, i)), i.responsavel_id], { link: link(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: false,
+    if (!i.importacao_id) await avisos.notificar([...(await donos(db, i)), i.responsavel_id], { link: link(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: false,
       titulo: `Na Carteira · ${d.nome}`, texto: `${i.condominio} entrou na Carteira (ID ${d.codigo}).` });
     res.status(201).json({ ok: true, condominio_id: id });
   });

@@ -92,7 +92,7 @@ const TUTORIAIS = [
   { slug: 'implantacao-ficha-repasse', grupo: 'Ferramentas', publico: 'implantacao_setor', titulo: 'Implantação — ficha de repasse',
     descricao: 'A ficha que abre na conclusão já preenchida: completar os campos em azul, enviar ao Crédito em 5 dias úteis, responder a devolução, novas versões e o PDF no papel timbrado.' },
   { slug: 'implantacao-acompanhar', grupo: 'Ferramentas', publico: 'implantacao_acompanhar', titulo: 'Implantação — acompanhamento e metas',
-    descricao: 'Painel, mês vigente, Controle (as colunas da planilha, com Excel), metas de onboarding e de documentação, antecipações para o Controle de Repasses, fichas de repasse e os parâmetros.' },
+    descricao: 'Painel, mês vigente, Controle (filtro por mês, editar as etapas e concluir, visão resumida e a planilha completa, com Excel), metas de onboarding e de documentação, antecipações para o Controle de Repasses, fichas de repasse e os parâmetros.' },
   { slug: 'contrato-solicitar', grupo: 'Ferramentas', publico: 'contrato', titulo: 'Solicitação de Contrato — pedir e acompanhar',
     descricao: 'Pedir o contrato a partir da análise, preencher as condições e os pedidos do síndico, enviar ao Jurídico, pedir ajuste na minuta ou a assinatura, acompanhar os contratos e, assinado, solicitar a implantação.' },
   { slug: 'contrato-elaborar', grupo: 'Ferramentas', publico: 'contrato_juridico', titulo: 'Solicitação de Contrato — elaborar e registrar as condições fechadas',

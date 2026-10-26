@@ -167,9 +167,26 @@ test('importar: histórico concluído, 2026 com etapas, documentos da meta, Obs.
   assert.deepEqual([d.pode.importada, d.pode.etapas, d.pode.pendencia, d.setor.prazo_concluir], [true, true, false, null]);
   assert.equal((await equipe('POST', `/api/implantacoes/${delta.id}/antecipacao/enviar`, {})).status, 409);
   assert.equal((await equipe('PATCH', `/api/implantacoes/${delta.id}/etapas`, { etapas: { ...delta.etapas, onboarding: { situacao: 'realizado', data: '2026-02-01' } } })).status, 200);
-  assert.equal((await equipe('POST', `/api/implantacoes/${delta.id}/concluir`, {})).status, 200);
-  assert.equal((await ctx.db.um('SELECT etapa FROM implantacoes WHERE id = $1', [delta.id])).etapa, 'na_carteira');
+  // no Controle: quem conduz edita as etapas da importada em andamento
+  const lc = (await equipe('GET', '/api/implantacoes/acompanhamento?ano=2026')).json.linhas.find((x) => x.id === delta.id);
+  assert.deepEqual([lc.controle.pode_etapas, lc.controle.ligada_carteira, !!lc.controle.etapas], [true, false, true]);
+  // fora da Carteira: conclui (sem avisos, sem ficha) e espera a coordenação confirmar a entrada; nada é criado sozinho
+  const cond = (await ctx.db.um('SELECT COUNT(*)::int AS n FROM condominios')).n;
+  const rc = await equipe('POST', `/api/implantacoes/${delta.id}/concluir`, {});
+  assert.deepEqual([rc.status, rc.json.carteira], [200, 'confirmar']);
+  assert.equal((await ctx.db.um('SELECT etapa FROM implantacoes WHERE id = $1', [delta.id])).etapa, 'concluida');
+  assert.equal((await ctx.db.um('SELECT COUNT(*)::int AS n FROM condominios')).n, cond);
   assert.equal((await ctx.db.um('SELECT COUNT(*)::int AS n FROM implantacao_fichas')).n, 0);
+  assert.equal((await ctx.db.um('SELECT COUNT(*)::int AS n FROM notificacoes')).n, antes);
+  assert.equal((await equipe('GET', `/api/implantacoes/${delta.id}`)).json.pode.carteira, false);
+  assert.equal((await coord('GET', `/api/implantacoes/${delta.id}`)).json.pode.carteira, true);
+  const prev = (await coord('GET', `/api/implantacoes/${delta.id}/carteira`)).json.dados;
+  assert.match(prev.observacoes, /Nº 4 \(histórico das planilhas\)/);
+  // CNPJ repetido na Carteira é recusado; com ID e CNPJ novos, entra (sem avisos)
+  assert.equal((await coord('POST', `/api/implantacoes/${delta.id}/carteira`, { dados: { ...prev, codigo: '90001' } })).status, 409);
+  const ok = await coord('POST', `/api/implantacoes/${delta.id}/carteira`, { dados: { ...prev, codigo: '91234' } });
+  assert.equal(ok.status, 201, ok.texto);
+  assert.equal((await ctx.db.um('SELECT etapa FROM implantacoes WHERE id = $1', [delta.id])).etapa, 'na_carteira');
   assert.equal((await ctx.db.um('SELECT COUNT(*)::int AS n FROM notificacoes')).n, antes);
 });
 
@@ -182,4 +199,23 @@ test('desfazer: apaga o que ninguém mexeu; a que foi editada no portal fica; de
   const p = (await coord('POST', '/api/implantacoes/importacao/previa', ARQ)).json;
   assert.match(p.itens.find((x) => x.chave === 'C6').motivo, /já está no portal/);
   assert.equal((await coord('POST', '/api/implantacoes/importacao', ARQ)).json.importadas, 4);
+});
+
+test('importada em andamento que já está na Carteira: conclui só ligando ao cadastro (não duplica) e sem exigir a data do onboarding', async () => {
+  const lote = await ctx.db.um("INSERT INTO implantacao_importacoes (criado_por, resumo, fora) VALUES ($1, '{}'::jsonb, '[]'::jsonb) RETURNING id", [ids['coord@teste.com']]);
+  const etapas = { documentacao: { feito: true }, vouch: { id: 'planilha-77' }, onboarding: { situacao: 'a_marcar' }, boletos: { feito: false, primeiro_vencimento: '2026-11-10' }, envio: { forma: 'email' } };
+  const i = await ctx.db.um(`INSERT INTO implantacoes (etapa, origem, condominio, cnpj, uf, formulario, etapas, enviado_em, importacao_id, numero_planilha, importacao)
+    VALUES ('em_implantacao', 'planilha', 'Residencial Histórico Alfa', $1, 'CE', $2::jsonb, $3::jsonb, '2026-10-20T12:00:00Z', $4, 77, '{"fonte":"controle"}'::jsonb) RETURNING id`,
+  [CNPJ.a, JSON.stringify({ nome: 'Residencial Histórico Alfa', cnpj: CNPJ.a, uf: 'CE', inicio_contrato: '2026-11-01' }), JSON.stringify(etapas), lote.id]);
+  const cond = (await ctx.db.um('SELECT COUNT(*)::int AS n FROM condominios')).n;
+  // falta emitir os boletos: não conclui
+  assert.equal((await coord('POST', `/api/implantacoes/${i.id}/concluir`, {})).status, 400);
+  // o ID Vouch que já é da Carteira é aceito na importada; onboarding "realizado" sem data basta
+  const r = await coord('PATCH', `/api/implantacoes/${i.id}/etapas`, { etapas: { ...etapas, vouch: { id: '90001' }, onboarding: { situacao: 'realizado' }, boletos: { feito: true, primeiro_vencimento: '2026-11-10' } } });
+  assert.equal(r.status, 200, r.texto);
+  const rc = await coord('POST', `/api/implantacoes/${i.id}/concluir`, {});
+  assert.deepEqual([rc.status, rc.json.carteira], [200, 'ja_estava']);
+  const depois = await ctx.db.um('SELECT i.etapa, c.codigo FROM implantacoes i JOIN condominios c ON c.id = i.condominio_id WHERE i.id = $1', [i.id]);
+  assert.deepEqual([depois.etapa, depois.codigo], ['na_carteira', '90001']);
+  assert.equal((await ctx.db.um('SELECT COUNT(*)::int AS n FROM condominios')).n, cond);
 });
