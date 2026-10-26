@@ -28,7 +28,9 @@ const CSP_RELATORIO = "default-src 'none'; style-src 'unsafe-inline' https://fon
   + "frame-ancestors 'self'; form-action 'none'; base-uri 'none'";
 const SO_LEITURA = '<style>@media print{html,body{display:none!important}}html,body{-webkit-user-select:none;user-select:none}</style>';
 const semImpressao = (html) => (/<\/head>/i.test(html) ? html.replace(/<\/head>/i, SO_LEITURA + '</head>') : SO_LEITURA + html);
-const semScripts = (html) => String(html).replace(/<script\b[\s\S]*?<\/script\s*>/gi, '').replace(/<script\b[^>]*>/gi, '');
+// sem scripts e sem <meta http-equiv="refresh"> (a CSP não impede que ele leve o leitor para outro site)
+const semScripts = (html) => String(html).replace(/<script\b[\s\S]*?<\/script\s*>/gi, '').replace(/<script\b[^>]*>/gi, '')
+  .replace(/<meta\b[^>]*http-equiv\s*=\s*["']?\s*refresh[^>]*>/gi, '');
 
 function rotasComissao({ db, seg, cfg, avisos, acessos }) {
   const r = express.Router();

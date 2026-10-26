@@ -111,7 +111,8 @@ function rotasTutoriais({ db, seg, cfg }) {
         x.desatualizado = !!(x.tem_video && v && new Date(v).getTime() > emDia);
         return x;
       }),
-      sem_tutorial: mods.filter((m) => m.versao_em && !comTutorial.has(m.slug)) // só as que já têm HTML.map((m) => ({ slug: m.slug, nome: m.nome })),
+      // só as que já têm HTML
+      sem_tutorial: mods.filter((m) => m.versao_em && !comTutorial.has(m.slug)).map((m) => ({ slug: m.slug, nome: m.nome })),
     });
   });
 

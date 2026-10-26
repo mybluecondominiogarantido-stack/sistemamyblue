@@ -169,8 +169,11 @@ test('analista assume, cola o relatório, calcula; o executivo não vê o cálcu
 });
 
 test('liberar gera o retorno em PDF, avisa o executivo e permite pedir reanálise', { skip: !temGerador && 'python3 com reportlab não instalado' }, async () => {
-  const lib = await analista('POST', `/api/credito/analises/${idA}/liberar`, {});
-  assert.equal(lib.status, 200, lib.texto);
+  // clique duplo: só um pedido libera (um PDF e um aviso)
+  const duplo = await Promise.all([1, 2].map(() => analista('POST', `/api/credito/analises/${idA}/liberar`, {})));
+  assert.equal(duplo.filter((x) => x.status === 200).length, 1, duplo.map((x) => x.texto).join(' | '));
+  const lib = duplo.find((x) => x.status === 200);
+  assert.equal((await ctx.db.um("SELECT COUNT(*)::int AS n FROM analise_documentos WHERE analise_id = $1 AND tipo = 'retorno_pdf'", [idA])).n, 1);
   assert.equal(lib.json.email.assunto, 'Retorno de Análise de Crédito — Condomínio Residencial Fictício');
   assert.match(lib.json.email.corpo, /Status: APROVADA — 2,00% ADM \+ R\$ 2,00\/boleto \| 23 UH no escopo\./);
   const av = await avisosDe('exec@teste.com');

@@ -406,7 +406,7 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
   const fichaRotas = rotasFicha(r, { db, seg, avisos, erro, evento, json, link, perfil, pode, coordenacao, pessoasDoSetor, administradores, historicoParametros,
     autorizacaoAtiva, autorizados, P });
   const aoConcluir = fichaRotas.aoConcluir;
-  rotasAntecipacoes(r, { db, avisos, erro, evento, json, link, coordenacao, carregar, acessos });
+  rotasAntecipacoes(r, { db, seg, avisos, erro, evento, json, link, coordenacao, carregar, acessos });
 
   /* ===================== listagem ===================== */
   r.get('/api/implantacoes', async (req, res) => {
@@ -997,23 +997,30 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     const lista = faltasParaConcluir(i);
     if (lista.length) return erro(res, 400, 'Faltam etapas para concluir.', { faltas: lista });
     const semOnboarding = !F.onboardingFeito(i.etapas);
+    // clique duplo ou duas pessoas ao mesmo tempo: só o primeiro pedido conclui (o segundo não repete avisos nem Parceiros)
+    const JA_CONCLUIDA = 'Esta implantação já foi concluída.';
+    const marcar = async (t, sql, params) => { if (!(await t.um(sql + ' AND etapa = $' + (params.length + 1) + ' RETURNING id', [...params, i.etapa]))) throw new Error(JA_CONCLUIDA); };
     if (i.importacao_id) {
       // histórico das planilhas: conclui sem avisos e sem ficha. Já na Carteira: só liga ao cadastro (nada é criado,
       // então não duplica). Fora da Carteira (ex.: contratos que ainda vão começar): fica concluída, e a coordenação
       // confirma a entrada na Carteira, com a conferência de ID e CNPJ repetidos.
       const cart = await jaNaCarteira(i);
-      await db.tx(async (t) => {
-        if (cart) await t.q("UPDATE implantacoes SET etapa = 'na_carteira', condominio_id = $2, concluido_em = now(), atualizado_em = now() WHERE id = $1", [i.id, cart.id]);
-        else await t.q("UPDATE implantacoes SET etapa = 'concluida', concluido_em = now(), atualizado_em = now() WHERE id = $1", [i.id]);
-        await evento(t, i.id, req.usuario.id, 'concluida', { importada: true, carteira: cart ? { condominio_id: cart.id, codigo: cart.codigo } : null });
-      });
+      try {
+        await db.tx(async (t) => {
+          if (cart) await marcar(t, "UPDATE implantacoes SET etapa = 'na_carteira', condominio_id = $2, concluido_em = now(), atualizado_em = now() WHERE id = $1", [i.id, cart.id]);
+          else await marcar(t, "UPDATE implantacoes SET etapa = 'concluida', concluido_em = now(), atualizado_em = now() WHERE id = $1", [i.id]);
+          await evento(t, i.id, req.usuario.id, 'concluida', { importada: true, carteira: cart ? { condominio_id: cart.id, codigo: cart.codigo } : null });
+        });
+      } catch (e) { if (e.message === JA_CONCLUIDA) return erro(res, 409, JA_CONCLUIDA); throw e; }
       return res.json({ ok: true, parceiros: null, carteira: cart ? 'ja_estava' : 'confirmar' });
     }
-    await db.tx(async (t) => {
-      await t.q("UPDATE implantacoes SET etapa = 'concluida', concluido_em = now(), atualizado_em = now() WHERE id = $1", [i.id]);
-      await evento(t, i.id, req.usuario.id, 'concluida', semOnboarding ? { onboarding_pendente: true } : {});
-      await t.q("UPDATE implantacao_pausas SET fim = now(), resolucao = 'Encerrado na conclusão', encerrada_por = $2 WHERE implantacao_id = $1 AND fim IS NULL", [i.id, req.usuario.id]);
-    });
+    try {
+      await db.tx(async (t) => {
+        await marcar(t, "UPDATE implantacoes SET etapa = 'concluida', concluido_em = now(), atualizado_em = now() WHERE id = $1", [i.id]);
+        await evento(t, i.id, req.usuario.id, 'concluida', semOnboarding ? { onboarding_pendente: true } : {});
+        await t.q("UPDATE implantacao_pausas SET fim = now(), resolucao = 'Encerrado na conclusão', encerrada_por = $2 WHERE implantacao_id = $1 AND fim IS NULL", [i.id, req.usuario.id]);
+      });
+    } catch (e) { if (e.message === JA_CONCLUIDA) return erro(res, 409, JA_CONCLUIDA); throw e; }
     if (aoConcluir) await aoConcluir(i, req.usuario);
     const parceiros = await levarParaParceiros(i, req.usuario);
     if (parceiros) await db.q('INSERT INTO implantacao_eventos (implantacao_id, usuario_id, tipo, detalhe) VALUES ($1, $2, $3, $4::jsonb)', [i.id, req.usuario.id, 'parceiros', JSON.stringify(parceiros)]);

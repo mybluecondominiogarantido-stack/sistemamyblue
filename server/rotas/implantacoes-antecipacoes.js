@@ -34,7 +34,7 @@ const CAMPOS = ['valor', 'dia', 'fim', 'prazo'];
 const igual = (a, b) => CAMPOS.every((k) => String(a && a[k] != null ? a[k] : '') === String(b && b[k] != null ? b[k] : ''));
 
 function rotasAntecipacoes(r, deps) {
-  const { db, avisos, erro, evento, json, link, coordenacao, carregar, acessos } = deps;
+  const { db, seg, avisos, erro, evento, json, link, coordenacao, carregar, acessos } = deps;
 
   /* ---------- Implantação: marcar e enviar ---------- */
   r.post('/api/implantacoes/:id/antecipacao/enviar', json, async (req, res) => {
@@ -83,7 +83,10 @@ function rotasAntecipacoes(r, deps) {
   });
 
   /* ---------- Controle de Repasses ---------- */
+  // login como nas demais rotas (inclusive a troca de senha pendente); ferramenta desativada só a administração abre
+  r.use('/api/repasses', seg.exigirLogin);
   async function acessoRepasses(req, res, gestor) {
+    if (!(await seg.podeAcessar(req.usuario, SLUG))) { erro(res, 403, 'Sem acesso ao Controle de Repasses.'); return null; }
     const m = await db.um('SELECT * FROM modulos WHERE slug = $1', [SLUG]);
     const a = m && acessos ? await acessos.acessoDe(req.usuario, m) : { abre: req.usuario.papel === 'admin', somente_leitura: false, papeis: [] };
     if (!a.abre) { erro(res, 403, 'Sem acesso ao Controle de Repasses.'); return null; }

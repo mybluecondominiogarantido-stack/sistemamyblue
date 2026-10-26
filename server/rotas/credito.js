@@ -625,13 +625,17 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
     const email = retorno.emailEntrega(resultado, ctx);
     const resumo = retorno.resumoExecutivo(resultado, ctx);
     const nomeArq = retorno.nomeArquivo(atual.condominio, atual.protocolo);
-    await db.tx(async (t) => {
-      await t.q("UPDATE analise_documentos SET substituido_em = now() WHERE analise_id = $1 AND tipo = 'retorno_pdf' AND substituido_em IS NULL", [a.id]);
-      await t.q(`INSERT INTO analise_documentos (analise_id, tipo, nome, mime, tamanho, sha256, conteudo, paginas, enviado_por) VALUES ($1, 'retorno_pdf', $2, 'application/pdf', $3, $4, $5, 4, $6)`,
-        [a.id, nomeArq, pdf.length, require('crypto').createHash('sha256').update(pdf).digest('hex'), pdf, req.usuario.id]);
-      await t.q("UPDATE analises SET etapa = 'enviada', liberada_por = $2, liberada_em = now(), enviada_em = now(), atualizado_em = now() WHERE id = $1", [a.id, req.usuario.id]);
-      await evento(t, a.id, req.usuario.id, 'liberada', { status: resultado.status.rotulo, condensado, resumo });
-    });
+    // clique duplo: só o primeiro pedido libera (o segundo não gera outro PDF nem outro e-mail)
+    const JA_LIBERADA = 'Esta análise já foi liberada.';
+    try {
+      await db.tx(async (t) => {
+        if (!(await t.um("UPDATE analises SET etapa = 'enviada', liberada_por = $2, liberada_em = now(), enviada_em = now(), atualizado_em = now() WHERE id = $1 AND etapa = $3 RETURNING id", [a.id, req.usuario.id, a.etapa]))) throw new Error(JA_LIBERADA);
+        await t.q("UPDATE analise_documentos SET substituido_em = now() WHERE analise_id = $1 AND tipo = 'retorno_pdf' AND substituido_em IS NULL", [a.id]);
+        await t.q(`INSERT INTO analise_documentos (analise_id, tipo, nome, mime, tamanho, sha256, conteudo, paginas, enviado_por) VALUES ($1, 'retorno_pdf', $2, 'application/pdf', $3, $4, $5, 4, $6)`,
+          [a.id, nomeArq, pdf.length, require('crypto').createHash('sha256').update(pdf).digest('hex'), pdf, req.usuario.id]);
+        await evento(t, a.id, req.usuario.id, 'liberada', { status: resultado.status.rotulo, condensado, resumo });
+      });
+    } catch (e) { if (e.message === JA_LIBERADA) return erro(res, 409, JA_LIBERADA); throw e; }
     await seg.auditar(req, 'credito_liberada', null, { analise: a.id, protocolo: atual.protocolo, status: resultado.status.rotulo });
     await avisos.notificar(await donos(a), { link: link(a.id), autor_id: req.usuario.id, tipo: 'credito', email: true, titulo: email.assunto, texto: email.corpo.replace(/\n+/g, ' ').replace('Detalhes e próximos passos no PDF.', 'O PDF está no portal, com os detalhes e os próximos passos.') });
     res.json({ ok: true, email, resumo });
