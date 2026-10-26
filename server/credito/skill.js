@@ -229,7 +229,6 @@ function lerRespostaSkill(texto) {
     if (/data de (emissao|atualizacao)/.test(sem) && !out.relatorio.data_emissao) { const d = dataDe(sem.replace(/^.*?data de (emissao|atualizacao)/, '')); if (d) out.relatorio.data_emissao = d; }
     if ((m = sem.match(/detalhado por competencia[\s:|*—–-]*(sim|nao)/))) out.relatorio.tem_competencia = m[1] === 'sim';
     if ((m = sem.match(/(?:traz o )?nomes? dos devedores[\s:|*—–-]*(sim|nao)/))) out.relatorio.tem_nomes = m[1] === 'sim';
-    if ((m = sem.match(/periodo coberto[\s:|*—–-]*(\d{1,2})\/(\d{4})/))) out.relatorio.periodo_inicio = `${m[2]}-${m[1].padStart(2, '0')}`;
     if ((m = sem.match(/taxa ordinaria vigente\s*:?\s*(.+)$/))) out.avisos.push(`Taxa ordinária vigente no relatório: ${limpar(l).replace(/^.*?vigente\s*:?\s*/i, '')}`);
 
     // tabela de campos da convenção

@@ -616,7 +616,7 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
     if (!pd.analisar) return erro(res, 403, 'Só o analista que assumiu a análise libera o retorno.');
     let resultado;
     try { resultado = await calcular(a, req.usuario); } catch (e) { if (e.status) return erro(res, e.status, e.message); throw e; }
-    if (resultado.status.codigo === 'pendente') return erro(res, 400, 'A análise está pendente: devolva ao executivo com a lista do que falta.');
+    if (resultado.status.codigo === 'pendente') return erro(res, 400, `Não dá para liberar: a análise está pendente. ${resultado.pendencias.map((x) => x.mensagem).join(' ')} Corrija os dados do analista ou devolva ao executivo com pendência.`);
     if (resultado.assertiva && resultado.assertiva.pendentes && resultado.assertiva.pendentes.length) return erro(res, 400, `Registre o resultado da consulta Assertiva antes de liberar: ${resultado.assertiva.pendentes.length === 1 ? 'falta a unidade' : `faltam ${resultado.assertiva.pendentes.length} unidades:`} ${resultado.assertiva.pendentes.join(', ')}.`);
     if (resultado.diretoria && !a.chancela_em) return erro(res, 400, 'Inadimplência acima de 35%: envie à diretoria antes de liberar.');
     const atual = await db.um('SELECT * FROM analises WHERE id = $1', [a.id]);
