@@ -824,7 +824,9 @@ module.exports = [
       await t.clicar('#e_doc', { depois: 400 });
       await t.digitar('#e_vouch', '90001', { atraso: 80 });
       await t.escolher('#e_onb', 'Realizado');
+      await t.preencherCampo('#e_onb_data', hoje());
       await t.clicar('#e_bol', { depois: 400 });
+      await t.preencherCampo('#e_bol_venc', dia10());
       await t.clicar('input[name=e_env][value=email]', { depois: 400 });
       await t.clicar('#btEtapasImp', { depois: 1800 });
       await t.legenda('As conferências do portal comparam com a análise e o contrato. Tudo certo: <b>Concluir implantação</b>.', { etapa: D, ms: 300 });
@@ -1535,3 +1537,5 @@ module.exports = [
 
 // ferramentas (cada uma precisa do HTML dela em FERRAMENTAS)
 module.exports.push(...require('./roteiros-ferramentas'));
+// o que monta os cenários, para o capturador de telas dos manuais (docs/manuais/fonte/capturar-comercial.js)
+module.exports.ajudantes = { sessaoCr, analiseCr, contratoTut, implantacaoTut, implantacaoForaTut, retornoTut, pdfsCr, pdfsImp, FORM_CR, FORM_CT, FORM_IMP, SENHA_CR };
