@@ -362,7 +362,8 @@ test('mês-base sem inadimplência sai da média: 2 meses com débito ÷ 2, 1 m�
   perto(r.inad_media, 15); // (10% + 20%) ÷ 2, não ÷ 3
   assert.equal(r.inad_media_rs, 15000);
   assert.deepEqual(r.meses.map((m) => !!m.fora_da_media), [false, true, false]);
-  assert.ok(r.observacoes.some((o) => /mai\/2026 sem inadimplência: fora da média, que fica sobre 2 meses/.test(o)));
+  assert.ok(r.observacoes.some((o) => o === 'Média sobre 2 meses considerados (abr/jun 2026).'), r.observacoes.join(' | '));
+  assert.ok(r.alertas.some((x) => x.codigo === 'tendencia_ascendente' && /10,00% → 20,00%\)/.test(x.mensagem))); // o mês vazio não entra na tendência
 
   ({ entrada, opcoes } = com([['2026-05', 30000]]));
   perto(analisar(entrada, POLITICA_PADRAO, opcoes).inad_media, 30);

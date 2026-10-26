@@ -431,7 +431,7 @@ def build():
 
     data_meses = [['Mês de referência', 'Nº de inadimplentes', 'Valor da inadimplência', 'Percentual sobre receita bruta']]
     data_meses.extend([list(m) for m in DADOS['meses_base']])
-    data_meses.append(['MÉDIA', DADOS['inad_media_qtd'], DADOS['inad_media_valor'], DADOS['inad_media_pct']])
+    data_meses.append([DADOS.get('rotulo_media', 'MÉDIA'), DADOS['inad_media_qtd'], DADOS['inad_media_valor'], DADOS['inad_media_pct']])
 
     tab_meses = Table(data_meses, colWidths=[full_w*0.20, full_w*0.22, full_w*0.28, full_w*0.30])
     tab_meses.setStyle(TableStyle([

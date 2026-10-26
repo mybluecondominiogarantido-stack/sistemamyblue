@@ -392,9 +392,8 @@ function analisar(entrada, politica = POLITICA_PADRAO, opcoes = {}) {
   const inadMedia = !podeApurar ? null : naMedia.length ? naMedia.reduce((s, m) => s + m.total / receitaBruta * 100, 0) / naMedia.length : 0;
   const inadMediaC = !podeApurar ? null : naMedia.length ? Math.round(naMedia.reduce((s, m) => s + m.total, 0) / naMedia.length) : 0;
   if (podeApurar && naMedia.length < porMes.length) {
-    const fora = porMes.filter(zerado).map((m) => rotuloMes(m.competencia)).join(', ');
     observacoes.push(naMedia.length
-      ? `${fora} sem inadimplência: fora da média, que fica sobre ${naMedia.length === 1 ? '1 mês' : `${naMedia.length} meses`}.`
+      ? `Média sobre ${naMedia.length === 1 ? '1 mês considerado' : `${naMedia.length} meses considerados`} (${textoJanela(naMedia.map((m) => m.competencia))}).`
       : 'Nenhuma inadimplência nos meses-base.');
   }
 
@@ -414,8 +413,9 @@ function analisar(entrada, politica = POLITICA_PADRAO, opcoes = {}) {
         alerta('concentracao', 'atencao', `${k === 1 ? '1 unidade concentra' : `${k} unidades concentram`} ${soma.toFixed(1).replace('.', ',')}% da inadimplência da base (${top.map((r) => `${r.unidade} ${fmtPct(r.pct)}`).join('; ')}).`, { unidades: top, pct: soma });
       }
     }
-    if (meses.length >= 2 && meses.every((m, i) => i === 0 || m.pct > meses[i - 1].pct + EPS)) {
-      alerta('tendencia_ascendente', 'atencao', `Inadimplência em alta nos meses-base (${meses.map((m) => fmtPct(m.pct)).join(' → ')}).`);
+    const tend = meses.filter((m) => !m.fora_da_media); // só os meses considerados na média
+    if (tend.length >= 2 && tend.every((m, i) => i === 0 || m.pct > tend[i - 1].pct + EPS)) {
+      alerta('tendencia_ascendente', 'atencao', `Inadimplência em alta nos meses-base (${tend.map((m) => fmtPct(m.pct)).join(' → ')}).`);
     }
   }
 

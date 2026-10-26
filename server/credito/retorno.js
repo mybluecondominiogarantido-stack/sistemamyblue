@@ -34,6 +34,14 @@ function nomeArquivo(razaoSocial, protocolo) {
 
 /* ---------- textos da análise ---------- */
 
+// meses que entram na média: o mês-base sem inadimplência não aparece (se nenhum tem, ficam os três, com 0%)
+const consideradosDe = (r) => { const c = r.meses.filter((m) => !m.fora_da_media); return c.length ? c : r.meses; };
+const qtdMeses = (n) => (n === 1 ? '1 mês considerado' : `${n} meses considerados`);
+const textoMedia = (r) => {
+  const c = consideradosDe(r);
+  return c.length < r.meses.length ? `${textoJanela(c.map((m) => m.competencia))} (${qtdMeses(c.length)})` : r.janela.texto;
+};
+
 // "Convenção incompleta" vira frase ("Convenção incompleta."), para as ressalvas não se emendarem no texto
 const frase = (t) => { const s = String(t || '').trim(); return !s || /[.!?;:]$/.test(s) ? s : `${s}.`; };
 // nomes do relatório em maiúsculas ("MARIA DA SILVA") saem como nome próprio ("Maria da Silva")
@@ -54,7 +62,7 @@ function observacoesStatus(r, ctx) {
   const f = ctx.formulario || {};
   const partes = [textoDecisao(r)];
   if (r.inad_media !== null) {
-    partes.push(`A inadimplência média apurada foi de <b>${fmtPct(r.inad_media)}</b> (${fmtBRL(r.inad_media_rs)} por mês), sobre as competências de <b>${esc(r.janela.texto)}</b>${ctx.emissao ? `, com base no relatório emitido em ${dataBR(ctx.emissao)}` : ''}.`);
+    partes.push(`A inadimplência média apurada foi de <b>${fmtPct(r.inad_media)}</b> (${fmtBRL(r.inad_media_rs)} por mês), sobre as competências de <b>${esc(textoMedia(r))}</b>${ctx.emissao ? `, com base no relatório emitido em ${dataBR(ctx.emissao)}` : ''}.`);
   }
   const e = r.escopo;
   if (e.uh_escopo !== null) {
@@ -126,7 +134,7 @@ function montarDados(r, ctx) {
   const v = r.valores;
   const c = r.comparativo;
   const p = r.precificacao;
-  const naMedia = r.meses.filter((m) => !m.fora_da_media);
+  const naMedia = consideradosDe(r);
   const mediaQtd = naMedia.length ? naMedia.reduce((s, m) => s + m.inadimplentes, 0) / naMedia.length : 0;
   const custoInformado = c && c.sem_myblue.custo_boleto_informado;
   const extra = v.extra_por_uh > 0 ? ` + taxa extra ${fmtBRL(v.extra_por_uh)}` : '';
@@ -154,14 +162,15 @@ function montarDados(r, ctx) {
     } : Object.fromEntries(['arrec_sem', 'arrec_com', 'inad_sem', 'inad_com', 'taxa_sem', 'taxa_com', 'bol_sem', 'bol_com', 'receb_sem', 'receb_com', 'ganho_anual'].map((k) => [k, '—'])),
     receita_bruta: v.receita_bruta === null ? '—' : fmtBRL(v.receita_bruta),
     receita_liquida: v.receita_liquida === null ? '—' : fmtBRL(v.receita_liquida),
-    meses_base: r.meses.map((m) => [mesLongo(m.competencia) + (m.fora_da_media ? ' (fora da média)' : ''), String(m.inadimplentes), fmtBRL(m.valor), m.pct === null ? '—' : fmtPct(m.pct)]),
+    meses_base: naMedia.map((m) => [mesLongo(m.competencia), String(m.inadimplentes), fmtBRL(m.valor), m.pct === null ? '—' : fmtPct(m.pct)]),
+    rotulo_media: naMedia.length < r.meses.length ? `MÉDIA (${qtdMeses(naMedia.length).toUpperCase()})` : 'MÉDIA',
     inad_media_qtd: numBR(mediaQtd, Number.isInteger(mediaQtd) ? 0 : 1),
     inad_media_valor: r.inad_media_rs === null ? '—' : fmtBRL(r.inad_media_rs),
     inad_media_pct: fmtPct(r.inad_media),
     nota_base: v.receita_bruta === null ? '' : esc(`Receita bruta = ${uh(r.escopo.uh_escopo)} UH × ${fmtBRL(v.valor_por_uh)} (ordinária ${fmtBRL(v.taxa_ordinaria)}${extra}${agua}). Entra o principal da ordinária${extra ? ' e da taxa extra' : ''}; ficam fora multa, juros, correção, honorários e acordos.${v.desconto ? ` Receita líquida já com o desconto de pontualidade de ${fmtBRL(v.desconto)}.` : ''}${custoInformado || !c ? '' : ' * Custo de boleto não informado: considerado R$ 2,50 por unidade.'}`),
-    nota_dias: r.janela.meses.length ? esc(`Meses-base ${textoJanela(r.janela.meses.map((m) => m.competencia))}: ${naMedia.length < r.meses.length
-      ? `mais de 10 dias de vencidas na emissão${ctx.emissao ? ` (${dataBR(ctx.emissao)})` : ''}; mês sem inadimplência fica fora da média${naMedia.length ? ` (média sobre ${naMedia.length === 1 ? '1 mês' : `${naMedia.length} meses`})` : ''}.`
-      : `competências com mais de 10 dias de vencidas na emissão do relatório${ctx.emissao ? ` (${dataBR(ctx.emissao)})` : ''}.`}`) : '',
+    nota_dias: r.janela.meses.length ? esc(naMedia.length < r.meses.length
+      ? `Média de ${qtdMeses(naMedia.length)} (${textoJanela(naMedia.map((m) => m.competencia))}), com mais de 10 dias de vencidos na emissão do relatório${ctx.emissao ? ` (${dataBR(ctx.emissao)})` : ''}.`
+      : `Meses-base ${textoJanela(r.janela.meses.map((m) => m.competencia))}: competências com mais de 10 dias de vencidas na emissão do relatório${ctx.emissao ? ` (${dataBR(ctx.emissao)})` : ''}.`) : '',
     receita_myb: r.indicadores ? fmtBRL(r.indicadores.receita_myblue) : '—',
     valor_antecipado: r.indicadores ? fmtBRL(r.indicadores.valor_antecipado) : '—',
     exposicao: r.indicadores ? fmtBRL(r.indicadores.exposicao) : '—',
@@ -223,7 +232,7 @@ async function gerarPdf(dados, opcoes = {}) {
 function resumoExecutivo(r, ctx) {
   const p = r.precificacao;
   const linhas = [`${r.status.rotulo}${p ? ` — ${fmtPct(p.taxa_adm)} ADM + ${fmtBRL(p.boleto)}/boleto` : ''} | ${uh(r.escopo.uh_escopo ?? 0)} UH no escopo.`];
-  if (r.inad_media !== null) linhas.push(`Inadimplência média de ${fmtPct(r.inad_media)} (${r.janela.texto}).`);
+  if (r.inad_media !== null) linhas.push(`Inadimplência média de ${fmtPct(r.inad_media)} (${textoMedia(r)}).`);
   if (r.comparativo) linhas.push(`Ganho anual estimado para o condomínio: ${fmtBRL(r.comparativo.ganho_anual)}.`);
   const principal = r.status.codigo === 'reprovada' ? r.reprovacoes[0]?.texto
     : r.status.codigo === 'pendente' ? r.pendencias[0]?.mensagem
