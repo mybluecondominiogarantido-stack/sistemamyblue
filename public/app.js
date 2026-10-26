@@ -3670,7 +3670,8 @@
       (rel.origem && rel.origem.ia ? '<div class="msg ' + (rel.origem.legivel === false || (rel.origem.observacoes || []).length ? 'aviso' : 'ok') + '">Lido pela IA' + (rel.sistema ? ' · relatório ' + esc(rel.sistema) : '') + ': ' + (rel.unidades || []).length + ' unidades, ' +
         (rel.unidades || []).reduce(function (n, u) { return n + (u.lancamentos || []).length; }, 0) + ' lançamentos' + (rel.origem.fonte_emissao && rel.origem.fonte_emissao.pagina ? '; emissão na p. ' + rel.origem.fonte_emissao.pagina : '') + '. Confira com o PDF antes de calcular.' +
         ((rel.origem.observacoes || []).length ? '<ul style="margin:6px 0 0;padding-left:18px">' + rel.origem.observacoes.map(function (o) { return '<li>' + esc(o) + '</li>'; }).join('') + '</ul>' : '') + '</div>' : '') +
-      '<div class="grade-4">' + campoCr('dEmis', 'Data de emissão do relatório', rel.data_emissao || '', { tipo: 'date', dis: !editavel }) + campoCr('dIni', 'Primeira competência do relatório', rel.periodo_inicio || '', { tipo: 'month', dis: !editavel }) +
+      '<div class="grade-4">' + campoCr('dEmis', 'Data de emissão do relatório', rel.data_emissao || '', { tipo: 'date', dis: !editavel }) + '<div><label class="rot" for="dIni">Primeira competência do relatório</label><div class="linha" style="gap:6px;flex-wrap:nowrap"><input class="campo" type="month" id="dIni" value="' + esc(rel.periodo_inicio || '') + '"' + dis + '>' +
+        (editavel ? '<button type="button" class="btn ghost sm" id="btLimparIni" title="Apagar">Limpar</button>' : '') + '</div><div class="ajuda">Mês em que o relatório começa, não o primeiro débito. Em branco se o relatório não disser.</div></div>' +
       '<label class="linha" style="font-weight:700;font-size:13px;align-self:end"><input type="checkbox" id="dComp"' + (rel.tem_competencia !== false ? ' checked' : '') + dis + '> detalhado por competência</label>' +
       '<label class="linha" style="font-weight:700;font-size:13px;align-self:end"><input type="checkbox" id="dNomes"' + (rel.tem_nomes !== false ? ' checked' : '') + dis + '> traz o nome dos devedores</label></div>' +
       (editavel ? '<div><label class="rot" for="dCola">Lançamentos (unidade ; titular ; CPF/CNPJ ; competência ; tipo ; valor ; vencimento) — cole a planilha ou corrija o que a IA leu e clique em Ler planilha</label><textarea class="campo" id="dCola" rows="' + ((rel.unidades || []).length ? 10 : 5) + '" placeholder="A-101;Fulano;111.111.111-11;04/2026;Taxa ordinária;1.840,00" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px">' + esc(planilhaDeUnidadesCr(rel.unidades)) + '</textarea>' +
@@ -3922,6 +3923,7 @@
         }
         await api('PATCH', '/api/credito/analises/' + a.id, { dados_analista: lerDadosAnalista(a.dados_analista || {}, unidadesLidas) });
       };
+      if ($('#btLimparIni')) $('#btLimparIni').onclick = function () { $('#dIni').value = ''; $('#dIni').focus(); };
       $('#btColar').onclick = async function () {
         try {
           var r = await api('POST', '/api/credito/analises/' + a.id + '/relatorio-colado', { texto: $('#dCola').value });
