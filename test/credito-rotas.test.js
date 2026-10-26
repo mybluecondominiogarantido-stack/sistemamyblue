@@ -430,3 +430,22 @@ test('consulta Assertiva: o analista registra cada unidade; espólio sai da gara
   assert.deepEqual(det.eventos.find((e) => e.tipo === 'assertiva').detalhe.consultas, [{ unidade: 'A-101', resultado: 'espolio' }]);
   assert.equal((await analista('POST', `/api/credito/analises/${id}/liberar`, {})).status, 200);
 });
+
+test('condomínio ainda sem CNPJ: envia sem o CNPJ e o cálculo avisa dos 90 dias para regularizar', async () => {
+  const r = await exec('POST', '/api/credito/analises', { formulario: { ...FORM, cnpj: '', sem_cnpj: false } });
+  const id = r.json.id;
+  await anexar(exec, id, 'relatorio');
+  await anexar(exec, id, 'convencao');
+  const sem = await exec('POST', `/api/credito/analises/${id}/enviar`, {});
+  assert.ok(sem.json.faltas.some((f) => /CNPJ/.test(f)));
+  assert.equal((await exec('PATCH', `/api/credito/analises/${id}`, { formulario: { ...FORM, cnpj: '11.222.333/0001-81', sem_cnpj: true } })).status, 200);
+  const det = (await exec('GET', `/api/credito/analises/${id}`)).json;
+  assert.equal(det.analise.cnpj, ''); // marcado sem CNPJ, o número não fica
+  const env = await exec('POST', `/api/credito/analises/${id}/enviar`, {});
+  assert.equal(env.status, 200, env.texto);
+  await analista('POST', `/api/credito/analises/${id}/assumir`, {});
+  const unidades = (await analista('POST', `/api/credito/analises/${id}/relatorio-colado`, { texto: planilha('2.800,00') })).json.unidades;
+  await analista('PATCH', `/api/credito/analises/${id}`, { dados_analista: { convencao: { registro: 'RI', uh: 24 }, relatorio: { data_emissao: hojeIso(), unidades } } });
+  const calc = await analista('POST', `/api/credito/analises/${id}/calcular`, {});
+  assert.ok(calc.json.resultado.alertas.some((x) => x.codigo === 'sem_cnpj'));
+});

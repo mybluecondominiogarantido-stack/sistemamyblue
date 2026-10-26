@@ -339,3 +339,13 @@ test('competências em mm/aaaa ou dd/mm/aaaa viram a mesma chave', () => {
   assert.equal(normalizarCompetencia('2026-6'), '2026-06');
   assert.equal(normalizarCompetencia('jun'), null);
 });
+
+test('taxa do relatório na divergência: a das competências recentes, não a mais comum do histórico', () => {
+  const base = casoA();
+  const antigas = Array.from({ length: 24 }, (_, i) => lanc(`20${String(23 + Math.floor(i / 12)).padStart(2, '0')}-${String((i % 12) + 1).padStart(2, '0')}`, 'ordinaria', 1500));
+  const unidades = [{ unidade: 'Z-999', titular: 'Titular Fictício', lancamentos: [...antigas, ...['2026-04', '2026-05', '2026-06'].map((c) => lanc(c, 'ordinaria', 1840))] }];
+  const r = analisar({ ...base, relatorio: { ...base.relatorio, unidades } }, POLITICA_PADRAO, { hoje: '2026-07-20' });
+  assert.equal(r.divergencias.find((d) => d.campo === 'taxa_ordinaria'), undefined); // vigente R$ 1.840 = formulário
+  const outro = analisar({ ...base, formulario: { ...base.formulario, taxa_ordinaria: 1500 }, relatorio: { ...base.relatorio, unidades } }, POLITICA_PADRAO, { hoje: '2026-07-20' });
+  assert.equal(outro.divergencias.find((d) => d.campo === 'taxa_ordinaria').valores.relatorio, 1840);
+});

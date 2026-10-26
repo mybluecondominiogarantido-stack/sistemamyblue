@@ -34,11 +34,17 @@ function nomeArquivo(razaoSocial, protocolo) {
 
 /* ---------- textos da análise ---------- */
 
+// "Convenção incompleta" vira frase ("Convenção incompleta."), para as ressalvas não se emendarem no texto
+const frase = (t) => { const s = String(t || '').trim(); return !s || /[.!?;:]$/.test(s) ? s : `${s}.`; };
+// nomes do relatório em maiúsculas ("MARIA DA SILVA") saem como nome próprio ("Maria da Silva")
+const nomeProprio = (t) => String(t || '').replace(/\b[A-ZÀ-Ý][A-ZÀ-Ý´'.]+(?:\s+[A-ZÀ-Ý][A-ZÀ-Ý´'.]*)+\b/g,
+  (nome) => nome.toLowerCase().replace(/(^|\s)(\S)/g, (m, e, c) => e + c.toUpperCase()).replace(/\s(D[aeo]s?|E)\s/g, (m) => m.toLowerCase()));
+
 function textoDecisao(r) {
   const preco = r.precificacao ? `taxa administrativa de ${fmtPct(r.precificacao.taxa_adm)} e boleto de ${fmtBRL(r.precificacao.boleto)}` : '';
   switch (r.status.codigo) {
     case 'aprovada': return `O condomínio foi <b>aprovado</b>, com ${preco}.`;
-    case 'ressalvas': return `O condomínio foi <b>aprovado com ressalvas</b>, com ${preco}.${r.diretoria ? ' A inadimplência acima de 35% exige a chancela da diretoria (CEO e Diretor Comercial).' : ''} ${r.ressalvas.filter((x) => x.codigo !== 'diretoria').map((x) => esc(x.texto)).join(' ')}`.trim();
+    case 'ressalvas': return `O condomínio foi <b>aprovado com ressalvas</b>, com ${preco}.${r.diretoria ? ' A inadimplência acima de 35% exige a chancela da diretoria (CEO e Diretor Comercial).' : ''} ${r.ressalvas.filter((x) => x.codigo !== 'diretoria').map((x) => esc(frase(x.texto))).join(' ')}`.trim();
     case 'reprovada': return `O condomínio <b>não foi aprovado</b>: ${r.reprovacoes.map((x) => esc(x.texto.replace(/\.$/, ''))).join('; ')}.`;
     default: return `A análise está <b>pendente</b>: ${r.pendencias.map((x) => esc(x.mensagem.replace(/\.$/, ''))).join('; ')}.`;
   }
@@ -106,6 +112,7 @@ function proximosPassos(r, ctx) {
   if (cod.has('convencao_sem_registro_ri')) passos.push('Regularizar o registro da convenção no Cartório de Registro de Imóveis em até 90 dias.');
   if (f.custo_boleto_atual === undefined || f.custo_boleto_atual === null || f.custo_boleto_atual === '') passos.push('Confirmar o custo de boleto praticado hoje pelo condomínio (o comparativo considerou R$ 2,50 por unidade).');
   for (const x of f.taxas_extras || []) if (x.fim) passos.push(`Confirmar a permanência da taxa extra "${x.descricao || 'sem descrição'}" após ${String(x.fim).split('-').reverse().join('/')}.`);
+  if (f.sem_cnpj) passos.push('Regularizar o CNPJ do condomínio em até 90 dias da primeira arrecadação; até lá, o repasse vai para a conta da administradora.');
   if (f.tipo_contratacao === 'portabilidade') passos.push('Alinhar com a garantidora atual a data de desligamento e as ações jurídicas em curso.');
   if (r.escopo.exclusoes.some((x) => x.motivo === 'espolio')) passos.push('Orientar o condomínio a direcionar a cobrança dos espólios ao inventário.');
   passos.push('Alinhar com o jurídico do condomínio as cobranças em andamento e o envio da carteira à MyBlue.');
@@ -128,7 +135,7 @@ function montarDados(r, ctx) {
     protocolo: ctx.protocolo,
     data_analise: dataBR(r.hoje),
     razao_social: esc(f.razao_social || ''),
-    cnpj: esc(f.cnpj || ''),
+    cnpj: f.sem_cnpj ? 'Ainda não tem (em constituição)' : esc(f.cnpj || ''),
     executivo: esc(ctx.executivo || f.executivo?.nome || ''),
     status: r.status.rotulo,
     taxa_adm: p ? fmtPct(p.taxa_adm) : '—',
@@ -165,7 +172,9 @@ function montarDados(r, ctx) {
 }
 
 function motivoExclusao(x) {
-  if (x.motivo === 'espolio') return `Espólio${x.detalhe ? ` (${x.detalhe})` : ''}: fora do escopo, débito acumulado direcionado ao inventário.`;
+  if (x.motivo === 'espolio') return /^confirmado/.test(x.detalhe || '')
+    ? `Espólio ${nomeProprio(x.detalhe)}: fora do escopo, débito acumulado direcionado ao inventário.`
+    : `Espólio${x.detalhe ? ` (${nomeProprio(x.detalhe)})` : ''}: fora do escopo, débito acumulado direcionado ao inventário.`;
   if (x.motivo === 'retomada') return `Unidade retomada${x.detalhe ? ` (${x.detalhe})` : ''}: fora do escopo da garantia.`;
   return `Abandono ou litígio${x.detalhe ? ` (${x.detalhe})` : ''}: fora do escopo da garantia.`;
 }

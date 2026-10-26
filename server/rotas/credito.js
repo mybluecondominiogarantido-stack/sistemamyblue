@@ -138,7 +138,7 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
     const lista = [];
     const cnpj = String(f.cnpj || '').replace(/\D/g, '');
     if (!texto(f.razao_social, 200)) lista.push('Informar a razão social do condomínio.');
-    if (!cnpjValido(cnpj.padStart(14, '0')) || cnpj.length < 11) lista.push('Informar um CNPJ válido.');
+    if (!f.sem_cnpj && (!cnpjValido(cnpj.padStart(14, '0')) || cnpj.length < 11)) lista.push('Informar um CNPJ válido, ou marcar que o condomínio ainda não tem CNPJ.');
     if (!texto(f.uf, 2)) lista.push('Informar a UF do condomínio.');
     if (!['nova', 'portabilidade'].includes(f.tipo_contratacao)) lista.push('Escolher o tipo de contratação.');
     if (!(Number(f.uh_total) > 0)) lista.push('Informar a quantidade de unidades.');
@@ -221,7 +221,7 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
 
   /* campos do formulário que o analista corrigiu: [{ campo, de, para }] */
   const ROTULOS_FORM = {
-    razao_social: 'Razão social', cnpj: 'CNPJ', uf: 'UF', cidade: 'Cidade', administradora: 'Administradora', sistema_gestao: 'Sistema de gestão',
+    razao_social: 'Razão social', cnpj: 'CNPJ', sem_cnpj: 'Ainda sem CNPJ', uf: 'UF', cidade: 'Cidade', administradora: 'Administradora', sistema_gestao: 'Sistema de gestão',
     garantidora_atual: 'Garantidora atual', vigencia_atual: 'Vigência do contrato atual', tipo_contratacao: 'Tipo de contratação', uh_total: 'Unidades (UH)',
     taxa_ordinaria: 'Taxa ordinária', dia_vencimento: 'Dia do vencimento', 'desconto_pontualidade.tipo': 'Desconto de pontualidade', 'desconto_pontualidade.valor': 'Valor do desconto',
     'agua_gas.total_mensal': 'Água + gás (total)', 'agua_gas.por_unidade': 'Água + gás (por unidade)', 'agua_gas.compoe_boleto': 'Água + gás no boleto',
@@ -305,7 +305,7 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
     const f = b.formulario && typeof b.formulario === 'object' ? b.formulario : {};
     const id = await db.tx(async (t) => {
       const { id: novo } = await t.um(`INSERT INTO analises (etapa, condominio, cnpj, uf, cidade, tipo_contratacao, executivo_id, solicitante_id, formulario)
-        VALUES ('rascunho', $1, $2, $3, $4, $5, $6, $7, $8::jsonb) RETURNING id`, [texto(f.razao_social, 200), texto(f.cnpj, 20), texto(f.uf, 2).toUpperCase(), texto(f.cidade, 100),
+        VALUES ('rascunho', $1, $2, $3, $4, $5, $6, $7, $8::jsonb) RETURNING id`, [texto(f.razao_social, 200), f.sem_cnpj ? '' : texto(f.cnpj, 20), texto(f.uf, 2).toUpperCase(), texto(f.cidade, 100),
         ['nova', 'portabilidade'].includes(f.tipo_contratacao) ? f.tipo_contratacao : null, executivoId, u.id, JSON.stringify(f)]);
       await evento(t, novo, u.id, 'criada', {});
       return novo;
@@ -358,7 +358,7 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
       if (!pd.editar && !pd.analisar) return erro(res, 403, 'O formulário só muda enquanto a solicitação está em rascunho ou com pendência, ou pelo analista que assumiu a análise.');
       const f = b.formulario && typeof b.formulario === 'object' ? b.formulario : {};
       s('formulario', JSON.stringify(f), '::jsonb');
-      s('condominio', texto(f.razao_social, 200)); s('cnpj', texto(f.cnpj, 20)); s('uf', texto(f.uf, 2).toUpperCase()); s('cidade', texto(f.cidade, 100));
+      s('condominio', texto(f.razao_social, 200)); s('cnpj', f.sem_cnpj ? '' : texto(f.cnpj, 20)); s('uf', texto(f.uf, 2).toUpperCase()); s('cidade', texto(f.cidade, 100));
       s('tipo_contratacao', ['nova', 'portabilidade'].includes(f.tipo_contratacao) ? f.tipo_contratacao : null);
     }
     if (b.executivo_id !== undefined) {
