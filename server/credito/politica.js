@@ -31,6 +31,7 @@ const POLITICA_PADRAO = Object.freeze({
 
   // meses-base e regra dos dias (§8.2: "mais de 10 dias")
   meses_base: 3,
+  media_sem_meses_zerados: true,  // mês-base sem inadimplência sai da média (2 meses com débito → soma ÷ 2)
   meses_coleta: 4,
   dias_apos_vencimento: 10,
   dias_inclusivo: false,          // false = mais de N dias; true = N dias ou mais
@@ -100,6 +101,7 @@ function validarPolitica(p) {
   if (p.meses_coleta < p.meses_base) erros.push('meses_coleta: não pode ser menor que meses_base');
   if (!['limitar', 'excluir'].includes(p.extra_acima_limite)) erros.push('extra_acima_limite: limitar ou excluir');
   if (!['em_aberto', 'consecutivas'].includes(p.assertiva_criterio)) erros.push('assertiva_criterio: em_aberto ou consecutivas');
+  if (typeof p.media_sem_meses_zerados !== 'boolean') erros.push('media_sem_meses_zerados: sim ou não');
   if (!['convencao', 'formulario'].includes(p.uh_fonte)) erros.push('uh_fonte: convencao ou formulario');
   return erros;
 }

@@ -381,12 +381,22 @@ function analisar(entrada, politica = POLITICA_PADRAO, opcoes = {}) {
   if (extraNoRelSemForm.size) divergir('taxa_extra', { relatorio: [...extraNoRelSemForm].map(rotuloMes) }, 'fora da base', 'formulario');
 
   const podeApurar = receitaBruta > 0 && comps.length > 0 && rel && rel.tem_competencia !== false;
+  // política: mês-base sem inadimplência sai da média (soma dos meses com débito ÷ quantos são); nenhum mês com débito → 0%
+  const zerado = (m) => P.media_sem_meses_zerados && m.total === 0;
   const meses = porMes.map((m) => ({
     competencia: m.competencia, rotulo: rotuloMesLongo(m.competencia), vencimento: m.vencimento,
     inadimplentes: m.porUnidade.length, valor: reais(m.total), pct: podeApurar ? m.total / receitaBruta * 100 : null,
+    ...(zerado(m) ? { fora_da_media: true } : {}),
   }));
-  const inadMedia = podeApurar ? meses.reduce((s, m) => s + m.pct, 0) / meses.length : null;
-  const inadMediaC = podeApurar ? Math.round(porMes.reduce((s, m) => s + m.total, 0) / porMes.length) : null;
+  const naMedia = porMes.filter((m) => !zerado(m));
+  const inadMedia = !podeApurar ? null : naMedia.length ? naMedia.reduce((s, m) => s + m.total / receitaBruta * 100, 0) / naMedia.length : 0;
+  const inadMediaC = !podeApurar ? null : naMedia.length ? Math.round(naMedia.reduce((s, m) => s + m.total, 0) / naMedia.length) : 0;
+  if (podeApurar && naMedia.length < porMes.length) {
+    const fora = porMes.filter(zerado).map((m) => rotuloMes(m.competencia)).join(', ');
+    observacoes.push(naMedia.length
+      ? `${fora} sem inadimplência: fora da média, que fica sobre ${naMedia.length === 1 ? '1 mês' : `${naMedia.length} meses`}.`
+      : 'Nenhuma inadimplência nos meses-base.');
+  }
 
   /* ---------- alertas de perfil da dívida ---------- */
   if (podeApurar) {

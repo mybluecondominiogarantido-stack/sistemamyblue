@@ -126,7 +126,8 @@ function montarDados(r, ctx) {
   const v = r.valores;
   const c = r.comparativo;
   const p = r.precificacao;
-  const mediaQtd = r.meses.length ? r.meses.reduce((s, m) => s + m.inadimplentes, 0) / r.meses.length : 0;
+  const naMedia = r.meses.filter((m) => !m.fora_da_media);
+  const mediaQtd = naMedia.length ? naMedia.reduce((s, m) => s + m.inadimplentes, 0) / naMedia.length : 0;
   const custoInformado = c && c.sem_myblue.custo_boleto_informado;
   const extra = v.extra_por_uh > 0 ? ` + taxa extra ${fmtBRL(v.extra_por_uh)}` : '';
   const agua = v.agua_gas_por_uh > 0 ? ` + água/gás ${fmtBRL(v.agua_gas_por_uh)}` : '';
@@ -153,12 +154,14 @@ function montarDados(r, ctx) {
     } : Object.fromEntries(['arrec_sem', 'arrec_com', 'inad_sem', 'inad_com', 'taxa_sem', 'taxa_com', 'bol_sem', 'bol_com', 'receb_sem', 'receb_com', 'ganho_anual'].map((k) => [k, '—'])),
     receita_bruta: v.receita_bruta === null ? '—' : fmtBRL(v.receita_bruta),
     receita_liquida: v.receita_liquida === null ? '—' : fmtBRL(v.receita_liquida),
-    meses_base: r.meses.map((m) => [mesLongo(m.competencia), String(m.inadimplentes), fmtBRL(m.valor), m.pct === null ? '—' : fmtPct(m.pct)]),
+    meses_base: r.meses.map((m) => [mesLongo(m.competencia) + (m.fora_da_media ? ' (fora da média)' : ''), String(m.inadimplentes), fmtBRL(m.valor), m.pct === null ? '—' : fmtPct(m.pct)]),
     inad_media_qtd: numBR(mediaQtd, Number.isInteger(mediaQtd) ? 0 : 1),
     inad_media_valor: r.inad_media_rs === null ? '—' : fmtBRL(r.inad_media_rs),
     inad_media_pct: fmtPct(r.inad_media),
     nota_base: v.receita_bruta === null ? '' : esc(`Receita bruta = ${uh(r.escopo.uh_escopo)} UH × ${fmtBRL(v.valor_por_uh)} (ordinária ${fmtBRL(v.taxa_ordinaria)}${extra}${agua}). Entra o principal da ordinária${extra ? ' e da taxa extra' : ''}; ficam fora multa, juros, correção, honorários e acordos.${v.desconto ? ` Receita líquida já com o desconto de pontualidade de ${fmtBRL(v.desconto)}.` : ''}${custoInformado || !c ? '' : ' * Custo de boleto não informado: considerado R$ 2,50 por unidade.'}`),
-    nota_dias: r.janela.meses.length ? esc(`Meses-base ${textoJanela(r.janela.meses.map((m) => m.competencia))}: competências com mais de 10 dias de vencidas na emissão do relatório${ctx.emissao ? ` (${dataBR(ctx.emissao)})` : ''}.`) : '',
+    nota_dias: r.janela.meses.length ? esc(`Meses-base ${textoJanela(r.janela.meses.map((m) => m.competencia))}: ${naMedia.length < r.meses.length
+      ? `mais de 10 dias de vencidas na emissão${ctx.emissao ? ` (${dataBR(ctx.emissao)})` : ''}; mês sem inadimplência fica fora da média${naMedia.length ? ` (média sobre ${naMedia.length === 1 ? '1 mês' : `${naMedia.length} meses`})` : ''}.`
+      : `competências com mais de 10 dias de vencidas na emissão do relatório${ctx.emissao ? ` (${dataBR(ctx.emissao)})` : ''}.`}`) : '',
     receita_myb: r.indicadores ? fmtBRL(r.indicadores.receita_myblue) : '—',
     valor_antecipado: r.indicadores ? fmtBRL(r.indicadores.valor_antecipado) : '—',
     exposicao: r.indicadores ? fmtBRL(r.indicadores.exposicao) : '—',

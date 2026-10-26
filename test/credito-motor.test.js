@@ -349,3 +349,30 @@ test('taxa do relatório na divergência: a das competências recentes, não a m
   const outro = analisar({ ...base, formulario: { ...base.formulario, taxa_ordinaria: 1500 }, relatorio: { ...base.relatorio, unidades } }, POLITICA_PADRAO, { hoje: '2026-07-20' });
   assert.equal(outro.divergencias.find((d) => d.campo === 'taxa_ordinaria').valores.relatorio, 1840);
 });
+
+test('mês-base sem inadimplência sai da média: 2 meses com débito ÷ 2, 1 mês ÷ 1, nenhum = 0%', () => {
+  const com = (meses) => {
+    const { entrada, opcoes } = casoSimples({ pct: 0 });
+    entrada.relatorio.unidades = [{ unidade: '101', titular: 'Fulano Fictício', lancamentos: meses.map(([c, v]) => lanc(c, 'ordinaria', v, 5)) }];
+    return { entrada, opcoes };
+  };
+  // receita 100 UH × R$ 1.000 = R$ 100.000
+  let { entrada, opcoes } = com([['2026-04', 10000], ['2026-06', 20000]]);
+  let r = analisar(entrada, POLITICA_PADRAO, opcoes);
+  perto(r.inad_media, 15); // (10% + 20%) ÷ 2, não ÷ 3
+  assert.equal(r.inad_media_rs, 15000);
+  assert.deepEqual(r.meses.map((m) => !!m.fora_da_media), [false, true, false]);
+  assert.ok(r.observacoes.some((o) => /mai\/2026 sem inadimplência: fora da média, que fica sobre 2 meses/.test(o)));
+
+  ({ entrada, opcoes } = com([['2026-05', 30000]]));
+  perto(analisar(entrada, POLITICA_PADRAO, opcoes).inad_media, 30);
+
+  ({ entrada, opcoes } = com([]));
+  assert.equal(analisar(entrada, POLITICA_PADRAO, opcoes).inad_media, 0);
+
+  // política desligada: o mês sem débito entra como zero (÷ 3)
+  ({ entrada, opcoes } = com([['2026-04', 10000], ['2026-06', 20000]]));
+  r = analisar(entrada, { ...POLITICA_PADRAO, media_sem_meses_zerados: false }, opcoes);
+  perto(r.inad_media, 10);
+  assert.ok(r.meses.every((m) => !m.fora_da_media));
+});
