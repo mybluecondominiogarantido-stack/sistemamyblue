@@ -287,7 +287,7 @@ function analisar(entrada, politica = POLITICA_PADRAO, opcoes = {}) {
     pendencias.push({ codigo: 'relatorio_anterior_janela', mensagem: `A posição do relatório é anterior aos ${P.meses_base} meses-base exigidos hoje: enviar o relatório atualizado.` });
   }
   const periodoIni = rel ? normalizarCompetencia(rel.periodo_inicio) : null;
-  if (periodoIni && comps.some((c) => c < periodoIni)) pendencias.push({ codigo: 'competencia_faltante', mensagem: `O relatório começa em ${rotuloMes(periodoIni)} e não cobre toda a janela (${textoJanela(comps)}).` });
+  if (periodoIni && comps.some((c) => c < periodoIni)) pendencias.push({ codigo: 'competencia_faltante', mensagem: `O relatório começa em ${rotuloMes(periodoIni)} e não cobre toda a janela (${textoJanela(comps)}): enviar o relatório desde ${rotuloMes(comps[0])}.` });
   if (comps.length) {
     let txt = `Inadimplência apurada sobre ${textoJanela(comps)}`;
     if (janela.descartadas.length && !janela.ajustada) txt += ` (${janela.descartadas.map((d) => rotuloMes(d.competencia)).join(', ')} fora da base: vencimento com ${P.dias_inclusivo ? 'menos de' : 'até'} ${P.dias_apos_vencimento} dias na emissão do relatório)`;
