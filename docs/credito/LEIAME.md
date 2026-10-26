@@ -101,6 +101,7 @@ Todas ficam como parâmetro da política (tabela `parametros_politica`), sem nad
 | Ponto | Decisão |
 |---|---|
 | Reprovação por inadimplência | acima de **40%** (35% a 40% = ressalvas + chancela da diretoria) |
+| Mês-base sem inadimplência | sai da média e não aparece na memória de cálculo: com débito em 2 dos 3 meses, a média é a soma ÷ 2 e o retorno diz "2 meses considerados"; em 1 mês, "1 mês considerado"; em nenhum, 0%. Parâmetro em Política e faixas (`media_sem_meses_zerados`) |
 | Regra dos 10 dias | a competência entra se, na emissão do relatório, passaram **mais de 10 dias** do vencimento |
 | Boleto | **R$ 2,00** fixo; Maranhão **R$ 5,50**. Executivo com boleto próprio: no cadastro dele (tabela `executivos`) |
 | Taxa extra | a taxa extra vigente (por unidade, conforme o formulário) entra **inteira**, sem limite; acima de **40% da ordinária** gera aviso ao analista |

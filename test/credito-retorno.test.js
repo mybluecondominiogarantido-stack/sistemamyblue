@@ -111,3 +111,13 @@ test('sem CNPJ: o retorno diz que ainda não tem e põe o prazo de 90 dias nos p
   assert.equal(d.cnpj, 'Ainda não tem (em constituição)');
   assert.ok(d.proximos_passos.some((p) => /Regularizar o CNPJ do condomínio em até 90 dias/.test(p)));
 });
+
+test('memória de cálculo mostra só os meses considerados e diz quantos foram', () => {
+  const { r, ctx } = caso();
+  const r2 = { ...r, meses: r.meses.map((m, i) => (i === 1 ? { ...m, inadimplentes: 0, valor: 0, pct: 0, fora_da_media: true } : m)) };
+  const d = R.montarDados(r2, ctx);
+  assert.equal(d.meses_base.length, 2); // o mês sem inadimplência não aparece
+  assert.equal(d.rotulo_media, 'MÉDIA (2 MESES CONSIDERADOS)');
+  assert.match(d.nota_dias, /^Média de 2 meses considerados \(/);
+  assert.match(d.observacoes_status, /\(2 meses considerados\)/);
+});

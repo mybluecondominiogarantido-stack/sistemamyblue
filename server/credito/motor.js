@@ -381,12 +381,21 @@ function analisar(entrada, politica = POLITICA_PADRAO, opcoes = {}) {
   if (extraNoRelSemForm.size) divergir('taxa_extra', { relatorio: [...extraNoRelSemForm].map(rotuloMes) }, 'fora da base', 'formulario');
 
   const podeApurar = receitaBruta > 0 && comps.length > 0 && rel && rel.tem_competencia !== false;
+  // política: mês-base sem inadimplência sai da média (soma dos meses com débito ÷ quantos são); nenhum mês com débito → 0%
+  const zerado = (m) => P.media_sem_meses_zerados && m.total === 0;
   const meses = porMes.map((m) => ({
     competencia: m.competencia, rotulo: rotuloMesLongo(m.competencia), vencimento: m.vencimento,
     inadimplentes: m.porUnidade.length, valor: reais(m.total), pct: podeApurar ? m.total / receitaBruta * 100 : null,
+    ...(zerado(m) ? { fora_da_media: true } : {}),
   }));
-  const inadMedia = podeApurar ? meses.reduce((s, m) => s + m.pct, 0) / meses.length : null;
-  const inadMediaC = podeApurar ? Math.round(porMes.reduce((s, m) => s + m.total, 0) / porMes.length) : null;
+  const naMedia = porMes.filter((m) => !zerado(m));
+  const inadMedia = !podeApurar ? null : naMedia.length ? naMedia.reduce((s, m) => s + m.total / receitaBruta * 100, 0) / naMedia.length : 0;
+  const inadMediaC = !podeApurar ? null : naMedia.length ? Math.round(naMedia.reduce((s, m) => s + m.total, 0) / naMedia.length) : 0;
+  if (podeApurar && naMedia.length < porMes.length) {
+    observacoes.push(naMedia.length
+      ? `Média sobre ${naMedia.length === 1 ? '1 mês considerado' : `${naMedia.length} meses considerados`} (${textoJanela(naMedia.map((m) => m.competencia))}).`
+      : 'Nenhuma inadimplência nos meses-base.');
+  }
 
   /* ---------- alertas de perfil da dívida ---------- */
   if (podeApurar) {
@@ -404,8 +413,9 @@ function analisar(entrada, politica = POLITICA_PADRAO, opcoes = {}) {
         alerta('concentracao', 'atencao', `${k === 1 ? '1 unidade concentra' : `${k} unidades concentram`} ${soma.toFixed(1).replace('.', ',')}% da inadimplência da base (${top.map((r) => `${r.unidade} ${fmtPct(r.pct)}`).join('; ')}).`, { unidades: top, pct: soma });
       }
     }
-    if (meses.length >= 2 && meses.every((m, i) => i === 0 || m.pct > meses[i - 1].pct + EPS)) {
-      alerta('tendencia_ascendente', 'atencao', `Inadimplência em alta nos meses-base (${meses.map((m) => fmtPct(m.pct)).join(' → ')}).`);
+    const tend = meses.filter((m) => !m.fora_da_media); // só os meses considerados na média
+    if (tend.length >= 2 && tend.every((m, i) => i === 0 || m.pct > tend[i - 1].pct + EPS)) {
+      alerta('tendencia_ascendente', 'atencao', `Inadimplência em alta nos meses-base (${tend.map((m) => fmtPct(m.pct)).join(' → ')}).`);
     }
   }
 
