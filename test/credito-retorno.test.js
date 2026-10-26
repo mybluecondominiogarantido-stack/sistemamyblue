@@ -121,3 +121,11 @@ test('memória de cálculo mostra só os meses considerados e diz quantos foram'
   assert.match(d.nota_dias, /^Média de 2 meses considerados \(/);
   assert.match(d.observacoes_status, /\(2 meses considerados\)/);
 });
+
+test('próximos passos da skill somam os obrigatórios do portal (CNPJ, validade) sem repetir', () => {
+  const { r, ctx } = caso();
+  const d = R.montarDados(r, { ...ctx, formulario: { ...formulario, sem_cnpj: true }, ajustesTexto: { proximos_passos: ['Apresentar a ata de assembleia.', 'Assinar o contrato dentro da validade.'] } });
+  assert.equal(d.proximos_passos[0], 'Apresentar a ata de assembleia.');
+  assert.ok(d.proximos_passos.some((p) => /Regularizar o CNPJ/.test(p)));
+  assert.equal(d.proximos_passos.filter((p) => /validade/.test(p)).length, 1); // a skill já trouxe: não repete
+});
