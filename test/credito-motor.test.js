@@ -377,3 +377,12 @@ test('mês-base sem inadimplência sai da média: 2 meses com débito ÷ 2, 1 m�
   perto(r.inad_media, 10);
   assert.ok(r.meses.every((m) => !m.fora_da_media));
 });
+
+test('primeira competência do relatório depois dos meses-base é aviso para o analista, não pendência', () => {
+  const { entrada, opcoes } = casoSimples({ pct: 5 });
+  entrada.relatorio.periodo_inicio = '2026-06';
+  const r = analisar(entrada, POLITICA_PADRAO, opcoes);
+  assert.notEqual(r.status.codigo, 'pendente');
+  assert.ok(!r.pendencias.some((p) => p.codigo === 'competencia_faltante'));
+  assert.match(r.alertas.find((a) => a.codigo === 'competencia_faltante').mensagem, /devolva ao executivo pedindo o relatório desde abr\/2026; se só não há débito neles, apague o campo/);
+});

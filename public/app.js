@@ -3595,7 +3595,8 @@
       (pr ? '<span style="font-weight:800">' + pctCr(pr.taxa_adm) + ' de taxa ADM + ' + reais(pr.boleto) + ' por boleto · ' + fmtNumCr(r.escopo.uh_escopo) + ' UH no escopo</span>' : '') +
       '<span class="espaco"></span><span class="etiqueta cinza">Política ' + esc(r.politica_versao) + '</span></div>' +
       (pr && pr.faixa ? '<div class="ajuda" style="margin-top:4px">Faixa “até ' + fmtNumCr(pr.faixa.ate) + '%” · janela ' + esc(r.janela.texto) + ' · proposta válida até ' + dataBr(r.validade_ate) + '</div>' : '') +
-      '<div class="pilha" style="gap:8px;margin-top:10px">' + lista('Por que reprova', r.reprovacoes, 'texto') + lista('Pendências', r.pendencias, 'mensagem') + lista('Ressalvas', r.ressalvas, 'texto') + '</div></div>' +
+      '<div class="pilha" style="gap:8px;margin-top:10px">' + lista('Por que reprova', r.reprovacoes, 'texto') + lista('Pendências', r.pendencias, 'mensagem') + lista('Ressalvas', r.ressalvas, 'texto') +
+'</div></div>' +
       '<div class="tiles" style="margin-bottom:16px">' +
       '<div class="tile"><span class="rot-tile">Inadimplência média</span><b>' + pctCr(r.inad_media) + '</b><span class="sec">' + (r.inad_media_rs != null ? reais(r.inad_media_rs) + ' por mês' : '') + '</span></div>' +
       '<div class="tile"><span class="rot-tile">Receita líquida</span><b>' + (r.valores.receita_liquida != null ? reais(r.valores.receita_liquida) : '—') + '</b><span class="sec">bruta ' + (r.valores.receita_bruta != null ? reais(r.valores.receita_bruta) : '—') + '</span></div>' +
@@ -3888,7 +3889,7 @@
           // cada campo preenchido fica marcado, para o analista conferir
           var put = function (id, v) { if ($('#' + id) && v !== undefined && v !== null) { $('#' + id).value = v; $('#' + id).classList.add('da-skill'); } };
           if (r.lancamentos && r.lancamentos.linhas) { put('dCola', r.lancamentos.texto); unidadesLidas = r.lancamentos.unidades; if ($('#dSemInad')) $('#dSemInad').checked = false; }
-          put('dEmis', r.relatorio.data_emissao); put('dIni', r.relatorio.periodo_inicio);
+          put('dEmis', r.relatorio.data_emissao);
           if (r.relatorio.tem_competencia !== undefined) $('#dComp').checked = r.relatorio.tem_competencia;
           if (r.relatorio.tem_nomes !== undefined) $('#dNomes').checked = r.relatorio.tem_nomes;
           if (r.convencao) {

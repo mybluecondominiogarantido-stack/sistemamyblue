@@ -617,9 +617,7 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
     let resultado;
     try { resultado = await calcular(a, req.usuario); } catch (e) { if (e.status) return erro(res, e.status, e.message); throw e; }
     if (resultado.status.codigo === 'pendente') {
-      const dica = resultado.pendencias.some((x) => x.codigo === 'competencia_faltante')
-        ? ' Se o relatório cobre esses meses e só não há débito neles, apague o campo "Primeira competência do relatório" e calcule de novo.' : '';
-      return erro(res, 400, `Não dá para liberar: a análise está pendente. ${resultado.pendencias.map((x) => x.mensagem).join(' ')}${dica} Ou devolva ao executivo com pendência.`);
+      return erro(res, 400, `Não dá para liberar: a análise está pendente. ${resultado.pendencias.map((x) => x.mensagem).join(' ')} Corrija os dados ou devolva ao executivo com pendência.`);
     }
     if (resultado.assertiva && resultado.assertiva.pendentes && resultado.assertiva.pendentes.length) return erro(res, 400, `Registre o resultado da consulta Assertiva antes de liberar: ${resultado.assertiva.pendentes.length === 1 ? 'falta a unidade' : `faltam ${resultado.assertiva.pendentes.length} unidades:`} ${resultado.assertiva.pendentes.join(', ')}.`);
     if (resultado.diretoria && !a.chancela_em) return erro(res, 400, 'Inadimplência acima de 35%: envie à diretoria antes de liberar.');
