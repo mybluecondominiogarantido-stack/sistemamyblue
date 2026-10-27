@@ -269,15 +269,17 @@ function rotasSetor(r, deps) {
     res.json({ ok: true, obs });
   });
 
-  /* ---------- Cobrar (coordenação): prazo para concluir ou da ficha de repasse ---------- */
+  /* ---------- Cobrar (coordenação): prazo para concluir, da ficha de repasse ou de uma etapa do pós-implantação ---------- */
   r.post('/api/implantacoes/:id/cobrar', json, async (req, res) => {
     const c = await carregar(req, res);
     if (!c) return;
     const { i, p } = c;
     if (!(p.coordenacao || p.admin)) return erro(res, 403, 'Só a coordenação cobra.');
-    const qual = req.body && req.body.qual === 'ficha' ? 'ficha' : 'concluir';
+    const QUAIS = { concluir: 'a conclusão da implantação', ficha: 'a ficha de repasse', espolio: 'a análise de espólios (pós-implantação)',
+      pendencias: 'o levantamento de pendências (pós-implantação)', prestacao: 'a 1ª prestação de contas (pós-implantação)' };
+    const qual = QUAIS[req.body && req.body.qual] ? req.body.qual : 'concluir';
     if (!i.responsavel_id) return erro(res, 409, 'Ninguém conduz esta implantação ainda.');
-    const o = qual === 'ficha' ? 'a ficha de repasse' : 'a conclusão da implantação';
+    const o = QUAIS[qual];
     await db.tx(async (t) => evento(t, i.id, req.usuario.id, 'cobranca_prazo', { qual }));
     await avisos.notificar([i.responsavel_id, ...await autorizados(db, i.id, qual === 'ficha' ? ['tudo', 'documentos'] : ['tudo', 'etapas'])], {
       link: link(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: true,

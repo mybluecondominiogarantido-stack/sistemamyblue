@@ -856,6 +856,8 @@ ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS obs_controle JSONB;
 ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS onboarding_justificativa JSONB;
 ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS aviso_concluir_em DATE;
 ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS aviso_onboarding_em DATE;
+-- pós-implantação (espólios, levantamento de pendências e 1ª prestação de contas): dia dos boletos, o que foi marcado e os avisos
+ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS pos JSONB NOT NULL DEFAULT '{}'::jsonb;
 -- implantação importada das planilhas: lote, Nº do formulário e o que veio de lá (fonte, avisos, nomes não achados no portal)
 ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS importacao_id INTEGER REFERENCES implantacao_importacoes(id) ON DELETE SET NULL;
 ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS numero_planilha INTEGER;

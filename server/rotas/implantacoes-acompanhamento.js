@@ -1,6 +1,6 @@
 'use strict';
 /*
- * Acompanhamento da implantação: painel, mês vigente, metas de onboarding e de documentação, antecipações e os
+ * Acompanhamento da implantação: painel, mês vigente, metas de onboarding e de documentação, antecipações, pós-implantação e os
  * parâmetros das metas (com histórico). As regras estão em server/implantacoes/metas.js.
  *
  * Quem vê: setor Implantação, coordenação, diretoria e administração. Parâmetros e a meta de documentação marcada à mão:
@@ -69,7 +69,7 @@ function controle(b, l, podeObs, podeEtapas) {
   };
 }
 
-function rotasAcompanhamento(r, { db, seg, avisos, perfil, erro, evento, json, fichas }) {
+function rotasAcompanhamento(r, { db, seg, avisos, perfil, erro, evento, json, fichas, pos }) {
   const interno = (p) => p.admin || p.equipe || p.coordenacao || p.diretoria;
 
   r.get('/api/implantacoes/acompanhamento', async (req, res) => {
@@ -103,7 +103,7 @@ function rotasAcompanhamento(r, { db, seg, avisos, perfil, erro, evento, json, f
       hoje, ano, parametros: atual, mes_vigente: M.mesVigente(hoje, atual.virada_dia),
       historico: historico.map((h) => ({ ...h, valores: M.normalizarParametros(h.valores).valores })).reverse(),
       documentos: Object.entries(F.DOCUMENTOS).filter(([t]) => !['analise_credito', 'contrato', 'outro'].includes(t)).map(([tipo, d]) => ({ tipo, nome: d.nome })),
-      linhas, painel: M.painel(linhas, { ano, mes, analista, executivo }), fichas: fichas ? await fichas() : [],
+      linhas, painel: M.painel(linhas, { ano, mes, analista, executivo }), fichas: fichas ? await fichas() : [], pos: pos ? await pos() : [],
       onboarding: M.resumoOnboarding(linhas, atual.meta_pct), documentacao: M.resumoDocumentacao(linhas, atual.meta_pct),
       analistas: nomes('responsavel_id', 'responsavel_nome'), executivos: nomes('executivo_id', 'executivo_nome'),
       anos: [...new Set([ano, ...linhas.map((l) => Number(l.inicio.slice(0, 4)))])].sort(),
