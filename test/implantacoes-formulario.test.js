@@ -41,6 +41,24 @@ test('faltas: documentos obrigatórios, CPF, parceria e cashback com as condicio
   assert.ok(!l.some((x) => /Convenção/.test(x)));
 });
 
+test('parceria: até dois parceiros diferentes, com o tipo de comissão marcado', () => {
+  const ok = { docs: TODOS_DOCS, origem: 'analise', executivoId: 1 };
+  const A = { id: 'p-alfa', nome: 'Alfa Fictícia' };
+  const B = { id: 'p-beta', nome: 'Beta Fictícia' };
+  const faltas = (extra) => F.faltas({ ...COMPLETO, parceria: 'sim', ...extra }, ok);
+  assert.deepEqual(faltas({ parceiros: [A], comissao_recorrencia: true }), []);
+  assert.deepEqual(faltas({ parceiros: [A], comissao_venda: true }), []);
+  assert.deepEqual(faltas({ parceiros: [A, B], comissao_recorrencia: true, comissao_venda: true }), []);
+  // parceiro ainda não cadastrado: vai só com o nome
+  assert.deepEqual(faltas({ parceiros: [{ id: '', nome: 'Parceiro Novo Fictício' }], comissao_recorrencia: true }), []);
+  assert.deepEqual(faltas({ parceiros: [A] }), ['Marcar a comissão do parceiro: recorrência, venda ou as duas.']);
+  assert.deepEqual(faltas({ parceiros: [A, A], comissao_recorrencia: true }), ['O segundo parceiro precisa ser diferente do primeiro.']);
+  assert.deepEqual(faltas({ parceiros: [A, B], comissao_venda: true }), ['Com dois parceiros, marcar a recorrência (5% para cada um).']);
+  assert.deepEqual(faltas({ parceiros: [A, B, { id: 'p-gama', nome: 'Gama Fictícia' }], comissao_recorrencia: true }), ['No máximo dois parceiros (a recorrência divide 5% para cada um).']);
+  assert.equal(F.comissaoTexto({ parceiros: [A, B], comissao_recorrencia: true, comissao_venda: true }), 'Recorrência 5% + 5% · Venda: 50% da 1ª taxa administrativa');
+  assert.equal(F.comissaoTexto({ parceiros: [A] }), 'a informar');
+});
+
 test('sem CNPJ: só condomínio de entrega, e o CNPJ vira pendência', () => {
   const semCnpj = { ...COMPLETO, cnpj: '', sem_cnpj: true };
   assert.ok(F.faltas(semCnpj, { docs: TODOS_DOCS, origem: 'analise', executivoId: 1 }).some((x) => /entrega/.test(x)));

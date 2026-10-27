@@ -11,6 +11,7 @@ Análise de Crédito.
 |---|---|
 | Rotas (perfil, análises disponíveis, liberação pelo gestor, formulário, documentos, envio, avisos) | `server/rotas/implantacoes.js` |
 | Regras do formulário: o que vem da análise, o que falta, o que fica pendente, o comparativo | `server/implantacoes/formulario.js` |
+| Parceria → Comissões de Novos Condomínios (o registro gravado na confirmação da Carteira) | `server/implantacoes/comissoes.js` |
 | Tabelas `implantacoes`, `implantacao_documentos`, `implantacao_eventos`, `implantacao_liberacoes`, `implantacao_protocolos` | `server/db.js` |
 | Lembretes: fila sem designação (4h úteis), prazo para iniciar vencido, pendências do executivo (uma vez por dia útil) — roda a cada 10 min | `criarRotinasImplantacao` em `server/rotas/implantacoes.js`, ligado em `server/index.js` |
 | Setor no dia a dia: quem edita (autorizações), pausas e prazo para concluir, onboarding depois de concluir, documento recebido sem arquivo, Obs. do Controle, Cobrar e a rotina dos prazos | `server/rotas/implantacoes-setor.js`; prazos em dias úteis em `server/implantacoes/prazos.js`; tabelas `implantacao_autorizacoes` e `implantacao_pausas` |
@@ -18,7 +19,7 @@ Análise de Crédito.
 | Antecipação → Controle de Repasses | `server/rotas/implantacoes-antecipacoes.js`; tabela `implantacao_antecipacoes` |
 | Acompanhamento (painel, mês vigente, controle, metas, antecipações, fichas, parâmetros, cobrança de documentos, Excel) | `server/rotas/implantacoes-acompanhamento.js`; regras em `server/implantacoes/metas.js`; tabela `implantacao_parametros`; .xlsx em `server/xlsx.js` |
 | Telas | `public/app.js` (bloco Implantação, ficha de repasse e bloco Acompanhamento) |
-| Testes (dados fictícios) | `test/implantacoes-formulario.test.js`, `test/implantacoes-rotas.test.js`, `test/implantacoes-metas.test.js`, `test/implantacoes-setor.test.js` |
+| Testes (dados fictícios) | `test/implantacoes-formulario.test.js`, `test/implantacoes-comissoes.test.js`, `test/implantacoes-rotas.test.js`, `test/implantacoes-metas.test.js`, `test/implantacoes-setor.test.js` |
 
 ## Regras
 
@@ -34,9 +35,12 @@ Análise de Crédito.
 - **Podem chegar depois:** RG/CPF ou CNH do síndico, conta bancária, comprovante de endereço do síndico, modelo do boleto
   anterior, procuração (e o CNPJ, no condomínio de entrega sem CNPJ). No envio, o executivo recebe a lista no sino; depois, um e-mail
   por dia útil até chegar. Quando um pendente chega, quem conduz (ou a coordenação) é avisado.
-- **Parceria:** o executivo só diz se há e escolhe o parceiro da base de comissão (ferramenta *Prestação de Contas —
-  Comissão de Parceiros*, coleção `partners`); o percentual é do setor Parceiros. Com a ferramenta ainda na planilha
-  Google, a lista fica vazia e o nome é digitado.
+- **Parceria:** o executivo diz se há, escolhe o parceiro da base de comissão (ferramenta *Prestação de Contas —
+  Comissão de Parceiros*, coleção `partners`) ou "Outro — ainda não cadastrado" com o nome, e marca a comissão:
+  recorrência (10%; com dois parceiros, 5% para cada) e/ou venda (50% da 1ª taxa administrativa, ao 1º parceiro). No
+  máximo dois parceiros, diferentes; com dois, a recorrência é obrigatória. Com a ferramenta ainda na planilha Google, a
+  lista fica vazia e o nome é digitado. A resposta vai para a *Comissões de Novos Condomínios* quando o condomínio
+  entra na Carteira (abaixo).
 - **Envio:** protocolo **IMP-AAAA-MM-DD-NN** (sequencial por dia, horário de Brasília). Avisos (sino e e-mail): a
   coordenação ("Nova implantação", aguardando designação) e a equipe ("Chegou uma nova implantação").
 
@@ -72,13 +76,22 @@ Análise de Crédito.
 - **Onboarding depois de concluir:** dá para concluir com o onboarding pendente; o alerta fica na implantação até
   registrar. Vencido o prazo do onboarding sem ele, quem conduz escreve a **justificativa** (a coordenação é avisada
   por dia útil até justificar); a meta fica como não batida mesmo justificada.
-- **Conclusão:** avisa a coordenação ("Pronta para a Carteira") e abre a **ficha de repasse**. Com parceria, o condomínio entra na Prestação de
-  Contas (coleção `condos`) ligado ao parceiro com comissão 0% (`vinculosJSON`), e o setor Parceiros é avisado para
-  cadastrar a condição; se o condomínio já existir lá, ou o parceiro não estiver na base, o aviso diz o que conferir.
+- **Conclusão:** avisa a coordenação ("Pronta para a Carteira") e abre a **ficha de repasse**. Não grava nada na
+  Prestação de Contas: o cadastro do condomínio e do vínculo com o parceiro é só pelo **Cadastrar** do Financeiro, na
+  Comissões de Novos Condomínios, depois da aprovação da gestão.
 - **Carteira:** a coordenação confere os dados sugeridos (ID Vouch, nome sugerido, UF, vencimento, vigência,
   administradora, forma de envio, executivo, razão social, CNPJ) e confirma; o portal recusa ID ou CNPJ que já estão na
   Carteira. Os responsáveis (cobrança, extrajudicial, crédito) são escolhidos depois, na ficha do condomínio. O Controle
   de Emissão de Boletos acompanha, como em qualquer condomínio novo da Carteira.
+- **Comissões de Novos Condomínios:** na confirmação, o portal grava o condomínio no armazenamento da ferramenta (a
+  reconhecida pelo modelo de `server/acessos.js`, com "Banco do portal · equipe"), na chave `cnp:c:<vigência>-v<ID Vouch>`
+  — a mesma do *Puxar da carteira* —, já `em_aprovacao`, com a resposta do formulário no formato da ferramenta e a
+  origem (`implantacao: { id, protocolo }`). Sem parceria também entra, para a gestão confirmar "sem parceiro";
+  formulário sem o tipo de comissão entra `aguardando`, para o executivo completar lá. Se a gestão já tinha puxado a
+  vigência e o condomínio está sem resposta, a resposta entra nele; já respondido ou tratado, nada muda. Quem tem o
+  papel Gestão na ferramenta é avisado (sino e e-mail; sem ninguém, a coordenação do setor da ferramenta). Devolução:
+  o executivo corrige na própria ferramenta; a implantação não reabre. Montagem em `server/implantacoes/comissoes.js`.
+  As importadas das planilhas ficam de fora.
 
 ## Ficha de repasse
 

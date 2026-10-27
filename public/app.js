@@ -4086,11 +4086,17 @@
     pendencia: ['Pendência com o comercial', 'ambar'], concluida: ['Concluída · aguardando a Carteira', 'verde'], na_carteira: ['Na Carteira', 'verde'], cancelada: ['Cancelada', 'cinza'],
   };
   var ABAS_IMP = [['minhas', 'Minhas solicitações'], ['fila', 'Fila do setor'], ['carteira', 'Aguardando Carteira'], ['diretoria', 'Diretoria'], ['todas', 'Todas'], ['liberacoes', 'Liberações de análise']];
+  // o que aconteceu com a parceria na Comissões de Novos Condomínios (server/implantacoes/comissoes.js)
+  var COMISSOES_IMP = {
+    criado: 'aguardando a aprovação da gestão', respondido: 'resposta incluída no condomínio que a gestão já tinha puxado',
+    ja_estava: 'o condomínio já estava respondido lá; nada mudou', sem_ferramenta: 'a ferramenta não está no portal (com armazenamento da equipe)',
+    sem_vigencia: 'sem vigência ou ID Vouch', erro: 'não foi possível gravar; informe a parceria na própria ferramenta',
+  };
   var EVENTO_IMP = {
     criada: 'criou a implantação', formulario: 'alterou o formulário', documento: 'anexou um documento', documento_removido: 'removeu um documento',
     enviada: 'enviou ao setor Implantação', reenviada: 'reenviou depois da pendência', cancelada: 'cancelou',
     designada: 'designou', iniciada: 'iniciou a implantação', etapas: 'atualizou as etapas', pendencia: 'devolveu com pendência',
-    concluida: 'concluiu a implantação', parceiros: 'levou o condomínio à base de Parceiros', carteira: 'confirmou a entrada na Carteira', contrato: 'recebeu as condições fechadas do contrato', contrato_corrigido: 'recebeu a correção das condições do contrato',
+    concluida: 'concluiu a implantação', parceiros: 'levou o condomínio à base de Parceiros', comissoes: 'enviou a parceria à Comissões de Novos Condomínios', carteira: 'confirmou a entrada na Carteira', contrato: 'recebeu as condições fechadas do contrato', contrato_corrigido: 'recebeu a correção das condições do contrato',
     diretoria_pedida: 'pediu a aprovação da diretoria', diretoria_aprovou: 'aprovou taxa e boleto', diretoria_recusou: 'não aprovou taxa e boleto',
     autorizacao_pedida: 'pediu autorização para editar', autorizacao: 'autorizou', autorizacao_recusada: 'não autorizou o pedido para editar', autorizacao_revogada: 'revogou uma autorização para editar',
     impedimento: 'marcou impedimento (prazo pausado)', retomada: 'retomou o prazo', onboarding_justificado: 'justificou o onboarding fora do prazo',
@@ -4345,10 +4351,14 @@
   }
   function linhaParceiroImp(p, parceiros) {
     p = p || {};
+    // parceiro informado sem cadastro (nome digitado): fica em "Outro", com o nome
+    var outro = !p.id && !!p.nome;
+    var nome = '<input class="campo" data-parceiro-nome value="' + esc(p.nome || '') + '" placeholder="Nome do parceiro"' + (parceiros.length && !outro ? ' hidden' : '') + '>';
     var campo = parceiros.length
       ? '<select class="campo" data-parceiro><option value="">Escolha o parceiro</option>' + parceiros.map(function (x) { return '<option value="' + esc(x.id) + '"' + (x.id === p.id ? ' selected' : '') + '>' + esc(x.nome + (x.uf ? ' — ' + x.uf : '')) + '</option>'; }).join('') +
-        (p.id && !parceiros.some(function (x) { return x.id === p.id; }) ? '<option value="' + esc(p.id) + '" selected>' + esc(p.nome) + '</option>' : '') + '</select>'
-      : '<input class="campo" data-parceiro-nome value="' + esc(p.nome || '') + '" placeholder="Nome do parceiro">';
+        (p.id && !parceiros.some(function (x) { return x.id === p.id; }) ? '<option value="' + esc(p.id) + '" selected>' + esc(p.nome) + '</option>' : '') +
+        '<option value="__outro"' + (outro ? ' selected' : '') + '>Outro — ainda não cadastrado</option></select>' + nome
+      : nome;
     return '<div class="linha" data-linha-parceiro style="flex-wrap:nowrap">' + campo + '<button type="button" class="btn icon ghost" data-tirar-parceiro aria-label="Remover parceiro">' + IC.fechar + '</button></div>';
   }
 
@@ -4407,10 +4417,13 @@
 
       '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">4</span>Parceria</h2></div><div class="corpo grade-3">' +
       radiosImp('parceria', 'Há contrato de parceria?', f.parceria || '', sim) +
-      '<div style="grid-column:span 2" data-se="parceria:sim"><span class="rot">Parceiro</span><div class="pilha" style="gap:8px" id="parceirosImp">' + parcs.map(function (p) { return linhaParceiroImp(p, lista); }).join('') + '</div>' +
-      '<button type="button" class="btn ghost sm" id="btParcImp" style="margin-top:8px">' + IC.mais + 'Dividir com outro parceiro</button>' +
-      '<div class="ajuda">' + (parceiros.aviso ? esc(parceiros.aviso) : 'Lista da base de comissão. Não está na lista? Peça o cadastro ao setor Parceiros.') + '</div></div>' +
-      '<div data-se="parceria:sim"><span class="rot">Percentual da comissão</span><div class="campo" style="background:var(--bg);color:var(--muted)">o setor Parceiros define</div></div></div></section>' +
+      '<div style="grid-column:span 2" data-se="parceria:sim"><span class="rot">Parceiro</span><div class="pilha" style="gap:8px" id="parceirosImp">' + parcs.slice(0, 2).map(function (p) { return linhaParceiroImp(p, lista); }).join('') + '</div>' +
+      '<button type="button" class="btn ghost sm" id="btParcImp" style="margin-top:8px"' + (parcs.length > 1 ? ' hidden' : '') + '>' + IC.mais + 'Dividir a recorrência com outro parceiro</button>' +
+      '<div class="ajuda">' + (parceiros.aviso ? esc(parceiros.aviso) : 'Lista da Prestação de Contas — Comissão de Parceiros. Não está na lista? Escolha "Outro — ainda não cadastrado" e escreva o nome: o Financeiro cadastra o parceiro quando a comissão for aprovada.') + '</div></div>' +
+      '<div data-se="parceria:sim"><span class="rot">Comissão do parceiro</span><div class="pilha" style="gap:8px">' +
+        '<label class="marca"><input type="checkbox" id="i_comissao_recorrencia"' + (f.comissao_recorrencia ? ' checked' : '') + '> Recorrência: 10% do que a MyBlue arrecada, todo mês (5% para cada, com dois parceiros)</label>' +
+        '<label class="marca"><input type="checkbox" id="i_comissao_venda"' + (f.comissao_venda ? ' checked' : '') + '> Venda: 50% da 1ª taxa administrativa, uma vez, ao 1º parceiro</label></div>' +
+        '<div class="ajuda">Quando o condomínio entrar na Carteira, vai para a aprovação da gestão comercial na Comissões de Novos Condomínios.</div></div></div></section>' +
 
       '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">5</span>Cashback e antecipação</h2></div><div class="corpo grade-3">' +
       radiosImp('cashback', 'Contrato com cashback?', f.cashback || '', [['nao', 'Não'], ['5', 'Sim, 5%'], ['10', 'Sim, 10%'], ['outro', 'Outro']],
@@ -4487,10 +4500,11 @@
       parceria: v('parceria'),
       parceiros: $$('[data-linha-parceiro]').map(function (l) {
         var s = $('[data-parceiro]', l);
-        if (s) { var p = lista.find(function (x) { return x.id === s.value; }); return s.value ? { id: s.value, nome: p ? p.nome : s.options[s.selectedIndex].text } : null; }
+        if (s && s.value !== '__outro') { var p = lista.find(function (x) { return x.id === s.value; }); return s.value ? { id: s.value, nome: p ? p.nome : s.options[s.selectedIndex].text } : null; }
         var n = $('[data-parceiro-nome]', l).value.trim();
         return n ? { id: '', nome: n } : null;
       }).filter(Boolean),
+      comissao_recorrencia: $('#i_comissao_recorrencia').checked, comissao_venda: $('#i_comissao_venda').checked,
       cashback: v('cashback'), cashback_pct: numCr($('#i_cashback_pct').value), cashback_receitas: marcas('cashback_receitas'),
       antecipacao: v('antecipacao'), antecipacao_valor: numCr(v('antecipacao_valor')), antecipacao_data: v('antecipacao_data'), antecipacao_prazo: v('antecipacao_prazo'),
       administradora: v('administradora'), administracao_interna: $('#i_administracao_interna').checked,
@@ -4875,13 +4889,20 @@
         c('razao_social', 'Razão social', { span: 2 }) + c('cnpj', 'CNPJ') + c('comarca', 'UF') + c('vencimento', 'Vencimento') + c('inicio_contrato', 'Início do contrato (vigência)', { tipo: 'date' }) +
         c('administradora', 'Administradora') + selCr('k_forma_envio', 'Forma de envio do boleto', dd.forma_envio, [['', 'Escolha'], ['E-MAIL', 'E-mail'], ['IMPRESSO', 'Impresso'], ['IMPRESSO/E-MAIL', 'Impresso/E-mail']]) + c('executivo', 'Executivo') + '</div>' +
         '<label class="rot" for="k_observacoes" style="margin-top:12px">Observações</label><textarea class="campo" id="k_observacoes" rows="2">' + esc(dd.observacoes) + '</textarea>' +
-        '<div class="ajuda">Analista de cobrança, extrajudicial e assistente de crédito são escolhidos depois, na ficha do condomínio na Carteira.</div>',
+        '<div class="ajuda">Analista de cobrança, extrajudicial e assistente de crédito são escolhidos depois, na ficha do condomínio na Carteira.' +
+        (i.importacao_id ? '' : ' Ao confirmar, a parceria do formulário vai para a Comissões de Novos Condomínios, na vigência acima, para a aprovação da gestão comercial.') + '</div>',
       pe: '<button class="btn ghost" data-fechar>Ainda não</button><button class="btn primary" id="kOk">Confirmar e incluir na Carteira</button>',
     });
     $('#kOk', mo).onclick = async function () {
       var dados = {};
       Object.keys(dd).forEach(function (k) { var el = $('#k_' + k, mo); dados[k] = el ? el.value.trim() : dd[k]; });
-      try { await api('POST', '/api/implantacoes/' + i.id + '/carteira', { dados: dados }); mo.fechar(); toast('Condomínio incluído na Carteira.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+      try {
+        var r = await api('POST', '/api/implantacoes/' + i.id + '/carteira', { dados: dados });
+        var cm = r.comissoes;
+        mo.fechar();
+        toast('Condomínio incluído na Carteira.' + (cm && (cm.situacao === 'sem_ferramenta' || cm.situacao === 'erro') ? ' A parceria não foi enviada à Comissões de Novos Condomínios: veja o histórico.' : cm && (cm.situacao === 'criado' || cm.situacao === 'respondido') ? ' Parceria enviada à Comissões de Novos Condomínios.' : ''), 'ok');
+        recarregar();
+      } catch (e) { toast(e.message, 'erro'); }
     };
   }
 
@@ -5957,6 +5978,7 @@
         var extra = e.tipo === 'documento' || e.tipo === 'documento_removido' ? ': ' + esc(x.nome) : e.tipo === 'enviada' ? ' (' + esc(x.protocolo) + ')' : e.tipo === 'criada' && x.analise ? ' a partir da análise ' + esc(x.analise)
           : e.tipo === 'designada' ? ' para ' + esc(x.para) : e.tipo === 'pendencia' ? ': ' + esc((x.itens || []).join('; ')) : e.tipo === 'carteira' ? ' (ID ' + esc(x.codigo) + ')'
             : e.tipo === 'parceiros' ? (x.criado ? ': ' + esc(x.criado) : x.ja_existia ? ': já existia ' + esc(x.ja_existia) : ': parceiro sem cadastro')
+              : e.tipo === 'comissoes' ? (COMISSOES_IMP[x.situacao] ? ': ' + COMISSOES_IMP[x.situacao] : '') + (x.regra && x.situacao !== 'ja_estava' ? ' · ' + esc(x.regra) : '')
               : e.tipo === 'autorizacao' ? ' ' + esc(x.para) + ' a editar (' + esc(ESCOPO_CURTO_IMP[x.escopo] || x.escopo) + (x.ate ? ' até ' + dataBr(x.ate) : '') + ')'
                 : e.tipo === 'autorizacao_pedida' ? ': "' + esc(x.motivo) + '"' : e.tipo === 'impedimento' ? ': ' + esc(x.motivo) + ' · "' + esc(x.detalhe) + '"' : e.tipo === 'retomada' ? ': "' + esc(x.resolucao) + '"'
                   : e.tipo === 'documento_marcado' ? ': ' + esc(x.nome) + ' · "' + esc(x.observacao) + '"' : e.tipo === 'documento_desmarcado' ? ': ' + esc(x.nome)
@@ -6001,7 +6023,7 @@
       };
     };
     if ($('#btConclImp')) $('#btConclImp').onclick = async function () {
-      var parc = (i.formulario.parceria === 'sim' && (i.formulario.parceiros || []).length) ? ' Como há parceria, o setor Parceiros é avisado e o condomínio entra na Prestação de Contas ligado ao parceiro (comissão a definir).' : '';
+      var parc = i.formulario.parceria === 'sim' ? ' A parceria vai para a aprovação da gestão comercial, na Comissões de Novos Condomínios, quando o condomínio entrar na Carteira.' : '';
       var onb = d.onboarding_pendente ? '<br><br><b>O onboarding ainda não foi feito.</b> Dá para concluir: o alerta continua na implantação até registrar o onboarding' + (d.setor && d.setor.onboarding && d.setor.onboarding.limite ? ' (prazo até ' + dataBr(d.setor.onboarding.limite) + ')' : '') + '; se o prazo vencer, é preciso justificar.' : '';
       if (!(await confirmar('Concluir a implantação', 'A coordenação é avisada para confirmar a entrada na Carteira.' + parc + onb, 'Concluir'))) return;
       try { await api('POST', '/api/implantacoes/' + i.id + '/concluir', {}); toast('Implantação concluída.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
@@ -6026,7 +6048,10 @@
     }
     var ligarTirar = function () {
       $$('#tbExtrasImp [data-tirar]').forEach(function (b) { b.onclick = function () { b.closest('tr').remove(); }; });
-      $$('[data-tirar-parceiro]').forEach(function (b) { b.onclick = function () { if ($$('[data-linha-parceiro]').length > 1) b.closest('[data-linha-parceiro]').remove(); else $$('select, input', b.closest('[data-linha-parceiro]')).forEach(function (x) { x.value = ''; }); }; });
+      $$('[data-tirar-parceiro]').forEach(function (b) { b.onclick = function () { if ($$('[data-linha-parceiro]').length > 1) b.closest('[data-linha-parceiro]').remove(); else $$('select, input', b.closest('[data-linha-parceiro]')).forEach(function (x) { x.value = ''; }); ligarTirar(); }; });
+      // no máximo dois parceiros; "Outro — ainda não cadastrado" mostra o campo do nome
+      $('#btParcImp').hidden = $$('[data-linha-parceiro]').length > 1;
+      $$('[data-linha-parceiro] [data-parceiro]').forEach(function (s) { s.onchange = function () { var n = $('[data-parceiro-nome]', s.closest('[data-linha-parceiro]')); n.hidden = s.value !== '__outro'; if (!n.hidden) n.focus(); }; });
       $$('[data-tirar-contato]').forEach(function (b) { b.onclick = function () { b.closest('[data-contato]').remove(); }; });
     };
     ligarTirar();

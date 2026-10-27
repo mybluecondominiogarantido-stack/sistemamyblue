@@ -156,7 +156,7 @@ const FORM = {
   sindico_tipo: 'condomino', sindico_isencao: 'integral', sindico_nome: 'Síndico Fictício', sindico_cpf: '111.444.777-35',
   sindico_email: 'sindico@exemplo.com', sindico_telefone: '(85) 90000-0000',
   taxa_adm: 3.5, boleto: 2, taxa_ordinaria: 1840, desconto_tipo: 'nenhum', inicio_contrato: '2026-11-01', honorarios: 12,
-  garantias: ['Taxa ordinária', 'Taxa extraordinária'], parceria: 'sim', parceiros: [{ id: 'p-alfa', nome: 'Alfa Administradora' }],
+  garantias: ['Taxa ordinária', 'Taxa extraordinária'], parceria: 'sim', parceiros: [{ id: 'p-alfa', nome: 'Alfa Administradora' }], comissao_recorrencia: true,
   cashback: '5', cashback_receitas: ['Taxa administrativa'], antecipacao: 'nao',
   administradora: 'Administradora Exemplo', consultor_nome: 'Consultor Fictício', consultor_telefone: '(85) 90000-0001',
   contatos: [{ nome: 'Contato Fictício', funcao: 'Gerente predial', telefone: '(85) 90000-0002' }],
@@ -306,7 +306,7 @@ test('pendência: volta ao executivo e o reenvio volta para quem conduz', async 
   assert.ok((await equipe('GET', `/api/implantacoes/${idI}`)).json.pode.etapas); // segue iniciada
 });
 
-test('concluir: aviso à coordenação e ao setor Parceiros, e o condomínio entra na base de comissão com o parceiro', async () => {
+test('concluir: aviso à coordenação; a parceria não vai mais direto à Prestação de Contas', async () => {
   await pessoa('Parceiros Fictício', 'parceiros@teste.com');
   await noSetor('Parceiros', 'parceiros@teste.com', false);
   const r0 = await equipe('PATCH', `/api/implantacoes/${idI}/etapas`, { etapas: { documentacao: { feito: true }, vouch: { id: '90001' }, onboarding: { situacao: 'realizado' }, boletos: { feito: true, primeiro_vencimento: '2026-11-10' }, envio: { forma: 'email' } } });
@@ -315,18 +315,23 @@ test('concluir: aviso à coordenação e ao setor Parceiros, e o condomínio ent
   assert.deepEqual(r1.json.faltas, []);
   const r = await equipe('POST', `/api/implantacoes/${idI}/concluir`, {});
   assert.equal(r.status, 200, r.texto);
-  assert.equal(r.json.parceiros.criado, 'Condomínio Residencial Fictício');
-  const condo = await ctx.registros.obter('parceiros', 'condos', 'c-condominioresidencialficticio');
-  assert.deepEqual(JSON.parse(condo.vinculosJSON), [{ partnerId: 'p-alfa', rate: 0 }]);
-  assert.equal(condo.valorBoleto, 2);
-  const ap = (await avisosDe('parceiros@teste.com')).pop();
-  assert.match(ap.titulo, /^Condomínio novo com parceiro/);
-  assert.match(ap.texto, /Alfa Administradora/);
+  // o cadastro na Prestação de Contas é só pelo Cadastrar da Comissões, depois da aprovação da gestão
+  assert.equal(await ctx.registros.obter('parceiros', 'condos', 'c-condominioresidencialficticio'), null);
+  assert.deepEqual(await avisosDe('parceiros@teste.com'), []);
   assert.match((await avisosDe('coord@teste.com')).pop().titulo, /^Pronta para a Carteira/);
   assert.equal((await coord('GET', '/api/implantacoes/resumo')).json.carteira, 1);
 });
 
-test('Carteira: a coordenação confere os dados (ID Vouch e envio vêm das etapas) e confirma', async () => {
+test('Carteira: a coordenação confere os dados (ID Vouch e envio vêm das etapas) e confirma; a parceria vai para a Comissões em aprovação', async () => {
+  // a Comissões de Novos Condomínios no portal (o HTML é reconhecido pelo modelo de server/acessos.js), com uma gestora
+  const comercial = (await ctx.db.um("SELECT id FROM setores WHERE nome = 'Comercial'")).id;
+  assert.equal((await admin('POST', '/api/admin/modulos', { nome: 'Comissões', slug: 'comissoes-teste', setor_id: comercial, armazenamento: 'compartilhado' })).status, 201);
+  const cnp = "<!doctype html><html><head><title>Comissões</title></head><body>ok<script>const PFX = 'cnp:';\nconst K_PERFIL = PFX + 'p:';</script></body></html>";
+  assert.equal((await admin('PUT', '/api/admin/modulos/comissoes-teste/arquivo', Buffer.from(cnp), { headers: { 'content-type': 'text/html' } })).status, 200);
+  await pessoa('Gestora Comercial Fictícia', 'gestora@teste.com');
+  await ctx.db.q("INSERT INTO armazenamento (modulo_slug, escopo, chave, valor) VALUES ('comissoes-teste', '*', $1, $2)",
+    [`cnp:p:${ids['gestora@teste.com']}`, JSON.stringify({ id: String(ids['gestora@teste.com']), papeis: ['gestor'], executivo: '', nome: 'Gestora Comercial Fictícia' })]);
+
   assert.equal((await equipe('GET', `/api/implantacoes/${idI}/carteira`)).status, 403);
   const p = (await coord('GET', `/api/implantacoes/${idI}/carteira`)).json;
   assert.deepEqual([p.dados.codigo, p.dados.nome, p.dados.comarca, p.dados.forma_envio, p.dados.vencimento, p.dados.inicio_contrato],
@@ -338,6 +343,18 @@ test('Carteira: a coordenação confere os dados (ID Vouch e envio vêm das etap
   assert.deepEqual([c.codigo, c.nome, c.comarca, c.forma_envio, c.cnpj, String(c.inicio_contrato instanceof Date ? c.inicio_contrato.toISOString().slice(0, 10) : c.inicio_contrato).slice(0, 10)],
     ['90001', 'Residencial Fictício', 'CE', 'E-MAIL', '11.222.333/0001-81', '2026-11-01']);
   assert.equal((await coord('GET', `/api/implantacoes/${idI}`)).json.implantacao.etapa, 'na_carteira');
+  assert.equal(r.json.comissoes.situacao, 'criado');
+  const cm = JSON.parse((await ctx.db.um("SELECT valor FROM armazenamento WHERE modulo_slug = 'comissoes-teste' AND escopo = '*' AND chave = 'cnp:c:2026-11-v90001'")).valor);
+  assert.deepEqual([cm.status, cm.ref, cm.codigo, cm.nome, cm.uf, cm.carteiraId, cm.primeiroVenc], ['em_aprovacao', '2026-11', '90001', 'Residencial Fictício', 'CE', r.json.condominio_id, '10/11/2026']);
+  assert.deepEqual([cm.resposta.temParceiro, cm.resposta.parceiroId, cm.resposta.recorrencia, cm.resposta.compartilhado, cm.resposta.venda], ['sim', 'p-alfa', true, false, false]);
+  assert.match(cm.implantacao.protocolo, /^IMP-/);
+  const aviso = (await avisosDe('gestora@teste.com')).pop();
+  assert.match(aviso.titulo, /^Comissão para aprovar · Residencial Fictício/);
+  assert.match(aviso.texto, /Recorrência 10% \(Alfa Administradora\)/);
+  assert.equal(aviso.link, '#/m/comissoes-teste');
+  // a ferramenta continua lendo o próprio armazenamento, agora com o condomínio da implantação
+  assert.ok((await admin('GET', '/api/armazenamento/comissoes-teste')).json.dados['cnp:c:2026-11-v90001']);
+  assert.ok((await coord('GET', `/api/implantacoes/${idI}`)).json.eventos.some((e) => e.tipo === 'comissoes' && e.detalhe.situacao === 'criado'));
   assert.equal((await coord('POST', `/api/implantacoes/${idI}/carteira`, { dados: p.dados })).status, 403);
   // o mesmo ID Vouch não entra em outra implantação
   await coord('POST', `/api/implantacoes/${idI2}/designar`, { usuario_id: ids['equipe@teste.com'] });
@@ -447,7 +464,7 @@ test('formulário em PDF: quem vê a implantação exporta, com as seções, a p
   assert.equal(r.headers.get('content-type'), 'application/pdf');
   assert.equal(r.buffer.subarray(0, 5).toString('latin1'), '%PDF-');
   const texto = require('child_process').execFileSync('pdftotext', ['-', '-'], { input: r.buffer }).toString();
-  for (const trecho of [/IMP-\d{4}-\d{2}-\d{2}-01/, /Condomínio Residencial Fictício/, /Diferente da análise/, /3,50% \(análise: 3,00%\)/, /Alfa Administradora/, /definido pelo setor Parceiros/,
+  for (const trecho of [/IMP-\d{4}-\d{2}-\d{2}-01/, /Condomínio Residencial Fictício/, /Diferente da análise/, /3,50% \(análise: 3,00%\)/, /Alfa Administradora/, /Recorrência 10%/,
     /ANDAMENTO NO SETOR/, /ID 90001/, /Contato Fictício/]) assert.match(texto, trecho);
 });
 

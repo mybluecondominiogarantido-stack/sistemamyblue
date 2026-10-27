@@ -23,6 +23,7 @@ const { lerPlanilha } = require('../planilha');
 const { normalizar: normalizarCarteira, semAcento } = require('../carteira');
 const { apelido } = require('../implantacao');
 const F = require('../implantacoes/formulario');
+const COM = require('../implantacoes/comissoes');
 const leitorPdf = require('../implantacoes/pdf');
 const formularioPdf = require('../implantacoes/formulario-pdf');
 const FC = require('../contratos/formulario');
@@ -178,9 +179,8 @@ async function abrirDoContrato(t, ct, usuarioId) {
 }
 
 const HORAS_PARA_INICIAR = 8;
-const normal = (s) => semAcento(s).toLowerCase().replace(/[^a-z0-9]/g, '');
 
-function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente, boletosCarteira, acessos }) {
+function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, modulos, expediente, boletosCarteira, acessos }) {
   const r = express.Router();
   const json = express.json({ limit: '1mb' });
   const corpoDoc = express.raw({ type: () => true, limit: (cfg.limiteCreditoMb || 30) * 1024 * 1024 });
@@ -927,38 +927,48 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     res.json({ ok: true, mensagem });
   });
 
-  /* condomínio com parceria: entra na base de comissão (Prestação de Contas) ligado ao parceiro, com comissão 0%,
-     para o setor Parceiros cadastrar a condição do contrato */
-  async function levarParaParceiros(i, u) {
+  /* condomínio que entrou na Carteira: a parceria informada no formulário vai para a Comissões de Novos Condomínios,
+     já em aprovação (server/implantacoes/comissoes.js). A gestão aprova e o Financeiro cadastra na Prestação de Contas. */
+  async function levarParaComissoes(i, carteira, u) {
+    let m = null;
+    for (const x of await modulos.listar()) {
+      if (x.ativo && x.armazenamento === 'compartilhado' && (await acessos.modeloDe(x))?.id === COM.MODELO) { m = x; break; }
+    }
+    if (!m) return { situacao: 'sem_ferramenta' };
     const f = i.formulario || {};
-    if (f.parceria !== 'sim' || !(f.parceiros || []).length) return null;
-    const out = { criado: null, ja_existia: null, sem_cadastro: [] };
-    const modulo = await db.um("SELECT 1 FROM modulos WHERE slug = 'parceiros'");
-    const base = modulo ? await registros.listar('parceiros', 'partners') : [];
-    const ids = new Set(base.map((x) => String(x.id)));
-    const vinculos = [];
-    for (const p of f.parceiros) {
-      if (p.id && ids.has(String(p.id))) vinculos.push({ partnerId: String(p.id), rate: 0 });
-      else out.sem_cadastro.push(texto(p.nome, 200));
-    }
-    if (modulo && vinculos.length) {
-      const nome = texto(f.nome || i.condominio, 200);
-      const existente = (await registros.listar('parceiros', 'condos')).find((x) => normal(x.nome) === normal(nome) || x.id === `c-${normal(nome)}`);
-      if (existente) out.ja_existia = existente.nome;
-      else {
-        const id = `c-${normal(nome)}`;
-        await registros.upsert('parceiros', 'condos', id, { id, nome, valorBoleto: Number(f.boleto) || 0, vinculosJSON: JSON.stringify(vinculos), custom: true }, u.id);
-        out.criado = nome;
+    const ex = i.executivo_id ? await db.um('SELECT e.nome, e.usuario_id FROM executivos e WHERE e.id = $1', [i.executivo_id]) : null;
+    const enviado = await db.um("SELECT criado_em FROM implantacao_eventos WHERE implantacao_id = $1 AND tipo = 'enviada' ORDER BY criado_em LIMIT 1", [i.id]);
+    const agora = new Date().toISOString();
+    const montado = COM.montar({ i, f, carteira, agora, primeiroVencimento: F.normalizarEtapas(i.etapas).boletos.primeiro_vencimento,
+      autor: { nome: ex ? ex.nome : '', id: ex && ex.usuario_id, em: enviado ? new Date(enviado.criado_em).toISOString() : agora } });
+    if (!montado.registro) return { situacao: montado.motivo };
+    const chave = COM.PFX_CONDO + montado.id;
+    const out = await db.tx(async (t) => {
+      // a mesma trava das gravações da ferramenta (server/rotas/ferramentas.js): não atropela quem está mexendo nela
+      await t.q('SELECT pg_advisory_xact_lock(hashtext($1))', [m.slug + '|*']);
+      const linha = await t.um("SELECT valor FROM armazenamento WHERE modulo_slug = $1 AND escopo = '*' AND chave = $2 FOR UPDATE", [m.slug, chave]);
+      let atual = null;
+      try { atual = linha ? JSON.parse(linha.valor) : null; } catch { atual = null; }
+      const j = COM.juntar(atual, montado.registro, agora);
+      if (j.registro) {
+        await t.q(`INSERT INTO armazenamento (modulo_slug, escopo, chave, valor, atualizado_por) VALUES ($1, '*', $2, $3, $4)
+          ON CONFLICT (modulo_slug, escopo, chave) DO UPDATE SET valor = excluded.valor, atualizado_em = now(), atualizado_por = excluded.atualizado_por,
+            versao = armazenamento.versao + 1`, [m.slug, chave, JSON.stringify(j.registro), u.id]);
       }
-    }
-    const membros = (await pessoasDoSetor(db, seg, 'Parceiros')).todos;
-    const nomes = f.parceiros.map((p) => texto(p.nome, 200)).join(' e ');
-    const situacao = out.criado ? 'Já está na Prestação de Contas, ligado ao parceiro com comissão 0%: cadastre a condição do contrato.'
-      : out.ja_existia ? `Já existia "${out.ja_existia}" na Prestação de Contas: confira o vínculo com o parceiro e a condição do contrato.`
-        : 'O parceiro não está na base de comissão: cadastre o parceiro e o condomínio na Prestação de Contas.';
-    await avisos.notificar(membros.length ? membros : await administradores(db), { link: '#/m/parceiros', autor_id: u.id, tipo: 'implantacao', email: true,
-      titulo: `Condomínio novo com parceiro · ${i.condominio}`,
-      texto: `A implantação de ${i.condominio} (${i.protocolo}) foi concluída com parceria: ${nomes}. ${situacao}` });
+      return { situacao: j.situacao, status: (j.registro || atual || {}).status || '', vigencia: montado.ref, regra: COM.regrasTexto(montado.registro.resposta) };
+    });
+    if (out.situacao === 'ja_estava') return out;
+    // avisa quem aprova na ferramenta (papel Gestão); sem ninguém com o papel, a coordenação do setor da ferramenta
+    const perfis = (await db.q("SELECT chave, valor FROM armazenamento WHERE modulo_slug = $1 AND escopo = '*' AND starts_with(chave, $2)", [m.slug, COM.PFX_PERFIL])).rows;
+    let quem = COM.gestoresDaFerramenta(perfis);
+    if (!quem.length && m.setor_nome) quem = (await pessoasDoSetor(db, seg, m.setor_nome)).gestores;
+    if (!quem.length) quem = await administradores(db);
+    const aprovar = out.status === 'em_aprovacao';
+    await avisos.notificar(quem, { link: `#/m/${m.slug}`, autor_id: u.id, tipo: 'implantacao', email: true,
+      titulo: `${aprovar ? 'Comissão para aprovar' : 'Condomínio novo na Comissões'} · ${carteira.nome}`,
+      texto: aprovar
+        ? `${carteira.nome} entrou na Carteira (implantação ${i.protocolo}) e está na Comissões de Novos Condomínios, entrada em ${COM.refNome(out.vigencia)}, aguardando a aprovação: ${out.regra}.`
+        : `${carteira.nome} entrou na Carteira (implantação ${i.protocolo}) sem o tipo de comissão. Está na Comissões de Novos Condomínios, entrada em ${COM.refNome(out.vigencia)}, aguardando a resposta do executivo.` });
     return out;
   }
 
@@ -1007,7 +1017,7 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
         else await t.q("UPDATE implantacoes SET etapa = 'concluida', concluido_em = now(), atualizado_em = now() WHERE id = $1", [i.id]);
         await evento(t, i.id, req.usuario.id, 'concluida', { importada: true, carteira: cart ? { condominio_id: cart.id, codigo: cart.codigo } : null });
       });
-      return res.json({ ok: true, parceiros: null, carteira: cart ? 'ja_estava' : 'confirmar' });
+      return res.json({ ok: true, carteira: cart ? 'ja_estava' : 'confirmar' });
     }
     await db.tx(async (t) => {
       await t.q("UPDATE implantacoes SET etapa = 'concluida', concluido_em = now(), atualizado_em = now() WHERE id = $1", [i.id]);
@@ -1015,14 +1025,12 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
       await t.q("UPDATE implantacao_pausas SET fim = now(), resolucao = 'Encerrado na conclusão', encerrada_por = $2 WHERE implantacao_id = $1 AND fim IS NULL", [i.id, req.usuario.id]);
     });
     if (aoConcluir) await aoConcluir(i, req.usuario);
-    const parceiros = await levarParaParceiros(i, req.usuario);
-    if (parceiros) await db.q('INSERT INTO implantacao_eventos (implantacao_id, usuario_id, tipo, detalhe) VALUES ($1, $2, $3, $4::jsonb)', [i.id, req.usuario.id, 'parceiros', JSON.stringify(parceiros)]);
     const coord = (await pessoasDoSetor(db, seg, SETOR)).gestores;
     await avisos.notificar(coord.length ? coord : await administradores(db), { link: link(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: true,
       titulo: `Pronta para a Carteira · ${i.protocolo} · ${i.condominio}`, texto: `${req.usuario.nome} concluiu a implantação de ${i.condominio}. Confira os dados e confirme a entrada na Carteira.` });
     await avisos.notificar(await donos(db, i), { link: link(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: false,
       titulo: `Implantação concluída · ${i.protocolo} · ${i.condominio}`, texto: `O setor Implantação concluiu a implantação de ${i.condominio}.` });
-    res.json({ ok: true, parceiros });
+    res.json({ ok: true });
   });
 
   /* ===================== Carteira: a coordenação confere e confirma ===================== */
@@ -1081,7 +1089,14 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     if (boletosCarteira) boletosCarteira.agendar(req.usuario);
     if (!i.importacao_id) await avisos.notificar([...(await donos(db, i)), i.responsavel_id], { link: link(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: false,
       titulo: `Na Carteira · ${d.nome}`, texto: `${i.condominio} entrou na Carteira (ID ${d.codigo}).` });
-    res.status(201).json({ ok: true, condominio_id: id });
+    // a parceria vai para a Comissões de Novos Condomínios (as importadas das planilhas são histórico: ficam de fora)
+    let comissoes = null;
+    if (!i.importacao_id) {
+      // o condomínio já está na Carteira: uma falha aqui fica registrada na implantação, sem desfazer a confirmação
+      try { comissoes = await levarParaComissoes(i, { ...d, id }, req.usuario); } catch (e) { comissoes = { situacao: 'erro', erro: texto(e.message, 300) }; }
+      await evento(db, i.id, req.usuario.id, 'comissoes', comissoes);
+    }
+    res.status(201).json({ ok: true, condominio_id: id, comissoes });
   });
 
   r.post('/api/implantacoes/:id/cancelar', json, async (req, res) => {

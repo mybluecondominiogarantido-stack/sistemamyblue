@@ -7,6 +7,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const D = require('./dados-ficticios');
+const COM = require('../../../server/implantacoes/comissoes');
 const { cliente } = require('./gravador');
 const { SENHA } = require('./cenario');
 
@@ -392,14 +393,22 @@ module.exports = [
       for (const [form, nome, uf, venc, adm, exec] of linhas) {
         await cen.admin('POST', '/api/carteira', { codigo: form, nome, comarca: uf, vencimento: String(Number(venc.slice(0, 2))), administradora: adm, executivo: exec, inicio_contrato: vig });
       }
+      // um condomínio implantado pelo portal: chega sozinho, já em aprovação (como server/implantacoes/comissoes.js grava)
+      const [form, nome, uf, venc, adm, exec] = linhas[linhas.length - 1];
+      const ref = vig.slice(0, 7);
+      const { registro } = COM.montar({ i: { id: 1, protocolo: `IMP-${vig}-01` }, f: { parceria: 'sim', parceiros: [{ id: 'p-nordestecondominios', nome: 'Nordeste Condomínios' }], comissao_recorrencia: true },
+        carteira: { id: 1, codigo: form, nome, comarca: uf, vencimento: String(Number(venc.slice(0, 2))), administradora: adm, executivo: exec, inicio_contrato: vig },
+        autor: { nome: exec }, primeiroVencimento: `${vig.slice(0, 8)}${venc.slice(0, 2)}`, agora: new Date().toISOString() });
+      await cen.admin('POST', '/api/armazenamento/comissoes-de-novos-condominios', { set: { [COM.PFX_CONDO + COM.idDoCondo(ref, form)]: JSON.stringify(registro) } });
     },
-    abertura: ['Os condomínios que entraram no mês: quem veio por parceiro e qual comissão pagar.', ['Puxar da carteira os condomínios da vigência', 'Comercial: responder a comissão', 'Gestão: aprovar ou devolver', 'Financeiro: cadastrar na Prestação de Contas']],
+    abertura: ['Os condomínios que entraram no mês: quem veio por parceiro e qual comissão pagar.', ['Da implantação, chegam prontos para aprovar', 'Puxar da carteira e responder: só as exceções', 'Gestão: aprovar ou devolver', 'Financeiro: cadastrar na Prestação de Contas']],
     async gravar(t) {
       const f = quadro(t, 'comissoes-de-novos-condominios');
-      const I = '1 · Puxar da carteira';
-      await t.legenda('Os condomínios novos já estão na <b>Carteira de condomínios</b>: entraram pela implantação, com a vigência do contrato.', { etapa: I, ms: 600 });
+      const I = '1 · Da implantação e da carteira';
       await t.clicar(f.locator('[data-view=aprovacao]'), { depois: 1200 });
-      await t.legenda('Na <b>Aprovação da gestão</b>, clique em <b>Puxar da carteira</b> e escolha a <b>vigência</b> (o mês de entrada).', { etapa: I, ms: 300 });
+      await t.legenda('O condomínio implantado pelo portal chega <b>sozinho</b> quando entra na Carteira: já <b>Em aprovação</b>, com o parceiro e a comissão que o executivo informou no formulário de implantação.', { etapa: I, ms: 600 });
+      await t.mostrar(f.locator('[data-apr]').first(), 2600);
+      await t.legenda('Condomínio que não veio por implantação do portal? Clique em <b>Puxar da carteira</b> e escolha a <b>vigência</b> (o mês de entrada).', { etapa: I, ms: 300 });
       await t.clicar(f.locator('#puxarCart'), { depois: 1800 });
       await t.mostrar(f.locator('#pRef'), 1800);
       await t.legenda('Confira a lista: ID Vouch, condomínio, UF, vencimento, ADM e executivo vêm da carteira, sem digitar de novo.', { etapa: I, ms: 300 });
@@ -409,7 +418,7 @@ module.exports = [
       await t.clicar(f.locator('[data-view=comercial]'), { depois: 1600 });
 
       const C = '2 · Resposta do comercial';
-      await t.legenda('Clique em <b>Responder</b>: o condomínio veio por parceiro?', { etapa: C, ms: 300 });
+      await t.legenda('Os puxados da carteira (e os devolvidos pela gestão) o executivo responde aqui. Clique em <b>Responder</b>: o condomínio veio por parceiro?', { etapa: C, ms: 300 });
       await t.clicar(f.locator('[data-abrir$="-v4101"]'), { depois: 1400 });
       await t.clicar(f.locator('label:has(input[name=tp][value=sim])'), { depois: 800 });
       await t.legenda('Escolha o parceiro <b>na lista</b> (a ferramenta sugere pela ADM informada). Se ele não estiver lá, peça ao Financeiro, por ticket, para cadastrá-lo. Depois marque <b>recorrência</b> e/ou <b>venda</b>.', { etapa: C, ms: 300 });
@@ -432,6 +441,7 @@ module.exports = [
       await t.mostrar(f.locator('[data-dev]').first(), 1800);
       await t.clicar(f.locator('[data-apr]').first(), { depois: 1600 });
       await t.clicar(f.locator('[data-apr]').first(), { depois: 1600 });
+      await t.clicar(f.locator('[data-apr]').first(), { depois: 1600 });
 
       const F = '4 · Financeiro';
       await t.legenda('No <b>Financeiro</b> ficam as comissões aprovadas, pagas no mês seguinte.', { etapa: F, ms: 300 });
@@ -448,7 +458,7 @@ module.exports = [
       await t.legenda('E o <b>Excel do mês</b> leva a lista completa para uma planilha.', { etapa: X, ms: 300 });
       await t.mostrar(f.locator('#exportBtn'), 2400);
     },
-    resumo: ['<b>Puxar da carteira</b> os condomínios da vigência', '<b>Comercial</b> responde: parceiro e tipo de comissão', '<b>Gestão</b> aprova · <b>Financeiro</b> cadastra na Prestação de Contas'],
+    resumo: ['Da <b>implantação</b>, chegam prontos para aprovar', '<b>Puxar da carteira</b> e responder: só as exceções', '<b>Gestão</b> aprova · <b>Financeiro</b> cadastra na Prestação de Contas'],
   },
   {
     nome: 'ferramenta-partnerchip',

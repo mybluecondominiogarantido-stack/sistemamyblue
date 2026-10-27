@@ -976,7 +976,7 @@ module.exports = [
       await t.preencherCampo('#i_inicio_contrato', diaUtil(10));
       await t.clicar('input[name=i_honorarios_op][value="12"]', { depois: 500 });
       await t.clicar('[data-marca=garantias][value="Taxa ordinária"]', { depois: 500 });
-      await t.legenda('Parceria: só diga se há e escolha o parceiro da base de comissão; o percentual é do setor Parceiros.', { etapa: B, ms: 500 });
+      await t.legenda('Parceria: diga se há, escolha o parceiro (ou <b>Outro — ainda não cadastrado</b>) e marque a comissão: <b>recorrência</b> e/ou <b>venda</b>. Quando o condomínio entrar na Carteira, vai sozinho para a aprovação da gestão comercial.', { etapa: B, ms: 500 });
       await t.clicar('input[name=i_parceria][value=nao]', { depois: 500 });
       await t.clicar('input[name=i_cashback][value=nao]', { depois: 400 });
       await t.clicar('input[name=i_antecipacao][value=nao]', { depois: 600 });
@@ -1042,7 +1042,7 @@ module.exports = [
       const C = '3 · Pendência e conclusão';
       await t.legenda('Faltou algo? <b>Devolver com pendência</b> manda a lista ao comercial, e o reenvio volta para você.', { etapa: C, ms: 500 });
       await t.mostrar('#btPendImp', 2400);
-      await t.legenda('Com as etapas feitas, <b>Concluir implantação</b> (o onboarding pode ficar para depois, com o alerta). Se houver parceria, o setor Parceiros é avisado. A <b>ficha de repasse</b> abre na conclusão.', { etapa: C, ms: 400 });
+      await t.legenda('Com as etapas feitas, <b>Concluir implantação</b> (o onboarding pode ficar para depois, com o alerta). A <b>ficha de repasse</b> abre na conclusão.', { etapa: C, ms: 400 });
       await t.clicar('#btConclImp', { depois: 1000 });
       await t.clicar('#mOk', { depois: 2600 });
 
@@ -1051,7 +1051,7 @@ module.exports = [
       await t.clicar('#btCartImp', { depois: 1800 });
       await t.mostrar('#k_codigo', 2400);
       await t.clicar('#kOk', { depois: 2600 });
-      await t.legenda('Pronto: o condomínio está na Carteira, e o Controle de Emissão de Boletos acompanha.', { etapa: D, ms: 3000 });
+      await t.legenda('Pronto: o condomínio está na Carteira, o Controle de Emissão de Boletos acompanha e a parceria do formulário vai para a <b>Comissões de Novos Condomínios</b>, em aprovação.', { etapa: D, ms: 3000 });
     },
     resumo: ['<b>Designar</b> · 8h úteis para iniciar', 'Marque as 5 etapas · 3 dias úteis para concluir', '<b>Concluir</b> · <b>Confirmar na Carteira</b>'],
   },

@@ -10,7 +10,9 @@
  *               sindico_nome, sindico_cpf, sindico_email, sindico_telefone
  *   condições   taxa_adm, boleto, taxa_ordinaria, desconto_tipo (nenhum|percentual|valor), desconto_valor, desconto_ate_dia,
  *               inicio_contrato (AAAA-MM-DD), honorarios (%), garantias [], garantia_outra, taxas_extras [{descricao, valor_por_uh, inicio, fim}]
- *   parceria    parceria (sim|nao), parceiros [{id, nome}] — o percentual é do setor Parceiros
+ *   parceria    parceria (sim|nao), parceiros [{id, nome}] (até 2, diferentes; id vazio = parceiro ainda não cadastrado),
+ *               comissao_recorrencia (10%, ou 5% + 5% com dois parceiros), comissao_venda (50% da 1ª taxa administrativa, ao 1º parceiro)
+ *               — vai para a Comissões de Novos Condomínios quando o condomínio entra na Carteira (server/implantacoes/comissoes.js)
  *   cashback    cashback (nao|5|10|outro), cashback_pct, cashback_receitas []
  *   antecipação antecipacao (sim|nao), antecipacao_valor, antecipacao_data, antecipacao_prazo
  *   contatos    administradora, administracao_interna, consultor_nome, consultor_telefone, consultor_email,
@@ -101,7 +103,15 @@ function faltas(f, { docs = new Set(), origem, executivoId, referencia = {} } = 
   exige(num(f.honorarios) > 0, 'Informar o percentual de honorários de cobrança extrajudicial.');
   exige((f.garantias || []).length || texto(f.garantia_outra), 'Marcar o que será garantido.');
   exige(['sim', 'nao'].includes(f.parceria), 'Dizer se há contrato de parceria.');
-  if (f.parceria === 'sim') exige((f.parceiros || []).some((p) => texto(p.nome)), 'Escolher o parceiro.');
+  if (f.parceria === 'sim') {
+    const ps = (f.parceiros || []).filter((p) => p && texto(p.nome));
+    exige(ps.length, 'Escolher o parceiro.');
+    if (ps.length > 2) l.push('No máximo dois parceiros (a recorrência divide 5% para cada um).');
+    const chave = (p) => texto(p.id) || texto(p.nome).toLowerCase();
+    if (ps.length === 2 && chave(ps[0]) === chave(ps[1])) l.push('O segundo parceiro precisa ser diferente do primeiro.');
+    exige(f.comissao_recorrencia || f.comissao_venda, 'Marcar a comissão do parceiro: recorrência, venda ou as duas.');
+    if (ps.length === 2 && !f.comissao_recorrencia) l.push('Com dois parceiros, marcar a recorrência (5% para cada um).');
+  }
   exige(['nao', '5', '10', 'outro'].includes(String(f.cashback || '')), 'Dizer se o contrato tem cashback.');
   if (f.cashback === 'outro') exige(num(f.cashback_pct) > 0, 'Informar o percentual do cashback.');
   if (['5', '10', 'outro'].includes(String(f.cashback))) exige((f.cashback_receitas || []).length, 'Marcar sobre quais receitas incide o cashback.');
@@ -118,6 +128,15 @@ function faltas(f, { docs = new Set(), origem, executivoId, referencia = {} } = 
   if (origem === 'entrega' && !(referencia && referencia.aprovado_em)) l.unshift('Pedir a aprovação da diretoria (taxa administrativa e boleto).');
   for (const tipo of docsObrigatorios(origem)) if (!docs.has(tipo)) l.push(`Anexar: ${DOCUMENTOS[tipo].nome}.`);
   return l;
+}
+
+/* a comissão do parceiro em texto (PDF e tela) */
+function comissaoTexto(f) {
+  const dois = (f.parceiros || []).filter((p) => p && texto(p.nome)).length > 1;
+  const l = [];
+  if (f.comissao_recorrencia) l.push(dois ? 'Recorrência 5% + 5%' : 'Recorrência 10%');
+  if (f.comissao_venda) l.push('Venda: 50% da 1ª taxa administrativa');
+  return l.join(' · ') || 'a informar';
 }
 
 /* condomínio de entrega: o mínimo para a diretoria aprovar taxa e boleto */
@@ -245,4 +264,4 @@ function doPdf(r) {
 }
 
 module.exports = { DOCUMENTOS, GARANTIAS, RECEITAS_CASHBACK, ONBOARDING, ENVIO, ENVIO_CARTEIRA, cpfValido, cnpjOk, daAnalise, doPdf, faltas, faltasEntrega, pendencias, diferencas, docsObrigatorios,
-  normalizarEtapas, faltasEtapas, faltasConcluir, onboardingFeito, conferirCadastro };
+  normalizarEtapas, faltasEtapas, faltasConcluir, onboardingFeito, conferirCadastro, comissaoTexto };

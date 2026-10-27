@@ -49,7 +49,7 @@ function montarDados(i, { executivo, responsavel, documentos = [], diferencas = 
     tabela: (f.taxas_extras || []).length ? { titulo: 'Taxa extra vigente', cab: ['Descrição', 'Valor por unidade', 'Início', 'Fim'], larguras: [0.4, 0.2, 0.2, 0.2],
       linhas: f.taxas_extras.map((x) => [x.descricao, reais(x.valor_por_uh), x.inicio, x.fim]) } : null },
     { numero: 4, titulo: 'Parceria', campos: [['Contrato de parceria', simNao(f.parceria)],
-      ...(f.parceria === 'sim' ? [['Parceiro', (f.parceiros || []).map((p) => p.nome).join(' e ')], ['Percentual', 'definido pelo setor Parceiros']] : [])] },
+      ...(f.parceria === 'sim' ? [['Parceiro', (f.parceiros || []).map((p) => p.nome + (p.id ? '' : ' (ainda não cadastrado)')).join(' e ')], ['Comissão', F.comissaoTexto(f)]] : [])] },
     { numero: 5, titulo: 'Cashback e antecipação', campos: [['Cashback', f.cashback === 'outro' ? `Sim, ${pct(f.cashback_pct)}` : CASHBACK[f.cashback] || ''],
       ...(['5', '10', 'outro'].includes(String(f.cashback)) ? [['Incide sobre', (f.cashback_receitas || []).join(', ')]] : []),
       ['Antecipação de valores', simNao(f.antecipacao)],

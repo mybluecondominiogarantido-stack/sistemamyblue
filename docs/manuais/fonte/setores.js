@@ -185,11 +185,11 @@ const FERRAMENTAS = {
   comissoes: {
     video: true,
     nome: 'Comissões de Novos Condomínios',
-    descricao: 'O caminho da comissão de cada condomínio novo, do comercial ao financeiro: a gestão comercial puxa da Carteira de condomínios os que entraram na vigência, o executivo informa se o condomínio veio por parceiro e qual comissão gera, a gestão aprova e o financeiro cadastra na Prestação de Contas.',
+    descricao: 'O caminho da comissão de cada condomínio novo, do comercial ao financeiro: o executivo informa no formulário de implantação se o condomínio veio por parceiro e qual comissão gera; quando o condomínio entra na Carteira, ele chega aqui sozinho, em aprovação. A gestão aprova e o financeiro cadastra na Prestação de Contas.',
     dados: 'Os dados ficam no banco do portal e são compartilhados por quem tem acesso à ferramenta.',
     abas: [
-      ['Comercial', 'A lista dos condomínios do mês (ID Vouch, executivo, ADM, vencimento): cada executivo vê os seus e informa a comissão de cada um.'],
-      ['Aprovação da gestão', 'O botão <b>Puxar da carteira</b>, o que está aguardando aprovação (para aprovar ou devolver) e todos os condomínios do mês.'],
+      ['Comercial', 'A lista dos condomínios do mês (ID Vouch, executivo, ADM, vencimento): cada executivo vê os seus, corrige os devolvidos pela gestão e responde os que foram puxados da carteira.'],
+      ['Aprovação da gestão', 'O que está aguardando aprovação (os que vieram da implantação chegam aqui sozinhos), todos os condomínios do mês e o botão <b>Puxar da carteira</b>, para os que não vieram por implantação do portal.'],
       ['Financeiro', 'O resumo do mês e as comissões aprovadas, para cadastrar na Prestação de Contas — Comissão de Parceiros.'],
       ['Acessos', 'Quem faz o quê no módulo: executivo, gestão comercial ou financeiro.'],
       ['Topo', 'O <b>mês de entrada</b> dos condomínios e o botão <b>Excel do mês</b>, que baixa a planilha do mês.'],
@@ -200,9 +200,13 @@ const FERRAMENTAS = {
         'Na aba <b>Acessos</b>, marque os <b>papéis</b> da pessoa: <b>executivo</b>, <b>gestão comercial</b> ou <b>financeiro</b>.',
         'Para o executivo, escolha em <b>Executivo na planilha</b> o nome dele como aparece no campo <b>Executivo de negócios</b> da Carteira de condomínios.',
       ], dica: 'Enquanto ninguém for definido como gestão, todos que abrem o módulo veem todas as abas.' },
-      { titulo: 'Puxar os condomínios da carteira', quem: 'Gestão comercial', onde: 'aba Aprovação da gestão', passos: [
-        'Os condomínios novos entram antes na <b>Carteira de condomínios</b>, pela aba <b>Adicionar novos</b> (planilha de implantação), com ID Vouch, vigência e executivo de negócios.',
-        'Na Comissões, clique em <b>Puxar da carteira</b> e escolha a <b>vigência</b> (mês de entrada dos condomínios).',
+      { titulo: 'Condomínios que chegam da implantação', quem: 'Gestão comercial', onde: 'aba Aprovação da gestão', passos: [
+        'O executivo informa a parceria no <b>formulário de implantação</b> do portal: se há parceiro, qual (até dois) e a comissão (recorrência e/ou venda).',
+        'Quando a coordenação da Implantação confirma o condomínio na <b>Carteira</b>, o portal o grava aqui, na vigência do contrato, já <b>Em aprovação</b> com essa resposta. Quem tem o papel Gestão recebe o aviso no sino e por e-mail.',
+        'Se o formulário veio sem o tipo de comissão (implantações enviadas antes dessa pergunta), o condomínio chega como <i>Aguardando comercial</i>, com o parceiro preenchido, e o executivo completa na aba <b>Comercial</b>.',
+      ], dica: 'Ninguém precisa puxar nem responder de novo esses condomínios. Se a gestão devolver, o executivo corrige aqui mesmo: a implantação não reabre.' },
+      { titulo: 'Puxar da carteira (condomínios que não vieram por implantação do portal)', quem: 'Gestão comercial', onde: 'aba Aprovação da gestão', passos: [
+        'Clique em <b>Puxar da carteira</b> e escolha a <b>vigência</b> (mês de entrada dos condomínios).',
         'Confira a lista: ID Vouch, condomínio, UF, vencimento, ADM e executivo vêm da carteira. Os <i>sem executivo</i> só a gestão vê e responde, até completar na carteira.',
         'Clique em <b>Puxar para a Comissões</b>. Cada executivo passa a ver os condomínios dele.',
       ], dica: 'Puxar de novo a mesma vigência atualiza os dados vindos da carteira (executivo, ADM…) sem apagar as respostas.' },
@@ -228,8 +232,8 @@ const FERRAMENTAS = {
       ], dica: '"Cadastrar" cria o condomínio e o vínculo com o parceiro na Prestação de Contas, que passa a calcular a comissão. O pagamento é no mês seguinte ao de entrada.' },
     ],
     rotina: [
-      '<b>Gestão comercial:</b> no início do mês, puxa da carteira os condomínios da vigência.',
-      '<b>Executivos:</b> informam a comissão de cada condomínio e enviam para aprovação.',
+      '<b>Executivos:</b> informam a parceria no formulário de implantação; os condomínios chegam aqui em aprovação quando entram na Carteira.',
+      '<b>Gestão comercial:</b> puxa da carteira só os condomínios que não vieram por implantação do portal, e o executivo responde esses.',
       '<b>Gestão comercial:</b> aprova ou devolve.',
       '<b>Financeiro:</b> cadastra as aprovadas na Prestação de Contas.',
     ],
@@ -336,8 +340,8 @@ const SETORES = [
     ],
     // como a comissão de um condomínio novo passa de uma ferramenta para a outra
     fluxo: [
-      'O Comercial fecha um condomínio novo e a implantação o cadastra na <b>Carteira de condomínios</b> (Adicionar novos). No início do mês, a gestão comercial puxa da carteira, em <b>Comissões de Novos Condomínios</b>, os condomínios da vigência.',
-      'O executivo informa se o condomínio veio por parceiro e qual comissão gera; a gestão comercial aprova ou devolve.',
+      'O Comercial fecha um condomínio novo e o executivo informa, no formulário de implantação, se ele veio por parceiro e qual comissão gera. Quando a coordenação da Implantação confirma o condomínio na <b>Carteira de condomínios</b>, ele chega sozinho em <b>Comissões de Novos Condomínios</b>, em aprovação.',
+      'A gestão comercial aprova ou devolve (o executivo corrige na própria Comissões).',
       'O financeiro, na aba <b>Financeiro</b> das Comissões, clica em <b>Cadastrar</b>: o condomínio e o vínculo com o parceiro são criados na <b>Prestação de Contas — Comissão de Parceiros</b>.',
       'A partir daí, a subárea Parceiros lança o condomínio todo mês junto com a carteira do parceiro (aba <b>Lançamento</b>), gera o relatório, envia e marca o pagamento, que sai no mês seguinte ao da competência.',
     ],
