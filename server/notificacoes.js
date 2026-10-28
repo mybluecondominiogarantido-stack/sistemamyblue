@@ -7,8 +7,7 @@
  */
 
 const { criarEnvioEmail } = require('./email');
-
-const escHtml = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const { montarHtml } = require('./email-layout');
 
 function criarNotificador(db, cfg) {
   let correio = null;
@@ -22,41 +21,57 @@ function criarNotificador(db, cfg) {
 
   const urlPortal = () => String(process.env.PORTAL_URL || cfg.portalUrl || '').replace(/\/+$/, '');
 
-  function montarEmail(n, ticket) {
-    const link = urlPortal() ? `${urlPortal()}/#/tickets/${ticket.id}` : null;
-    const assunto = `[Ticket #${ticket.id}] ${n.titulo}`;
-    const linhas = [n.texto, '', `Ticket #${ticket.id}: ${ticket.titulo}`, ticket.setor_nome ? `Setor: ${ticket.setor_nome}` : null,
-      ticket.prazo ? `Prazo: ${new Date(ticket.prazo).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}` : null,
-      link ? `\nAbrir no portal: ${link}` : null].filter((x) => x !== null);
-    const html = `<div style="font-family:Arial,sans-serif;color:#13323a;max-width:560px">
-      <p style="font-size:15px">${escHtml(n.texto)}</p>
-      <div style="border:1px solid #dde8ec;border-radius:12px;padding:14px 16px;margin:14px 0">
-        <div style="font-size:12px;color:#6f8a94;font-weight:bold">TICKET #${ticket.id}${ticket.setor_nome ? ' · ' + escHtml(ticket.setor_nome) : ''}</div>
-        <div style="font-size:16px;font-weight:bold;margin-top:4px">${escHtml(ticket.titulo)}</div>
-        ${ticket.descricao ? `<div style="white-space:pre-wrap;color:#3c5660;margin-top:8px">${escHtml(String(ticket.descricao).slice(0, 1500))}</div>` : ''}
-      </div>
-      ${link ? `<p><a href="${escHtml(link)}" style="background:#199cb1;color:#fff;padding:10px 18px;border-radius:999px;text-decoration:none;font-weight:bold">Abrir no portal</a></p>` : ''}
-      <p style="font-size:12px;color:#9db3bc">Portal MyBlue · Central de Tickets</p></div>`;
-    return { subject: assunto, text: linhas.join('\n'), html };
+  const prazoBr = (d) => new Date(d).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' });
+
+  /* aviso de ticket: o layout padrão com o quadro do ticket (número, setor, prazo) e a descrição */
+  function montarEmail(n, ticket, para) {
+    const d = n.detalhes || {};
+    return montarHtml({
+      ...n, link: `#/tickets/${ticket.id}`,
+      detalhes: {
+        assunto: `[Ticket #${ticket.id}] ${n.titulo}`, botao: 'Abrir ticket', motivo: 'você participa deste ticket',
+        linhas: [['Ticket', `#${ticket.id} · ${ticket.titulo}`], ['Setor', ticket.setor_nome], ['Prazo', ticket.prazo ? prazoBr(ticket.prazo) : null]],
+        pre: ticket.descricao ? String(ticket.descricao).slice(0, 1500) : null,
+        ...d,
+      },
+    }, { portalUrl: urlPortal(), destinatario: para });
   }
 
-  /* aviso que não é de ticket: e-mail curto com o botão para a tela do portal (n.link, ex.: "#/comissoes") */
-  function montarEmailSimples(n) {
-    const link = urlPortal() && n.link ? `${urlPortal()}/${n.link.replace(/^\/+/, '')}` : urlPortal() || null;
-    return {
-      subject: n.titulo,
-      text: [n.texto, link ? `\nAbrir no portal: ${link}` : null].filter((x) => x !== null).join('\n'),
-      html: `<div style="font-family:Arial,sans-serif;color:#13323a;max-width:560px">
-      <p style="font-size:16px;font-weight:bold">${escHtml(n.titulo)}</p>
-      <p style="font-size:15px">${escHtml(n.texto)}</p>
-      ${link ? `<p><a href="${escHtml(link)}" style="background:#199cb1;color:#fff;padding:10px 18px;border-radius:999px;text-decoration:none;font-weight:bold">Abrir no portal</a></p>` : ''}
-      <p style="font-size:12px;color:#9db3bc">Portal MyBlue</p></div>`,
-    };
+  /* aviso que não é de ticket: layout padrão com o botão para a tela do portal (n.link, ex.: "#/comissoes") */
+  function montarEmailSimples(n, para) {
+    return montarHtml(n, { portalUrl: urlPortal(), destinatario: para });
+  }
+
+  /*
+   * Fila de envio: no máximo 2 e-mails ao mesmo tempo (o Microsoft 365 recusa com 429 "MailboxConcurrency" quando
+   * muitos saem juntos, ex.: demonstrativos do mês). Recusa por limite tenta de novo em 3 s, 10 s e 30 s.
+   */
+  const ESPERAS = cfg.esperasEmail || [3000, 10000, 30000];
+  const limite = (e) => /\((429|503)\)|MailboxConcurrency|ApplicationThrottled|throttl/i.test(String((e && e.message) || e));
+  const fila = [];
+  let ativos = 0;
+  function enfileirar(tarefa) {
+    return new Promise((ok, falha) => { fila.push({ tarefa, ok, falha }); proximo(); });
+  }
+  function proximo() {
+    while (ativos < 2 && fila.length) {
+      const { tarefa, ok, falha } = fila.shift();
+      ativos++;
+      (async () => {
+        for (let i = 0; ; i++) {
+          try { return await tarefa(); } catch (e) {
+            if (!limite(e) || i >= ESPERAS.length) throw e;
+            await new Promise((r) => setTimeout(r, ESPERAS[i]));
+          }
+        }
+      })().then(ok, falha).finally(() => { ativos--; proximo(); });
+    }
   }
 
   /*
    * usuarios: ids de quem recebe (quem fez a ação é retirado)
-   * n: { ticket_id, link, tipo, titulo, texto, email (bool), autor_id }
+   * n: { ticket_id, link, tipo, titulo, texto, email (bool), autor_id, detalhes? }
+   * detalhes: só para o e-mail (quadro, lista, botão…), veja server/email-layout.js
    */
   async function notificar(usuarios, n) {
     try {
@@ -69,16 +84,17 @@ function criarNotificador(db, cfg) {
           [u.id, n.ticket_id || null, n.tipo, n.titulo, n.texto, n.link || null])).id;
       }
       if (!n.email || !enviar) return;
-      let msg;
+      let ticket = null;
       if (n.ticket_id) {
-        const ticket = await db.um('SELECT t.id, t.titulo, t.descricao, t.prazo, s.nome AS setor_nome FROM tickets t JOIN setores s ON s.id = t.setor_id WHERE t.id = $1', [n.ticket_id]);
+        ticket = await db.um('SELECT t.id, t.titulo, t.descricao, t.prazo, s.nome AS setor_nome FROM tickets t JOIN setores s ON s.id = t.setor_id WHERE t.id = $1', [n.ticket_id]);
         if (!ticket) return;
-        msg = montarEmail(n, ticket);
-      } else msg = montarEmailSimples(n);
-      // e-mail sai em segundo plano: a tela não espera o servidor de e-mail
+      }
+      // e-mail sai em segundo plano (pela fila): a tela não espera o servidor de e-mail
       // o resultado fica no aviso (email_enviado_em ou email_erro)
       for (const u of destino) {
-        Promise.resolve(enviar({ para: { nome: u.nome, email: u.email }, ...msg }))
+        const para = { nome: u.nome, email: u.email };
+        const msg = ticket ? montarEmail(n, ticket, para) : montarEmailSimples(n, para);
+        enfileirar(() => enviar({ para, ...msg }))
           .then(() => db.q('UPDATE notificacoes SET email_enviado_em = now(), email_erro = NULL WHERE id = $1', [avisoDe[u.id]]))
           .catch((e) => {
             console.error('[avisos] falha ao enviar e-mail para', u.email, '-', e.message);
@@ -101,13 +117,15 @@ function criarNotificador(db, cfg) {
   /* e-mail de teste pela administração: aqui o erro volta para a tela */
   async function emailTeste(u) {
     if (!enviar) throw new Error('O envio de e-mail não está configurado no servidor.');
-    const link = urlPortal();
-    await enviar({
-      para: { nome: u.nome, email: u.email },
-      subject: 'Teste de e-mail — Portal MyBlue',
-      text: `Olá, ${u.nome}! Os avisos da Central de Tickets estão chegando por e-mail.${link ? `\n\n${link}` : ''}`,
-      html: `<p>Olá, ${escHtml(u.nome)}!</p><p>Os avisos da Central de Tickets estão chegando por e-mail.</p>${link ? `<p><a href="${escHtml(link)}">${escHtml(link)}</a></p>` : '<p style="color:#d98a1b">Falta definir PORTAL_URL para os e-mails terem o link do ticket.</p>'}`,
-    });
+    const m = montarHtml({
+      tipo: 'teste', titulo: 'Teste de e-mail — Portal MyBlue', link: null,
+      texto: 'Os avisos do portal estão chegando por e-mail, neste layout.',
+      detalhes: {
+        tom: 'ok', etiqueta: 'E-mail funcionando', botao: 'Abrir o portal', motivo: 'a administração pediu um e-mail de teste',
+        nota: urlPortal() ? null : 'Falta definir PORTAL_URL para os e-mails terem a logo e o link do portal.',
+      },
+    }, { portalUrl: urlPortal(), destinatario: u });
+    await enviar({ para: { nome: u.nome, email: u.email }, ...m });
   }
 
   // agenda do Microsoft 365 (convite do onboarding da Implantação); sem Graph, null

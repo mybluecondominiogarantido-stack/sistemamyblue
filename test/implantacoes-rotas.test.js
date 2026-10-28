@@ -204,7 +204,7 @@ test('documento pendente que chega avisa o setor; lembrete diário por e-mail ao
   await new Promise((ok) => setTimeout(ok, 20));
   const m = emailsPara('exec@teste.com').slice(antes);
   assert.equal(m.length, 1);
-  assert.match(m[0].text, /Comprovante de endereço do síndico; Modelo do boleto anterior/);
+  assert.match(m[0].text, /1\. Comprovante de endereço do síndico\n2\. Modelo do boleto anterior/);
   assert.ok(!/Conta bancária/.test(m[0].text));
   assert.equal((await ctx.rotinasImplantacao.executar(new Date(amanha.getTime() + 3600 * 1000))).documentos, 0);
   // fora do expediente não roda
