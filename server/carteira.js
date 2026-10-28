@@ -169,6 +169,29 @@ function acharPessoa(nomeCarteira, membros) {
   return null;
 }
 
+/* ===================== condomínio pelo nome (ferramentas que guardam só o nome e a UF) ===================== */
+const ROMANOS = { i: '1', ii: '2', iii: '3', iv: '4', v: '5', vi: '6', vii: '7', viii: '8', ix: '9', x: '10' };
+const GENERICOS = new Set(['condominio', 'cond', 'residencial', 'res', 'edificio', 'ed']);
+// "Cond. Monte Azul II" → "monte azul 2"; "Vila das Flores 1" → "vila das flores" (o "1" final costuma ficar de fora)
+function chaveCondominio(s) {
+  const pal = semAcento(s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(Boolean)
+    .map((p) => ROMANOS[p] || p);
+  while (pal.length > 1 && GENERICOS.has(pal[0])) pal.shift();
+  if (pal.length > 1 && pal[pal.length - 1] === '1') pal.pop();
+  return pal.join(' ');
+}
+
+/* Acha na carteira o condomínio com este nome nesta UF (a comarca da carteira). Precisa ser um só:
+   havendo mais de um, fica o único ATIVO; senão não acha (null). Sem UF, procura em todas. */
+function acharCondominio(lista, nome, uf) {
+  const alvo = chaveCondominio(nome);
+  if (!alvo) return null;
+  const comarca = limpar(uf).toUpperCase();
+  let achados = lista.filter((c) => chaveCondominio(c.nome) === alvo && (!comarca || limpar(c.comarca).toUpperCase() === comarca));
+  if (achados.length > 1) achados = achados.filter((c) => c.situacao === 'ATIVO');
+  return achados.length === 1 ? achados[0] : null;
+}
+
 /* Responsável pela carteira em cada setor: Map setor_id → função. */
 async function funcoesPorSetor(db) {
   const setores = (await db.q('SELECT id, nome FROM setores')).rows;
@@ -193,4 +216,4 @@ async function responsavelDoCondominio(db, condominioId, setorId) {
   return achado ? { id: achado.id, nome: achado.nome, carteira: c.pessoa } : { id: null, carteira: c.pessoa };
 }
 
-module.exports = { acharPessoa, funcoesPorSetor, responsavelDoCondominio, FUNCOES, CAMPOS, SITUACOES, interpretar, normalizar, lerCsv, decodificar, semAcento };
+module.exports = { acharPessoa, acharCondominio, chaveCondominio, funcoesPorSetor, responsavelDoCondominio, FUNCOES, CAMPOS, SITUACOES, interpretar, normalizar, lerCsv, decodificar, semAcento };
