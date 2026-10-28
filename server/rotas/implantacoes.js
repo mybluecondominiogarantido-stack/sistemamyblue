@@ -29,6 +29,7 @@ const { rotasAcompanhamento, lembretesDocumentacao, carregarLinhas, historicoPar
 const { rotasFicha, criarRotinaFichas } = require('./implantacoes-ficha');
 const { rotasAntecipacoes } = require('./implantacoes-antecipacoes');
 const { rotasImportacao } = require('./implantacoes-importacao');
+const { acertarConvite } = require('../implantacoes/convite');
 const { rotasSetor, criarRotinaPrazos, prazoConcluir, autorizacaoAtiva, autorizados, pausasDe, prazoOnboarding, ESCOPOS, MOTIVOS_IMPEDIMENTO } = require('./implantacoes-setor');
 const { criarPrazos } = require('../implantacoes/prazos');
 const { criarPos, rotasPos, criarRotinaPos } = require('./implantacoes-pos');
@@ -367,7 +368,8 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
       pedir_autorizacao: p.equipe && !doSetor && !aut && !!i.responsavel_id && ['em_implantacao', 'pendencia', 'concluida', 'na_carteira'].includes(i.etapa),
       autorizar: (p.coordenacao || p.admin) && !!i.responsavel_id && !['rascunho', 'diretoria', 'juridico', 'cancelada'].includes(i.etapa),
       editar_setor: doSetor || autTudo,
-      tirar_documentos: editavel && (dono || p.admin),
+      // o comercial tira (e troca) documento só antes do primeiro envio; depois, o errado volta como pendência pela Implantação
+      tirar_documentos: editavel && (p.admin || (dono && !i.enviado_em)),
       enviar: editavel && (dono || p.admin),
       // com o Jurídico, o executivo ainda desiste (a conferência do contrato é cancelada junto)
       cancelar: ((editavel || i.etapa === 'juridico') && dono) || (p.coordenacao && aberta),
@@ -458,8 +460,10 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
   const posCalc = criarPos({ db, expediente, historicoParametros });
   rotasAcompanhamento(r, { db, seg, avisos, perfil, erro, evento, json, fichas: () => fichaRotas.resumo(), pos: () => posCalc.resumo() });
   rotasImportacao(r, { db, erro, perfil, historicoParametros });
-  rotasSetor(r, { db, avisos, erro, evento, json, link, coordenacao, carregar, historicoParametros, expediente });
-  // a ficha de repasse abre na conclusão
+  // convite do onboarding no Outlook (só com Microsoft 365): criar, atualizar ou cancelar depois de salvar
+  const convite = (i, onboarding) => acertarConvite({ db, agenda: avisos.agenda, gestores: seg.GESTORES_DE_SETOR }, i, onboarding);
+  rotasSetor(r, { db, avisos, erro, evento, json, link, coordenacao, carregar, historicoParametros, expediente, convite });
+  // a ficha de transição abre na conclusão
   const fichaRotas = rotasFicha(r, { db, seg, avisos, erro, evento, json, link, perfil, pode, coordenacao, pessoasDoSetor, administradores, historicoParametros,
     autorizacaoAtiva, autorizados, P });
   const aoConcluir = fichaRotas.aoConcluir;
@@ -505,7 +509,7 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     const info = await db.um(`SELECT e.nome AS executivo_nome, e.uf AS executivo_uf, us.nome AS solicitante_nome, ur.nome AS responsavel_nome
       FROM implantacoes i LEFT JOIN executivos e ON e.id = i.executivo_id LEFT JOIN usuarios us ON us.id = i.solicitante_id
       LEFT JOIN usuarios ur ON ur.id = i.responsavel_id WHERE i.id = $1`, [i.id]);
-    const documentos = (await db.q(`SELECT d.id, d.tipo, d.nome, d.mime, d.tamanho, d.enviado_em, d.substituido_em, d.vinculado, d.sem_arquivo, d.observacao, d.desfeito_em, u.nome AS enviado_por_nome
+    const documentos = (await db.q(`SELECT d.id, d.tipo, d.nome, d.mime, d.tamanho, d.enviado_em, d.substituido_em, d.vinculado, d.sem_arquivo, d.observacao, d.recebido_de, d.desfeito_em, u.nome AS enviado_por_nome
       FROM implantacao_documentos d LEFT JOIN usuarios u ON u.id = d.enviado_por WHERE d.implantacao_id = $1 ORDER BY d.id`, [i.id])).rows;
     const eventos = (await db.q(`SELECT ev.id, ev.tipo, ev.detalhe, ev.criado_em, u.nome AS usuario_nome FROM implantacao_eventos ev
       LEFT JOIN usuarios u ON u.id = ev.usuario_id WHERE ev.implantacao_id = $1 ORDER BY ev.id`, [i.id])).rows;
@@ -602,8 +606,9 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
       const doContrato = FC.paraImplantacao(ct);
       for (const k of FC.CAMPOS_FECHADOS_IMPLANTACAO) { if (doContrato[k] !== undefined) f[k] = doContrato[k]; else delete f[k]; }
     }
-    // o dia de vencimento dos boletos acompanha a data do primeiro vencimento
-    if (/^\d{4}-\d{2}-\d{2}$/.test(texto(f.primeiro_vencimento))) f.dia_vencimento = Number(texto(f.primeiro_vencimento).slice(8, 10));
+    // vencimento padrão (dia) e 1º vencimento (data) são independentes: o primeiro boleto pode sair em outro dia por causa da implantação;
+    // sem o dia padrão, vale o dia do 1º vencimento
+    if (!f.dia_vencimento && /^\d{4}-\d{2}-\d{2}$/.test(texto(f.primeiro_vencimento))) f.dia_vencimento = Number(texto(f.primeiro_vencimento).slice(8, 10));
     await db.tx(async (t) => {
       await t.q(`UPDATE implantacoes SET formulario = $2::jsonb, condominio = $3, cnpj = $4, uf = $5, executivo_id = $6, atualizado_em = now() WHERE id = $1`,
         [i.id, JSON.stringify(f), texto(f.nome, 200), f.sem_cnpj ? '' : texto(f.cnpj, 20), texto(f.uf, 2).toUpperCase(), executivoId]);
@@ -630,6 +635,11 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     // o que veio vinculado da análise ou do contrato não é trocado aqui
     if (tipo !== 'outro' && await db.um('SELECT 1 FROM implantacao_documentos WHERE implantacao_id = $1 AND tipo = $2 AND substituido_em IS NULL AND vinculado', [i.id, tipo])) {
       return erro(res, 409, `${F.DOCUMENTOS[tipo].nome} veio vinculado da análise ou do contrato e não pode ser trocado.`);
+    }
+    // o comercial não troca documento já anexado depois do envio: se estiver errado, a Implantação devolve com pendência e ele volta a faltar
+    if (tipo !== 'outro' && i.enviado_em && !(p.equipe || p.coordenacao || p.admin)
+      && await db.um('SELECT 1 FROM implantacao_documentos WHERE implantacao_id = $1 AND tipo = $2 AND substituido_em IS NULL', [i.id, tipo])) {
+      return erro(res, 409, `${F.DOCUMENTOS[tipo].nome} já foi anexado e não pode ser trocado. Se estiver errado, a Implantação devolve com pendência e você anexa o certo.`);
     }
     const antes = await tiposVigentes(db, i.id);
     const id = await db.tx(async (t) => {
@@ -805,6 +815,9 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     if (!pd.etapas) return erro(res, 403, 'Só quem conduz a implantação (depois de iniciar) ou a coordenação marca as etapas.');
     const antes = F.normalizarEtapas(i.etapas);
     const etapas = F.normalizarEtapas(req.body && req.body.etapas);
+    // marcado ou realizado: data e hora obrigatórias (fora o histórico das planilhas); boletos emitidos: o 1º vencimento
+    const erroEtapas = F.validarEtapas(etapas, { importada: !!i.importacao_id });
+    if (erroEtapas) return erro(res, 400, erroEtapas);
     // quem fez o onboarding: começa com quem é responsável pela implantação
     if (['marcado', 'realizado'].includes(etapas.onboarding.situacao) && !etapas.onboarding.por) etapas.onboarding.por = i.responsavel_id || req.usuario.id;
     // importada das planilhas: o condomínio em geral já está na Carteira com esse ID
@@ -821,7 +834,8 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
       const mudou = Object.keys(etapas).filter((k) => JSON.stringify(etapas[k]) !== JSON.stringify(antes[k]));
       if (mudou.length) await evento(t, i.id, req.usuario.id, 'etapas', { mudou, etapas });
     });
-    res.json({ ok: true, etapas, faltas: F.faltasConcluir(etapas), onboarding_pendente: !F.onboardingFeito(etapas) });
+    const cv = i.importacao_id ? { situacao: 'nada', mensagem: '' } : await convite(i, etapas.onboarding);
+    res.json({ ok: true, etapas, faltas: F.faltasConcluir(etapas), onboarding_pendente: !F.onboardingFeito(etapas), convite: cv });
   });
 
   r.post('/api/implantacoes/:id/pendencia', json, async (req, res) => {
@@ -831,11 +845,14 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     if (!pd.pendencia) return erro(res, 403, 'Só quem conduz a implantação (depois de iniciar) ou a coordenação devolve com pendência.');
     const itens = (Array.isArray(req.body && req.body.itens) ? req.body.itens : []).map((x) => texto(x, 500)).filter(Boolean);
     if (!itens.length) return erro(res, 400, 'Liste o que falta.');
+    // documentos errados voltam a faltar: o comercial anexa o certo (o anterior fica no histórico)
+    const refazer = [...new Set((Array.isArray(req.body && req.body.documentos) ? req.body.documentos : []).map(String))].filter((k) => F.DOCUMENTOS[k] && k !== 'outro');
     const ex = i.executivo_id ? await db.um('SELECT nome FROM executivos WHERE id = $1', [i.executivo_id]) : null;
     const mensagem = `Olá${ex ? `, ${ex.nome.split(' ')[0]}` : ''}. Para seguir com a implantação do ${i.condominio} (${i.protocolo}), precisamos de:\n\n${itens.map((x, k) => `${k + 1}. ${x}`).join('\n')}\n\nAjuste o formulário ou anexe o que falta e reenvie pelo portal.`;
     await db.tx(async (t) => {
       await t.q("UPDATE implantacoes SET etapa = 'pendencia', atualizado_em = now() WHERE id = $1", [i.id]);
-      await evento(t, i.id, req.usuario.id, 'pendencia', { itens, mensagem });
+      await evento(t, i.id, req.usuario.id, 'pendencia', { itens, mensagem, documentos: refazer });
+      if (refazer.length) await t.q('UPDATE implantacao_documentos SET substituido_em = now() WHERE implantacao_id = $1 AND tipo = ANY($2::text[]) AND substituido_em IS NULL AND NOT vinculado', [i.id, refazer]);
       // o prazo para concluir pausa até o comercial reenviar (um impedimento aberto se encerra: a pendência passa a valer)
       await t.q("UPDATE implantacao_pausas SET fim = now(), resolucao = 'Encerrado: devolvida ao comercial', encerrada_por = $2 WHERE implantacao_id = $1 AND fim IS NULL", [i.id, req.usuario.id]);
       await t.q("INSERT INTO implantacao_pausas (implantacao_id, tipo, motivo, detalhe, por) VALUES ($1, 'pendencia', 'pendencia', $2, $3)", [i.id, itens.join('; ').slice(0, 1000), req.usuario.id]);
@@ -952,6 +969,7 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
       codigo: /^planilha-/.test(e.vouch.id) ? '' : e.vouch.id, nome: apelido(f.nome || i.condominio), situacao: 'ATIVO', comarca: texto(f.uf, 2).toUpperCase(), vencimento: f.dia_vencimento ? String(f.dia_vencimento) : '',
       administradora: texto(f.administradora, 120).toUpperCase(), forma_envio: F.ENVIO_CARTEIRA[e.envio.forma] || '', executivo: ex ? ex.nome.toUpperCase() : '',
       inicio_contrato: texto(f.inicio_contrato, 10), razao_social: texto(f.nome || i.condominio, 200), cnpj: f.sem_cnpj ? '' : texto(f.cnpj, 20),
+      sindico_nome: texto(f.sindico_nome, 160), sindico_telefone: texto(f.sindico_telefone, 40), sindico_email: texto(f.sindico_email, 160),
       observacoes: [i.protocolo ? `Implantação ${i.protocolo}` : `Implantação Nº ${i.numero_planilha || ''} (histórico das planilhas)`, i.analise_protocolo ? `análise ${i.analise_protocolo}` : '', f.administracao_interna ? 'administração interna' : ''].filter(Boolean).join(' · '),
     };
   }
@@ -974,12 +992,17 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     const { i, pd } = c;
     if (!pd.carteira) return erro(res, 403, 'Só a coordenação do setor Implantação confirma a entrada na Carteira.');
     const b = req.body && req.body.dados && typeof req.body.dados === 'object' ? req.body.dados : {};
-    const campos = ['codigo', 'nome', 'situacao', 'comarca', 'vencimento', 'administradora', 'forma_envio', 'executivo', 'inicio_contrato', 'razao_social', 'cnpj', 'observacoes'];
+    const campos = ['codigo', 'nome', 'situacao', 'comarca', 'vencimento', 'administradora', 'forma_envio', 'executivo', 'inicio_contrato', 'razao_social', 'cnpj',
+      'sindico_nome', 'sindico_telefone', 'sindico_email', 'observacoes'];
     const v = normalizarCarteira(Object.fromEntries(campos.map((k) => [k, b[k] == null ? '' : b[k]])));
     if (v.erro) return erro(res, 400, v.erro);
     const d = v.dados;
     if (!d.inicio_contrato) return erro(res, 400, 'Informe o início do contrato (vigência).');
     if (d.cnpj && d.cnpj.replace(/\D/g, '').length !== 14) return erro(res, 400, `CNPJ incompleto (${d.cnpj}): são 14 dígitos.`);
+    // o síndico vai para a Carteira (no histórico das planilhas, quando houver)
+    if (!i.importacao_id && !d.sindico_nome) return erro(res, 400, 'Informe o nome do síndico.');
+    if ((!i.importacao_id || d.sindico_telefone) && d.sindico_telefone.replace(/\D/g, '').length < 10) return erro(res, 400, 'Informe o telefone do síndico com DDD.');
+    if ((!i.importacao_id || d.sindico_email) && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.sindico_email)) return erro(res, 400, 'Informe um e-mail válido do síndico.');
     const dup = await duplicados(d);
     if (dup.some((x) => x.codigo === d.codigo)) return erro(res, 409, `O ID Vouch ${d.codigo} já está na Carteira.`);
     if (dup.length) return erro(res, 409, `Já existe na Carteira um condomínio com este CNPJ: ${dup[0].nome} (ID ${dup[0].codigo}).`);
@@ -988,7 +1011,7 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
       const { id: novo } = await t.um(`INSERT INTO condominios (${cols.join(', ')}, atualizado_por) VALUES (${cols.map((_, k) => '$' + (k + 1)).join(', ')}, $${cols.length + 1}) RETURNING id`,
         [...cols.map((k) => d[k]), req.usuario.id]);
       await t.q("UPDATE implantacoes SET etapa = 'na_carteira', condominio_id = $2, atualizado_em = now() WHERE id = $1", [i.id, novo]);
-      // a assistente de crédito que recebeu a ficha de repasse fica na Carteira
+      // a assistente de crédito que recebeu a ficha de transição fica na Carteira
       await t.q(`UPDATE condominios c SET assistente_credito = u.nome FROM implantacao_fichas f JOIN usuarios u ON u.id = f.destino_id
         WHERE c.id = $2 AND f.implantacao_id = $1 AND c.assistente_credito = ''`, [i.id, novo]);
       await evento(t, i.id, req.usuario.id, 'carteira', { condominio_id: novo, codigo: d.codigo, nome: d.nome });

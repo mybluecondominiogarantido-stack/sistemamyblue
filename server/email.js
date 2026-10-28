@@ -11,6 +11,12 @@
  *  2. SMTP comum: SMTP_HOST, SMTP_PORT, SMTP_USUARIO, SMTP_SENHA, EMAIL_REMETENTE.
  *
  * enviar({ para: { nome, email }, subject, text, html })
+ *
+ * Agenda (só no Microsoft 365): o convite do onboarding da Implantação é uma reunião no calendário da caixa
+ * EMAIL_REMETENTE, com link do Teams. Pede "Application Calendars.ReadWrite" no aplicativo, restrito à mesma caixa.
+ * agenda.criar({ assunto, html, inicio, fim, participantes: [{ nome, email }] }) → { id, link }
+ * agenda.atualizar(id, mesmo formato) · agenda.cancelar(id, comentario)
+ * inicio e fim: 'AAAA-MM-DDTHH:MM' no horário de Brasília.
  */
 
 /* "Portal MyBlue <naoresponda@myblue.com.br>" → { nome, email } */
@@ -41,6 +47,46 @@ function criarEnvioGraph(e, fetchFn) {
     return token;
   }
 
+  /* chamada à Graph com o token do aplicativo (token revogado antes da hora: pega outro e tenta uma vez) */
+  async function chamar(metodo, url, corpo) {
+    const init = async () => ({ method: metodo, headers: { authorization: `Bearer ${await obterToken()}`, 'content-type': 'application/json' }, ...(corpo ? { body: JSON.stringify(corpo) } : {}) });
+    let r = await fetchFn(url, await init());
+    if (r.status === 401) { token = null; r = await fetchFn(url, await init()); }
+    return r;
+  }
+  const falhou = async (r, acao) => {
+    const j = await r.json().catch(() => ({}));
+    return new Error(`Microsoft 365 não ${acao} (${r.status}): ${(j.error && (j.error.message || j.error.code)) || 'erro desconhecido'}`);
+  };
+
+  const caixa = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(remetente.email)}`;
+  const evento = (x) => ({
+    subject: x.assunto,
+    body: { contentType: 'HTML', content: x.html || '' },
+    start: { dateTime: `${x.inicio}:00`, timeZone: 'E. South America Standard Time' },
+    end: { dateTime: `${x.fim}:00`, timeZone: 'E. South America Standard Time' },
+    attendees: (x.participantes || []).filter((p) => p && p.email).map((p) => ({ emailAddress: { address: p.email, name: p.nome || p.email }, type: 'required' })),
+    isOnlineMeeting: true, onlineMeetingProvider: 'teamsForBusiness', allowNewTimeProposals: true,
+  });
+  const agenda = {
+    async criar(x) {
+      const r = await chamar('POST', `${caixa}/events`, evento(x));
+      if (!r.ok) throw await falhou(r, 'criou o convite');
+      const j = await r.json().catch(() => ({}));
+      return { id: j.id, link: (j.onlineMeeting && j.onlineMeeting.joinUrl) || '' };
+    },
+    async atualizar(id, x) {
+      const r = await chamar('PATCH', `${caixa}/events/${encodeURIComponent(id)}`, evento(x));
+      if (!r.ok) throw await falhou(r, 'atualizou o convite');
+      const j = await r.json().catch(() => ({}));
+      return { id: j.id || id, link: (j.onlineMeeting && j.onlineMeeting.joinUrl) || '' };
+    },
+    async cancelar(id, comentario) {
+      const r = await chamar('POST', `${caixa}/events/${encodeURIComponent(id)}/cancel`, { comment: comentario || '' });
+      if (!r.ok && r.status !== 404) throw await falhou(r, 'cancelou o convite');
+    },
+  };
+
   async function enviar(msg) {
     const corpo = {
       message: {
@@ -51,19 +97,11 @@ function criarEnvioGraph(e, fetchFn) {
       },
       saveToSentItems: false,
     };
-    const url = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(remetente.email)}/sendMail`;
-    let r = await fetchFn(url, { method: 'POST', headers: { authorization: `Bearer ${await obterToken()}`, 'content-type': 'application/json' }, body: JSON.stringify(corpo) });
-    if (r.status === 401) { // token revogado antes da hora: pega outro e tenta uma vez
-      token = null;
-      r = await fetchFn(url, { method: 'POST', headers: { authorization: `Bearer ${await obterToken()}`, 'content-type': 'application/json' }, body: JSON.stringify(corpo) });
-    }
-    if (!r.ok) {
-      const j = await r.json().catch(() => ({}));
-      throw new Error(`Microsoft 365 não enviou (${r.status}): ${(j.error && (j.error.message || j.error.code)) || 'erro desconhecido'}`);
-    }
+    const r = await chamar('POST', `${caixa}/sendMail`, corpo);
+    if (!r.ok) throw await falhou(r, 'enviou');
   }
 
-  return { tipo: 'microsoft365', remetente: remetente.email, enviar };
+  return { tipo: 'microsoft365', remetente: remetente.email, enviar, agenda };
 }
 
 function criarEnvioSmtp(e) {

@@ -644,7 +644,7 @@ CREATE TABLE IF NOT EXISTS implantacao_pausas (
 );
 CREATE INDEX IF NOT EXISTS idx_implantacao_pausas ON implantacao_pausas(implantacao_id);
 
--- ficha de repasse: abre na conclusão, a Implantação completa os campos azuis e envia à assistente de crédito
+-- ficha de transição: abre na conclusão, a Implantação completa os campos azuis e envia à assistente de crédito
 -- (ou à supervisora de crédito, que escolhe). Cada envio é uma versão (até 3, mais só com a liberação da coordenação)
 CREATE TABLE IF NOT EXISTS implantacao_fichas (
   implantacao_id INTEGER PRIMARY KEY REFERENCES implantacoes(id) ON DELETE CASCADE,
@@ -826,6 +826,10 @@ ALTER TABLE condominios ADD COLUMN IF NOT EXISTS observacoes TEXT NOT NULL DEFAU
 ALTER TABLE condominios ADD COLUMN IF NOT EXISTS executivo TEXT NOT NULL DEFAULT '';
 ALTER TABLE condominios ADD COLUMN IF NOT EXISTS criado_em TIMESTAMPTZ NOT NULL DEFAULT now();
 ALTER TABLE condominios ADD COLUMN IF NOT EXISTS atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL;
+-- síndico do condomínio (nome, telefone e e-mail): vem do formulário da implantação na entrada na Carteira
+ALTER TABLE condominios ADD COLUMN IF NOT EXISTS sindico_nome TEXT NOT NULL DEFAULT '';
+ALTER TABLE condominios ADD COLUMN IF NOT EXISTS sindico_telefone TEXT NOT NULL DEFAULT '';
+ALTER TABLE condominios ADD COLUMN IF NOT EXISTS sindico_email TEXT NOT NULL DEFAULT '';
 ALTER TABLE modulos DROP CONSTRAINT IF EXISTS modulos_adaptador_check;
 ALTER TABLE modulos ADD CONSTRAINT modulos_adaptador_check CHECK (adaptador IS NULL OR adaptador IN ('gas-linhas','gas-objetos','gas-posicional','claude-db'));
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto BYTEA;
@@ -871,6 +875,8 @@ ALTER TABLE implantacao_documentos ADD COLUMN IF NOT EXISTS sem_arquivo BOOLEAN 
 ALTER TABLE implantacao_documentos ADD COLUMN IF NOT EXISTS observacao TEXT NOT NULL DEFAULT '';
 ALTER TABLE implantacao_documentos ADD COLUMN IF NOT EXISTS desfeito_em TIMESTAMPTZ;
 ALTER TABLE implantacao_documentos ADD COLUMN IF NOT EXISTS desfeito_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL;
+-- documento recebido direto pela Implantação: de quem veio (síndico, administradora ou outro)
+ALTER TABLE implantacao_documentos ADD COLUMN IF NOT EXISTS recebido_de TEXT NOT NULL DEFAULT '';
 -- Obs. da aba Controle (escrita pela equipe), justificativa do onboarding fora do prazo e os avisos diários dos prazos
 ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS obs_controle JSONB;
 ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS onboarding_justificativa JSONB;
@@ -878,6 +884,8 @@ ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS aviso_concluir_em DATE;
 ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS aviso_onboarding_em DATE;
 -- pós-implantação (espólios, levantamento de pendências e 1ª prestação de contas): dia dos boletos, o que foi marcado e os avisos
 ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS pos JSONB NOT NULL DEFAULT '{}'::jsonb;
+-- convite do onboarding no Outlook (Microsoft 365): id da reunião, quando, para quem, ou o erro da última tentativa
+ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS onboarding_convite JSONB;
 -- implantação importada das planilhas: lote, Nº do formulário e o que veio de lá (fonte, avisos, nomes não achados no portal)
 ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS importacao_id INTEGER REFERENCES implantacao_importacoes(id) ON DELETE SET NULL;
 ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS numero_planilha INTEGER;

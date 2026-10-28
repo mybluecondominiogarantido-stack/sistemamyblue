@@ -175,6 +175,19 @@ function normalizarEtapas(e) {
   };
 }
 
+/* o que não pode ser salvo nas etapas: marcado ou realizado sem data e hora (fora o histórico das planilhas);
+   boletos emitidos sem o 1º vencimento. so: 'onboarding' confere só o onboarding */
+function validarEtapas(e, o = {}) {
+  const on = e.onboarding;
+  // no histórico das planilhas o onboarding pode não ter data (o Controle não a registrava)
+  if (!o.importada && ['marcado', 'realizado'].includes(on.situacao)) {
+    if (!DATA.test(on.data)) return 'Informe a data do onboarding: é obrigatória quando está marcado ou realizado.';
+    if (!on.hora) return 'Informe a hora do onboarding: é obrigatória quando está marcado ou realizado.';
+  }
+  if (o.so !== 'onboarding' && e.boletos.feito && !e.boletos.primeiro_vencimento) return 'Informe o 1º vencimento dos boletos: é obrigatório ao marcar "Boletos emitidos".';
+  return '';
+}
+
 /* o que falta para concluir a implantação */
 function faltasEtapas(e) {
   e = normalizarEtapas(e);
@@ -236,5 +249,5 @@ function doPdf(r) {
   };
 }
 
-module.exports = { DOCUMENTOS, DA_ADVOGADA, GARANTIAS, RECEITAS_CASHBACK, ONBOARDING, ENVIO, ENVIO_CARTEIRA, cpfValido, cnpjOk, daAnalise, doPdf, faltas, pendencias, diferencas, docsObrigatorios,
+module.exports = { validarEtapas, DOCUMENTOS, DA_ADVOGADA, GARANTIAS, RECEITAS_CASHBACK, ONBOARDING, ENVIO, ENVIO_CARTEIRA, cpfValido, cnpjOk, daAnalise, doPdf, faltas, pendencias, diferencas, docsObrigatorios,
   normalizarEtapas, faltasEtapas, faltasConcluir, onboardingFeito, conferirCadastro };

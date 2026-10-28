@@ -26,7 +26,7 @@ const PADRAO = Object.freeze({
   docs_meta: ['convencao', 'ata_eleicao', 'ata_orcamento', 'procuracao'],
 });
 const LIMITES = { onboarding_dias: [1, 365, 'Prazo do onboarding'], documentacao_dias: [1, 365, 'Prazo da documentação'], meta_pct: [1, 100, 'Meta da carteira'], virada_dia: [1, 28, 'Dia da virada do mês'],
-  concluir_dias: [1, 30, 'Prazo para concluir (dias úteis)'], ficha_dias: [1, 30, 'Prazo da ficha de repasse (dias úteis)'],
+  concluir_dias: [1, 30, 'Prazo para concluir (dias úteis)'], ficha_dias: [1, 30, 'Prazo da ficha de transição (dias úteis)'],
   espolio_dias: [1, 30, 'Prazo dos espólios (dias úteis)'], pendencias_dias: [1, 30, 'Prazo do levantamento de pendências (dias úteis)'],
   prestacao_dias: [1, 30, 'Prazo da 1ª prestação de contas (dias úteis)'] };
 const ETAPAS = ['documentacao', 'vouch', 'onboarding', 'boletos', 'envio'];

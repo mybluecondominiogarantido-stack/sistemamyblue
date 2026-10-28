@@ -268,14 +268,20 @@ test('iniciar, conferências do setor e as 5 etapas', async () => {
   assert.equal((await equipe('POST', `/api/implantacoes/${idI}/iniciar`, {})).status, 200);
   // cadastro de moradores em CSV: 2 unidades, um CPF inválido na linha 3
   const csv = Buffer.from('Unidade;Nome;CPF\n101;Morador Fictício 1;111.444.777-35\n102;Morador Fictício 2;123.456.789-00\n');
-  assert.equal((await exec('POST', `/api/implantacoes/${idI}/documentos`, csv, { headers: { 'x-tipo': 'cadastro_moradores', 'x-nome-arquivo': 'cadastro.csv', 'content-type': 'text/csv' } })).status, 201);
+  // depois do envio, o executivo não troca documento já anexado; quem conduz troca
+  assert.equal((await exec('POST', `/api/implantacoes/${idI}/documentos`, csv, { headers: { 'x-tipo': 'cadastro_moradores', 'x-nome-arquivo': 'cadastro.csv', 'content-type': 'text/csv' } })).status, 409);
+  assert.equal((await equipe('POST', `/api/implantacoes/${idI}/documentos`, csv, { headers: { 'x-tipo': 'cadastro_moradores', 'x-nome-arquivo': 'cadastro.csv', 'content-type': 'text/csv' } })).status, 201);
   let d = (await equipe('GET', `/api/implantacoes/${idI}`)).json;
   assert.deepEqual(d.conferencias.cadastro, { unidades: 2, tem_documento: true, documentos_invalidos: [3], sem_documento: 0, unidades_formulario: 24 });
   assert.equal(d.conferencias.cpf_sindico, true);
   assert.deepEqual(d.conferencias.diferencas.map((x) => x.campo), ['taxa_adm']);
   assert.equal(d.faltas_etapas.length, 5); // documentação, Vouch, boletos, 1º vencimento e envio (o onboarding pode ficar para depois)
   assert.equal((await exec('PATCH', `/api/implantacoes/${idI}/etapas`, { etapas: {} })).status, 403);
-  let r = await equipe('PATCH', `/api/implantacoes/${idI}/etapas`, { etapas: { documentacao: { feito: true }, vouch: { id: '90001' }, onboarding: { situacao: 'marcado', data: '2026-10-23 15:00' } } });
+  // marcado: data e hora obrigatórias
+  assert.equal((await equipe('PATCH', `/api/implantacoes/${idI}/etapas`, { etapas: { onboarding: { situacao: 'marcado', data: '2026-10-23' } } })).status, 400);
+  // boletos emitidos: o 1º vencimento é obrigatório
+  assert.equal((await equipe('PATCH', `/api/implantacoes/${idI}/etapas`, { etapas: { boletos: { feito: true } } })).status, 400);
+  let r = await equipe('PATCH', `/api/implantacoes/${idI}/etapas`, { etapas: { documentacao: { feito: true }, vouch: { id: '90001' }, onboarding: { situacao: 'marcado', data: '2026-10-23', hora: '15:00' } } });
   assert.equal(r.status, 200, r.texto);
   assert.equal(r.json.faltas.length, 3);
   assert.equal(r.json.onboarding_pendente, true);
@@ -299,9 +305,10 @@ test('pendência: volta ao executivo e o reenvio volta para quem conduz', async 
 test('concluir: aviso à coordenação e ao setor Parceiros, e o condomínio entra na base de comissão com o parceiro', async () => {
   await pessoa('Parceiros Fictício', 'parceiros@teste.com');
   await noSetor('Parceiros', 'parceiros@teste.com', false);
-  const r0 = await equipe('PATCH', `/api/implantacoes/${idI}/etapas`, { etapas: { documentacao: { feito: true }, vouch: { id: '90001' }, onboarding: { situacao: 'realizado' }, boletos: { feito: true, primeiro_vencimento: '2026-11-10' }, envio: { forma: 'email' } } });
-  assert.deepEqual(r0.json.faltas, ['Informar a data em que o onboarding foi feito.']);
-  const r1 = await equipe('PATCH', `/api/implantacoes/${idI}/etapas`, { etapas: { ...r0.json.etapas, onboarding: { situacao: 'realizado', data: '2026-10-20', hora: '10:00' } } });
+  const base = { documentacao: { feito: true }, vouch: { id: '90001' }, onboarding: { situacao: 'realizado' }, boletos: { feito: true, primeiro_vencimento: '2026-11-10' }, envio: { forma: 'email' } };
+  const r0 = await equipe('PATCH', `/api/implantacoes/${idI}/etapas`, { etapas: base });
+  assert.equal(r0.status, 400); // realizado sem data e hora não salva
+  const r1 = await equipe('PATCH', `/api/implantacoes/${idI}/etapas`, { etapas: { ...base, onboarding: { situacao: 'realizado', data: '2026-10-20', hora: '10:00' } } });
   assert.deepEqual(r1.json.faltas, []);
   const r = await equipe('POST', `/api/implantacoes/${idI}/concluir`, {});
   assert.equal(r.status, 200, r.texto);
@@ -322,11 +329,16 @@ test('Carteira: a coordenação confere os dados (ID Vouch e envio vêm das etap
   assert.deepEqual([p.dados.codigo, p.dados.nome, p.dados.comarca, p.dados.forma_envio, p.dados.vencimento, p.dados.inicio_contrato],
     ['90001', 'Fictício', 'CE', 'E-MAIL', '10', '2026-11-01']);
   assert.deepEqual(p.duplicados, []);
+  // o síndico vem do formulário e é obrigatório na Carteira
+  assert.ok(p.dados.sindico_nome && p.dados.sindico_email && p.dados.sindico_telefone);
+  assert.equal((await coord('POST', `/api/implantacoes/${idI}/carteira`, { dados: { ...p.dados, sindico_email: 'sem-arroba' } })).status, 400);
+  assert.equal((await coord('POST', `/api/implantacoes/${idI}/carteira`, { dados: { ...p.dados, sindico_telefone: '9999' } })).status, 400);
   const r = await coord('POST', `/api/implantacoes/${idI}/carteira`, { dados: { ...p.dados, nome: 'Residencial Fictício' } });
   assert.equal(r.status, 201, r.texto);
   const c = await ctx.db.um('SELECT * FROM condominios WHERE id = $1', [r.json.condominio_id]);
   assert.deepEqual([c.codigo, c.nome, c.comarca, c.forma_envio, c.cnpj, String(c.inicio_contrato instanceof Date ? c.inicio_contrato.toISOString().slice(0, 10) : c.inicio_contrato).slice(0, 10)],
     ['90001', 'Residencial Fictício', 'CE', 'E-MAIL', '11.222.333/0001-81', '2026-11-01']);
+  assert.deepEqual([c.sindico_nome, c.sindico_telefone, c.sindico_email], [p.dados.sindico_nome, p.dados.sindico_telefone, p.dados.sindico_email]);
   assert.equal((await coord('GET', `/api/implantacoes/${idI}`)).json.implantacao.etapa, 'na_carteira');
   assert.equal((await coord('POST', `/api/implantacoes/${idI}/carteira`, { dados: p.dados })).status, 403);
   // o mesmo ID Vouch não entra em outra implantação

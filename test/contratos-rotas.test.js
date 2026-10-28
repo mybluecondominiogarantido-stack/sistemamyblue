@@ -261,10 +261,15 @@ test('Implantação: o executivo solicita pelo contrato, e ela vem com as condi�
   assert.equal((await exec('PATCH', `/api/implantacoes/${idImpC}`, { formulario: { ...d.implantacao.formulario, garantias: ['Gás'], taxa_adm: 9, boleto: 1, honorarios: 10, consultor_nome: 'Consultor Fictício' } })).status, 200);
   let fi = (await exec('GET', `/api/implantacoes/${idImpC}`)).json.implantacao.formulario;
   assert.deepEqual([fi.garantias, fi.taxa_adm, fi.boleto, fi.honorarios, fi.consultor_nome], [['Gás'], 3.25, 2, 15, 'Consultor Fictício']); // o que será garantido o comercial preenche
-  // o primeiro vencimento vem do contrato, mas o comercial ajusta (o síndico mudou); o dia dos boletos acompanha, a vigência não muda
+  // o primeiro vencimento vem do contrato, mas o comercial ajusta (o síndico mudou); o vencimento padrão (dia) não muda com ele,
+  // porque o 1º boleto pode sair em outro dia por causa da implantação; a vigência não muda
+  const padrao = fi.dia_vencimento;
   assert.equal((await exec('PATCH', `/api/implantacoes/${idImpC}`, { formulario: { ...fi, primeiro_vencimento: '2026-12-15', inicio_contrato: '2027-01-01' } })).status, 200);
   fi = (await exec('GET', `/api/implantacoes/${idImpC}`)).json.implantacao.formulario;
-  assert.deepEqual([fi.primeiro_vencimento, fi.dia_vencimento, fi.inicio_contrato], ['2026-12-15', 15, '2026-12-01']);
+  assert.deepEqual([fi.primeiro_vencimento, fi.dia_vencimento, fi.inicio_contrato], ['2026-12-15', padrao, '2026-12-01']);
+  // sem o vencimento padrão, vale o dia do 1º vencimento
+  assert.equal((await exec('PATCH', `/api/implantacoes/${idImpC}`, { formulario: { ...fi, dia_vencimento: null } })).status, 200);
+  assert.equal((await exec('GET', `/api/implantacoes/${idImpC}`)).json.implantacao.formulario.dia_vencimento, 15);
   assert.equal(d.implantacao.formulario.honorarios, 15); // os honorários das condições fechadas
   assert.equal(d.contrato.fechado.foro, 'Natal/RN');
   assert.deepEqual(d.diferencas.map((x) => x.campo), ['taxa_adm']); // diferente da análise (3,50%)

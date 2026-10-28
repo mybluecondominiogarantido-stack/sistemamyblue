@@ -1,6 +1,6 @@
 'use strict';
 /*
- * Ficha de repasse (complementa server/rotas/implantacoes.js): abre na conclusão da implantação, já preenchida
+ * Ficha de transição (complementa server/rotas/implantacoes.js): abre na conclusão da implantação, já preenchida
  * (server/implantacoes/ficha.js); quem conduz completa os campos em azul e envia à assistente de crédito do condomínio
  * na Carteira (sem ela, à supervisão de Crédito, que escolhe e o portal grava na Carteira). A assistente de crédito
  * confirma o recebimento ou devolve com uma pergunta; cada envio é uma versão (até 3; mais, só com a liberação da
@@ -71,7 +71,7 @@ function rotasFicha(r, deps) {
     const prazo = novo.prazo;
     const fmt = prazo ? prazo.split('-').reverse().join('/') : '';
     if (i.responsavel_id) await avisos.notificar([i.responsavel_id], { link: linkFicha(i.id), tipo: 'implantacao', email: false,
-      titulo: `Ficha de repasse aberta · ${i.condominio}`, texto: `A ficha de repasse de ${i.condominio} já vem preenchida: complete os campos em azul e envie ao Crédito até ${fmt}.` });
+      titulo: `Ficha de transição aberta · ${i.condominio}`, texto: `A ficha de transição de ${i.condominio} já vem preenchida: complete os campos em azul e envie ao Crédito até ${fmt}.` });
   }
 
   /* quem é quem na ficha: Implantação (quem conduz, autorizada, coordenação), Crédito (destino e supervisão) */
@@ -136,7 +136,7 @@ function rotasFicha(r, deps) {
   r.post('/api/implantacoes/:id/ficha/abrir', json, async (req, res) => {
     const c = await carregarFicha(req, res);
     if (!c) return;
-    if (!c.pf.abrir) return erro(res, c.ficha ? 409 : 403, c.ficha ? 'A ficha de repasse já está aberta.' : 'Só quem conduz a implantação abre a ficha, depois de concluir.');
+    if (!c.pf.abrir) return erro(res, c.ficha ? 409 : 403, c.ficha ? 'A ficha de transição já está aberta.' : 'Só quem conduz a implantação abre a ficha, depois de concluir.');
     const novo = await preparar(c.i);
     await db.tx(async (t) => { await abrir(t, c.i, novo); await evento(t, c.i.id, req.usuario.id, 'ficha_aberta', {}); });
     res.status(201).json({ ok: true });
@@ -183,12 +183,12 @@ function rotasFicha(r, deps) {
     });
     if (destino) {
       await avisos.notificar([destino.id], { link: linkFicha(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: true,
-        titulo: `Ficha de repasse${versao > 1 ? ` (versão ${versao})` : ''} · ${i.condominio}`,
-        texto: `${req.usuario.nome} enviou a ficha de repasse de ${i.condominio}${versao > 1 ? `, versão ${versao} (${motivo})` : ''}, que fica com você. Abra no portal e confirme o recebimento.${resposta ? ` Resposta à sua pergunta: "${resposta}"` : ''}` });
+        titulo: `Ficha de transição${versao > 1 ? ` (versão ${versao})` : ''} · ${i.condominio}`,
+        texto: `${req.usuario.nome} enviou a ficha de transição de ${i.condominio}${versao > 1 ? `, versão ${versao} (${motivo})` : ''}, que fica com você. Abra no portal e confirme o recebimento.${resposta ? ` Resposta à sua pergunta: "${resposta}"` : ''}` });
     } else {
       await avisos.notificar(await supervisaoCredito(), { link: linkFicha(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: true,
-        titulo: `Ficha de repasse para distribuir · ${i.condominio}`,
-        texto: `${req.usuario.nome} enviou a ficha de repasse de ${i.condominio}, que ainda não tem assistente de crédito na Carteira. Escolha a assistente no portal.` });
+        titulo: `Ficha de transição para distribuir · ${i.condominio}`,
+        texto: `${req.usuario.nome} enviou a ficha de transição de ${i.condominio}, que ainda não tem assistente de crédito na Carteira. Escolha a assistente no portal.` });
     }
     res.json({ ok: true, versao, para: destino ? destino.nome : null });
   });
@@ -208,9 +208,9 @@ function rotasFicha(r, deps) {
       await evento(t, i.id, req.usuario.id, 'ficha_destino', { para: alvo.nome });
     });
     await avisos.notificar([alvo.id], { link: linkFicha(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: true,
-      titulo: `Ficha de repasse · ${i.condominio}`, texto: `${req.usuario.nome} encaminhou a você a ficha de repasse de ${i.condominio}, que fica com você. Abra no portal e confirme o recebimento.` });
+      titulo: `Ficha de transição · ${i.condominio}`, texto: `${req.usuario.nome} encaminhou a você a ficha de transição de ${i.condominio}, que fica com você. Abra no portal e confirme o recebimento.` });
     if (i.responsavel_id) await avisos.notificar([i.responsavel_id], { link: linkFicha(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: false,
-      titulo: `Ficha de repasse encaminhada · ${i.condominio}`, texto: `A supervisão de Crédito encaminhou a ficha de ${i.condominio} para ${alvo.nome}.` });
+      titulo: `Ficha de transição encaminhada · ${i.condominio}`, texto: `A supervisão de Crédito encaminhou a ficha de ${i.condominio} para ${alvo.nome}.` });
     res.json({ ok: true });
   });
 
@@ -225,7 +225,7 @@ function rotasFicha(r, deps) {
       await evento(t, i.id, req.usuario.id, 'ficha_recebida', { versao: ficha.versao });
     });
     await avisos.notificar([i.responsavel_id, ...await autorizados(db, i.id, ['tudo', 'documentos'])].filter(Boolean), { link: linkFicha(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: false,
-      titulo: `Ficha de repasse recebida · ${i.condominio}`, texto: `${req.usuario.nome} confirmou o recebimento da ficha de repasse (versão ${ficha.versao}).` });
+      titulo: `Ficha de transição recebida · ${i.condominio}`, texto: `${req.usuario.nome} confirmou o recebimento da ficha de transição (versão ${ficha.versao}).` });
     res.json({ ok: true });
   });
 
@@ -241,7 +241,7 @@ function rotasFicha(r, deps) {
       await evento(t, i.id, req.usuario.id, 'ficha_devolvida', { versao: ficha.versao, pergunta });
     });
     await avisos.notificar([i.responsavel_id, ...await autorizados(db, i.id, ['tudo', 'documentos'])].filter(Boolean), { link: linkFicha(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: true,
-      titulo: `Ficha de repasse devolvida com pergunta · ${i.condominio}`, texto: `${req.usuario.nome} devolveu a versão ${ficha.versao}: "${pergunta}"` });
+      titulo: `Ficha de transição devolvida com pergunta · ${i.condominio}`, texto: `${req.usuario.nome} devolveu a versão ${ficha.versao}: "${pergunta}"` });
     res.json({ ok: true });
   });
 
@@ -258,7 +258,7 @@ function rotasFicha(r, deps) {
       await evento(t, i.id, req.usuario.id, 'ficha_resposta', { versao: ficha.versao, resposta });
     });
     if (ficha.destino_id) await avisos.notificar([ficha.destino_id], { link: linkFicha(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: true,
-      titulo: `Resposta sobre a ficha de repasse · ${i.condominio}`, texto: `${req.usuario.nome} respondeu (versão ${ficha.versao}, sem mudar a ficha): "${resposta}". Confirme o recebimento no portal.` });
+      titulo: `Resposta sobre a ficha de transição · ${i.condominio}`, texto: `${req.usuario.nome} respondeu (versão ${ficha.versao}, sem mudar a ficha): "${resposta}". Confirme o recebimento no portal.` });
     res.json({ ok: true });
   });
 
@@ -275,7 +275,7 @@ function rotasFicha(r, deps) {
       await evento(t, i.id, req.usuario.id, 'ficha_liberada', { motivo });
     });
     if (i.responsavel_id) await avisos.notificar([i.responsavel_id], { link: linkFicha(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: false,
-      titulo: `Nova versão da ficha liberada · ${i.condominio}`, texto: `${req.usuario.nome} liberou mais uma versão da ficha de repasse: "${motivo}"` });
+      titulo: `Nova versão da ficha liberada · ${i.condominio}`, texto: `${req.usuario.nome} liberou mais uma versão da ficha de transição: "${motivo}"` });
     res.json({ ok: true });
   });
 
@@ -284,7 +284,7 @@ function rotasFicha(r, deps) {
     const c = await carregarFicha(req, res);
     if (!c) return;
     const { i, ficha, pf } = c;
-    if (!ficha) return erro(res, 404, 'A ficha de repasse ainda não foi aberta.');
+    if (!ficha) return erro(res, 404, 'A ficha de transição ainda não foi aberta.');
     const n = Number(req.query.versao) || null;
     let conteudo, sufixo;
     if (n) {
@@ -298,14 +298,14 @@ function rotasFicha(r, deps) {
     }
     let pdf;
     try { pdf = await formularioPdf.gerarPdf(FI.paraPdf(conteudo), { timbrado: true }); } catch (e) { return erro(res, 500, e.message); }
-    const nome = `Ficha_de_repasse_${nomeArquivo(i.condominio)}_${i.protocolo || ''}${sufixo}.pdf`;
+    const nome = `Ficha_de_transicao_${nomeArquivo(i.condominio)}_${i.protocolo || ''}${sufixo}.pdf`;
     res.set('Content-Type', 'application/pdf');
     res.set('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(nome)}`);
     res.set('Cache-Control', 'private, no-store');
     res.send(pdf);
   });
 
-  /* todas as fichas, para a aba Fichas de repasse do Acompanhamento */
+  /* todas as fichas, para a aba Fichas de transição do Acompanhamento */
   async function resumo() {
     const { rows } = await db.q(`SELECT f.*, i.protocolo, i.condominio, i.uf, i.concluido_em, i.responsavel_id, i.condominio_id, ur.nome AS responsavel_nome, ud.nome AS destino_nome,
         (SELECT ev.criado_em FROM implantacao_eventos ev WHERE ev.implantacao_id = f.implantacao_id AND ev.tipo = 'ficha_devolvida' ORDER BY ev.id DESC LIMIT 1) AS devolvida_em,
@@ -345,14 +345,14 @@ function criarRotinaFichas({ db, avisos, expediente, coordenacao, historicoParam
       const para = [x.responsavel_id, ...await autorizados(db, x.implantacao_id, ['tudo', 'documentos'])].filter(Boolean);
       if (s.status === 'atrasado') {
         const n = s.atraso === 1 ? '1 dia útil' : `${s.atraso} dias úteis`;
-        await avisos.notificar(para, { link, tipo: 'implantacao', email: true, titulo: `Ficha de repasse atrasada · ${n} · ${x.condominio}`,
-          texto: `A ficha de repasse de ${x.condominio} (${x.protocolo}) passou do prazo para enviar ao Crédito (${fmt(s.vence)}).` });
-        await avisos.notificar(coord, { link, tipo: 'implantacao', email: true, titulo: `Ficha de repasse atrasada de ${x.responsavel_nome || 'quem conduz'} · ${n}`,
+        await avisos.notificar(para, { link, tipo: 'implantacao', email: true, titulo: `Ficha de transição atrasada · ${n} · ${x.condominio}`,
+          texto: `A ficha de transição de ${x.condominio} (${x.protocolo}) passou do prazo para enviar ao Crédito (${fmt(s.vence)}).` });
+        await avisos.notificar(coord, { link, tipo: 'implantacao', email: true, titulo: `Ficha de transição atrasada de ${x.responsavel_nome || 'quem conduz'} · ${n}`,
           texto: `${x.condominio} (${x.protocolo}): o prazo para enviar a ficha era ${fmt(s.vence)}. Para cobrar, abra a ficha.` });
       } else {
         await avisos.notificar(para, { link, tipo: 'implantacao', email: true,
-          titulo: `Ficha de repasse vence ${s.status === 'vence_hoje' ? 'hoje' : 'amanhã'} · ${x.condominio}`,
-          texto: `Envie a ficha de repasse de ${x.condominio} ao Crédito até ${fmt(s.vence)}${s.status === 'vence_hoje' ? ' (hoje)' : ''}.` });
+          titulo: `Ficha de transição vence ${s.status === 'vence_hoje' ? 'hoje' : 'amanhã'} · ${x.condominio}`,
+          texto: `Envie a ficha de transição de ${x.condominio} ao Crédito até ${fmt(s.vence)}${s.status === 'vence_hoje' ? ' (hoje)' : ''}.` });
       }
       await db.q('UPDATE implantacao_fichas SET aviso_prazo_em = $2::date WHERE implantacao_id = $1', [x.implantacao_id, hoje]);
       feito.ficha++;

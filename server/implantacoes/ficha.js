@@ -1,6 +1,6 @@
 'use strict';
 /*
- * Ficha de repasse da implantação: o que o portal já sabe do condomínio (formulário, análise, contrato, etapas,
+ * Ficha de transição da implantação: o que o portal já sabe do condomínio (formulário, análise, contrato, etapas,
  * documentos e Carteira) mais os campos em azul, que só a assistente de implantação sabe (dados).
  *
  * montar() devolve o mesmo conteúdo para a tela e para o PDF (formulario_pdf.py): seções com pares rótulo/valor e
@@ -209,10 +209,10 @@ function montar(i, dadosBrutos, ctx = {}) {
   if (!onbFeito) atencao.push('onboarding ainda não feito');
   const cidade = [f.cidade, f.uf].filter(Boolean).join('/');
   return {
-    cabecalho: 'FICHA DE REPASSE DE IMPLANTAÇÃO',
+    cabecalho: 'FICHA DE TRANSIÇÃO DE IMPLANTAÇÃO',
     protocolo: i.protocolo || '',
     emitido: `Emitida em ${quando(ctx.quando || new Date())}${ctx.emitido_por ? ` por ${ctx.emitido_por}` : ''}`,
-    titulo_pdf: `Ficha de repasse ${i.protocolo || ''} ${f.nome || i.condominio || ''}`.trim(),
+    titulo_pdf: `Ficha de transição ${i.protocolo || ''} ${f.nome || i.condominio || ''}`.trim(),
     condominio: f.nome || i.condominio || 'Condomínio',
     subtitulo: [cidade, f.uh_total ? `${f.uh_total} unidades` : '', e.vouch.id ? `ID Vouch ${e.vouch.id}` : '', ctx.responsavel ? `Assistente de implantação: ${ctx.responsavel}` : '',
       ctx.destino ? `Assistente de crédito: ${ctx.destino}` : ''].filter(Boolean).join(' · '),
