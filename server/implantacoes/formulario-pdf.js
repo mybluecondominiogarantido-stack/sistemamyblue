@@ -11,7 +11,7 @@ const F = require('./formulario');
 
 const GERADOR = path.join(__dirname, 'formulario_pdf.py');
 const LOGO = path.join(__dirname, '..', '..', 'public', 'img', 'logo.png');
-// papel timbrado da MyBlue (formulário de implantação e ficha de repasse)
+// papel timbrado da MyBlue (formulário de implantação e ficha de transição)
 const TIMBRADO = path.join(__dirname, 'timbrado.png');
 
 const num = (v) => (v === null || v === undefined || v === '' ? null : Number(v));

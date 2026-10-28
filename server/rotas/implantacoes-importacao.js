@@ -7,7 +7,7 @@
  *   GET  /api/implantacoes/importacao          → lotes
  *   POST /api/implantacoes/importacao/:id/desfazer
  * As regras de conferência estão em server/implantacoes/importacao.js. As importadas são histórico: não geram avisos,
- * prazos, cobranças, ficha de repasse nem envio ao Controle de Repasses, e não entram nas filas do setor.
+ * prazos, cobranças, ficha de transição nem envio ao Controle de Repasses, e não entram nas filas do setor.
  */
 const express = require('express');
 const I = require('../implantacoes/importacao');

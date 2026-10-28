@@ -3,8 +3,8 @@
 Do contrato assinado à Carteira. **Toda implantação começa de um contrato assinado**: o comercial escolhe um contrato
 concluído no portal (Solicitação de Contrato) ou anexa o contrato assinado fora do portal com o retorno da análise,
 preenche o formulário (o antigo Formulário de Implantação do Microsoft Forms) e anexa os documentos; o setor **Implantação** conduz;
-a coordenação confirma a entrada na Carteira. Tela própria do portal (menu **Implantação**), com os mesmos padrões da
-Análise de Crédito.
+a coordenação confirma a entrada na Carteira. Tela própria do portal (menu **Painel de implantação**), com os mesmos
+padrões da Análise de Crédito.
 
 ## Onde está cada parte
 
@@ -15,11 +15,13 @@ Análise de Crédito.
 | Tabelas `implantacoes`, `implantacao_documentos`, `implantacao_eventos`, `implantacao_protocolos` (`implantacao_liberacoes` guarda só o histórico das liberações antigas) | `server/db.js` |
 | Lembretes: fila sem designação (4h úteis), prazo para iniciar vencido, pendências do executivo (uma vez por dia útil) — roda a cada 10 min | `criarRotinasImplantacao` em `server/rotas/implantacoes.js`, ligado em `server/index.js` |
 | Setor no dia a dia: quem edita (autorizações), pausas e prazo para concluir, onboarding depois de concluir, documento recebido sem arquivo, Obs. do Controle, Cobrar e a rotina dos prazos | `server/rotas/implantacoes-setor.js`; prazos em dias úteis em `server/implantacoes/prazos.js`; tabelas `implantacao_autorizacoes` e `implantacao_pausas` |
-| Ficha de repasse (montagem, envio, devolução, versões, PDF e rotina do prazo) | `server/implantacoes/ficha.js` e `server/rotas/implantacoes-ficha.js`; tabelas `implantacao_fichas` e `implantacao_ficha_versoes` |
+| Ficha de transição (montagem, envio, devolução, versões, PDF e rotina do prazo) | `server/implantacoes/ficha.js` e `server/rotas/implantacoes-ficha.js`; tabelas `implantacao_fichas` e `implantacao_ficha_versoes` |
 | Antecipação → Controle de Repasses | `server/rotas/implantacoes-antecipacoes.js`; tabela `implantacao_antecipacoes` |
-| Acompanhamento (painel, mês vigente, controle, metas, antecipações, fichas, parâmetros, cobrança de documentos, Excel) | `server/rotas/implantacoes-acompanhamento.js`; regras em `server/implantacoes/metas.js`; tabela `implantacao_parametros`; .xlsx em `server/xlsx.js` |
-| Telas | `public/app.js` (bloco Implantação, ficha de repasse e bloco Acompanhamento) |
-| Testes (dados fictícios) | `test/implantacoes-formulario.test.js`, `test/implantacoes-rotas.test.js`, `test/implantacoes-metas.test.js`, `test/implantacoes-setor.test.js` |
+| Pós-implantação (espólios, levantamento de pendências, 1ª prestação de contas, rotina dos prazos) | regras em `server/implantacoes/pos.js`; rotas e rotina em `server/rotas/implantacoes-pos.js`; coluna `implantacoes.pos` |
+| Painel de implantação: dados do Dashboard, Painel de atividades e Depois da conclusão (mês vigente, controle, metas, antecipações, fichas, pós-implantação, prazo para concluir, parâmetros, cobrança de documentos, Excel) | `server/rotas/implantacoes-acompanhamento.js`; regras em `server/implantacoes/metas.js`; tabela `implantacao_parametros`; .xlsx em `server/xlsx.js` |
+| Convite do onboarding no Outlook (agenda do Microsoft 365) | `server/implantacoes/convite.js`; agenda em `server/email.js`; coluna `implantacoes.onboarding_convite` |
+| Telas | `public/app.js` (Painel de implantação, tela da implantação e ficha de transição) |
+| Testes (dados fictícios) | `test/implantacoes-formulario.test.js`, `test/implantacoes-rotas.test.js`, `test/implantacoes-metas.test.js`, `test/implantacoes-setor.test.js`, `test/implantacoes-pos.test.js` |
 
 ## Regras
 
@@ -52,10 +54,21 @@ Análise de Crédito.
   contam). Sem designação, a coordenação recebe um lembrete a cada **4h úteis**; prazo para iniciar vencido avisa,
   uma vez, a coordenação e quem foi designado.
 - **As 5 etapas:** documentação conferida, cadastro no Vouch (o ID vai para a Carteira; ID já usado na Carteira é
-  recusado), onboarding (a marcar, marcado, síndico MyBlue ou realizado; marcado e realizado com data, hora e quem fez —
-  começa com quem conduz), emissão de boletos (com o **1º vencimento**, que o setor informa: nem sempre é o dia do
-  formulário, pelo prazo curto para implantar) e envio (digital, físico ou ambos; vai para a Carteira como forma de
-  envio). Concluir com as outras 4 etapas feitas e o 1º vencimento; o onboarding pode ficar para depois.
+  recusado), onboarding (a marcar, marcado, síndico MyBlue ou realizado; marcado e realizado com **data e hora
+  obrigatórias** e quem fez — começa com quem conduz), emissão de boletos (com o **1º vencimento**, obrigatório ao
+  marcar "Boletos emitidos") e envio (digital, físico ou ambos; vai para a Carteira como forma de envio). Concluir com
+  as outras 4 etapas feitas e o 1º vencimento; o onboarding pode ficar para depois.
+- **Vencimento padrão e 1º vencimento:** dois campos do formulário. O **vencimento padrão** (dia) é o do condomínio e é
+  o que vai para a Carteira; o **1º vencimento** (data) é o do primeiro boleto, que pode sair em outro dia por causa da
+  implantação. Na etapa Emissão de boletos o 1º vencimento já vem do formulário e a assistente altera se ficou definida
+  outra data (a tela mostra "alterado · no formulário …"); o prazo do onboarding, a pós-implantação e a ficha de
+  transição seguem a data da etapa. Sem o vencimento padrão, vale o dia do 1º vencimento.
+- **Convite do onboarding no Outlook:** ao salvar o onboarding como **marcado**, o portal cria uma reunião de **1h com
+  link do Teams** no calendário da caixa que envia os avisos (`EMAIL_REMETENTE`), para quem conduz (e quem faz, se for
+  outra pessoa), as **pessoas do setor CS** (sem a liderança) e o **síndico** (e-mail do formulário). Mudar a data ou a
+  hora atualiza o convite; voltar para "a marcar" ou "síndico MyBlue" cancela. Pede o Microsoft 365 configurado e a
+  permissão **Calendars.ReadWrite** (aplicativo) no app do Entra ID, restrita à caixa remetente; sem ela, o onboarding
+  salva e a tela mostra por que o convite não saiu.
 - **Quem edita:** a equipe toda vê todas as implantações; só **quem foi designada** edita (as de outra pessoa aparecem
   com 🔒). Outra pessoa da equipe edita com **autorização da coordenação**: pedida pela própria pessoa (com o motivo) ou
   dada direto, com escopo (**tudo**, **só as etapas** ou **só documentos e ficha**) e prazo opcional. A coordenação
@@ -67,25 +80,32 @@ Análise de Crédito.
   resolvido; o prazo continua de onde parou. Impedimento aberto há 3 dias úteis: lembrete "ainda está impedida?".
   Lembrete 1 dia útil antes e no dia; atrasada, um alerta por dia útil a quem conduz e à coordenação (com **Cobrar**).
   Concluir com impedimento aberto encerra a pausa.
-- **Documento recebido sem arquivo** (em papel, já no CPD): **Marcar recebido**, com observação obrigatória; conta como
-  recebido na data da marcação (pendências e meta de documentação). Dá para desfazer; o arquivo, se chegar depois, é
-  anexado normalmente.
+- **Documento recebido direto pela Implantação** (do síndico, da administradora ou de outra pessoa, sem passar pelo
+  executivo): **Anexar** guarda o arquivo; **Marcar recebido** registra de quem veio (`recebido_de`) com observação
+  obrigatória. Conta como recebido na data (pendências e meta de documentação) e a cobrança do executivo para. Dá
+  para desfazer a marcação; o arquivo, se chegar depois, é anexado normalmente.
+- **Documentos do comercial:** antes do primeiro envio, o comercial anexa, troca e tira. Depois do envio, anexa só o que
+  falta: o que já anexou fica com cadeado e não é trocado nem tirado (409). Se estiver errado, quem conduz devolve com
+  pendência marcando o documento (`documentos` na pendência): ele volta a faltar e o comercial anexa o certo.
 - **Conferências do portal:** diferenças com a análise, CPF do síndico, CNPJ e o cadastro de moradores (Excel/CSV): nº
   de unidades contra o formulário e linhas com CPF/CNPJ inválido.
-- **Pendência:** quem conduz devolve ao comercial com a lista do que falta (sino e e-mail); o reenvio volta para a
-  mesma pessoa.
+- **Pendência:** quem conduz devolve ao comercial com a lista do que falta (sino e e-mail), e pode marcar documentos
+  anexados errados, que voltam a faltar; o reenvio volta para a mesma pessoa.
+- **Cobrar (coordenação):** a conclusão, a ficha de transição, o **onboarding** e cada etapa da pós-implantação vão para
+  quem conduz (e quem tem autorização), no sino e por e-mail (`POST /api/implantacoes/:id/cobrar` com `qual`).
 - **Onboarding depois de concluir:** dá para concluir com o onboarding pendente; o alerta fica na implantação até
   registrar. Vencido o prazo do onboarding sem ele, quem conduz escreve a **justificativa** (a coordenação é avisada
   por dia útil até justificar); a meta fica como não batida mesmo justificada.
-- **Conclusão:** avisa a coordenação ("Pronta para a Carteira") e abre a **ficha de repasse**. Com parceria, o condomínio entra na Prestação de
+- **Conclusão:** avisa a coordenação ("Pronta para a Carteira") e abre a **ficha de transição**. Com parceria, o condomínio entra na Prestação de
   Contas (coleção `condos`) ligado ao parceiro com comissão 0% (`vinculosJSON`), e o setor Parceiros é avisado para
   cadastrar a condição; se o condomínio já existir lá, ou o parceiro não estiver na base, o aviso diz o que conferir.
-- **Carteira:** a coordenação confere os dados sugeridos (ID Vouch, nome sugerido, UF, vencimento, vigência,
-  administradora, forma de envio, executivo, razão social, CNPJ) e confirma; o portal recusa ID ou CNPJ que já estão na
+- **Carteira:** a coordenação confere os dados sugeridos (ID Vouch, nome sugerido, UF, vencimento padrão, vigência,
+  administradora, forma de envio, executivo, razão social, CNPJ e o **nome, telefone e e-mail do síndico**, do
+  formulário e obrigatórios) e confirma; o portal recusa ID ou CNPJ que já estão na
   Carteira. Os responsáveis (cobrança, extrajudicial, crédito) são escolhidos depois, na ficha do condomínio. O Controle
   de Emissão de Boletos acompanha, como em qualquer condomínio novo da Carteira.
 
-## Ficha de repasse
+## Ficha de transição
 
 Abre na conclusão, já preenchida (`server/implantacoes/ficha.js`) com o formulário, a análise, o contrato, as etapas e os
 documentos, em 8 partes: informações gerais, financeiras (2.1 consumo, 2.2 taxa extra, 2.3 fundo de reserva, 2.4
@@ -95,7 +115,9 @@ O que só a Implantação sabe vai nos **campos em azul**; o resto não se edita
 etapa, e a ficha acompanha).
 
 - **Envio:** à assistente de crédito do condomínio na Carteira (`assistente_credito`, pelo nome, no setor Crédito);
-  sem ela, à **supervisão de Crédito**, que escolhe (e o portal grava na Carteira quando o condomínio entrar). Aviso no
+  sem ela, à **supervisão de Crédito**, que escolhe (e o portal grava na Carteira quando o condomínio entrar). Antes
+  do envio, a tela diz para quem vai (`ficha.para`); o botão é "Enviar para <assistente>" ou "Enviar à supervisão de
+  Crédito". Aviso no
   sino e por e-mail; ela confirma o recebimento ou **devolve com uma pergunta**. Quem conduz responde sem mudar a ficha
   ou envia uma nova versão.
 - **Versões:** cada envio guarda a ficha como foi (`implantacao_ficha_versoes`); a partir da 2ª, com o motivo. Até
@@ -105,33 +127,72 @@ etapa, e a ficha acompanha).
   Lembrete 1 dia útil antes e no dia; atrasada, alerta por dia útil a quem conduz e à coordenação (Cobrar).
 - Tela: `#/implantacao/:id/ficha` (a assistente de crédito entra pelo link do aviso).
 
+## Pós-implantação
+
+Depois de assumir e de emitir os boletos, a Assistente de Implantação (quem conduz) faz três etapas, com prazo em dias
+úteis (`server/implantacoes/pos.js`). Os arquivos não passam pelo portal: ficam no CPD, na pasta do condomínio.
+
+| Etapa | Começa | Prazo | Termina |
+|---|---|---|---|
+| Espólios | ao assumir | `espolio_dias` (**2**) | ao abrir a solicitação na ferramenta **Análise de Espólio** (verificação no Assertiva + documento) |
+| Levantamento de pendências | na emissão dos boletos (etapa marcada) | `pendencias_dias` (**1**) | ao marcar *Enviado no WhatsApp e salvo no CPD* ou *Cadastro completo, nada a enviar* (o PDF sai da Central de Ferramentas, Planilha de moradores) |
+| 1ª prestação de contas | no repasse: 1º dia útil depois do 1º vencimento | `prestacao_dias` (**5**) | ao marcar *Enviada ao condomínio* (feita no Montador, Central de Ferramentas). A implantação faz só a 1ª |
+
+- **Espólios:** o portal acha a solicitação sozinho na coleção `solicitacoes` da Análise de Espólio (mesmo CNPJ, ou
+  mesmo nome sem CNPJ, aberta a partir do envio ao setor); o prazo conta até a primeira. A devolutiva da coordenação de
+  cobrança aparece ao lado (com a coordenação, concluída com o resultado, ou **devolvida**: reabrir a solicitação na
+  ferramenta). Sem solicitação achada, a assistente informa o protocolo à mão.
+- **Avisos:** lembrete 1 dia útil antes e no dia; atrasada, alerta por dia útil a ela e à coordenação, por etapa
+  (`implantacoes.pos.avisos`). A coordenação cobra pela implantação ou pelo Painel de atividades → Pós-implantação.
+- **Quem marca:** quem conduz, quem tem autorização (tudo ou só as etapas) e a coordenação; dá para desfazer.
+- **Vale para** as implantações do portal assumidas a partir de `pos_marco` (Parâmetros); o histórico importado fica de fora.
+- API: `POST /api/implantacoes/:id/pos/:etapa` (`espolio` com `{ protocolo }`, `pendencias` com `{ situacao }`,
+  `prestacao`; `{ acao: 'desfazer' }` desfaz) e `POST /api/implantacoes/:id/cobrar` com `qual` = `espolio`,
+  `pendencias` ou `prestacao`. O detalhe traz `setor.pos`; o Painel de implantação, `pos`.
+
 ## Antecipação → Controle de Repasses
 
-Na aba Antecipações do Acompanhamento, a equipe marca e envia a antecipação negociada no formulário (valor, data, dia,
+Em Depois da conclusão → Antecipações, a equipe marca e envia a antecipação negociada no formulário (valor, data, dia,
 prazo e o mês final). No Controle de Repasses (ferramenta `repasses`), quem tem o papel **Gestor** cadastra a regra (com
 ajuste ou não) ou devolve com o motivo; a situação volta para a implantação. Se o formulário mudar depois do cadastro,
 a aba mostra e reenvia como **atualização**, com o antes e o depois. Dá para desfazer o envio antes da decisão. API:
 `GET /api/repasses/antecipacoes`, `POST /api/repasses/antecipacoes/:id/cadastrar` `{ regra_id, valor, dia, modo, fim, obs }`
 e `.../devolver` `{ motivo }` (liberadas para a ferramenta isolada em `server/seguranca.js`).
 
-## Acompanhamento
+## Painel de implantação
 
-Menu **Implantação → Acompanhamento** (setor Implantação, coordenação, diretoria e administração). Substitui as telas
-calculadas da planilha de controle (Dashboard, Mês Vigente, Onboarding, Documentação, Devolutiva e Antecipações).
-Entram as implantações enviadas ao setor (fora rascunho, diretoria e canceladas); ano e mês pela data de início do contrato.
+Menu **Painel de implantação**: uma tela só (a antiga lista da Implantação e o antigo Acompanhamento), aberta por função.
+Os endereços antigos (`#/acompanhamento/...`, `#/implantacao/fila`, `todas`, `carteira`) levam ao lugar novo.
+
+| Função | Abre em | Vê |
+|---|---|---|
+| Gestão (coordenação e administração) | Dashboard | tudo, com Designar, Cobrar, Carteira e o botão **Parâmetros** |
+| Diretoria | Dashboard | as mesmas telas, **só consulta** (o servidor não deixa agir) |
+| Assistente de implantação (setor) | Painel de atividades → Fila, filtrado para ela ("ver o setor todo" limpa o filtro) | Dashboard com a carteira dela e o percentual das metas |
+| Comercial (executivo) | Minhas solicitações | situação de cada pedido, "Falta de você" e Responder / Enviar documentos / Abrir |
+
+- **Dashboard** (só indicadores): contratos, % médio, concluídos, em andamento e não iniciados; progresso por etapa;
+  contratos e concluídos por mês; **Prazo para concluir** (concluídas no prazo, tempo médio e uma tabela por
+  assistente com contratos, % médio, concluídas, tempo e no prazo — `linhas[].concluir`); metas de onboarding e de
+  documentação em %; por UF e por executivo; **Pendências para acompanhar** (onboarding, do limite mais curto, com
+  Cobrar; documentação, com Cobrar o executivo e marcar à mão) e o desempenho do mês na pós-implantação (gestão).
+- **Painel de atividades:** **Fila** (em aberto, do que pede ação primeiro: selos das 5 etapas, prazo para concluir e
+  pendências), **Mês vigente**, **Controle** e **Pós-implantação**.
+- **Depois da conclusão:** **Aguardando Carteira** (gestão), **Fichas de transição** e **Antecipações**.
+- **Sem informação repetida:** cada número aparece num lugar só; o Dashboard aponta para a lista no Painel de atividades.
 
 - **% concluído:** etapas feitas ÷ 5 (concluída ou na Carteira = 100%). Faixas: concluída, só falta o onboarding, 60–99%,
   40–59% e abaixo de 40%.
-- **Visual:** cabeçalho com **Dados do portal** e **Excel** (baixa a aba aberta, com os filtros, em .xlsx); aviso de
-  cada aba; ano em pílulas, mês, analista, executivo e busca, **lembrados por pessoa** (com *Limpar filtros*); abas com
-  ícones e contadores do que pede atenção; cartões clicáveis que filtram a lista.
-- **Painel:** contratos, % médio, concluídos, em andamento, não iniciados; progresso por etapa e o gargalo; contratos e
-  concluídos por mês (o filtro de mês não muda o gráfico); por UF, executivo e analista; a lista dos contratos.
+- **Visual:** cabeçalho com **Dados do portal** e **Excel** (baixa a tela aberta, com os filtros, em .xlsx); ano em
+  pílulas, mês, assistente, executivo e busca, **lembrados por pessoa** (com *Limpar filtros*); abas e visões com
+  contadores do que pede atenção.
 - **Controle:** as colunas da planilha *Controle Implantações*, com o **protocolo do portal** no lugar do Nº, cabeçalho e
   duas colunas fixas, ordenação por coluna; a **Obs.** quem conduz (e a coordenação) escreve na célula e ela vai para a
-  ficha de repasse.
-- **Fichas de repasse:** situação (a enviar, enviada, devolvida, recebida), versão, assistente de crédito e o prazo de 5
+  ficha de transição.
+- **Fichas de transição:** situação (a enviar, enviada, devolvida, recebida), versão, assistente de crédito e o prazo de 5
   dias úteis, com Cobrar para a coordenação.
+- **Pós-implantação:** uma linha por implantação com as três etapas (espólios, pendências, 1ª prestação de contas),
+  pílulas em aberto, atrasadas, vencem hoje ou amanhã e concluídas; Cobrar por etapa (coordenação). Veja a seção acima.
 - **Mês vigente:** contratos que começam no mês, na ordem do 1º vencimento (previsto — o primeiro dia de vencimento a
   partir do início do contrato — até o setor informar). Do dia da virada (25) em diante, mostra o mês seguinte.
 - **Meta de onboarding:** em até **30 dias depois do 1º vencimento**. "Síndico MyBlue" conta como batida; "A marcar"
@@ -144,13 +205,14 @@ Entram as implantações enviadas ao setor (fora rascunho, diretoria e cancelada
   Cobrar (setor) e sozinha, uma vez, quando faltam 3 dias para o limite. Fica no histórico da implantação.
 - **Antecipações:** as negociadas no formulário, por mês de início do contrato; marcar e enviar ao Controle de
   Repasses, com a situação de lá.
-- **Parâmetros:** prazos (30 e 60 dias; concluir em 3 e ficha em 5 dias úteis), meta (90%), virada (25), data-marco (01/07/2026, envios anteriores ficam fora das
+- **Parâmetros:** prazos (30 e 60 dias; concluir em 3 e ficha em 5 dias úteis; pós-implantação: espólios 2, pendências
+  1 e prestação de contas 5 dias úteis, para as assumidas a partir de 27/10/2026), meta (90%), virada (25), data-marco (01/07/2026, envios anteriores ficam fora das
   metas) e os documentos da meta. Só a coordenação e a administração alteram; cada mudança vale a partir de uma data e
   fica no histórico (`implantacao_parametros`): cada implantação usa a regra que valia no dia do envio.
 
 ## Histórico das planilhas (importação)
 
-Em **Acompanhamento → Parâmetros → Importar o histórico das planilhas** (coordenação e administração), o portal recebe o
+Em **Painel de implantação → Parâmetros → Importar o histórico das planilhas** (coordenação e administração), o portal recebe o
 *Formulário de implantação* (todas as respostas do Forms) e o *Controle Implantações* (.csv ou .xlsx, como o Excel salva),
 confere e mostra a prévia antes de gravar. Regras (`server/implantacoes/importacao.js`), as mesmas das fórmulas da planilha:
 
@@ -166,7 +228,7 @@ confere e mostra a prévia antes de gravar. Regras (`server/implantacoes/importa
 
 As importadas ficam com `origem = 'planilha'`, o **Nº** do formulário e a etiqueta *planilha*. São histórico: contam no
 Painel e nas metas da época (onboarding "REALIZADO" sem data conta como batido), mas não geram avisos, prazos, cobranças,
-ficha de repasse nem envio ao Controle de Repasses, e não entram na fila nem em "minhas". A que ficou em andamento dá para
+ficha de transição nem envio ao Controle de Repasses, e não entram na fila nem em "minhas". A que ficou em andamento dá para
 atualizar e concluir (sem avisos), também pelo **Editar** da aba Controle (quem conduz e a coordenação); a data do
 onboarding não é exigida. Ao concluir, o portal procura o condomínio na Carteira (ligado na importação, ID Vouch, CNPJ
 ou nome): achou, a implantação só é ligada ao cadastro (nada é criado, não duplica); não achou (ex.: contratos que
@@ -230,7 +292,7 @@ Botão **PDF** na implantação (quem a vê pode exportar): `GET /api/implantaco
 montado em `server/implantacoes/formulario-pdf.js` e desenhado por `server/implantacoes/formulario_pdf.py` (ReportLab,
 no visual do Retorno de Análise de Crédito): cabeçalho com o protocolo, faixa do condomínio, diferenças em relação à
 análise, os 7 blocos, documentos (entregues e pendentes) e o andamento no setor. Sai no **papel timbrado** da MyBlue
-(`server/implantacoes/timbrado.png`, a página A4 inteira; o mesmo da ficha de repasse).
+(`server/implantacoes/timbrado.png`, a página A4 inteira; o mesmo da ficha de transição).
 
 ## Tutoriais
 

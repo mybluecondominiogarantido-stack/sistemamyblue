@@ -16,7 +16,7 @@
  *   credito_analise  analistas (setor da política) e diretoria da Análise de Crédito
  *   implantacao      quem usa a Implantação (executivos cadastrados, setor Implantação e diretoria)
  *   implantacao_setor  o setor Implantação
- *   implantacao_acompanhar  quem vê o Acompanhamento (setor Implantação e diretoria)
+ *   implantacao_acompanhar  quem vê o Dashboard do Painel de implantação (setor Implantação e diretoria)
  *   contrato    quem usa a Solicitação de Contrato (executivos cadastrados, quem elabora e diretoria)
  *   contrato_juridico  quem elabora os contratos (Solicitação de Contrato → Quem elabora)
  *   jornada_executivo  executivos de negócios cadastrados (o caminho inteiro, pelo executivo)
@@ -86,13 +86,13 @@ const TUTORIAIS = [
   { slug: 'credito-analisar', grupo: 'Ferramentas', publico: 'credito_analise', titulo: 'Análise de Crédito — analisar e liberar',
     descricao: 'Assumir da fila, lançar o relatório, conferir a convenção, calcular, ver a prévia, levar à diretoria e liberar o retorno.' },
   { slug: 'implantacao-solicitar', grupo: 'Ferramentas', publico: 'implantacao', titulo: 'Implantação — pedir e acompanhar',
-    descricao: 'Abrir a implantação a partir do contrato assinado (no portal, ou fora dele com o retorno da análise), preencher o formulário, anexar os documentos, enviar e acompanhar.' },
+    descricao: 'No Painel de implantação, Minhas solicitações: abrir a implantação a partir do contrato assinado (no portal, ou fora dele com o retorno da análise), preencher o formulário (vencimento padrão e 1º vencimento), anexar os documentos, enviar e acompanhar pela linha do tempo.' },
   { slug: 'implantacao-conduzir', grupo: 'Ferramentas', publico: 'implantacao_setor', titulo: 'Implantação — designar, conduzir e levar à Carteira',
-    descricao: 'Designar quem conduz, quem edita, as 5 etapas e o prazo de 3 dias úteis (com impedimento), as conferências, devolver com pendência, concluir e confirmar a entrada na Carteira.' },
-  { slug: 'implantacao-ficha-repasse', grupo: 'Ferramentas', publico: 'implantacao_setor', titulo: 'Implantação — ficha de repasse',
+    descricao: 'A Fila do Painel de atividades, designar quem conduz, quem edita, as 5 etapas (onboarding com data, hora e convite do Outlook; 1º vencimento vindo do formulário) e o prazo de 3 dias úteis (com impedimento), documentos recebidos direto, devolver com pendência, concluir e confirmar a entrada na Carteira com o síndico, e o pós-implantação.' },
+  { slug: 'implantacao-ficha-repasse', grupo: 'Ferramentas', publico: 'implantacao_setor', titulo: 'Implantação — ficha de transição',
     descricao: 'A ficha que abre na conclusão já preenchida: completar os campos em azul, enviar ao Crédito em 5 dias úteis, responder a devolução, novas versões e o PDF no papel timbrado.' },
-  { slug: 'implantacao-acompanhar', grupo: 'Ferramentas', publico: 'implantacao_acompanhar', titulo: 'Implantação — acompanhamento e metas',
-    descricao: 'Painel, mês vigente, Controle (filtro por mês, editar as etapas e concluir, visão resumida e a planilha completa, com Excel), metas de onboarding e de documentação, antecipações para o Controle de Repasses, fichas de repasse e os parâmetros.' },
+  { slug: 'implantacao-acompanhar', grupo: 'Ferramentas', publico: 'implantacao_acompanhar', titulo: 'Implantação — Painel de implantação e metas',
+    descricao: 'Dashboard (indicadores, prazo para concluir, metas e pendências de onboarding e documentação), Painel de atividades (Fila, Mês vigente, Controle com Excel e Pós-implantação), Depois da conclusão (Carteira, fichas de transição e antecipações) e os parâmetros.' },
   { slug: 'contrato-solicitar', grupo: 'Ferramentas', publico: 'contrato', titulo: 'Solicitação de Contrato — pedir e acompanhar',
     descricao: 'Pedir o contrato a partir da análise, preencher as condições e os pedidos do síndico, enviar ao Jurídico, pedir ajuste na minuta ou a assinatura, acompanhar os contratos e, assinado, solicitar a implantação.' },
   { slug: 'contrato-elaborar', grupo: 'Ferramentas', publico: 'contrato_juridico', titulo: 'Solicitação de Contrato — elaborar e registrar as condições fechadas',

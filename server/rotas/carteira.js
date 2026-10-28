@@ -12,7 +12,7 @@ const { interpretarImplantacao, compararComCarteira } = require('../implantacao'
 
 const COLUNAS = CAMPOS.map((c) => c.campo);
 const ROTULOS = { codigo: 'ID Vouch', situacao: 'situação', comarca: 'UF', nome: 'nome', vencimento: 'vencimento', administradora: 'administradora', forma_envio: 'forma de envio',
-  executivo: 'executivo', inicio_contrato: 'vigência', razao_social: 'razão social', cnpj: 'CNPJ', observacoes: 'observações',
+  executivo: 'executivo', sindico_nome: 'síndico', sindico_telefone: 'telefone do síndico', sindico_email: 'e-mail do síndico', inicio_contrato: 'vigência', razao_social: 'razão social', cnpj: 'CNPJ', observacoes: 'observações',
   ...Object.fromEntries(FUNCOES.map((f) => [f.campo, f.rotulo])) };
 // DATE volta como texto (evita deslocar o dia pelo fuso)
 const SELECT = `SELECT c.id, ${COLUNAS.filter((x) => x !== 'inicio_contrato').map((x) => 'c.' + x).join(', ')},

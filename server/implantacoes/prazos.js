@@ -2,7 +2,7 @@
 /*
  * Prazos da Implantação em dias úteis (o calendário é o do expediente: fins de semana e feriados não contam).
  *  - concluir: N dias úteis (parâmetro, padrão 3) depois de assumir; pausa com pendência ou impedimento e continua de onde parou;
- *  - ficha de repasse: N dias úteis (padrão 5) da conclusão até o primeiro envio ao Crédito.
+ *  - ficha de transição: N dias úteis (padrão 5) da conclusão até o primeiro envio ao Crédito.
  * Um dia útil conta quando o prazo não estava pausado no começo dele: pausar no meio do dia ainda conta o dia; o dia em que
  * a pausa termina não conta. Os dias são AAAA-MM-DD no horário de Brasília.
  */

@@ -6,7 +6,7 @@ logo, canto azul, rodapé com os contatos e o número da página.
   python3 formulario_pdf.py <dados.json> <saida.pdf> <logo.png> [timbrado.png]
 
 Com o papel timbrado (4º argumento: a página A4 inteira em imagem), o logo e os contatos vêm dele e o título fica à direita.
-Também gera a Ficha de repasse (server/implantacoes/ficha.js): valor {"v": texto} sai em azul (preenchido pela Implantação),
+Também gera a Ficha de transição (server/implantacoes/ficha.js): valor {"v": texto} sai em azul (preenchido pela Implantação),
 linha {"grupo": título} separa grupos numa tabela e "legenda" explica as cores.
 
 O conteúdo vem pronto do portal (server/implantacoes/formulario-pdf.js e server/contratos/formulario.js): cabeçalho

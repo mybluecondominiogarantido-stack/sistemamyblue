@@ -110,7 +110,9 @@ function criarNotificador(db, cfg) {
     });
   }
 
-  return { notificar, triagemDoSetor, emailTeste, emailAtivo: !!enviar, emailTipo: correio ? correio.tipo : null, emailRemetente: correio ? correio.remetente : null };
+  // agenda do Microsoft 365 (convite do onboarding da Implantação); sem Graph, null
+  const agenda = cfg.agenda || (correio && correio.agenda) || null;
+  return { notificar, triagemDoSetor, emailTeste, agenda, emailAtivo: !!enviar, emailTipo: correio ? correio.tipo : null, emailRemetente: correio ? correio.remetente : null };
 }
 
 module.exports = { criarNotificador };

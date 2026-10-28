@@ -7,6 +7,13 @@ const http = require('http');
 const { criarApp, lerConfig } = require('../server/index');
 
 let servidor, base, ctx;
+/* agenda do Microsoft 365 simulada: guarda o que o portal pediu (convite do onboarding) */
+const agenda = {
+  chamadas: [], falhar: false,
+  async criar(x) { if (this.falhar) throw new Error('sem permissão de calendário'); this.chamadas.push(['criar', x]); return { id: 'ev-' + this.chamadas.length }; },
+  async atualizar(id, x) { this.chamadas.push(['atualizar', x, id]); return { id }; },
+  async cancelar(id) { this.chamadas.push(['cancelar', null, id]); },
+};
 
 function cliente() {
   let cookie = '';
@@ -51,6 +58,8 @@ const ultimo = async (email) => (await avisosDe(email)).pop() || {};
 const PDF = Buffer.from('%PDF-1.4\n% documento fictício\n');
 const anexar = (c, id, tipo) => c('POST', `/api/implantacoes/${id}/documentos`, PDF, { headers: { 'x-tipo': tipo, 'x-nome-arquivo': `${tipo}.pdf` } });
 const detalhe = async (c, id) => (await c('GET', `/api/implantacoes/${id}`)).json;
+// os lembretes do pós-implantação (test/implantacoes-pos.test.js) não entram nestes testes
+const SEM_AVISOS_POS = `UPDATE implantacoes SET pos = pos || '{"avisos":{"espolio":"2099-01-01","pendencias":"2099-01-01","prestacao":"2099-01-01"}}'::jsonb`;
 
 const FORM = {
   nome: 'Condomínio Fictício', cnpj: '11.222.333/0001-81', uf: 'CE', cidade: 'Fortaleza', uh_total: 24, dia_vencimento: 10,
@@ -91,7 +100,7 @@ const sp = (dia, hora = 14) => new Date(`${dia}T${String(hora + 3).padStart(2, '
 
 before(async () => {
   const cfg = lerConfig({ dataDir: ':memoria:', databaseUrl: '', adminEmail: 'admin@teste.com', adminSenha: 'Admin1234', silencioso: true, porta: 0,
-    portalUrl: 'https://portal.teste', enviarEmail: async () => {} });
+    portalUrl: 'https://portal.teste', enviarEmail: async () => {}, agenda });
   const r = await criarApp(cfg);
   ctx = r.ctx;
   await ctx.db.q('UPDATE usuarios SET trocar_senha = FALSE');
@@ -213,17 +222,19 @@ test('documento recebido sem arquivo: com observação, conta como recebido e d�
   assert.equal((await ana('POST', `/api/implantacoes/${idA}/documentos/marcar`, { tipo: 'modelo_boleto', observacao: '' })).status, 400);
   assert.equal((await ana('POST', `/api/implantacoes/${idA}/documentos/marcar`, { tipo: 'analise_credito', observacao: 'Em papel' })).status, 400);
   assert.equal((await bia('POST', `/api/implantacoes/${idA}/documentos/marcar`, { tipo: 'modelo_boleto', observacao: 'Em papel' })).status, 403);
-  assert.equal((await ana('POST', `/api/implantacoes/${idA}/documentos/marcar`, { tipo: 'conta_bancaria', observacao: 'Em papel' })).status, 409); // já anexado
-  assert.equal((await ana('POST', `/api/implantacoes/${idA}/documentos/marcar`, { tipo: 'modelo_boleto', observacao: 'Original em papel, arquivado no CPD' })).status, 201);
+  assert.equal((await ana('POST', `/api/implantacoes/${idA}/documentos/marcar`, { tipo: 'conta_bancaria', de: 'sindico', observacao: 'Em papel' })).status, 409); // já anexado
+  // de quem veio é obrigatório (síndico, administradora ou outro)
+  assert.equal((await ana('POST', `/api/implantacoes/${idA}/documentos/marcar`, { tipo: 'modelo_boleto', observacao: 'Original em papel, arquivado no CPD' })).status, 400);
+  assert.equal((await ana('POST', `/api/implantacoes/${idA}/documentos/marcar`, { tipo: 'modelo_boleto', de: 'administradora', observacao: 'Original em papel, arquivado no CPD' })).status, 201);
   d = await detalhe(ana, idA);
   assert.ok(!d.pendencias.includes('Modelo do boleto anterior'));
   const doc = d.documentos.find((x) => x.tipo === 'modelo_boleto' && !x.substituido_em);
-  assert.deepEqual([doc.sem_arquivo, doc.observacao, doc.enviado_por_nome], [true, 'Original em papel, arquivado no CPD', 'Ana Fictícia']);
+  assert.deepEqual([doc.sem_arquivo, doc.observacao, doc.recebido_de, doc.enviado_por_nome], [true, 'Original em papel, arquivado no CPD', 'administradora', 'Ana Fictícia']);
   assert.equal((await ana('GET', `/api/implantacoes/${idA}/documentos/${doc.id}`)).status, 404); // não há arquivo para baixar
   // na meta de documentação, a data da marcação conta como a do recebimento (a procuração é da equipe)
   const meta = async () => (await coord('GET', '/api/implantacoes/acompanhamento')).json.linhas.find((l) => l.id === idA).documentacao.docs.find((x) => x.tipo === 'procuracao');
   assert.equal((await meta()).em, null);
-  assert.equal((await ana('POST', `/api/implantacoes/${idA}/documentos/marcar`, { tipo: 'procuracao', observacao: 'Procuração assinada em papel' })).status, 201);
+  assert.equal((await ana('POST', `/api/implantacoes/${idA}/documentos/marcar`, { tipo: 'procuracao', de: 'sindico', observacao: 'Procuração assinada em papel' })).status, 201);
   assert.match((await meta()).em, /^\d{4}-\d{2}-\d{2}/);
   const proc = (await detalhe(ana, idA)).documentos.find((x) => x.tipo === 'procuracao' && !x.substituido_em);
   assert.equal((await coord('POST', `/api/implantacoes/${idA}/documentos/${proc.id}/desfazer`, {})).status, 200);
@@ -296,6 +307,7 @@ test('rotina dos prazos: lembrete na véspera e no dia, atraso uma vez por dia �
   // as outras implantações deste arquivo não entram na conta
   await ctx.db.q("UPDATE implantacoes SET aviso_concluir_em = '2099-01-01' WHERE id <> $1", [id]);
   await ctx.db.q("UPDATE implantacao_fichas SET aviso_prazo_em = '2099-01-01'");
+  await ctx.db.q(SEM_AVISOS_POS);
   const titulos = async (email) => (await avisosDe(email)).map((x) => x.titulo);
   const ex = (dia) => ctx.rotinasImplantacao.executar(sp(dia));
   assert.equal((await ex('2026-10-27')).prazos_dias_uteis.concluir, 0);
@@ -324,7 +336,7 @@ test('rotina dos prazos: lembrete na véspera e no dia, atraso uma vez por dia �
   assert.equal((await ex('2026-11-05')).prazos_dias_uteis.impedimento, 0);
 });
 
-/* ===================== ficha de repasse ===================== */
+/* ===================== ficha de transição ===================== */
 const temReportlab = (() => { try { require('child_process').execFileSync('python3', ['-c', 'import reportlab']); return true; } catch { return false; } })();
 let sup, rita;
 const DADOS_FICHA = { taxa_condominial: 'Fixa', balancete: 'Não', subsindico: 'Subsíndica Fictícia',
@@ -333,7 +345,7 @@ const DADOS_FICHA = { taxa_condominial: 'Fixa', balancete: 'Não', subsindico: '
   nao_garantidas: [{ unidade: 'Apto 101', o_que: 'Todas as taxas', por_que: 'Espólio', obs: 'Inventário' }],
   conferidos: { ata_taxa_extra: 'Não se aplica', ata_receita: 'Conferida' }, particularidades: '1º boleto com prazo curto.' };
 
-test('ficha de repasse: abre na conclusão já preenchida (Obs. do Controle na seção 8) e só quem conduz edita', async () => {
+test('ficha de transição: abre na conclusão já preenchida (Obs. do Controle na seção 8) e só quem conduz edita', async () => {
   sup = await pessoa('Supervisora de Crédito Fictícia', 'sup@teste.com');
   rita = await pessoa('Rita Fictícia', 'rita@teste.com');
   await noSetor('Crédito', 'sup@teste.com', true);
@@ -360,11 +372,11 @@ test('ficha de repasse: abre na conclusão já preenchida (Obs. do Controle na s
   assert.deepEqual(k.secoes.find((x) => x.numero === '2.4').tabela.linhas[0].map((c) => c.v), ['Outra receita', 'Aluguel de antena', 'R$ 900,00', '']);
 });
 
-test('ficha de repasse: sem assistente na Carteira vai à supervisão, que escolhe; devolução com pergunta, resposta e versões (até 3)', async () => {
+test('ficha de transição: sem assistente na Carteira vai à supervisão, que escolhe; devolução com pergunta, resposta e versões (até 3)', async () => {
   const r1 = await ana('POST', `/api/implantacoes/${idA}/ficha/enviar`, {});
   assert.equal(r1.status, 200, r1.texto);
   assert.deepEqual([r1.json.versao, r1.json.para], [1, null]);
-  assert.match((await ultimo('sup@teste.com')).titulo, /^Ficha de repasse para distribuir · /);
+  assert.match((await ultimo('sup@teste.com')).titulo, /^Ficha de transição para distribuir · /);
   let j = (await sup('GET', `/api/implantacoes/${idA}/ficha`)).json;
   assert.ok(j.pode.escolher);
   assert.ok(j.credito.some((x) => x.nome === 'Rita Fictícia'));
@@ -379,7 +391,7 @@ test('ficha de repasse: sem assistente na Carteira vai à supervisão, que escol
   assert.equal((await rita('POST', `/api/implantacoes/${idA}/ficha/devolver`, { pergunta: '' })).status, 400);
   assert.equal((await rita('POST', `/api/implantacoes/${idA}/ficha/devolver`, { pergunta: 'O 1º repasse vai para qual conta?' })).status, 200);
   const dv = await ultimo('ana@teste.com');
-  assert.match(dv.titulo, /^Ficha de repasse devolvida com pergunta/);
+  assert.match(dv.titulo, /^Ficha de transição devolvida com pergunta/);
   assert.match(dv.texto, /qual conta/);
   j = (await ana('GET', `/api/implantacoes/${idA}/ficha`)).json;
   assert.deepEqual([j.ficha.situacao, j.ficha.devolucao.detalhe.pergunta, j.pode.responder], ['devolvida', 'O 1º repasse vai para qual conta?', true]);
@@ -389,10 +401,10 @@ test('ficha de repasse: sem assistente na Carteira vai à supervisão, que escol
   assert.equal((await ana('POST', `/api/implantacoes/${idA}/ficha/enviar`, { dados: { ...DADOS_FICHA, repasse_obs: 'Conta do contrato até a nova chegar' } })).status, 400);
   const r2 = await ana('POST', `/api/implantacoes/${idA}/ficha/enviar`, { motivo: 'esclarecida a conta do primeiro repasse' });
   assert.deepEqual([r2.status, r2.json.versao, r2.json.para], [200, 2, 'Rita Fictícia']);
-  assert.match((await ultimo('rita@teste.com')).titulo, /^Ficha de repasse \(versão 2\)/);
+  assert.match((await ultimo('rita@teste.com')).titulo, /^Ficha de transição \(versão 2\)/);
   assert.equal((await ana('POST', `/api/implantacoes/${idA}/ficha/confirmar`, {})).status, 403);
   assert.equal((await rita('POST', `/api/implantacoes/${idA}/ficha/confirmar`, {})).status, 200);
-  assert.match((await ultimo('ana@teste.com')).titulo, /^Ficha de repasse recebida/);
+  assert.match((await ultimo('ana@teste.com')).titulo, /^Ficha de transição recebida/);
   j = (await ana('GET', `/api/implantacoes/${idA}/ficha`)).json;
   assert.equal(j.ficha.situacao, 'recebida');
   assert.deepEqual(j.versoes.map((v) => [v.versao, v.para_nome, !!v.confirmada_em]), [[1, 'Rita Fictícia', false], [2, 'Rita Fictícia', true]]);
@@ -410,44 +422,45 @@ test('ficha de repasse: sem assistente na Carteira vai à supervisão, que escol
   assert.equal(v1.conteudo.secoes.find((x) => x.numero === 4).campos.find((c) => c[0] === 'Considerações')[1].v, '');
 });
 
-test('ficha de repasse: PDF de cada versão (-v1, -v2) no papel timbrado', { skip: !temReportlab && 'reportlab não instalado' }, async () => {
+test('ficha de transição: PDF de cada versão (-v1, -v2) no papel timbrado', { skip: !temReportlab && 'reportlab não instalado' }, async () => {
   const r = await rita('GET', `/api/implantacoes/${idA}/ficha.pdf?versao=2`, undefined, { bruto: true });
   assert.equal(r.status, 200);
   assert.equal(r.headers.get('content-type'), 'application/pdf');
-  assert.match(decodeURIComponent(r.headers.get('content-disposition')), /Ficha_de_repasse_.*-v2\.pdf/);
+  assert.match(decodeURIComponent(r.headers.get('content-disposition')), /Ficha_de_transicao_.*-v2\.pdf/);
   assert.equal(r.buffer.subarray(0, 4).toString(), '%PDF');
   assert.equal((await rita('GET', `/api/implantacoes/${idA}/ficha.pdf?versao=9`, undefined, { bruto: true })).status, 404);
 });
 
-test('ficha de repasse: na Carteira, a assistente de crédito que recebeu a ficha fica no condomínio', async () => {
+test('ficha de transição: na Carteira, a assistente de crédito que recebeu a ficha fica no condomínio', async () => {
   const p = (await coord('GET', `/api/implantacoes/${idA}/carteira`)).json;
   const r = await coord('POST', `/api/implantacoes/${idA}/carteira`, { dados: { ...p.dados, codigo: '90101' } });
   assert.equal(r.status, 201, r.texto);
   assert.equal((await ctx.db.um('SELECT assistente_credito FROM condominios WHERE id = $1', [r.json.condominio_id])).assistente_credito, 'Rita Fictícia');
 });
 
-test('ficha de repasse: prazo de 5 dias úteis da conclusão; lembrete na véspera e no dia, atraso à assistente e à coordenação', async () => {
+test('ficha de transição: prazo de 5 dias úteis da conclusão; lembrete na véspera e no dia, atraso à assistente e à coordenação', async () => {
   const id = await assumida('Residencial Fictício Delta');
   const etapas = { documentacao: { feito: true }, vouch: { id: '90404' }, onboarding: { situacao: 'realizado', data: '2026-10-22', hora: '09:00' }, boletos: { feito: true, primeiro_vencimento: '2026-11-10' }, envio: { forma: 'email' } };
   assert.equal((await ana('PATCH', `/api/implantacoes/${id}/etapas`, { etapas })).status, 200);
   assert.equal((await ana('POST', `/api/implantacoes/${id}/concluir`, {})).status, 200);
-  assert.match((await ultimo('ana@teste.com')).titulo, /^Ficha de repasse aberta · /);
+  assert.match((await ultimo('ana@teste.com')).titulo, /^Ficha de transição aberta · /);
   // aberta numa segunda (26/10/2026) → 5 dias úteis: vence 02/11 (sem feriados no teste)
   await ctx.db.q("UPDATE implantacao_fichas SET aberta_em = '2026-10-26T13:00:00Z', aviso_prazo_em = NULL WHERE implantacao_id = $1", [id]);
   await ctx.db.q("UPDATE implantacao_fichas SET aviso_prazo_em = '2099-01-01' WHERE implantacao_id <> $1", [id]);
   await ctx.db.q("UPDATE implantacoes SET aviso_concluir_em = '2099-01-01', aviso_onboarding_em = '2099-01-01'");
+  await ctx.db.q(SEM_AVISOS_POS);
   const ex = async (dia) => (await ctx.rotinasImplantacao.executar(sp(dia))).prazos_dias_uteis.ficha;
   assert.equal(await ex('2026-10-29'), 0);
   assert.equal(await ex('2026-10-30'), 1);
-  assert.match((await ultimo('ana@teste.com')).titulo, /^Ficha de repasse vence amanhã · /);
+  assert.match((await ultimo('ana@teste.com')).titulo, /^Ficha de transição vence amanhã · /);
   assert.equal(await ex('2026-10-30'), 0);
   await ex('2026-11-02');
-  assert.match((await ultimo('ana@teste.com')).titulo, /^Ficha de repasse vence hoje · /);
+  assert.match((await ultimo('ana@teste.com')).titulo, /^Ficha de transição vence hoje · /);
   await ex('2026-11-03');
-  assert.match((await ultimo('ana@teste.com')).titulo, /^Ficha de repasse atrasada · 1 dia útil · /);
-  assert.match((await ultimo('coord@teste.com')).titulo, /^Ficha de repasse atrasada de Ana Fictícia · 1 dia útil/);
+  assert.match((await ultimo('ana@teste.com')).titulo, /^Ficha de transição atrasada · 1 dia útil · /);
+  assert.match((await ultimo('coord@teste.com')).titulo, /^Ficha de transição atrasada de Ana Fictícia · 1 dia útil/);
   assert.equal((await coord('POST', `/api/implantacoes/${id}/cobrar`, { qual: 'ficha' })).status, 200);
-  assert.match((await ultimo('ana@teste.com')).texto, /cobrando a ficha de repasse/);
+  assert.match((await ultimo('ana@teste.com')).texto, /cobrando a ficha de transição/);
   // enviada, a rotina para
   assert.equal((await ana('POST', `/api/implantacoes/${id}/ficha/enviar`, { dados: DADOS_FICHA })).status, 200);
   assert.equal(await ex('2026-11-04'), 0);
@@ -506,7 +519,7 @@ test('antecipação: a Implantação envia; no Controle de Repasses o Gestor cad
   for (const t of ['antecipacao_enviada', 'antecipacao_cadastrada', 'antecipacao_devolvida']) assert.ok(tipos.includes(t), t);
 });
 
-test('Acompanhamento: colunas do Controle (Obs. só de quem conduz), fichas de repasse, Excel e desfazer o envio da antecipação', async () => {
+test('Acompanhamento: colunas do Controle (Obs. só de quem conduz), fichas de transição, Excel e desfazer o envio da antecipação', async () => {
   const j = (await ana('GET', '/api/implantacoes/acompanhamento')).json;
   const l = j.linhas.find((x) => x.id === idA);
   assert.equal(l.controle.obs, 'Síndico pediu boleto separado');
@@ -526,4 +539,55 @@ test('Acompanhamento: colunas do Controle (Obs. só de quem conduz), fichas de r
   assert.equal((await ana('POST', `/api/implantacoes/${id}/antecipacao/desfazer`, {})).status, 200);
   assert.equal((await ana('POST', `/api/implantacoes/${id}/antecipacao/desfazer`, {})).status, 409);
   assert.equal(await ctx.db.um('SELECT 1 FROM implantacao_antecipacoes WHERE implantacao_id = $1', [id]), null);
+});
+
+test('onboarding marcado: convite no Outlook (1h, Teams) para quem conduz, o setor CS sem a liderança e o síndico; mudar atualiza, desmarcar cancela', async () => {
+  await pessoa('Carla Fictícia', 'carla.cs@teste.com');
+  await pessoa('Lider Fictício', 'lider.cs@teste.com');
+  await noSetor('CS', 'carla.cs@teste.com', false);
+  await noSetor('CS', 'lider.cs@teste.com', true);
+  const id = await assumida('Residencial Fictício Convite');
+  agenda.chamadas = [];
+  const salvar = (onboarding) => ana('PATCH', `/api/implantacoes/${id}/etapas`, { etapas: { onboarding } });
+  // data e hora são obrigatórias
+  assert.equal((await salvar({ situacao: 'marcado', data: '2026-11-04' })).status, 400);
+  let r = await salvar({ situacao: 'marcado', data: '2026-11-04', hora: '10:00' });
+  assert.equal(r.status, 200, r.texto);
+  assert.equal(r.json.convite.situacao, 'enviado');
+  const [acao, x] = agenda.chamadas[0];
+  assert.equal(acao, 'criar');
+  assert.deepEqual([x.inicio, x.fim], ['2026-11-04T10:00', '2026-11-04T11:00']);
+  assert.deepEqual(x.participantes.map((p) => p.email).sort(), ['ana@teste.com', 'carla.cs@teste.com', 'sindico@exemplo.com']);
+  // salvar de novo sem mudar não reenvia; mudar a hora atualiza o mesmo convite
+  assert.equal((await salvar({ situacao: 'marcado', data: '2026-11-04', hora: '10:00' })).json.convite.situacao, 'mantido');
+  r = await salvar({ situacao: 'marcado', data: '2026-11-04', hora: '15:30' });
+  assert.equal(r.json.convite.situacao, 'atualizado');
+  assert.deepEqual([agenda.chamadas[1][0], agenda.chamadas[1][2], agenda.chamadas[1][1].fim], ['atualizar', 'ev-1', '2026-11-04T16:30']);
+  // voltar para "a marcar" cancela
+  assert.equal((await salvar({ situacao: 'a_marcar' })).json.convite.situacao, 'cancelado');
+  assert.deepEqual(agenda.chamadas[2].slice(0, 1), ['cancelar']);
+  assert.equal((await ctx.db.um('SELECT onboarding_convite FROM implantacoes WHERE id = $1', [id])).onboarding_convite, null);
+  // o Microsoft 365 recusou: o onboarding salva e a tela recebe o aviso
+  agenda.falhar = true;
+  r = await salvar({ situacao: 'marcado', data: '2026-11-05', hora: '09:00' });
+  agenda.falhar = false;
+  assert.equal(r.status, 200);
+  assert.equal(r.json.convite.situacao, 'erro');
+  assert.match(r.json.convite.mensagem, /sem permissão de calendário/);
+});
+
+test('a coordenação cobra o onboarding; documento errado volta a faltar pela pendência e o comercial anexa o certo', async () => {
+  const id = await assumida('Residencial Fictício Pendência');
+  assert.equal((await ana('POST', `/api/implantacoes/${id}/cobrar`, { qual: 'onboarding' })).status, 403);
+  assert.equal((await coord('POST', `/api/implantacoes/${id}/cobrar`, { qual: 'onboarding' })).status, 200);
+  assert.match((await ultimo('ana@teste.com')).texto, /cobrando o onboarding/);
+  // depois do envio, o comercial não troca nem tira o que já anexou
+  assert.equal((await anexar(exec, id, 'ata_eleicao')).status, 409);
+  // a assistente devolve com pendência dizendo qual documento está errado: ele volta a faltar
+  assert.equal((await ana('POST', `/api/implantacoes/${id}/pendencia`, { itens: ['A ata de eleição está sem assinatura'], documentos: ['ata_eleicao'] })).status, 200);
+  const d = await detalhe(exec, id);
+  assert.ok(!d.documentos.some((x) => x.tipo === 'ata_eleicao' && !x.substituido_em));
+  assert.equal((await anexar(exec, id, 'ata_eleicao')).status, 201);
+  assert.equal((await anexar(exec, id, 'ata_eleicao')).status, 409);
+  assert.equal((await anexar(exec, id, 'cadastro_moradores')).status, 409);
 });

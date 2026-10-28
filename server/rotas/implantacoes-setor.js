@@ -16,7 +16,9 @@ const { criarPrazos } = require('../implantacoes/prazos');
 
 const texto = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
-const ESCOPOS = { tudo: 'tudo nesta implantação', etapas: 'só as etapas', documentos: 'só documentos e ficha de repasse' };
+const ESCOPOS = { tudo: 'tudo nesta implantação', etapas: 'só as etapas', documentos: 'só documentos e ficha de transição' };
+// documento recebido direto pela Implantação, sem passar pelo comercial: de quem veio
+const RECEBIDO_DE = { sindico: 'do síndico', administradora: 'da administradora', outro: 'de outra pessoa' };
 const MOTIVOS_IMPEDIMENTO = { sindico: 'Aguardando o síndico', vouch: 'Aguardando cadastro no Vouch', administradora: 'Aguardando a administradora anterior', outro: 'Outro' };
 const DIAS_LEMBRETE_IMPEDIMENTO = 3;
 
@@ -55,7 +57,7 @@ function prazoOnboarding(linha) {
 }
 
 function rotasSetor(r, deps) {
-  const { db, avisos, erro, evento, json, link, coordenacao, carregar, historicoParametros, expediente } = deps;
+  const { db, avisos, erro, evento, json, link, coordenacao, carregar, historicoParametros, expediente, convite } = deps;
   const P = criarPrazos((d) => expediente.ehDiaUtil(d));
   const hojeSP = () => M.diaSP(Date.now());
 
@@ -196,14 +198,16 @@ function rotasSetor(r, deps) {
     if (!pd.onboarding) return erro(res, 403, 'O onboarding desta implantação não pode ser registrado por você agora.');
     const etapas = F.normalizarEtapas(i.etapas);
     const o = F.normalizarEtapas({ onboarding: req.body && req.body.onboarding }).onboarding;
-    if (['marcado', 'realizado'].includes(o.situacao) && !DATA.test(o.data)) return erro(res, 400, 'Informe a data do onboarding.');
+    const erroOnb = F.validarEtapas({ ...etapas, onboarding: o }, { importada: !!i.importacao_id, so: 'onboarding' });
+    if (erroOnb) return erro(res, 400, erroOnb);
     if (['marcado', 'realizado'].includes(o.situacao) && !o.por) o.por = i.responsavel_id || req.usuario.id;
     etapas.onboarding = o;
     await db.tx(async (t) => {
       await t.q('UPDATE implantacoes SET etapas = $2::jsonb, atualizado_em = now() WHERE id = $1', [i.id, JSON.stringify(etapas)]);
       await evento(t, i.id, req.usuario.id, 'etapas', { mudou: ['onboarding'], etapas });
     });
-    res.json({ ok: true, etapas });
+    const cv = convite && !i.importacao_id ? await convite(i, o) : { situacao: 'nada', mensagem: '' };
+    res.json({ ok: true, etapas, convite: cv });
   });
 
   r.post('/api/implantacoes/:id/onboarding-justificativa', json, async (req, res) => {
@@ -229,15 +233,17 @@ function rotasSetor(r, deps) {
     if (!pd.marcar_documentos) return erro(res, 403, 'Só quem conduz a implantação (ou tem autorização) e a coordenação marcam documento recebido.');
     const tipo = String(req.body && req.body.tipo || '');
     const observacao = texto(req.body && req.body.observacao, 500);
+    const de = String(req.body && req.body.de || '');
     if (!F.DOCUMENTOS[tipo] || ['outro', 'analise_credito'].includes(tipo)) return erro(res, 400, 'Escolha o documento.');
-    if (observacao.length < 3) return erro(res, 400, 'Escreva a observação (ex.: original em papel, arquivado no CPD).');
+    if (!RECEBIDO_DE[de]) return erro(res, 400, 'Diga de quem veio o documento: síndico, administradora ou outro.');
+    if (observacao.length < 3) return erro(res, 400, 'Escreva a observação (ex.: o síndico mandou por e-mail; o original está no CPD).');
     if (await db.um('SELECT 1 FROM implantacao_documentos WHERE implantacao_id = $1 AND tipo = $2 AND substituido_em IS NULL', [i.id, tipo])) {
       return erro(res, 409, `${F.DOCUMENTOS[tipo].nome} já está recebido.`);
     }
     await db.tx(async (t) => {
-      await t.q(`INSERT INTO implantacao_documentos (implantacao_id, tipo, nome, mime, tamanho, sem_arquivo, observacao, enviado_por)
-        VALUES ($1, $2, $3, 'text/plain', 0, TRUE, $4, $5)`, [i.id, tipo, 'Recebido sem arquivo', observacao, req.usuario.id]);
-      await evento(t, i.id, req.usuario.id, 'documento_marcado', { tipo, nome: F.DOCUMENTOS[tipo].nome, observacao });
+      await t.q(`INSERT INTO implantacao_documentos (implantacao_id, tipo, nome, mime, tamanho, sem_arquivo, observacao, recebido_de, enviado_por)
+        VALUES ($1, $2, $3, 'text/plain', 0, TRUE, $4, $5, $6)`, [i.id, tipo, 'Recebido sem arquivo', observacao, de, req.usuario.id]);
+      await evento(t, i.id, req.usuario.id, 'documento_marcado', { tipo, nome: F.DOCUMENTOS[tipo].nome, observacao, de: RECEBIDO_DE[de] });
       await t.q('UPDATE implantacoes SET atualizado_em = now() WHERE id = $1', [i.id]);
     });
     res.status(201).json({ ok: true });
@@ -269,15 +275,17 @@ function rotasSetor(r, deps) {
     res.json({ ok: true, obs });
   });
 
-  /* ---------- Cobrar (coordenação): prazo para concluir ou da ficha de repasse ---------- */
+  /* ---------- Cobrar (coordenação): prazo para concluir, da ficha de transição, do onboarding ou de uma etapa do pós-implantação ---------- */
   r.post('/api/implantacoes/:id/cobrar', json, async (req, res) => {
     const c = await carregar(req, res);
     if (!c) return;
     const { i, p } = c;
     if (!(p.coordenacao || p.admin)) return erro(res, 403, 'Só a coordenação cobra.');
-    const qual = req.body && req.body.qual === 'ficha' ? 'ficha' : 'concluir';
+    const QUAIS = { concluir: 'a conclusão da implantação', ficha: 'a ficha de transição', onboarding: 'o onboarding', espolio: 'a análise de espólios (pós-implantação)',
+      pendencias: 'o levantamento de pendências (pós-implantação)', prestacao: 'a 1ª prestação de contas (pós-implantação)' };
+    const qual = QUAIS[req.body && req.body.qual] ? req.body.qual : 'concluir';
     if (!i.responsavel_id) return erro(res, 409, 'Ninguém conduz esta implantação ainda.');
-    const o = qual === 'ficha' ? 'a ficha de repasse' : 'a conclusão da implantação';
+    const o = QUAIS[qual];
     await db.tx(async (t) => evento(t, i.id, req.usuario.id, 'cobranca_prazo', { qual }));
     await avisos.notificar([i.responsavel_id, ...await autorizados(db, i.id, qual === 'ficha' ? ['tudo', 'documentos'] : ['tudo', 'etapas'])], {
       link: link(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: true,

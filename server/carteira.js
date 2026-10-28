@@ -24,6 +24,10 @@ const CAMPOS = [
   ...FUNCOES.map((f) => ({ campo: f.campo, coluna: f.coluna, max: 120, pessoa: true })),
   { campo: 'administradora', coluna: 'ADMINISTRADORA', max: 120 },
   { campo: 'forma_envio', coluna: 'FORMA DE ENVIO', max: 60 },
+  // síndico: vem do formulário da implantação quando a coordenação confirma a entrada na Carteira
+  { campo: 'sindico_nome', coluna: 'SÍNDICO', max: 160 },
+  { campo: 'sindico_telefone', coluna: 'TELEFONE DO SÍNDICO', max: 40 },
+  { campo: 'sindico_email', coluna: 'E-MAIL DO SÍNDICO', max: 160 },
   // executivo de negócios que fechou o contrato (vem da planilha de implantação)
   { campo: 'executivo', coluna: 'EXECUTIVO', outras: ['EXECUTIVO DE NEGÓCIOS'], max: 120 },
   // vigência do contrato (data de início); planilhas antigas chamavam de INÍCIO DO CONTRATO

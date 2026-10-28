@@ -69,3 +69,21 @@ test('Microsoft 365: renova o token recusado e mostra o erro da Microsoft', asyn
   const semLogin = microsoftFalsa({ token: () => resposta(401, { error: 'invalid_client', error_description: 'AADSTS7000215: Invalid client secret provided.' }) });
   await assert.rejects(criarEnvioEmail(ENV, semLogin.fetchFn).enviar({ para: { nome: 'A', email: 'a@b.com' }, subject: 's', text: 't', html: 'h' }), /Invalid client secret/);
 });
+
+test('Microsoft 365: agenda cria a reunião com Teams no calendário da caixa remetente, atualiza e cancela', async () => {
+  const ms = microsoftFalsa({ envio: () => resposta(200, { id: 'ev-1', onlineMeeting: { joinUrl: 'https://teams.exemplo/1' } }) });
+  const { agenda } = criarEnvioEmail(ENV, ms.fetchFn);
+  const x = { assunto: 'Onboarding · Cond. Fictício', html: '<p>oi</p>', inicio: '2026-11-04T10:00', fim: '2026-11-04T11:00', participantes: [{ nome: 'Síndico', email: 'sindico@exemplo.com' }, { nome: 'Sem e-mail' }] };
+  assert.deepEqual(await agenda.criar(x), { id: 'ev-1', link: 'https://teams.exemplo/1' });
+  const criar = ms.chamadas.find((c) => /\/events$/.test(c.url));
+  assert.match(criar.url, /\/users\/naoresponda%40myblue\.com\.br\/events$/);
+  const ev = JSON.parse(criar.init.body);
+  assert.deepEqual([ev.isOnlineMeeting, ev.onlineMeetingProvider, ev.start.dateTime, ev.end.dateTime, ev.start.timeZone], [true, 'teamsForBusiness', '2026-11-04T10:00:00', '2026-11-04T11:00:00', 'E. South America Standard Time']);
+  assert.deepEqual(ev.attendees.map((a) => a.emailAddress.address), ['sindico@exemplo.com']);
+  await agenda.atualizar('ev-1', x);
+  assert.ok(ms.chamadas.some((c) => c.init.method === 'PATCH' && /\/events\/ev-1$/.test(c.url)));
+  await agenda.cancelar('ev-1', 'desmarcado');
+  assert.ok(ms.chamadas.some((c) => c.init.method === 'POST' && /\/events\/ev-1\/cancel$/.test(c.url)));
+  // sem Microsoft 365 (SMTP), não há agenda
+  assert.equal(criarEnvioEmail({ SMTP_HOST: 'smtp.exemplo.com' }).agenda, undefined);
+});

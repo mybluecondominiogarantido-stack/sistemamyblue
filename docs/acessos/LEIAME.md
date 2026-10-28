@@ -149,14 +149,16 @@ nas pendências e no retorno, e para a diretoria quando há chancela. Detalhes d
 
 ## Implantação
 
-Tela própria do portal (menu **Implantação**), não é uma ferramenta em HTML. Quem faz o quê:
+Tela própria do portal (menu **Painel de implantação**), não é uma ferramenta em HTML. Cada função abre na sua tela:
+a gestão no Dashboard, a equipe no Painel de atividades (filtrado para a própria pessoa) e o comercial em Minhas
+solicitações; a **diretoria** vê as telas da gestão só para consulta. Quem faz o quê:
 
 | Quem | Como entra | Pode |
 |---|---|---|
-| **Comercial** (executivo de negócios) | o mesmo cadastro de executivo da Análise de Crédito | abrir a implantação a partir dos seus contratos concluídos (ou do contrato assinado fora do portal, com o retorno da análise), preencher o formulário e anexar documentos (inclusive os pendentes, depois do envio) |
-| **Equipe de implantação** | estar no setor **Implantação** | ver a fila e todas as implantações (🔒 nas de outra pessoa); quem foi designada inicia, marca as 5 etapas, anexa e marca documentos, marca impedimento, devolve com pendência, conclui, preenche e envia a ficha de repasse e envia a antecipação ao Controle de Repasses. Outra pessoa da equipe só edita com **autorização da coordenação** (pedida ou dada direto), com escopo (tudo, só as etapas, só documentos e ficha) e prazo |
-| **Coordenação** | líder do setor Implantação, ou perfil Coordenador/Supervisor no setor | o da equipe em qualquer implantação, mais designar quem conduz, autorizar, recusar e revogar quem edita, cobrar prazos, liberar versão extra da ficha, cancelar e confirmar a entrada na Carteira |
-| **Assistente de crédito** | estar no setor **Crédito** e receber a ficha (da Carteira ou escolhida pela supervisão) | ver a ficha de repasse que recebeu, confirmar o recebimento ou devolver com pergunta |
+| **Comercial** (executivo de negócios) | o mesmo cadastro de executivo da Análise de Crédito | abrir a implantação a partir dos seus contratos concluídos (ou do contrato assinado fora do portal, com o retorno da análise), preencher o formulário e anexar documentos (inclusive os pendentes, depois do envio; o que já anexou fica com cadeado e não é trocado depois do envio) |
+| **Equipe de implantação** | estar no setor **Implantação** | ver a fila e todas as implantações (🔒 nas de outra pessoa); quem foi designada inicia, marca as 5 etapas (o onboarding marcado envia o convite do Outlook), anexa e marca documentos (dizendo de quem vieram), marca impedimento, devolve com pendência, conclui, preenche e envia a ficha de transição, marca o pós-implantação (espólios, pendências, 1ª prestação de contas) e envia a antecipação ao Controle de Repasses. Outra pessoa da equipe só edita com **autorização da coordenação** (pedida ou dada direto), com escopo (tudo, só as etapas, só documentos e ficha) e prazo |
+| **Coordenação** | líder do setor Implantação, ou perfil Coordenador/Supervisor no setor | o da equipe em qualquer implantação, mais designar quem conduz, autorizar, recusar e revogar quem edita, cobrar prazos (concluir, ficha, onboarding e pós-implantação), os Parâmetros, liberar versão extra da ficha, cancelar e confirmar a entrada na Carteira |
+| **Assistente de crédito** | estar no setor **Crédito** e receber a ficha (da Carteira ou escolhida pela supervisão) | ver a ficha de transição que recebeu, confirmar o recebimento ou devolver com pergunta |
 | **Supervisão de Crédito** | líder do setor Crédito, ou perfil Coordenador/Supervisor no setor | escolher a assistente de crédito quando a Carteira ainda não tem (o portal grava na Carteira) |
 | **Gestor do Controle de Repasses** | papel **Gestor** na ferramenta *repasses* (janela da ferramenta → Quem abre e com qual papel) | cadastrar (com ajuste) ou devolver as antecipações vindas da Implantação |
 | **Quem elabora contratos** | permissão *Elaborar as minutas de contrato* | registrar as condições do contrato assinado fora do portal (a implantação espera com o Jurídico e depois segue ao setor) |
