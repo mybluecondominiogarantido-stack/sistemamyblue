@@ -3,7 +3,7 @@
 Todos no padrão visual da MyBlue (papel timbrado, capa, sumário por partes, capítulos numerados e histórico de versões).
 
 - `Manual-do-Portal-Geral.pdf` (Manual do Portal – Geral): acesso e conta, menu, perfis e acessos (perfil + setor no cadastro), Central de Tickets (abrir, acompanhar, atender, líder, supervisão), avisos, painel, Carteira de condomínios, Central de Links, gestão do setor (coordenador e supervisor), administração, quem pode o quê e perguntas frequentes.
-- `Fluxograma-Portal-MyBlue.pdf`: fluxograma operacional (A4 paisagem) da Central de Tickets, do acesso de uma pessoa nova e da ferramenta nova ou atualizada, com a página de atores, formas, prazos e situações.
+- `Fluxograma-Portal-MyBlue.pdf`: fluxograma operacional (A4 paisagem) da Central de Tickets, da renegociação fechada (CS → Crédito), do acesso de uma pessoa nova e da ferramenta nova ou atualizada, com a página de atores, formas, prazos e situações.
 - `Guia-TI-Email-Microsoft365.pdf`: passo a passo para o TI ligar o e-mail dos avisos pelo Microsoft 365 (gerado por `fonte/gerar-guia-email.js`).
 - `Padrao-Ferramentas-HTML.pdf`: padrão para criar ferramentas em HTML (texto para as instruções do projeto do Claude, como pedir, regras, publicação com aprovação e checklist da administração).
 - `Novas-Ferramentas-no-Portal.pdf`: proposta de construir as próximas ferramentas dentro do código do portal, com GitHub e aprovação da administração pelo pull request.

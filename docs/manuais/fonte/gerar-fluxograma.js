@@ -11,7 +11,7 @@ const path = require('path');
 const { playwright } = require('./padrao');
 
 const SAIDA = process.argv[2] || path.join(__dirname, '..');
-const VERSAO = 'Versão 1.0 — Outubro/2026';
+const VERSAO = 'Versão 1.1 — Outubro/2026';
 const LOGO = 'data:image/png;base64,' + fs.readFileSync(path.join(__dirname, '..', '..', '..', 'public', 'img', 'logo.png')).toString('base64');
 
 /* atores: cor da etiqueta e da borda dos passos */
@@ -162,7 +162,48 @@ function ticketsPagina(total) {
   return pagina(1, total, 'Fluxograma — Central de Tickets', 'Do pedido de quem precisa até a resolução: para quem vai, quem distribui, quem atende e como quem pediu acompanha', nos, lig, setas);
 }
 
-/* ---------- página 2: acessos e ferramentas ---------- */
+/* ---------- página 2: renegociação fechada (CS → Crédito) ---------- */
+function renegociacaoPagina(n, total) {
+  const Y = [64, 114, 164];
+  const nos = [
+    { id: 'ini', c: 0, y: Y[0], tipo: 'pilula', t: '<b>INÍCIO</b><br>Negociação com o condomínio concluída' },
+    { id: 'salvar', c: 1, y: Y[0], ator: 'colaborador', t: 'CS salva a renegociação como <b>Fechado</b> no Controle de Renegociações, com as condições' },
+    { id: 'd1', c: 2, y: Y[0], tipo: 'decisao', ator: 'portal', t: 'Esta renegociação já tem ticket?' },
+    { id: 'busca', c: 3, y: Y[0], ator: 'portal', t: 'Procura o condomínio na Carteira pelo nome e pela UF' },
+    { id: 'd2', c: 4, y: Y[0], tipo: 'decisao', ator: 'portal', t: 'Achou um só?' },
+    { id: 'abre', c: 5, y: Y[0], ator: 'portal', t: 'Abre o ticket <i>Renegociação fechada</i> para o Crédito, com as condições (9 h úteis, alta)' },
+    { id: 'd3', c: 5, y: Y[1], tipo: 'decisao', ator: 'portal', t: 'Assistente da Carteira está na equipe do Crédito?' },
+    { id: 'recebe', c: 4, y: Y[1], ator: 'responsavel', t: 'Assistente de crédito recebe direto: sino, som e e-mail' },
+    { id: 'tratar', c: 3, y: Y[1], ator: 'responsavel', t: 'Iniciar atendimento com prazo e aplicar as novas condições' },
+    { id: 'resolver', c: 2, y: Y[1], ator: 'responsavel', t: 'Marcar como resolvido' },
+    { id: 'avisa', c: 1, y: Y[1], ator: 'portal', t: 'CS é avisado; acompanha em <b>Abertos por mim</b>' },
+    { id: 'fim', c: 0, y: Y[1], tipo: 'pilula', t: '<b>FIM</b><br>Condições aplicadas no Crédito' },
+    { id: 'comenta', c: 2, y: Y[2], ator: 'portal', t: 'Comenta no mesmo ticket o que mudou (antes → depois); reabre se estava resolvido' },
+    { id: 'lider', c: 5, y: Y[2], tagDireita: true, ator: 'lider', t: 'Fila do Crédito, sem responsável: o líder confere e distribui' },
+    { id: 'nota', c: 0, y: Y[2], w: 40, h: 23, tipo: 'nota', ator: 'portal', t: '<span><b>Não abrem ticket:</b> <i>Importar base 2026</i>, a correção da planilha e as renegociações que já estavam fechadas antes desta automação.</span>' },
+  ];
+  const lig = [
+    { de: ['ini', 'r'], para: ['salvar', 'l'] },
+    { de: ['salvar', 'r'], para: ['d1', 'l'] },
+    { de: ['d1', 'r'], para: ['busca', 'l'], rotulo: [145.5, 59.6, 'NÃO'] },
+    { de: ['busca', 'r'], para: ['d2', 'l'] },
+    { de: ['d2', 'r'], para: ['abre', 'l'], rotulo: [237.6, 59.6, 'SIM'] },
+    { de: ['abre', 'b'], para: ['d3', 't'] },
+    { de: ['d3', 'l'], para: ['recebe', 'r'], rotulo: [237.2, 109.6, 'SIM'] },
+    { de: ['recebe', 'l'], para: ['tratar', 'r'] },
+    { de: ['tratar', 'l'], para: ['resolver', 'r'] },
+    { de: ['resolver', 'l'], para: ['avisa', 'r'] },
+    { de: ['avisa', 'l'], para: ['fim', 'r'] },
+    { de: ['d3', 'b'], para: ['lider', 't'], cor: '#c62828', rotulo: [264.6, 133.2, 'NÃO'] },
+    { de: ['lider', 'l'], via: [[217, 164]], para: ['recebe', 'b'], rotulo: [219, 150, 'distribui'] },
+    { de: ['d2', 'b'], via: [[217, 89], [240, 89], [240, 145], [263, 145]], cor: '#c62828', rotulo: [190, 91.2, 'NÃO · o CS é avisado para conferir o nome'] },
+    { de: ['d1', 'b'], via: [[125, 89], [102, 89], [102, 164]], para: ['comenta', 'l'], cor: '#2e7d32', rotulo: [104, 93.4, 'SIM · condições mudaram'] },
+    { de: ['comenta', 'r'], via: [[171, 164]], para: ['tratar', 'b'], rotulo: [149, 161.4, 'assistente é avisada'] },
+  ];
+  return pagina(n, total, 'Fluxograma — Renegociação fechada → Crédito', 'Do Controle de Renegociações do CS até a assistente de crédito do condomínio aplicar as novas condições', nos, lig);
+}
+
+/* ---------- página 3: acessos e ferramentas ---------- */
 function acessosPagina(total) {
   const A = 66; const A2 = 95; const B = 140; const B2 = 170;
   const nos = [
@@ -198,10 +239,10 @@ function acessosPagina(total) {
     { de: ['publica', 'b'], via: [[125, B2]], para: ['volta', 'r'], tracejado: true },
   ];
   const secoes = `<div class="secao" style="top:44mm">A · Acesso de uma pessoa nova</div><div class="secao" style="top:118mm">B · Ferramenta nova ou atualizada</div>`;
-  return pagina(2, total, 'Fluxograma — Acessos e ferramentas', 'Como uma pessoa ganha acesso ao portal e como uma ferramenta nova ou atualizada chega à equipe', nos, lig, secoes);
+  return pagina(3, total, 'Fluxograma — Acessos e ferramentas', 'Como uma pessoa ganha acesso ao portal e como uma ferramenta nova ou atualizada chega à equipe', nos, lig, secoes);
 }
 
-/* ---------- página 3: como usar ---------- */
+/* ---------- página 4: como usar ---------- */
 function comoUsarPagina(total) {
   const tag = (k) => `<span class="tag" style="background:${ATORES[k][1]}">${ATORES[k][0]}</span>`;
   const ator = (k, t) => `<div class="ator">${tag(k)}<p>${t}</p></div>`;
@@ -238,12 +279,12 @@ function comoUsarPagina(total) {
     <div class="gat"><span class="tag" style="background:#1b9bbc">Para quem pediu</span>Resolvido ou cancelado · mudou a previsão de conclusão · comentários.</div>
   </div></div>
   <div class="import">Importante: peça e responda sempre pelo ticket, não por mensagem solta. É o que garante prazo, responsável e histórico.</div>`;
-  return `<section class="pg">${cabecalho('Como usar este fluxograma', 'Atores, formas, prazos, situações possíveis e avisos')}${corpo}${rodape(3, total)}</section>`;
+  return `<section class="pg">${cabecalho('Como usar este fluxograma', 'Atores, formas, prazos, situações possíveis e avisos')}${corpo}${rodape(4, total)}</section>`;
 }
 
 async function gerar() {
-  const total = 3;
-  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Fluxograma — Portal MyBlue</title><style>${CSS}</style></head><body>${ticketsPagina(total)}${acessosPagina(total)}${comoUsarPagina(total)}</body></html>`;
+  const total = 4;
+  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Fluxograma — Portal MyBlue</title><style>${CSS}</style></head><body>${ticketsPagina(total)}${renegociacaoPagina(2, total)}${acessosPagina(total)}${comoUsarPagina(total)}</body></html>`;
   const { chromium } = playwright();
   const br = await chromium.launch();
   const page = await br.newPage();

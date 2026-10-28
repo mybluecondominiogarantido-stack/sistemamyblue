@@ -13,7 +13,7 @@ const paginaSimples = (titulo, msg) => `<!doctype html><html lang="pt-BR"><head>
 <title>${titulo}</title><link rel="stylesheet" href="/estilos.css"></head><body class="pagina-aviso"><div class="aviso-card"><img src="/img/logo.png" alt="MyBlue" height="40">
 <h1>${titulo}</h1><p>${msg}</p><a class="btn primary" href="/" target="_top">Voltar ao início</a></div></body></html>`;
 
-function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, boletosCarteira, cfg }) {
+function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, boletosCarteira, renegociacoes, cfg }) {
   const r = express.Router();
 
   /* ---------- lista de ferramentas do usuário ---------- */
@@ -356,19 +356,24 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, bo
         }
         const idDaLinha = (row) => (Array.isArray(row) && row[0] != null && String(row[0]).trim() !== '' ? String(row[0]) : `int-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
         const validarLinhas = (rows) => Array.isArray(rows) && rows.every(Array.isArray);
+        // Controle de Renegociações: ao salvar uma renegociação como Fechado, o portal abre o ticket para o Crédito
+        const reneg = renegociacoes && renegociacoes.acompanha(m, colecao);
         switch (acao) {
-          case 'add':
+          case 'add': {
             if (!Array.isArray(p.row)) break;
-            await registros.upsert(m.slug, colecao, idDaLinha(p.row), p.row, uid); await log({ id: p.row[0] });
+            const id = idDaLinha(p.row);
+            const anterior = reneg ? await registros.obter(m.slug, colecao, id) : null;
+            await registros.upsert(m.slug, colecao, id, p.row, uid); await log({ id: p.row[0] });
+            if (reneg) await renegociacoes.aoGravar(req, m, id, anterior, p.row);
             return responder(res, cb, { ok: true });
+          }
           case 'update': {
             if (!Array.isArray(p.row)) break;
             const id = p.id != null ? String(p.id) : idDaLinha(p.row);
-            if (temAntes(p)) {
-              const atual = await registros.obter(m.slug, colecao, id);
-              if (canon(atual) !== canon(antesDe(p)) && canon(atual) !== canon(p.row)) return conflitoGas(res, cb, atual);
-            }
+            const atual = temAntes(p) || reneg ? await registros.obter(m.slug, colecao, id) : null;
+            if (temAntes(p) && canon(atual) !== canon(antesDe(p)) && canon(atual) !== canon(p.row)) return conflitoGas(res, cb, atual);
             await registros.upsert(m.slug, colecao, id, p.row, uid); await log({ id });
+            if (reneg) await renegociacoes.aoGravar(req, m, id, atual, p.row);
             return responder(res, cb, { ok: true });
           }
           case 'delete':

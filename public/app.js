@@ -1752,7 +1752,8 @@
   function textoEvento(e) {
     var d = e.detalhe || {};
     switch (e.tipo) {
-      case 'criado': return 'abriu o ticket para <b>' + esc(d.setor || '') + '</b>' + (d.condominio ? ' · ' + esc(d.condominio) : d.interna ? ' · demanda interna' : '');
+      case 'criado': return 'abriu o ticket para <b>' + esc(d.setor || '') + '</b>' + (d.condominio ? ' · ' + esc(d.condominio) : d.interna ? ' · demanda interna' : '') + (d.origem ? ' pelo ' + esc(d.origem) : '');
+      case 'condominio_nao_identificado': return 'não achou <b>' + esc(d.condominio || 'o condomínio') + (d.uf ? ' · ' + esc(d.uf) : '') + '</b> na carteira: o ticket ficou na fila do setor para o líder distribuir';
       case 'status': return 'mudou a situação de ' + etqStatus(d.de) + ' para ' + etqStatus(d.para);
       case 'atribuicao': return d.para ? (d.automatico ? 'enviou para <b>' + esc(d.para) + '</b>, responsável pelo condomínio na carteira' : 'atribuiu a <b>' + esc(d.para) + '</b>') : 'devolveu o ticket para a fila do setor';
       case 'carteira_sem_cadastro': return 'não achou <b>' + esc(pessoaCarteira(d.carteira).nome) + '</b> (responsável pelo condomínio na carteira) na equipe do setor: o ticket ficou com o líder';

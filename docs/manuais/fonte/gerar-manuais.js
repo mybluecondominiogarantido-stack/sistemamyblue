@@ -35,6 +35,7 @@ const HISTORICO = [
   ['2.3', '19/10/2026', 'Acessos centralizados no portal (<i>Quem abre e com qual papel</i>: edita ou só consulta e papel em cada ferramenta; ferramenta nova cadastrada pela coordenação aguarda aprovação). Controle de Emissão de Boletos: aba <b>Distratados</b> e <b>cadastro pela Carteira de condomínios</b> (cada competência nova sai com os condomínios da carteira; conferência na janela da ferramenta).'],
   ['2.4', '26/10/2026', 'Central de Tickets: a demanda passa a ser <b>Externa</b> (condomínio, síndico, propostas) ou <b>Interna</b> (demandas entre setores).'],
   ['2.5', '26/10/2026', 'Implantação: toda implantação começa de um <b>contrato assinado</b> (no portal, ou fora dele com o retorno da análise, e aí o Jurídico registra as condições antes de seguir ao setor).'],
+  ['2.6', '28/10/2026', 'Controle de Renegociações: renegociação salva como <b>Fechado</b> abre sozinha o ticket <i>Renegociação fechada</i> para a assistente de crédito do condomínio, com as condições; mudanças depois viram comentário no mesmo ticket.'],
 ];
 const VERSOES = (doc) => capVersoes({
   titulo: `Manutenção e controle de versão deste manual`,

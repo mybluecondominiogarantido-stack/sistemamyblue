@@ -164,6 +164,14 @@ Demandas internas entre os setores: quem precisa de algo de outro setor abre um 
 5. **Tratar:** o responsável muda a situação (*Em andamento*, *Aguardando*), conversa com quem abriu e registra **notas internas** (quem abriu não vê). Ao transferir para outro setor, o ticket vai para a pessoa da carteira de lá (se houver) ou para a fila, e a equipe nova define o próprio prazo para conclusão.
 6. **Resolver:** quem abriu é avisado e pode **reabrir** se não ficou resolvido. Também pode cancelar o próprio pedido.
 
+**Renegociação fechada (Controle de Renegociações → Crédito)**
+
+Quando o CS salva uma renegociação que passou a ser **Fechado**, o portal abre sozinho um ticket para o **Crédito**, tipo *Renegociação fechada*, em nome de quem fechou, com as condições na descrição (taxa e tarifa antes → depois, VOP, boletos, fidelização, vigência, observações). O condomínio é procurado na Carteira pelo **nome e pela UF** (sem acento, sem "Cond."/"Residencial", romano = número, "1" final opcional); achando um só, o ticket vai direto para a **assistente de crédito** dele, como qualquer ticket de condomínio. Sem condomínio identificado, vai para a fila do Crédito e quem fechou recebe um aviso para conferir o nome.
+
+- Salvar de novo com outras condições (ou fechar de novo depois de reabrir a negociação) **não abre outro ticket**: o que mudou vira um comentário no mesmo ticket (antes → depois), com aviso por e-mail. Se o ticket já estava resolvido ou cancelado, ele volta para *Novo*, com prazo novo.
+- O tipo *Renegociação fechada* é criado sozinho no 1º ticket (9 h úteis, prioridade alta) e pode ser ajustado em *Equipes e tipos de demanda* (não renomeie: com outro nome, o portal cria o tipo de novo).
+- Não abrem ticket: *Importar base 2026*, a correção da planilha e as renegociações que já estavam fechadas antes desta automação. O vínculo renegociação → ticket fica em `renegociacao_tickets` (código em `server/renegociacoes.js`).
+
 **Prazos**
 
 | Prazo | Quem define | Até quando conta |

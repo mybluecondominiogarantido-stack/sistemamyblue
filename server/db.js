@@ -773,6 +773,16 @@ CREATE TABLE IF NOT EXISTS contrato_eventos (
   criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_contrato_eventos ON contrato_eventos(contrato_id, criado_em);
+
+-- renegociação do Controle de Renegociações que virou ticket para o Crédito (uma por renegociação)
+-- e as condições que o ticket já tem (as mudanças seguintes viram comentário no mesmo ticket)
+CREATE TABLE IF NOT EXISTS renegociacao_tickets (
+  item_id TEXT PRIMARY KEY,
+  ticket_id INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+  condicoes JSONB NOT NULL,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 `;
 
 /* Supabase publica o schema "public" pela API dele (PostgREST). Com RLS ligado e sem
@@ -784,7 +794,7 @@ const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 
   'analise_lancamentos', 'analise_exclusoes', 'analise_alertas', 'analise_eventos',
   'implantacao_protocolos', 'implantacoes', 'implantacao_documentos', 'implantacao_eventos', 'implantacao_liberacoes', 'implantacao_parametros',
   'implantacao_autorizacoes', 'implantacao_pausas', 'implantacao_fichas', 'implantacao_ficha_versoes', 'implantacao_antecipacoes', 'implantacao_importacoes',
-  'contrato_protocolos', 'contratos', 'contrato_documentos', 'contrato_eventos'];
+  'contrato_protocolos', 'contratos', 'contrato_documentos', 'contrato_eventos', 'renegociacao_tickets'];
 const RLS = TABELAS.map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`).join(';\n');
 
 /* Ajustes em bancos já existentes (rodam a cada início e não fazem nada se já estiverem aplicados). */
