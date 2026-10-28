@@ -1089,6 +1089,10 @@ module.exports = [
       await t.legenda('Com as etapas feitas, <b>Concluir implantação</b> (o onboarding pode ficar para depois, com o alerta). Se houver parceria, o setor Parceiros é avisado. A <b>ficha de repasse</b> abre na conclusão.', { etapa: C, ms: 400 });
       await t.clicar('#btConclImp', { depois: 1000 });
       await t.clicar('#mOk', { depois: 2600 });
+      await t.legenda('O quadro <b>Pós-implantação</b>: espólios em 2 dias úteis de assumir (abra a solicitação na <b>Análise de Espólio</b>; a devolutiva da cobrança aparece aqui), levantamento de pendências em 1 dia útil dos boletos e a 1ª prestação de contas em 5 dias úteis do repasse.', { etapa: C, ms: 600 });
+      await t.mostrar('section.painel:has(.pos-linha)', 3400);
+      await t.legenda('Os PDFs saem da <b>Central de Ferramentas</b> e ficam no CPD: aqui só se marca o envio. Lembrete na véspera e no dia; atrasada, a coordenação também é avisada e pode cobrar.', { etapa: C, ms: 400 });
+      await t.mostrar('#btPosPend', 2400);
 
       const D = '4 · Carteira';
       await t.legenda('A coordenação confere os dados e clica em <b>Confirmar na Carteira</b>: o ID Vouch e a forma de envio já vêm das etapas.', { etapa: D, ms: 400 });
@@ -1097,7 +1101,7 @@ module.exports = [
       await t.clicar('#kOk', { depois: 2600 });
       await t.legenda('Pronto: o condomínio está na Carteira, e o Controle de Emissão de Boletos acompanha.', { etapa: D, ms: 3000 });
     },
-    resumo: ['<b>Designar</b> · 8h úteis para iniciar', 'Marque as 5 etapas · 3 dias úteis para concluir', '<b>Concluir</b> · <b>Confirmar na Carteira</b>'],
+    resumo: ['<b>Designar</b> · 8h úteis para iniciar', 'Marque as 5 etapas · 3 dias úteis para concluir', '<b>Concluir</b> · <b>Pós-implantação</b> · <b>Confirmar na Carteira</b>'],
   },
 
   {
@@ -1199,11 +1203,14 @@ module.exports = [
       await t.ir('#/acompanhamento/fichas', 1600);
       await t.legenda('<b>Fichas de repasse</b>: o prazo de 5 dias úteis de cada ficha, as atrasadas (a coordenação cobra) e as devolvidas.', { etapa: D, ms: 600 });
       await t.pausa(2400);
+      await t.ir('#/acompanhamento/pos', 1600);
+      await t.legenda('<b>Pós-implantação</b>: espólios, levantamento de pendências e 1ª prestação de contas de cada implantação, com o prazo em dias úteis, a devolutiva da Análise de Espólio e o Cobrar da coordenação.', { etapa: D, ms: 600 });
+      await t.pausa(2600);
       await t.ir('#/acompanhamento/parametros', 1600);
       await t.legenda('Os prazos e metas ficam em <b>Parâmetros</b>: a coordenação ajusta, e cada mudança vale a partir da data escolhida.', { etapa: D, ms: 600 });
       await t.mostrar('#pmOnb', 2800);
     },
-    resumo: ['<b>Acompanhamento</b> no menu da Implantação', 'Painel, mês vigente, Controle e metas calculados pelo portal', 'Antecipações ao Controle de Repasses · <b>Fichas</b> · <b>Parâmetros</b>'],
+    resumo: ['<b>Acompanhamento</b> no menu da Implantação', 'Painel, mês vigente, Controle e metas calculados pelo portal', 'Antecipações ao Controle de Repasses · <b>Fichas</b> · <b>Pós-implantação</b> · <b>Parâmetros</b>'],
   },
 
   /* ======================= Solicitação de Contrato ======================= */

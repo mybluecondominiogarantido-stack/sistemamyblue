@@ -434,6 +434,15 @@ legend.rot,#formImp span.rot,.modal span.rot{display:block;font-size:12px;font-w
 th.centro,td.centro{text-align:center}
 .marca-acomp{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border);color:var(--faint);font-weight:800;font-size:13px;box-sizing:border-box}
 .marca-acomp.ok{background:var(--green-bg);border-color:transparent;color:var(--green)}
+/* pós-implantação: quadro da implantação e aba do Acompanhamento */
+.pos-linha{display:flex;flex-wrap:wrap;align-items:flex-start;gap:12px;padding:12px 0;border-top:1px solid var(--border)}
+.pos-linha:first-child{border-top:0;padding-top:0}
+.pos-num{flex:0 0 auto;display:inline-grid;place-items:center;width:26px;height:26px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border);font-weight:800;font-size:13px;box-sizing:border-box}
+.pos-num.ok{background:var(--green-bg);border-color:transparent;color:var(--green)}
+.pos-txt{flex:1 1 320px;min-width:0}
+.pos-extra{margin-top:6px;font-size:13.5px;color:var(--ink-2)}
+.pos-acoes{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;flex:0 1 auto}
+.pos-cel .sec{display:block}
 .pontos-acomp{display:inline-flex;gap:4px}
 .pontos-acomp i{width:10px;height:10px;border-radius:999px;border:2px solid var(--teal);box-sizing:border-box}
 .pontos-acomp i.f{background:var(--teal)}

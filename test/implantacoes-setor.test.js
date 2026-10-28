@@ -51,6 +51,8 @@ const ultimo = async (email) => (await avisosDe(email)).pop() || {};
 const PDF = Buffer.from('%PDF-1.4\n% documento fictício\n');
 const anexar = (c, id, tipo) => c('POST', `/api/implantacoes/${id}/documentos`, PDF, { headers: { 'x-tipo': tipo, 'x-nome-arquivo': `${tipo}.pdf` } });
 const detalhe = async (c, id) => (await c('GET', `/api/implantacoes/${id}`)).json;
+// os lembretes do pós-implantação (test/implantacoes-pos.test.js) não entram nestes testes
+const SEM_AVISOS_POS = `UPDATE implantacoes SET pos = pos || '{"avisos":{"espolio":"2099-01-01","pendencias":"2099-01-01","prestacao":"2099-01-01"}}'::jsonb`;
 
 const FORM = {
   nome: 'Condomínio Fictício', cnpj: '11.222.333/0001-81', uf: 'CE', cidade: 'Fortaleza', uh_total: 24, dia_vencimento: 10,
@@ -296,6 +298,7 @@ test('rotina dos prazos: lembrete na véspera e no dia, atraso uma vez por dia �
   // as outras implantações deste arquivo não entram na conta
   await ctx.db.q("UPDATE implantacoes SET aviso_concluir_em = '2099-01-01' WHERE id <> $1", [id]);
   await ctx.db.q("UPDATE implantacao_fichas SET aviso_prazo_em = '2099-01-01'");
+  await ctx.db.q(SEM_AVISOS_POS);
   const titulos = async (email) => (await avisosDe(email)).map((x) => x.titulo);
   const ex = (dia) => ctx.rotinasImplantacao.executar(sp(dia));
   assert.equal((await ex('2026-10-27')).prazos_dias_uteis.concluir, 0);
@@ -436,6 +439,7 @@ test('ficha de repasse: prazo de 5 dias úteis da conclusão; lembrete na véspe
   await ctx.db.q("UPDATE implantacao_fichas SET aberta_em = '2026-10-26T13:00:00Z', aviso_prazo_em = NULL WHERE implantacao_id = $1", [id]);
   await ctx.db.q("UPDATE implantacao_fichas SET aviso_prazo_em = '2099-01-01' WHERE implantacao_id <> $1", [id]);
   await ctx.db.q("UPDATE implantacoes SET aviso_concluir_em = '2099-01-01', aviso_onboarding_em = '2099-01-01'");
+  await ctx.db.q(SEM_AVISOS_POS);
   const ex = async (dia) => (await ctx.rotinasImplantacao.executar(sp(dia))).prazos_dias_uteis.ficha;
   assert.equal(await ex('2026-10-29'), 0);
   assert.equal(await ex('2026-10-30'), 1);

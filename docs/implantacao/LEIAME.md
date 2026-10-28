@@ -17,9 +17,10 @@ Análise de Crédito.
 | Setor no dia a dia: quem edita (autorizações), pausas e prazo para concluir, onboarding depois de concluir, documento recebido sem arquivo, Obs. do Controle, Cobrar e a rotina dos prazos | `server/rotas/implantacoes-setor.js`; prazos em dias úteis em `server/implantacoes/prazos.js`; tabelas `implantacao_autorizacoes` e `implantacao_pausas` |
 | Ficha de repasse (montagem, envio, devolução, versões, PDF e rotina do prazo) | `server/implantacoes/ficha.js` e `server/rotas/implantacoes-ficha.js`; tabelas `implantacao_fichas` e `implantacao_ficha_versoes` |
 | Antecipação → Controle de Repasses | `server/rotas/implantacoes-antecipacoes.js`; tabela `implantacao_antecipacoes` |
-| Acompanhamento (painel, mês vigente, controle, metas, antecipações, fichas, parâmetros, cobrança de documentos, Excel) | `server/rotas/implantacoes-acompanhamento.js`; regras em `server/implantacoes/metas.js`; tabela `implantacao_parametros`; .xlsx em `server/xlsx.js` |
+| Pós-implantação (espólios, levantamento de pendências, 1ª prestação de contas, rotina dos prazos) | regras em `server/implantacoes/pos.js`; rotas e rotina em `server/rotas/implantacoes-pos.js`; coluna `implantacoes.pos` |
+| Acompanhamento (painel, mês vigente, controle, metas, antecipações, fichas, pós-implantação, parâmetros, cobrança de documentos, Excel) | `server/rotas/implantacoes-acompanhamento.js`; regras em `server/implantacoes/metas.js`; tabela `implantacao_parametros`; .xlsx em `server/xlsx.js` |
 | Telas | `public/app.js` (bloco Implantação, ficha de repasse e bloco Acompanhamento) |
-| Testes (dados fictícios) | `test/implantacoes-formulario.test.js`, `test/implantacoes-rotas.test.js`, `test/implantacoes-metas.test.js`, `test/implantacoes-setor.test.js` |
+| Testes (dados fictícios) | `test/implantacoes-formulario.test.js`, `test/implantacoes-rotas.test.js`, `test/implantacoes-metas.test.js`, `test/implantacoes-setor.test.js`, `test/implantacoes-pos.test.js` |
 
 ## Regras
 
@@ -105,6 +106,29 @@ etapa, e a ficha acompanha).
   Lembrete 1 dia útil antes e no dia; atrasada, alerta por dia útil a quem conduz e à coordenação (Cobrar).
 - Tela: `#/implantacao/:id/ficha` (a assistente de crédito entra pelo link do aviso).
 
+## Pós-implantação
+
+Depois de assumir e de emitir os boletos, a Assistente de Implantação (quem conduz) faz três etapas, com prazo em dias
+úteis (`server/implantacoes/pos.js`). Os arquivos não passam pelo portal: ficam no CPD, na pasta do condomínio.
+
+| Etapa | Começa | Prazo | Termina |
+|---|---|---|---|
+| Espólios | ao assumir | `espolio_dias` (**2**) | ao abrir a solicitação na ferramenta **Análise de Espólio** (verificação no Assertiva + documento) |
+| Levantamento de pendências | na emissão dos boletos (etapa marcada) | `pendencias_dias` (**1**) | ao marcar *Enviado no WhatsApp e salvo no CPD* ou *Cadastro completo, nada a enviar* (o PDF sai da Central de Ferramentas, Planilha de moradores) |
+| 1ª prestação de contas | no repasse: 1º dia útil depois do 1º vencimento | `prestacao_dias` (**5**) | ao marcar *Enviada ao condomínio* (feita no Montador, Central de Ferramentas). A implantação faz só a 1ª |
+
+- **Espólios:** o portal acha a solicitação sozinho na coleção `solicitacoes` da Análise de Espólio (mesmo CNPJ, ou
+  mesmo nome sem CNPJ, aberta a partir do envio ao setor); o prazo conta até a primeira. A devolutiva da coordenação de
+  cobrança aparece ao lado (com a coordenação, concluída com o resultado, ou **devolvida**: reabrir a solicitação na
+  ferramenta). Sem solicitação achada, a assistente informa o protocolo à mão.
+- **Avisos:** lembrete 1 dia útil antes e no dia; atrasada, alerta por dia útil a ela e à coordenação, por etapa
+  (`implantacoes.pos.avisos`). A coordenação cobra pela implantação ou pela aba do Acompanhamento.
+- **Quem marca:** quem conduz, quem tem autorização (tudo ou só as etapas) e a coordenação; dá para desfazer.
+- **Vale para** as implantações do portal assumidas a partir de `pos_marco` (Parâmetros); o histórico importado fica de fora.
+- API: `POST /api/implantacoes/:id/pos/:etapa` (`espolio` com `{ protocolo }`, `pendencias` com `{ situacao }`,
+  `prestacao`; `{ acao: 'desfazer' }` desfaz) e `POST /api/implantacoes/:id/cobrar` com `qual` = `espolio`,
+  `pendencias` ou `prestacao`. O detalhe traz `setor.pos`; o Acompanhamento, `pos`.
+
 ## Antecipação → Controle de Repasses
 
 Na aba Antecipações do Acompanhamento, a equipe marca e envia a antecipação negociada no formulário (valor, data, dia,
@@ -132,6 +156,8 @@ Entram as implantações enviadas ao setor (fora rascunho, diretoria e cancelada
   ficha de repasse.
 - **Fichas de repasse:** situação (a enviar, enviada, devolvida, recebida), versão, assistente de crédito e o prazo de 5
   dias úteis, com Cobrar para a coordenação.
+- **Pós-implantação:** uma linha por implantação com as três etapas (espólios, pendências, 1ª prestação de contas),
+  pílulas em aberto, atrasadas, vencem hoje ou amanhã e concluídas; Cobrar por etapa (coordenação). Veja a seção acima.
 - **Mês vigente:** contratos que começam no mês, na ordem do 1º vencimento (previsto — o primeiro dia de vencimento a
   partir do início do contrato — até o setor informar). Do dia da virada (25) em diante, mostra o mês seguinte.
 - **Meta de onboarding:** em até **30 dias depois do 1º vencimento**. "Síndico MyBlue" conta como batida; "A marcar"
@@ -144,7 +170,8 @@ Entram as implantações enviadas ao setor (fora rascunho, diretoria e cancelada
   Cobrar (setor) e sozinha, uma vez, quando faltam 3 dias para o limite. Fica no histórico da implantação.
 - **Antecipações:** as negociadas no formulário, por mês de início do contrato; marcar e enviar ao Controle de
   Repasses, com a situação de lá.
-- **Parâmetros:** prazos (30 e 60 dias; concluir em 3 e ficha em 5 dias úteis), meta (90%), virada (25), data-marco (01/07/2026, envios anteriores ficam fora das
+- **Parâmetros:** prazos (30 e 60 dias; concluir em 3 e ficha em 5 dias úteis; pós-implantação: espólios 2, pendências
+  1 e prestação de contas 5 dias úteis, para as assumidas a partir de 27/10/2026), meta (90%), virada (25), data-marco (01/07/2026, envios anteriores ficam fora das
   metas) e os documentos da meta. Só a coordenação e a administração alteram; cada mudança vale a partir de uma data e
   fica no histórico (`implantacao_parametros`): cada implantação usa a regra que valia no dia do envio.
 

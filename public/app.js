@@ -4660,6 +4660,52 @@
     if (s.status === 'cumprido') return ['Concluída no prazo (' + dataBr(s.em) + ')', 'verde'];
     return ['Concluída com ' + diasUteisImp(s.atraso) + ' de atraso (' + dataBr(s.em) + ')', 'ambar'];
   }
+  /* pós-implantação: espólios, levantamento de pendências e 1ª prestação de contas (regras em server/implantacoes/pos.js) */
+  var AGUARDA_POS = { boletos: 'aguarda a emissão dos boletos', vencimento: 'aguarda o 1º vencimento' };
+  function prazoPosImp(x, curto) {
+    var s = x.prazo || {}, v = s.vence ? dataBr(s.vence) : '';
+    if (s.status === 'aguardando') return s.motivo === 'repasse' ? ['começa no repasse (' + dataBr(x.inicio) + ')' + (curto ? '' : ' · até ' + v), 'cinza'] : [AGUARDA_POS[s.motivo] || 'aguardando', 'cinza'];
+    if (s.status === 'no_prazo') return ['até ' + v + ' · faltam ' + diasUteisImp(s.faltam), 'azul'];
+    if (s.status === 'vence_amanha') return ['vence no próximo dia útil (' + v + ')', 'ambar'];
+    if (s.status === 'vence_hoje') return ['vence hoje (' + v + ')', 'ambar'];
+    if (s.status === 'atrasado') return ['atrasada · ' + diasUteisImp(s.atraso) + ' (venceu ' + v + ')', 'vermelha'];
+    var feito = x.etapa === 'espolio' ? 'solicitação aberta' : x.etapa === 'prestacao' ? 'enviada' : 'feito';
+    if (s.status === 'cumprido') return [feito + ' no prazo (' + dataBr(s.em) + ')', 'verde'];
+    return [feito + ' com ' + diasUteisImp(s.atraso) + ' de atraso (' + dataBr(s.em) + ')', 'ambar'];
+  }
+  var DEVOLUTIVA_POS = { aguardando: ['com a coordenação de cobrança', 'azul'], concluida: ['devolutiva recebida', 'verde'], devolvida: ['devolvida: reenviar', 'vermelha'] };
+  function htmlPosImp(i, pos, pd, st) {
+    var marca = pd.editar_setor || !!(st.autorizacao && st.autorizacao.escopo === 'etapas');
+    var quem = function (r) { return r ? ' · ' + esc(r.por_nome || '') + ' em ' + dataHoraCr(r.em) : ''; };
+    var desfazer = function (k) { return marca ? '<button class="link-acomp" data-pos-desfazer="' + k + '">Desfazer</button>' : ''; };
+    var cobrar = function (x) { return pd.autorizar && !x.feito && x.prazo && x.prazo.status === 'atrasado' ? '<button class="btn ghost sm" data-cobrar-pos="' + x.etapa + '">Cobrar</button>' : ''; };
+    var linha = function (n, x, desc, extra, acoes) {
+      return '<div class="pos-linha"><span class="pos-num' + (x.feito && !x.acao ? ' ok' : '') + '">' + (x.feito && !x.acao ? '✓' : n) + '</span><div class="pos-txt"><div class="linha" style="gap:8px"><b>' + esc(x.nome) + '</b>' + etq(prazoPosImp(x)) + '</div>' +
+        '<span class="ajuda" style="margin:2px 0 0">' + desc + '</span>' + (extra ? '<div class="pos-extra">' + extra + '</div>' : '') + '</div><div class="pos-acoes">' + acoes + '</div></div>';
+    };
+    var esp = pos.etapas[0], pen = pos.etapas[1], pre = pos.etapas[2];
+    var dv = esp.devolutiva, extraEsp = '';
+    if (dv) {
+      extraEsp = etq(DEVOLUTIVA_POS[dv.situacao]) + ' Solicitação ' + esc(dv.protocolo || '') + ' aberta ' + dataHoraCr(dv.aberta_em) + (dv.por ? ' por ' + esc(dv.por) : '') + (dv.unidades ? ' · ' + dv.unidades + (dv.unidades === 1 ? ' unidade' : ' unidades') : '') +
+        (dv.situacao === 'concluida' ? ' · concluída ' + (dv.concluida_em ? dataHoraCr(dv.concluida_em) : '') + (dv.resultado.length ? ': ' + esc(dv.resultado.map(function (r) { return r.unid + ' ' + (r.resultado || ''); }).join('; ')) : '') : '') +
+        (dv.situacao === 'devolvida' ? '<div class="msg erro" style="margin:6px 0 0">A coordenação de cobrança devolveu' + (dv.motivo ? ': "' + esc(dv.motivo) + '"' : '.') + ' Corrija e abra a solicitação de novo na Análise de Espólio.</div>' : '');
+    } else if (esp.manual) {
+      extraEsp = 'Protocolo <b>' + esc(esp.manual.protocolo) + '</b> informado à mão' + quem(esp.manual) + ' ' + desfazer('espolio');
+    }
+    var html = '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Pós-implantação</h2>' +
+      etq(pos.concluido ? ['etapas feitas', 'verde'] : pos.atrasadas ? [pos.atrasadas + (pos.atrasadas === 1 ? ' atrasada' : ' atrasadas'), 'vermelha'] : [pos.etapas.filter(function (x) { return x.feito && !x.acao; }).length + ' de 3 feitas', 'azul']) +
+      '<span class="espaco"></span><span class="ajuda" style="margin:0">com a Assistente de Implantação · prazos em dias úteis</span></div><div class="corpo pilha" style="gap:0">';
+    html += linha(1, esp, 'Verifique no Assertiva e abra a solicitação na <b>Análise de Espólio</b> com o documento; a coordenação de cobrança analisa e devolve. ' + diasUteisImp(esp.dias) + ' depois de assumir (' + dataBr(esp.inicio) + ').', extraEsp,
+      cobrar(esp) + '<a class="btn ' + (esp.acao ? 'primary' : 'ghost') + ' sm" href="#/m/analise-de-espolio">Abrir a Análise de Espólio</a>' + (marca && !esp.feito ? '<button class="btn ghost sm" id="btPosEsp">Já abri: informar o protocolo</button>' : ''));
+    html += linha(2, pen, 'O PDF sai da <b>Central de Ferramentas</b> (Planilha de moradores), vai pelo WhatsApp e fica salvo no CPD, na pasta do condomínio. ' + diasUteisImp(pen.dias) + ' depois de emitir os boletos' + (pen.inicio ? ' (' + dataBr(pen.inicio) + ')' : '') + '.',
+      pen.registro ? esc(pen.registro.texto) + quem(pen.registro) + ' ' + desfazer('pendencias') : '',
+      cobrar(pen) + '<a class="btn ghost sm" href="#/m/credito">Abrir a Central de Ferramentas</a>' + (marca && pen.acao ? '<button class="btn primary sm" id="btPosPend">Registrar o envio</button>' : ''));
+    html += linha(3, pre, 'Feita no <b>Montador</b> (Central de Ferramentas), enviada ao condomínio e salva no CPD. A implantação faz só a 1ª. ' + diasUteisImp(pre.dias) + ' depois do repasse' +
+      (pre.inicio ? ' (' + dataBr(pre.inicio) + ', 1º dia útil depois do vencimento de ' + dataBr(pre.vencimento) + ')' : ' (1º dia útil depois do 1º vencimento)') + '.',
+      pre.registro ? 'Enviada ao condomínio' + quem(pre.registro) + ' ' + desfazer('prestacao') : '',
+      cobrar(pre) + (marca && pre.acao ? '<button class="btn primary sm" data-pos-marcar="prestacao">Marcar enviada ao condomínio</button>' : ''));
+    return html + '</div></section>';
+  }
   function htmlDiaADiaImp(d) {
     var i = d.implantacao, pd = d.pode, st = d.setor;
     if (i.importacao_id) {
@@ -4723,6 +4769,7 @@
         '<span class="espaco"></span><a class="btn ' + (fc && fc.situacao === 'a_enviar' || (fc && fc.situacao === 'devolvida') ? 'primary' : 'ghost') + ' sm" href="#/implantacao/' + i.id + '/ficha">' + (fc ? 'Abrir a ficha' : 'Ver') + '</a></div>' +
         '<div class="corpo"><span class="ajuda" style="margin:0">Vem preenchida com o que o portal sabe; quem conduziu completa os campos em azul e envia à assistente de crédito em até ' + (fc && fc.prazo ? fc.prazo.dias : 5) + ' dias úteis da conclusão.</span></div></section>';
     }
+    if (st.pos) html += htmlPosImp(i, st.pos, pd, st);
     // onboarding depois de concluir
     var o = st.onboarding;
     if (d.onboarding_pendente && ['concluida', 'na_carteira'].indexOf(i.etapa) >= 0) {
@@ -4815,6 +4862,39 @@
       };
     };
     if ($('#btJustOnbImp')) $('#btJustOnbImp').onclick = function () { post('/onboarding-justificativa', { texto: $('#mJustOnb').value }, 'Justificativa salva.'); };
+    // pós-implantação
+    if ($('#btPosEsp')) $('#btPosEsp').onclick = function () {
+      var mo = modal({ titulo: 'Solicitação de análise de espólio', corpo: '<p class="ajuda" style="margin-top:0">O portal acha sozinho a solicitação aberta na Análise de Espólio com o mesmo CNPJ (ou nome). Se ela foi aberta com outro nome ou CNPJ, informe o protocolo.</p>' +
+        '<label class="rot" for="mPosProt">Protocolo na Análise de Espólio</label><input class="campo" id="mPosProt" placeholder="Ex.: AE-2026-0001">',
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mPosProtOk">Salvar</button>' });
+      $('#mPosProtOk', mo).onclick = function () { post('/pos/espolio', { protocolo: $('#mPosProt', mo).value }, 'Espólios registrados.', mo); };
+    };
+    if ($('#btPosPend')) $('#btPosPend').onclick = function () {
+      var mo = modal({ titulo: 'Levantamento de pendências', corpo: '<p class="ajuda" style="margin-top:0">O PDF não é anexado no portal: fica salvo no CPD, na pasta do condomínio.</p><div class="linha" style="gap:8px">' +
+        '<label class="opcao-radio"><input type="radio" name="mPosPen" value="enviado" checked><div><b>Enviado no WhatsApp e salvo no CPD</b></div></label>' +
+        '<label class="opcao-radio"><input type="radio" name="mPosPen" value="completo"><div><b>Cadastro completo, nada a enviar</b></div></label></div>',
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mPosPenOk">Registrar</button>' });
+      $('#mPosPenOk', mo).onclick = function () { post('/pos/pendencias', { situacao: $('input[name=mPosPen]:checked', mo).value }, 'Levantamento de pendências registrado.', mo); };
+    };
+    $$('[data-pos-marcar]').forEach(function (b) {
+      b.onclick = async function () {
+        if (!(await confirmar('1ª prestação de contas', 'Marcar como enviada ao condomínio (e salva no CPD)?', 'Marcar'))) return;
+        post('/pos/prestacao', {}, 'Prestação de contas marcada.');
+      };
+    });
+    $$('[data-pos-desfazer]').forEach(function (b) {
+      b.onclick = async function () {
+        if (!(await confirmar('Desfazer', 'A etapa volta a ficar pendente e o prazo continua contando.', 'Desfazer', true))) return;
+        post('/pos/' + b.getAttribute('data-pos-desfazer'), { acao: 'desfazer' }, 'Desfeito.');
+      };
+    });
+    $$('[data-cobrar-pos]').forEach(function (b) {
+      b.onclick = async function () {
+        var k = b.getAttribute('data-cobrar-pos'), x = st.pos.etapas.filter(function (e) { return e.etapa === k; })[0];
+        if (!(await confirmar('Cobrar · ' + x.nome, esc(i.responsavel_nome || 'Quem conduz') + ' recebe a cobrança no portal e por e-mail.', 'Cobrar'))) return;
+        post('/cobrar', { qual: k }, 'Cobrança enviada.');
+      };
+    });
   }
 
   async function confirmarCarteiraImp(i, recarregar) {
@@ -4842,7 +4922,7 @@
 
   /* ---------- acompanhamento: painel, mês vigente, controle, metas, antecipações, fichas e parâmetros (regras em server/implantacoes/metas.js) ---------- */
   var ABAS_ACOMP = [['painel', 'Painel', 'grafico'], ['mes', 'Mês vigente', 'calendario'], ['controle', 'Controle', 'camadas'], ['onboarding', 'Onboarding', 'pessoas'],
-    ['documentacao', 'Documentação', 'documento'], ['antecipacoes', 'Antecipações', 'banco'], ['fichas', 'Fichas de repasse', 'pasta'], ['parametros', 'Parâmetros', 'lapis']];
+    ['documentacao', 'Documentação', 'documento'], ['antecipacoes', 'Antecipações', 'banco'], ['fichas', 'Fichas de repasse', 'pasta'], ['pos', 'Pós-implantação', 'enviar'], ['parametros', 'Parâmetros', 'lapis']];
   var AVISO_ACOMP = {
     painel: 'Contratos contados pela <b>data de início</b>; implantações canceladas ficam fora. Os números se atualizam a cada formulário e etapa registrados no portal (antes vinham da planilha).',
     mes: 'Implantações cujo contrato começa no mês, na ordem do 1º vencimento. A partir do dia da virada (Parâmetros), a tela mostra o mês seguinte.',
@@ -4851,13 +4931,14 @@
     documentacao: 'Meta de documentação: os documentos da meta em até o prazo contado do <b>envio do formulário</b>. A data de cada documento é a do primeiro anexo (ou da marcação de recebido sem arquivo). Clique num documento que falta para anexar ou marcar recebido.',
     antecipacoes: 'Vem do bloco "Cashback e antecipação" do formulário. <b>Marque</b> e envie ao <b>Controle de Repasses</b>: o Gestor confirma e a antecipação vira regra lá.',
     fichas: 'Cada ficha deve ser enviada ao Crédito em até <b>5 dias úteis</b> da conclusão da implantação. Lembrete 1 dia útil antes e no dia; passou do prazo, ela e a <b>coordenação</b> recebem um alerta por dia útil até o envio. A assistente de crédito vem da Carteira; sem ela, a <b>supervisão de Crédito</b> escolhe.',
+    pos: 'Depois de assumir e de emitir os boletos, a Assistente de Implantação faz três etapas, com prazo em dias úteis: <b>espólios</b> (solicitação na Análise de Espólio, a coordenação de cobrança devolve), <b>levantamento de pendências</b> (PDF da Planilha de moradores pelo WhatsApp, salvo no CPD) e a <b>1ª prestação de contas</b> (Montador, depois do repasse). Lembrete 1 dia útil antes e no dia; atrasada, alerta por dia útil a ela e à coordenação. Só para as implantações assumidas a partir da data dos Parâmetros.',
     parametros: 'Cada mudança vale a partir da data escolhida: os envios anteriores continuam calculados com a regra da época.',
   };
   var MESES_ACOMP = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   var MESES_LONGO = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
   var FAIXA_ACOMP = { concluida: ['concluída', 'verde'], so_onboarding: ['só falta o onboarding', 'azul'], alta: ['60% a 99%', 'azul'], media: ['40% a 59%', 'ambar'], baixa: ['abaixo de 40%', 'vermelha'] };
   var SIT_META_ACOMP = { atingida: ['Meta atingida', 'verde'], andamento: ['Em andamento', 'azul'], abaixo: ['Abaixo da meta', 'ambar'] };
-  var PADRAO_FILTRO_ACOMP = { ano: '', mes: '', analista: '', executivo: '', busca: '', card: '', docSit: '', onb: '', fichaSit: 'aguardando' };
+  var PADRAO_FILTRO_ACOMP = { ano: '', mes: '', analista: '', executivo: '', busca: '', card: '', docSit: '', onb: '', fichaSit: 'aguardando', posSit: 'abertas' };
   var filtroAcomp = null;
   var exportarAcomp = null; // a aba aberta diz o que o botão Excel baixa: { nome, abas: [{ titulo, cab, linhas }] }
   // filtros lembrados por pessoa (neste navegador)
@@ -4906,9 +4987,11 @@
       documentacao: j.linhas.filter(function (l) { return l.na_meta && l.documentacao.status === 'pendente'; }).length,
       antecipacoes: j.linhas.filter(function (l) { return l.antecipacao_envio && (l.antecipacao_envio.situacao === 'devolvida' || l.antecipacao_envio.mudou); }).length,
       fichas: j.fichas.filter(function (x) { return x.situacao === 'devolvida' || (!x.primeiro_envio_em && x.prazo && x.prazo.status === 'atrasado'); }).length,
+      pos: (j.pos || []).filter(atrasadaPosAcomp).length,
     };
   }
-  var TITULO_CONTADOR_ACOMP = { onboarding: 'onboardings a marcar', documentacao: 'contratos com documento pendente', antecipacoes: 'devolvidas ou com o formulário mudado', fichas: 'fichas atrasadas ou devolvidas' };
+  function atrasadaPosAcomp(x) { return x.atrasadas > 0 || x.etapas[0].acao && !!x.etapas[0].devolutiva; }
+  var TITULO_CONTADOR_ACOMP = { onboarding: 'onboardings a marcar', documentacao: 'contratos com documento pendente', antecipacoes: 'devolvidas ou com o formulário mudado', fichas: 'fichas atrasadas ou devolvidas', pos: 'implantações com etapa atrasada ou espólio devolvido' };
 
   async function paginaAcompanhamentoImp(aba) {
     carregarFiltroAcomp();
@@ -4943,7 +5026,7 @@
         return '<a href="#/acompanhamento/' + a[0] + '" class="' + (a[0] === aba ? 'on' : '') + '">' + (IC[a[2]] || '') + esc(a[1]) + (n ? '<span class="cont-acomp" title="' + n + ' ' + esc(TITULO_CONTADOR_ACOMP[a[0]]) + '">' + n + '</span>' : '') + '</a>';
       }).join('') + '</nav><div id="corpoAcomp"></div></div>';
     var recarregar = function () { salvarFiltroAcomp(); paginaAcompanhamentoImp(aba); };
-    var corpo = { painel: painelAcomp, mes: mesAcomp, controle: controleAcomp, onboarding: onboardingAcomp, documentacao: documentacaoAcomp, antecipacoes: antecipacoesAcomp, fichas: fichasAcomp, parametros: parametrosAcomp }[aba];
+    var corpo = { painel: painelAcomp, mes: mesAcomp, controle: controleAcomp, onboarding: onboardingAcomp, documentacao: documentacaoAcomp, antecipacoes: antecipacoesAcomp, fichas: fichasAcomp, pos: posAcomp, parametros: parametrosAcomp }[aba];
     exportarAcomp = null;
     var desenhar = function () { salvarFiltroAcomp(); corpo(j, $('#corpoAcomp'), recarregar); };
     $('#acRecarregar').onclick = recarregar;
@@ -5535,6 +5618,71 @@
     desenhar();
   }
 
+  var SIT_POS_ACOMP = [['abertas', 'Em aberto'], ['atrasadas', 'Atrasadas'], ['vencem', 'Vencem hoje ou amanhã'], ['concluidas', 'Concluídas'], ['todas', 'Todas']];
+  function posAcomp(j, raiz) {
+    var f = filtroAcomp;
+    var coord = j.pode.parametros;
+    var p = j.parametros;
+    function celula(x, l) {
+      var s = x.prazo || {};
+      var devolvida = x.etapa === 'espolio' && x.devolutiva && x.devolutiva.situacao === 'devolvida';
+      var chip = devolvida ? ['devolvida pela cobrança: reenviar', 'vermelha'] : prazoPosImp(x, true);
+      var sec = '';
+      if (devolvida) sec = prazoPosImp(x, true)[0] + (x.devolutiva.protocolo ? ' · ' + x.devolutiva.protocolo : '');
+      else if (x.etapa === 'espolio' && x.devolutiva) sec = DEVOLUTIVA_POS[x.devolutiva.situacao][0] + (x.devolutiva.protocolo ? ' · ' + x.devolutiva.protocolo : '');
+      else if (x.etapa === 'espolio' && x.manual) sec = 'protocolo ' + x.manual.protocolo + ' (à mão)';
+      else if (x.etapa === 'pendencias' && x.registro) sec = x.registro.situacao === 'completo' ? 'cadastro completo' : 'enviado no WhatsApp';
+      else if (x.etapa === 'prestacao' && x.inicio) sec = 'repasse ' + dataBr(x.inicio).slice(0, 5);
+      return '<td class="pos-cel">' + etq([chip[0].toUpperCase(), chip[1]]) + (sec ? '<span class="sec">' + esc(sec) + '</span>' : '') +
+        (coord && !x.feito && s.status === 'atrasado' ? '<button class="link-acomp sub-link" data-cobrar-pos-ac="' + l.id + '" data-qual="' + x.etapa + '">Cobrar</button>' : '') + '</td>';
+    }
+    function desenhar() {
+      var base = (j.pos || []).filter(function (x) { return (!f.analista || String(x.responsavel_id) === String(f.analista)) && (!f.busca || semAcentoAcomp(x.condominio + ' ' + x.protocolo).indexOf(semAcentoAcomp(f.busca)) >= 0); });
+      var FILTRO = { abertas: function (x) { return !x.concluido; }, atrasadas: atrasadaPosAcomp,
+        vencem: function (x) { return x.etapas.some(function (e) { return !e.feito && ['vence_hoje', 'vence_amanha'].indexOf(e.prazo && e.prazo.status) >= 0; }); },
+        concluidas: function (x) { return x.concluido; }, todas: function () { return true; } };
+      if (!FILTRO[f.posSit]) f.posSit = 'abertas';
+      var lista = base.filter(FILTRO[f.posSit]);
+      var mesAtual = j.hoje.slice(0, 7);
+      var feitasMes = [];
+      base.forEach(function (x) { x.etapas.forEach(function (e) { if (e.feito && e.prazo && String(e.prazo.em || '').slice(0, 7) === mesAtual) feitasMes.push(e); }); });
+      var noPrazo = feitasMes.filter(function (e) { return e.prazo.status === 'cumprido'; }).length;
+      var devolvidas = base.filter(function (x) { return x.etapas[0].devolutiva && x.etapas[0].devolutiva.situacao === 'devolvida'; }).length;
+      var atrasadas = base.filter(function (x) { return x.atrasadas > 0; }).length;
+      raiz.innerHTML = '<div class="linha" style="gap:8px;margin-bottom:14px">' + SIT_POS_ACOMP.map(function (s) {
+        return '<button class="pilula-acomp' + (f.posSit === s[0] ? ' on' : '') + '" data-psit="' + s[0] + '">' + esc(s[1]) + ' <span class="n">' + base.filter(FILTRO[s[0]]).length + '</span></button>';
+      }).join('') + '</div>' +
+        '<div class="cards-acomp">' + tileAcomp('Em aberto', base.filter(FILTRO.abertas).length, 'implantações com etapa a fazer') +
+        tileAcomp('Vencem em até 1 dia útil', base.filter(FILTRO.vencem).length, 'lembrete já enviado') +
+        tileAcomp('Atrasadas', atrasadas, 'passaram do prazo', { cor: atrasadas ? 'red' : '' }) +
+        tileAcomp('Etapas no prazo no mês', feitasMes.length ? Math.round(noPrazo * 100 / feitasMes.length) + '%' : '—', feitasMes.length ? noPrazo + ' de ' + feitasMes.length : 'nenhuma feita no mês', { barra: feitasMes.length ? noPrazo * 100 / feitasMes.length : 0 }) +
+        tileAcomp('Espólios devolvidos', devolvidas, 'reenviar na Análise de Espólio') + '</div>' +
+        '<section class="painel"><div class="cab-painel"><h2>Pós-implantação</h2><span class="espaco"></span><span class="ajuda" style="margin:0">espólios ' + diasUteisImp(p.espolio_dias) + ' de assumir · pendências ' + diasUteisImp(p.pendencias_dias) + ' dos boletos · prestação ' + diasUteisImp(p.prestacao_dias) + ' do repasse</span></div>' +
+        '<div class="tabela-wrap"><table style="min-width:1100px"><thead><tr><th>Condomínio</th><th>Conduzida por</th><th>Espólios</th><th>Levantamento de pendências</th><th>1ª prestação de contas</th></tr></thead><tbody>' +
+        (lista.map(function (l) {
+          return '<tr class="clicavel" data-imp="' + l.id + '"><td style="min-width:230px"><a href="#/implantacao/' + l.id + '"><b>' + esc(l.condominio) + '</b></a><span class="sec">' + esc([l.protocolo, l.uf, 'assumida ' + dataBr(l.assumida).slice(0, 5)].filter(Boolean).join(' · ')) + '</span></td>' +
+            '<td>' + esc(l.responsavel_nome || '—') + '</td>' + l.etapas.map(function (x) { return celula(x, l); }).join('') + '</tr>';
+        }).join('') || '<tr><td colspan="5"><div class="vazio" style="border:0;padding:30px">Nenhuma implantação aqui.</div></td></tr>') + '</tbody></table></div>' +
+        '<p class="ajuda" style="margin:0;padding:8px 16px 14px">Os espólios contam até a solicitação ser aberta na Análise de Espólio (o portal acha pelo CNPJ ou pelo nome do condomínio); a devolutiva da coordenação de cobrança aparece ao lado. Os PDFs ficam no CPD, na pasta do condomínio: no portal só se marca o envio.</p></section>';
+      $$('[data-psit]', raiz).forEach(function (b) { b.onclick = function () { f.posSit = b.getAttribute('data-psit'); salvarFiltroAcomp(); desenhar(); }; });
+      irImpAcomp(raiz);
+      $$('[data-cobrar-pos-ac]', raiz).forEach(function (b) {
+        b.onclick = async function () {
+          if (!(await confirmar('Cobrar', 'Quem conduz recebe a cobrança no portal e por e-mail.', 'Cobrar'))) return;
+          try { await api('POST', '/api/implantacoes/' + b.getAttribute('data-cobrar-pos-ac') + '/cobrar', { qual: b.getAttribute('data-qual') }); toast('Cobrança enviada.', 'ok'); } catch (e) { toast(e.message, 'erro'); }
+        };
+      });
+      var txt = function (x) { return prazoPosImp(x, true)[0]; };
+      exportarAcomp = { nome: 'Pos-implantacao', abas: [{ titulo: 'Pós-implantação', cab: ['Protocolo', 'Condomínio', 'UF', 'Assumida em', 'Conduzida por', 'Espólios', 'Solicitação (protocolo)', 'Devolutiva', 'Levantamento de pendências', 'Pendências: registro', 'Repasse', '1ª prestação de contas'],
+        linhas: lista.map(function (l) {
+          var e = l.etapas;
+          return [l.protocolo, l.condominio, l.uf, dataBr(l.assumida), l.responsavel_nome || '', txt(e[0]), e[0].devolutiva ? e[0].devolutiva.protocolo : e[0].manual ? e[0].manual.protocolo : '',
+            e[0].devolutiva ? DEVOLUTIVA_POS[e[0].devolutiva.situacao][0] : '', txt(e[1]), e[1].registro ? e[1].registro.texto : '', e[2].inicio ? dataBr(e[2].inicio) : '', txt(e[2])];
+        }) }] };
+    }
+    desenhar();
+  }
+
   function parametrosAcomp(j, raiz, recarregar) {
     var p = j.parametros, pode = j.pode.parametros, dis = pode ? '' : ' disabled';
     var campo = function (id, rot, valor, ajuda) { return '<div><label class="rot" for="' + id + '">' + esc(rot) + '</label><input class="campo" id="' + id + '" type="number" min="1" value="' + esc(valor) + '"' + dis + '><div class="ajuda">' + esc(ajuda) + '</div></div>'; };
@@ -5546,6 +5694,9 @@
       '<div class="corpo grade-3">' + campo('pmOnb', 'Prazo do onboarding (dias)', p.onboarding_dias, 'contados do 1º vencimento') + campo('pmDoc', 'Prazo da documentação (dias)', p.documentacao_dias, 'contados do envio do formulário de implantação') +
       campo('pmMeta', 'Meta da carteira (%)', p.meta_pct, 'onboarding e documentação') + campo('pmVir', 'Dia da virada do mês vigente', p.virada_dia, 'a partir dele, a tela mostra o mês seguinte') +
       campo('pmConc', 'Prazo para concluir (dias úteis)', p.concluir_dias, 'depois de assumir; pausa com pendência ou impedimento') + campo('pmFicha', 'Prazo da ficha de repasse (dias úteis)', p.ficha_dias, 'da conclusão até o 1º envio ao Crédito') +
+      campo('pmEsp', 'Pós: espólios (dias úteis)', p.espolio_dias, 'depois de assumir, até abrir a solicitação na Análise de Espólio') + campo('pmPen', 'Pós: levantamento de pendências (dias úteis)', p.pendencias_dias, 'depois de emitir os boletos') +
+      campo('pmPre', 'Pós: 1ª prestação de contas (dias úteis)', p.prestacao_dias, 'depois do repasse (1º dia útil depois do 1º vencimento)') +
+      '<div><label class="rot" for="pmPosMarco">Pós-implantação a partir de</label><input class="campo" id="pmPosMarco" type="date" value="' + esc(p.pos_marco) + '"' + dis + '><div class="ajuda">implantações assumidas a partir desta data</div></div>' +
       '<div><label class="rot" for="pmMarco">Data-marco das metas</label><input class="campo" id="pmMarco" type="date" value="' + esc(p.marco) + '"' + dis + '><div class="ajuda">envios anteriores ficam fora das metas</div></div></div>' +
       '<div class="corpo" style="padding-top:0"><span class="rot">Documentos que contam na meta de documentação</span><div class="marcas">' +
       j.documentos.map(function (d) { return '<label class="marca"><input type="checkbox" data-docmeta value="' + esc(d.tipo) + '"' + (p.docs_meta.indexOf(d.tipo) >= 0 ? ' checked' : '') + dis + '> ' + esc(d.nome) + '</label>'; }).join('') + '</div></div>' +
@@ -5555,16 +5706,18 @@
       (j.historico.map(function (h) {
         var v = h.valores;
         return '<tr><td><b>' + dataBr(h.vale_desde) + '</b></td><td>Onboarding ' + v.onboarding_dias + ' dias · documentação ' + v.documentacao_dias + ' dias · meta ' + v.meta_pct + '% · virada no dia ' + v.virada_dia + ' · concluir em ' + v.concluir_dias + ' dias úteis · ficha em ' + v.ficha_dias + ' dias úteis · marco ' + dataBr(v.marco) +
+          ' · pós: espólios ' + v.espolio_dias + ', pendências ' + v.pendencias_dias + ', prestação ' + v.prestacao_dias + ' dias úteis, a partir de ' + dataBr(v.pos_marco) +
           '<span class="sec">' + esc(v.docs_meta.map(function (t) { return nomeDoc[t] || t; }).join(', ')) + '</span></td><td>' + esc(h.alterado_por_nome || '—') + '</td><td>' + dataHoraCr(h.alterado_em) + '</td></tr>';
-      }).join('') || '<tr><td colspan="4" class="sec">Ainda sem alteração: valem as regras da planilha (onboarding 30 dias, documentação 60 dias, meta 90%, virada no dia 25), concluir em 3 dias úteis e ficha em 5 dias úteis.</td></tr>') + '</tbody></table></div></section>' +
+      }).join('') || '<tr><td colspan="4" class="sec">Ainda sem alteração: valem as regras da planilha (onboarding 30 dias, documentação 60 dias, meta 90%, virada no dia 25), concluir em 3 dias úteis, ficha em 5 dias úteis e o pós-implantação: espólios 2, pendências 1 e prestação de contas 5 dias úteis.</td></tr>') + '</tbody></table></div></section>' +
       (pode ? '<div id="impHist" style="margin-top:16px"></div>' : '');
-    exportarAcomp = { nome: 'Parametros', abas: [{ titulo: 'Histórico', cab: ['Vale a partir de', 'Onboarding (dias)', 'Documentação (dias)', 'Meta (%)', 'Virada', 'Concluir (dias úteis)', 'Ficha (dias úteis)', 'Marco', 'Quem alterou'],
-      linhas: j.historico.map(function (h) { var v = h.valores; return [dataBr(h.vale_desde), v.onboarding_dias, v.documentacao_dias, v.meta_pct, v.virada_dia, v.concluir_dias, v.ficha_dias, dataBr(v.marco), h.alterado_por_nome || '']; }) }] };
+    exportarAcomp = { nome: 'Parametros', abas: [{ titulo: 'Histórico', cab: ['Vale a partir de', 'Onboarding (dias)', 'Documentação (dias)', 'Meta (%)', 'Virada', 'Concluir (dias úteis)', 'Ficha (dias úteis)', 'Marco', 'Pós: espólios', 'Pós: pendências', 'Pós: prestação', 'Pós a partir de', 'Quem alterou'],
+      linhas: j.historico.map(function (h) { var v = h.valores; return [dataBr(h.vale_desde), v.onboarding_dias, v.documentacao_dias, v.meta_pct, v.virada_dia, v.concluir_dias, v.ficha_dias, dataBr(v.marco), v.espolio_dias, v.pendencias_dias, v.prestacao_dias, dataBr(v.pos_marco), h.alterado_por_nome || '']; }) }] };
     if (!pode) return;
     importacaoAcomp($('#impHist', raiz), recarregar);
     $('#pmSalvar', raiz).onclick = async function () {
       var valores = { onboarding_dias: Number($('#pmOnb', raiz).value), documentacao_dias: Number($('#pmDoc', raiz).value), meta_pct: Number($('#pmMeta', raiz).value), virada_dia: Number($('#pmVir', raiz).value),
         concluir_dias: Number($('#pmConc', raiz).value), ficha_dias: Number($('#pmFicha', raiz).value),
+        espolio_dias: Number($('#pmEsp', raiz).value), pendencias_dias: Number($('#pmPen', raiz).value), prestacao_dias: Number($('#pmPre', raiz).value), pos_marco: $('#pmPosMarco', raiz).value,
         marco: $('#pmMarco', raiz).value, docs_meta: $$('[data-docmeta]:checked', raiz).map(function (c) { return c.value; }) };
       try { await api('POST', '/api/implantacoes/acompanhamento/parametros', { valores: valores, vale_desde: $('#pmVale', raiz).value }); toast('Regras salvas.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
     };

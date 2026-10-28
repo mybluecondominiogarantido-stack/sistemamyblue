@@ -31,6 +31,7 @@ const { rotasAntecipacoes } = require('./implantacoes-antecipacoes');
 const { rotasImportacao } = require('./implantacoes-importacao');
 const { rotasSetor, criarRotinaPrazos, prazoConcluir, autorizacaoAtiva, autorizados, pausasDe, prazoOnboarding, ESCOPOS, MOTIVOS_IMPEDIMENTO } = require('./implantacoes-setor');
 const { criarPrazos } = require('../implantacoes/prazos');
+const { criarPos, rotasPos, criarRotinaPos } = require('./implantacoes-pos');
 
 const SETOR = 'Implantação';
 const ETAPAS = ['rascunho', 'diretoria', 'juridico', 'fila', 'em_implantacao', 'pendencia', 'concluida', 'na_carteira', 'cancelada'];
@@ -78,10 +79,11 @@ function criarRotinasImplantacao({ db, seg, avisos, expediente }) {
   }
   const rotinaPrazos = criarRotinaPrazos({ db, avisos, expediente, coordenacao, link: (id) => `#/implantacao/${id}`, carregarLinhas, historicoParametros });
   const rotinaFichas = criarRotinaFichas({ db, avisos, expediente, coordenacao, historicoParametros, autorizados, P: criarPrazos((d) => expediente.ehDiaUtil(d)) });
+  const rotinaPos = criarRotinaPos({ db, avisos, expediente, coordenacao, link: (id) => `#/implantacao/${id}`, autorizados, posCalc: criarPos({ db, expediente, historicoParametros }) });
   async function executar(agora = new Date()) {
     const m = expediente.momento(agora);
     const feito = { documentos: 0, sem_designacao: 0, prazos: 0, meta_documentos: 0 };
-    feito.prazos_dias_uteis = { ...await rotinaPrazos(agora), ...await rotinaFichas(agora) };
+    feito.prazos_dias_uteis = { ...await rotinaPrazos(agora), ...await rotinaFichas(agora), ...await rotinaPos(agora) };
     for (const i of (await db.q("SELECT id, protocolo, condominio, enviado_em, lembrete_fila_em FROM implantacoes WHERE etapa = 'fila'")).rows) {
       if (expediente.somarHorasUteis(i.lembrete_fila_em || i.enviado_em, HORAS_LEMBRETE_FILA) > agora) continue;
       await avisos.notificar(await coordenacao(), { link: `#/implantacao/${i.id}`, tipo: 'implantacao', email: true,
@@ -453,7 +455,8 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     res.json({ contratos: await contratosDisponiveis(p, req.usuario) });
   });
 
-  rotasAcompanhamento(r, { db, seg, avisos, perfil, erro, evento, json, fichas: () => fichaRotas.resumo() });
+  const posCalc = criarPos({ db, expediente, historicoParametros });
+  rotasAcompanhamento(r, { db, seg, avisos, perfil, erro, evento, json, fichas: () => fichaRotas.resumo(), pos: () => posCalc.resumo() });
   rotasImportacao(r, { db, erro, perfil, historicoParametros });
   rotasSetor(r, { db, avisos, erro, evento, json, link, coordenacao, carregar, historicoParametros, expediente });
   // a ficha de repasse abre na conclusão
@@ -461,6 +464,7 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     autorizacaoAtiva, autorizados, P });
   const aoConcluir = fichaRotas.aoConcluir;
   rotasAntecipacoes(r, { db, avisos, erro, evento, json, link, coordenacao, carregar, acessos });
+  rotasPos(r, { db, erro, evento, json, carregar, posCalc });
 
   /* ===================== listagem ===================== */
   r.get('/api/implantacoes', async (req, res) => {
@@ -538,6 +542,7 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
           const f = await db.um('SELECT situacao, versao, aberta_em, primeiro_envio_em FROM implantacao_fichas WHERE implantacao_id = $1', [i.id]);
           return f ? { situacao: f.situacao, versao: f.versao, prazo: await fichaRotas.prazoFicha(f) } : null;
         })(),
+        pos: await posCalc.daImplantacao(i),
       };
     }
     res.json({
@@ -808,6 +813,11 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     }
     await db.tx(async (t) => {
       await t.q('UPDATE implantacoes SET etapas = $2::jsonb, atualizado_em = now() WHERE id = $1', [i.id, JSON.stringify(etapas)]);
+      // pós-implantação: o levantamento de pendências conta do dia em que os boletos foram emitidos
+      if (etapas.boletos.feito !== antes.boletos.feito) {
+        await t.q(etapas.boletos.feito ? "UPDATE implantacoes SET pos = jsonb_set(COALESCE(pos, '{}'::jsonb), '{boletos_em}', to_jsonb($2::text)) WHERE id = $1"
+          : "UPDATE implantacoes SET pos = COALESCE(pos, '{}'::jsonb) - 'boletos_em' WHERE id = $1", etapas.boletos.feito ? [i.id, M.diaSP(Date.now())] : [i.id]);
+      }
       const mudou = Object.keys(etapas).filter((k) => JSON.stringify(etapas[k]) !== JSON.stringify(antes[k]));
       if (mudou.length) await evento(t, i.id, req.usuario.id, 'etapas', { mudou, etapas });
     });

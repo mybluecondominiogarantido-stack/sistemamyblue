@@ -14,15 +14,21 @@
  *  - Metas só para envios a partir da data-marco. Os parâmetros valem a partir de uma data (histórico).
  *  - Prazos em dias úteis (server/implantacoes/prazos.js): concluir em concluir_dias (3) depois de assumir; ficha de
  *    repasse em ficha_dias (5) da conclusão até o envio ao Crédito.
+ *  - Pós-implantação (server/implantacoes/pos.js), para as assumidas a partir de pos_marco: espólios em espolio_dias (2)
+ *    depois de assumir; levantamento de pendências em pendencias_dias (1) depois de emitir os boletos; 1ª prestação de
+ *    contas em prestacao_dias (5) depois do repasse (1º dia útil depois do 1º vencimento).
  */
 const F = require('./formulario');
 
 const PADRAO = Object.freeze({
   onboarding_dias: 30, documentacao_dias: 60, meta_pct: 90, virada_dia: 25, marco: '2026-07-01', concluir_dias: 3, ficha_dias: 5,
+  espolio_dias: 2, pendencias_dias: 1, prestacao_dias: 5, pos_marco: '2026-10-27',
   docs_meta: ['convencao', 'ata_eleicao', 'ata_orcamento', 'procuracao'],
 });
 const LIMITES = { onboarding_dias: [1, 365, 'Prazo do onboarding'], documentacao_dias: [1, 365, 'Prazo da documentação'], meta_pct: [1, 100, 'Meta da carteira'], virada_dia: [1, 28, 'Dia da virada do mês'],
-  concluir_dias: [1, 30, 'Prazo para concluir (dias úteis)'], ficha_dias: [1, 30, 'Prazo da ficha de repasse (dias úteis)'] };
+  concluir_dias: [1, 30, 'Prazo para concluir (dias úteis)'], ficha_dias: [1, 30, 'Prazo da ficha de repasse (dias úteis)'],
+  espolio_dias: [1, 30, 'Prazo dos espólios (dias úteis)'], pendencias_dias: [1, 30, 'Prazo do levantamento de pendências (dias úteis)'],
+  prestacao_dias: [1, 30, 'Prazo da 1ª prestação de contas (dias úteis)'] };
 const ETAPAS = ['documentacao', 'vouch', 'onboarding', 'boletos', 'envio'];
 const ETAPA_NOME = { documentacao: 'Documentação', vouch: 'Vouch', onboarding: 'Onboarding', boletos: 'Emissão de boletos', envio: 'Envio dos boletos' };
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
@@ -70,6 +76,8 @@ function normalizarParametros(v) {
   }
   out.marco = String(v.marco === undefined ? PADRAO.marco : v.marco);
   if (!valida(out.marco)) erros.push('Data-marco inválida.');
+  out.pos_marco = String(v.pos_marco === undefined ? PADRAO.pos_marco : v.pos_marco);
+  if (!valida(out.pos_marco)) erros.push('Data de início do pós-implantação inválida.');
   const docs = Array.isArray(v.docs_meta) ? v.docs_meta : PADRAO.docs_meta;
   out.docs_meta = [...new Set(docs.map(String))].filter((t) => F.DOCUMENTOS[t] && !['analise_credito', 'contrato', 'outro'].includes(t));
   if (!out.docs_meta.length) erros.push('Marque ao menos um documento da meta.');
