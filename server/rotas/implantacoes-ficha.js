@@ -121,11 +121,13 @@ function rotasFicha(r, deps) {
     const rascunho = FI.montar(i, ficha.dados, ctx);
     const conteudo = pf.editar || !ultima ? rascunho : ultima.conteudo;
     const destino = ficha.destino_id ? await db.um('SELECT id, nome FROM usuarios WHERE id = $1', [ficha.destino_id]) : null;
+    // antes do envio: para quem vai (a assistente de crédito do condomínio na Carteira; sem ela, a supervisão de Crédito escolhe)
+    const para = destino || ficha.versao ? null : await daCarteira(i);
     const devolucao = ficha.situacao === 'devolvida' ? eventos.filter((e) => e.tipo === 'ficha_devolvida').pop() || null : null;
     res.json({
       implantacao: { id: i.id, protocolo: i.protocolo, condominio: i.condominio, etapa: i.etapa, responsavel_id: i.responsavel_id, responsavel_nome: i.responsavel_nome },
       ficha: { situacao: ficha.situacao, versao: ficha.versao, limite, aberta_em: ficha.aberta_em, primeiro_envio_em: ficha.primeiro_envio_em, atualizado_em: ficha.atualizado_em,
-        destino, prazo: await prazoFicha(ficha), devolucao,
+        destino, para: para ? { id: para.id, nome: para.nome } : null, prazo: await prazoFicha(ficha), devolucao,
         alterada: !!(ultima && JSON.stringify(FI.diferencas(ultima.conteudo, rascunho)) !== '[]'), mudou: ultima ? FI.diferencas(ultima.conteudo, rascunho) : [] },
       dados: pf.editar ? FI.normalizarDados(ficha.dados) : null, conteudo, faltas: pf.editar ? FI.faltas(ficha.dados) : [],
       versoes, eventos, pode: pf,

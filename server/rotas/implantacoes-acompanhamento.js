@@ -69,7 +69,7 @@ function controle(b, l, podeObs, podeEtapas) {
   };
 }
 
-function rotasAcompanhamento(r, { db, seg, avisos, perfil, erro, evento, json, fichas, pos }) {
+function rotasAcompanhamento(r, { db, seg, avisos, perfil, erro, evento, json, fichas, pos, prazos }) {
   const interno = (p) => p.admin || p.equipe || p.coordenacao || p.diretoria;
 
   r.get('/api/implantacoes/acompanhamento', async (req, res) => {
@@ -80,6 +80,7 @@ function rotasAcompanhamento(r, { db, seg, avisos, perfil, erro, evento, json, f
     const atual = M.parametrosEm(historico, hoje);
     const brutas = await carregarLinhas(db, { hoje, historico });
     const envioAntecipacao = await situacoesAntecipacao(db, brutas);
+    const concluir = prazos ? await prazos(brutas.map((b) => b._bruto), historico, hoje) : {};
     const contratos = new Set((await db.q("SELECT DISTINCT implantacao_id FROM implantacao_documentos WHERE tipo = 'contrato' AND substituido_em IS NULL")).rows.map((x) => x.implantacao_id));
     const coord = !!(p.coordenacao || p.admin);
     const linhas = brutas.map(({ _bruto, ...l }) => {
@@ -88,7 +89,8 @@ function rotasAcompanhamento(r, { db, seg, avisos, perfil, erro, evento, json, f
       const podeEtapas = _bruto.etapa === 'em_implantacao' && conduz && !!(_bruto.importacao_id || _bruto.iniciado_em);
       const c = controle(_bruto, l, conduz, podeEtapas);
       c.contrato = !!(_bruto.contrato_id || contratos.has(l.id));
-      return { ...l, antecipacao_envio: envioAntecipacao[l.id] || null, controle: c };
+      return { ...l, antecipacao_envio: envioAntecipacao[l.id] || null, controle: c, concluir: concluir[l.id] || null,
+        designado_em: _bruto.designado_em || null, iniciado_em: _bruto.iniciado_em || null, concluido_em: _bruto.concluido_em || null };
     });
     const porIds = [...new Set(linhas.map((l) => l.onboarding.por).filter(Boolean))];
     const nomesPor = new Map(porIds.length ? (await db.q(`SELECT id, nome FROM usuarios WHERE id IN (${porIds.map(Number).join(',')})`)).rows.map((x) => [x.id, x.nome]) : []);

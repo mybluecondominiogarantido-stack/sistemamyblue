@@ -668,6 +668,37 @@ tr.sel-ct td{background:var(--surface-2)}
 .ctrl-acomp.resumida .obs-td{min-width:130px;width:20%}
 .ctrl-acomp.resumida .obs-ctrl{min-width:120px;width:100%}
 .obs-ctrl::placeholder{color:var(--faint)}
+.cards-acomp.quatro{grid-template-columns:repeat(4,minmax(0,1fr))}
+.cards-acomp.duas{grid-template-columns:repeat(2,minmax(0,1fr))}
+.cards-acomp.uma{grid-template-columns:1fr}
+/* Painel de implantação: visões, selos das etapas e as metas do Dashboard */
+.tempo-imp{list-style:none;margin:0;padding:18px 18px 14px;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.marco-imp{position:relative;display:flex;flex-direction:column;gap:3px;padding-top:34px;min-width:0}
+.marco-imp::before{content:'';position:absolute;top:12px;left:28px;right:-10px;height:3px;background:var(--border)}
+.marco-imp:last-child::before{display:none}
+.marco-imp.feito::before{background:var(--green)}
+.ponto-imp{position:absolute;top:0;left:0;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:800;border:2px dashed var(--border-2);background:var(--surface);color:#fff}
+.marco-imp.feito .ponto-imp{background:var(--green);border:2px solid var(--green)}
+.marco-imp.atual .ponto-imp{border:3px solid var(--teal);box-shadow:0 0 0 4px var(--teal-bg)}
+.marco-imp b{font-size:11.5px;letter-spacing:.5px;text-transform:uppercase;color:var(--ink-2)}
+.dia-imp{font-family:var(--display);font-size:20px;font-weight:700;color:var(--ink)}
+.marco-imp.futuro .dia-imp{color:var(--faint)}
+.marco-imp .sec{font-size:12.5px;font-weight:600;color:var(--muted);overflow-wrap:anywhere}
+.cadeado-doc{display:inline-flex;color:var(--muted)}
+.cadeado-doc svg{width:16px;height:16px}
+.venc-padrao{display:inline-flex;align-items:baseline;gap:6px;font-weight:700;padding:7px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2)}
+.convite-imp{display:flex;align-items:center;gap:6px;flex-basis:100%;font-size:13px;font-weight:700;color:var(--teal-d)}
+.convite-imp svg{width:16px;height:16px}
+.convite-imp.erro{color:var(--red)}
+@media (max-width:760px){.tempo-imp{grid-template-columns:1fr;gap:16px}.marco-imp{padding:0 0 0 38px}.marco-imp::before{top:28px;left:12px;right:auto;bottom:-16px;width:3px;height:auto}}
+.visoes-painel{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+.visoes-painel a.pilula-acomp{text-decoration:none}
+.selos-imp{display:inline-flex;gap:3px;white-space:nowrap}
+.selos-imp i{font-style:normal;font-size:10.5px;font-weight:800;border-radius:6px;padding:2px 6px;background:var(--amber-bg);color:#9a6512}
+.selos-imp i.f{background:var(--green-bg);color:var(--green)}
+.meta-dash{display:flex;flex-direction:column;gap:8px;padding:12px 16px 16px}
+.meta-dash b{font-family:var(--display);font-size:30px;line-height:1}
+.meta-dash .link-acomp{align-self:flex-start;color:var(--teal-d);text-decoration:underline;font-weight:700}
 @media (max-width:1100px){.cards-acomp{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:640px){.cards-acomp{grid-template-columns:1fr 1fr}.busca-acomp{min-width:100%}.ctrl-acomp .f1{left:0}.ctrl-acomp .f0{position:static}}
 .abas-acomp{gap:0}

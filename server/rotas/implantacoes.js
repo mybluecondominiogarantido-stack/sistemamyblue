@@ -458,7 +458,25 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
   });
 
   const posCalc = criarPos({ db, expediente, historicoParametros });
-  rotasAcompanhamento(r, { db, seg, avisos, perfil, erro, evento, json, fichas: () => fichaRotas.resumo(), pos: () => posCalc.resumo() });
+  /* prazo para concluir de cada implantação do portal (Dashboard: concluídas no prazo, tempo médio, por assistente):
+     { id: { status, atraso, vence, em, iniciada, dias } }, dias = dias úteis entre iniciar e concluir, sem as pausas */
+  async function prazosConcluir(brutas, historico, hoje) {
+    const pausas = new Map();
+    for (const x of (await db.q('SELECT implantacao_id, inicio, fim FROM implantacao_pausas ORDER BY id')).rows) {
+      if (!pausas.has(x.implantacao_id)) pausas.set(x.implantacao_id, []);
+      pausas.get(x.implantacao_id).push(x);
+    }
+    const out = {};
+    for (const i of brutas) {
+      const ps = pausas.get(i.id) || [];
+      const s = prazoConcluir(i, ps, M.parametrosEm(historico, M.diaSP(i.enviado_em || i.iniciado_em)), P, hoje);
+      if (!s) continue;
+      const dias = i.concluido_em ? P.consumidos(M.diaSP(i.iniciado_em), M.diaSP(i.concluido_em), ps.map((p) => ({ inicio: M.diaSP(p.inicio), fim: p.fim ? M.diaSP(p.fim) : null }))) : null;
+      out[i.id] = { status: s.status, atraso: s.atraso || 0, faltam: s.faltam == null ? null : s.faltam, vence: s.vence || null, em: s.em || null, desde: s.desde || null, iniciada: M.diaSP(i.iniciado_em), dias };
+    }
+    return out;
+  }
+  rotasAcompanhamento(r, { db, seg, avisos, perfil, erro, evento, json, fichas: () => fichaRotas.resumo(), pos: () => posCalc.resumo(), prazos: prazosConcluir });
   rotasImportacao(r, { db, erro, perfil, historicoParametros });
   // convite do onboarding no Outlook (só com Microsoft 365): criar, atualizar ou cancelar depois de salvar
   const convite = (i, onboarding) => acertarConvite({ db, agenda: avisos.agenda, gestores: seg.GESTORES_DE_SETOR }, i, onboarding);
