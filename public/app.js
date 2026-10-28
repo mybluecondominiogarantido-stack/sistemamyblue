@@ -2458,7 +2458,7 @@
     }
 
     var ROTULO_CAMPO = { codigo: 'ID Vouch', nome: 'Condomínio (Apelido Vouch)', situacao: 'Situação', comarca: 'UF', vencimento: 'Vencimento', administradora: 'Administradora', forma_envio: 'Forma de envio', executivo: 'Executivo de negócios',
-      inicio_contrato: 'Vigência', razao_social: 'Razão social', cnpj: 'CNPJ', observacoes: 'Observações' };
+      sindico_nome: 'Síndico', sindico_telefone: 'Telefone do síndico', sindico_email: 'E-mail do síndico', inicio_contrato: 'Vigência', razao_social: 'Razão social', cnpj: 'CNPJ', observacoes: 'Observações' };
     funcoes.forEach(function (fn) { ROTULO_CAMPO[fn.campo] = fn.rotulo; });
 
     function editarCondominio(c, historico) {
@@ -2497,6 +2497,8 @@
           '<div class="grade-2">' + campo('cdRazao', 'Razão social', c.razao_social, ' maxlength="200"', lib('razao_social')) + campo('cdCnpj', 'CNPJ', c.cnpj, ' maxlength="20" inputmode="numeric"', lib('cnpj')) + '</div>' +
           '<div class="grade-3">' + campo('cdVenc', 'Vencimento', c.vencimento, ' maxlength="40" placeholder="10 ou 5º DIA ÚTIL" list="cdVencs"', lib('vencimento')) +
           campo('cdAdm', 'Administradora', c.administradora, ' maxlength="120" list="cdAdms"', lib('administradora')) + campo('cdEnvio', 'Forma de envio', c.forma_envio, ' maxlength="60" list="cdEnvios"', lib('forma_envio')) + '</div>' +
+          '<div class="grade-3">' + campo('cdSind', 'Síndico', c.sindico_nome, ' maxlength="160"', lib('sindico_nome')) + campo('cdSindTel', 'Telefone do síndico', c.sindico_telefone, ' maxlength="40"', lib('sindico_telefone')) +
+            campo('cdSindEmail', 'E-mail do síndico', c.sindico_email, ' maxlength="160" type="email"', lib('sindico_email')) + '</div>' +
           '<div class="grade-3">' + funcoes.map(function (fn) { return campo('cd_' + fn.campo, esc(fn.rotulo), c[fn.campo], ' maxlength="120" list="cdl_' + fn.campo + '" placeholder="NOME - RAMAL"', lib(fn.campo)); }).join('') + '</div>' +
           (parcial ? '<div class="ajuda">Você altera só os campos liberados para você; os outros ficam travados.' + (j.acesso ? ' Quem edita o quê: <b>Seu acesso</b>, no alto da Carteira.' : ' Para mudar o que você pode editar, fale com a coordenação do seu setor.') + '</div>' : '') +
           '<div class="grade-3">' + campo('cdInicio', 'Vigência do contrato' + (novo ? ' *' : ''), mesAno(c.inicio_contrato), ' maxlength="7" inputmode="numeric" placeholder="mm/aaaa"', lib('inicio_contrato')) +
@@ -2520,7 +2522,7 @@
       if (parcial) {
         $('#btCdOk', m).onclick = async function () {
           var ids = { codigo: 'cdCodigo', situacao: 'cdSit', comarca: 'cdUf', nome: 'cdNome', razao_social: 'cdRazao', cnpj: 'cdCnpj', vencimento: 'cdVenc', administradora: 'cdAdm',
-            forma_envio: 'cdEnvio', inicio_contrato: 'cdInicio', executivo: 'cdExec', observacoes: 'cdObs' };
+            forma_envio: 'cdEnvio', inicio_contrato: 'cdInicio', executivo: 'cdExec', observacoes: 'cdObs', sindico_nome: 'cdSind', sindico_telefone: 'cdSindTel', sindico_email: 'cdSindEmail' };
           funcoes.forEach(function (fn) { ids[fn.campo] = 'cd_' + fn.campo; });
           var corpo = {};
           Object.keys(ids).forEach(function (k) { if (podeCampo(k)) corpo[k] = $('#' + ids[k], m).value; });
@@ -2541,6 +2543,7 @@
           codigo: $('#cdCodigo', m).value, situacao: $('#cdSit', m).value, comarca: $('#cdUf', m).value, nome: $('#cdNome', m).value,
           razao_social: $('#cdRazao', m).value, cnpj: $('#cdCnpj', m).value, vencimento: $('#cdVenc', m).value, administradora: $('#cdAdm', m).value, executivo: $('#cdExec', m).value,
           forma_envio: $('#cdEnvio', m).value, inicio_contrato: $('#cdInicio', m).value, observacoes: $('#cdObs', m).value,
+          sindico_nome: $('#cdSind', m).value, sindico_telefone: $('#cdSindTel', m).value, sindico_email: $('#cdSindEmail', m).value,
         };
         funcoes.forEach(function (fn) { corpo[fn.campo] = $('#cd_' + fn.campo, m).value; });
         var msg = $('#cdMsg', m);
@@ -5272,8 +5275,9 @@
       corpo: (j.duplicados.length ? '<div class="msg aviso" style="margin-bottom:12px">Já existe na Carteira: ' + esc(j.duplicados.map(function (x) { return x.nome + ' (ID ' + x.codigo + ')'; }).join('; ')) + '. Confira antes de incluir.</div>'
         : '<div class="msg ok" style="margin-bottom:12px">Nenhum condomínio com este ID ou CNPJ na Carteira.</div>') +
         '<div class="grade-3">' + c('codigo', 'ID Vouch', { ajuda: 'Da etapa Cadastro no sistema.' }) + c('nome', 'Nome na Carteira', { ajuda: 'Sugerido a partir da razão social.' }) + c('situacao', 'Situação') +
-        c('razao_social', 'Razão social', { span: 2 }) + c('cnpj', 'CNPJ') + c('comarca', 'UF') + c('vencimento', 'Vencimento') + c('inicio_contrato', 'Início do contrato (vigência)', { tipo: 'date' }) +
+        c('razao_social', 'Razão social', { span: 2 }) + c('cnpj', 'CNPJ') + c('comarca', 'UF') + c('vencimento', 'Vencimento padrão', { ajuda: 'O dia do formulário (não o 1º vencimento).' }) + c('inicio_contrato', 'Início do contrato (vigência)', { tipo: 'date' }) +
         c('administradora', 'Administradora') + selCr('k_forma_envio', 'Forma de envio do boleto', dd.forma_envio, [['', 'Escolha'], ['E-MAIL', 'E-mail'], ['IMPRESSO', 'Impresso'], ['IMPRESSO/E-MAIL', 'Impresso/E-mail']]) + c('executivo', 'Executivo') + '</div>' +
+        '<span class="rot" style="margin-top:12px">Síndico (do formulário)</span><div class="grade-3">' + c('sindico_nome', 'Nome do síndico') + c('sindico_telefone', 'Telefone do síndico') + c('sindico_email', 'E-mail do síndico', { tipo: 'email' }) + '</div>' +
         '<label class="rot" for="k_observacoes" style="margin-top:12px">Observações</label><textarea class="campo" id="k_observacoes" rows="2">' + esc(dd.observacoes) + '</textarea>' +
         '<div class="ajuda">Analista de cobrança, extrajudicial e assistente de crédito são escolhidos depois, na ficha do condomínio na Carteira.</div>',
       pe: '<button class="btn ghost" data-fechar>Ainda não</button><button class="btn primary" id="kOk">Confirmar e incluir na Carteira</button>',
