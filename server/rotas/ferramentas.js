@@ -384,6 +384,14 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, bo
             }
             await registros.apagar(m.slug, colecao, p.id); await log({ id: p.id });
             return responder(res, cb, { ok: true });
+          case 'relatorio': {
+            // PDF do relatório de garantia de uma renegociação: vai anexado no ticket do Crédito
+            if (!reneg || p.id == null) break;
+            const r2 = await renegociacoes.guardarRelatorio(req, String(p.id), p.nome, p.pdf);
+            if (r2.erro) return responder(res, cb, { ok: false, error: r2.erro }, 400);
+            await log({ id: p.id, ticket: r2.ticket });
+            return responder(res, cb, { ok: true });
+          }
           case 'addMany':
             if (!validarLinhas(p.rows)) break;
             await registros.lote(m.slug, colecao, p.rows.map((row) => ({ id: idDaLinha(row), dados: row })), uid); await log({ total: p.rows.length });

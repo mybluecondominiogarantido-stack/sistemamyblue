@@ -783,6 +783,16 @@ CREATE TABLE IF NOT EXISTS renegociacao_tickets (
   criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
   atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- PDF do relatório de garantia de cada renegociação, enviado pela ferramenta (vai anexado no ticket do Crédito)
+CREATE TABLE IF NOT EXISTS renegociacao_relatorios (
+  item_id TEXT PRIMARY KEY,
+  nome TEXT NOT NULL,
+  tamanho INTEGER NOT NULL,
+  conteudo BYTEA NOT NULL,
+  enviado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  enviado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 `;
 
 /* Supabase publica o schema "public" pela API dele (PostgREST). Com RLS ligado e sem
@@ -794,7 +804,7 @@ const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 
   'analise_lancamentos', 'analise_exclusoes', 'analise_alertas', 'analise_eventos',
   'implantacao_protocolos', 'implantacoes', 'implantacao_documentos', 'implantacao_eventos', 'implantacao_liberacoes', 'implantacao_parametros',
   'implantacao_autorizacoes', 'implantacao_pausas', 'implantacao_fichas', 'implantacao_ficha_versoes', 'implantacao_antecipacoes', 'implantacao_importacoes',
-  'contrato_protocolos', 'contratos', 'contrato_documentos', 'contrato_eventos', 'renegociacao_tickets'];
+  'contrato_protocolos', 'contratos', 'contrato_documentos', 'contrato_eventos', 'renegociacao_tickets', 'renegociacao_relatorios'];
 const RLS = TABELAS.map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`).join(';\n');
 
 /* Ajustes em bancos já existentes (rodam a cada início e não fazem nada se já estiverem aplicados). */

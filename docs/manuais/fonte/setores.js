@@ -42,11 +42,11 @@ const FERRAMENTAS = {
     descricao: 'Controle próprio do CS para as renegociações de contrato, a perda de receita no exercício e os tickets do Sucesso do Cliente.',
     dados: 'Os registros ficam no banco do portal e são compartilhados pela equipe.',
     obs: 'Esta ferramenta é o controle próprio do CS. A <b>Central de Tickets</b> do portal é outra coisa: serve para as demandas <b>entre os setores</b> da MyBlue. '
-      + 'A ligação entre as duas é automática: ao salvar uma renegociação como <b>Fechado</b>, o portal abre um ticket <i>Renegociação fechada</i> para a <b>assistente de crédito</b> do condomínio na Carteira, com as condições fechadas. '
+      + 'A ligação entre as duas é automática: ao salvar uma renegociação como <b>Fechado</b>, o portal abre um ticket <i>Renegociação fechada</i> para a <b>assistente de crédito</b> do condomínio na Carteira, com as condições fechadas e o PDF do relatório de garantia anexado (quando você anexar). '
       + 'O condomínio é procurado na Carteira pelo nome e pela UF; se não for achado, o ticket vai para o líder do Crédito e você recebe um aviso para conferir o nome. '
       + 'Mudou alguma condição depois? Salve de novo: o mesmo ticket recebe um comentário com o antes e o depois (e é reaberto, se já estava resolvido). Acompanhe em <b>Central de Tickets → Abertos por mim</b>.',
     abas: [
-      ['Renegociações', 'Registro de cada renegociação de contrato com o condomínio. Salvar como <b>Fechado</b> abre o ticket para a assistente de crédito.'],
+      ['Renegociações', 'Registro de cada renegociação de contrato com o condomínio, inclusive o tipo de negociação e, na antecipação, os dias de antecipação e de vencimento (tudo fica no banco do portal). Salvar como <b>Fechado</b> abre o ticket para a assistente de crédito.'],
       ['Perda de receita no exercício', 'Quanto a MyBlue deixa de receber no ano com as renegociações.'],
       ['Tickets', 'Controle dos tickets do Sucesso do Cliente.'],
     ],
@@ -404,7 +404,7 @@ const SETORES = [
       ['Recibo (entrega / motoboy)', 9, 'alta', 'O que foi entregue, para quem e quando.'],
       ['Consumo de água e gás', 18, 'media', 'Condomínio, mês e as leituras (anexe a planilha ou foto).'],
       ['Planilha de moradores', 18, 'baixa', 'Condomínio e o que precisa ser atualizado.'],
-      ['Renegociação fechada', 9, 'alta', 'Aberto sozinho pelo portal quando o CS fecha uma renegociação no Controle de Renegociações, já com as condições (taxa e tarifa antes → depois, VOP, boletos, fidelização e vigência). Se elas mudarem depois, o mesmo ticket recebe um comentário com o antes e o depois.'],
+      ['Renegociação fechada', 9, 'alta', 'Aberto sozinho pelo portal quando o CS fecha uma renegociação no Controle de Renegociações, já com as condições (tipo de negociação, taxa e tarifa antes → depois, VOP, boletos, fidelização, vigência e antecipação) e o PDF do relatório de garantia anexado. Se elas mudarem depois, o mesmo ticket recebe um comentário com o antes e o depois.'],
     ],
     abre: [
       ['Cobrança', 'situação de inadimplência para a prestação de contas'],

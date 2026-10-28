@@ -13,7 +13,8 @@ const emails = [];
 // cabeçalho da planilha como a ferramenta define (SHEET_HEADERS)
 const CAB = ['ID', 'Condomínio', 'Estado', 'Data', 'Status', 'Taxa Anterior (%)', 'Taxa de Serviço (%)', 'Tarifa Anterior (R$)', 'Tarifa Bancária (R$)',
   'VOP Mensal (R$)', 'Qtd. Boletos', 'Receita Anterior (R$)', 'Receita Nova (R$)', 'Perda Mensal (R$)', 'Perda (%)', 'Antecipações (R$)', '% Antecip. do VOP',
-  'Honorários', 'Val. Boletos', 'Fidelização', 'Início vigência', 'Meses no Exercício', 'Perda no Ano (R$)', 'Observações', 'Relatório', 'Registrado em'];
+  'Honorários', 'Val. Boletos', 'Fidelização', 'Início vigência', 'Meses no Exercício', 'Perda no Ano (R$)', 'Observações', 'Relatório', 'Registrado em',
+  'Tipo de negociação', 'Tipo (outro)', 'Dia antecipação', 'Dia vencimento'];
 const HTML_RENEG = `<!DOCTYPE html><html><head><title>MyBlue — Controle de Renegociações</title></head><body><script>
 const SHEET_URL_BUILTIN = "https://script.google.com/macros/s/AAA/exec";
 const SHEET_HEADERS = ${JSON.stringify(CAB)};
@@ -250,4 +251,53 @@ test('o tipo de demanda pode ser ajustado pela administração e vale para os pr
   const esperado = criarExpediente().somarHorasUteis(new Date(t.criado_em), 18);
   assert.ok(Math.abs(new Date(t.prazo) - esperado) < 5000);
   assert.equal((await ctx.db.um("SELECT COUNT(*)::int AS n FROM ticket_categorias WHERE nome = 'Renegociação fechada'")).n, 1);
+});
+
+const PDF = Buffer.from('%PDF-1.4\n% relatório fictício\n%%EOF\n').toString('base64');
+const anexosDe = async (ticketId) => (await ctx.db.q('SELECT nome, tipo, interno FROM ticket_anexos WHERE ticket_id = $1 ORDER BY id', [ticketId])).rows;
+
+test('tipo de negociação e dias da antecipação vão para a planilha e para o ticket', async () => {
+  const campos = { 'Tipo de negociação': 'Antecipação', 'Antecipações (R$)': 15000, 'Dia antecipação': '1', 'Dia vencimento': '10' };
+  await gravar(sara, { action: 'add', row: linha({ id: 'r5', cond: 'Jardim Azul', uf: 'CE', status: 'Fechado', campos }) });
+  const [t] = await ticketsDe('r5');
+  for (const trecho of ['Tipo de negociação: Antecipação', 'Antecipações: R$ 15.000,00', 'Dia da antecipação (todo mês): 1', 'Dia do vencimento (todo mês): 10']) {
+    assert.ok(t.descricao.includes(trecho), 'falta: ' + trecho + '\n' + t.descricao);
+  }
+  // as colunas novas voltam na leitura da planilha (a ferramenta lê pelo cabeçalho)
+  const r = await sara('GET', '/api/gas/renegociacoes');
+  const [cab, ...linhas] = r.json;
+  assert.equal(cab[cab.length - 4], 'Tipo de negociação');
+  assert.equal(linhas.find((l) => l[0] === 'r5')[cab.indexOf('Dia vencimento')], '10');
+  // mudar o tipo depois vira comentário
+  await gravar(sara, { action: 'update', id: 'r5', row: linha({ id: 'r5', cond: 'Jardim Azul', uf: 'CE', status: 'Fechado', campos: { ...campos, 'Tipo de negociação': 'Renegociação de taxa', 'Dia antecipação': '', 'Dia vencimento': '' } }) });
+  const c = await ctx.db.um("SELECT texto FROM ticket_eventos WHERE ticket_id = $1 AND tipo = 'comentario'", [t.id]);
+  assert.ok(c.texto.includes('Tipo de negociação: Antecipação → Renegociação de taxa'), c.texto);
+});
+
+test('relatório de garantia (PDF): guardado no banco e anexado no ticket, antes ou depois de fechar', async () => {
+  // enviado com a renegociação ainda em negociação: entra no ticket quando ela fechar
+  await gravar(sara, { action: 'add', row: linha({ id: 'r6', cond: 'Jardim Azul', uf: 'CE', status: 'Em negociação' }) });
+  let r = await gravar(sara, { action: 'relatorio', id: 'r6', nome: 'relatorio-garantia.pdf', pdf: PDF });
+  assert.equal(r.status, 200, r.texto);
+  assert.equal((await ctx.db.um('SELECT tamanho FROM renegociacao_relatorios WHERE item_id = $1', ['r6'])).tamanho, Buffer.from(PDF, 'base64').length);
+  await gravar(sara, { action: 'update', id: 'r6', row: linha({ id: 'r6', cond: 'Jardim Azul', uf: 'CE', status: 'Fechado', campos: { 'Relatório': 'relatorio-garantia.pdf' } }) });
+  const [t] = await ticketsDe('r6');
+  assert.deepEqual(await anexosDe(t.id), [{ nome: 'relatorio-garantia.pdf', tipo: 'application/pdf', interno: false }]);
+  assert.ok(t.descricao.includes('Relatório de garantia: relatorio-garantia.pdf'));
+  // a assistente baixa o PDF pela Central de Tickets
+  const d = (await bruna('GET', `/api/tickets/${t.id}`)).json;
+  assert.equal(d.anexos.length, 1);
+  assert.ok(d.eventos.some((e) => e.tipo === 'anexo'));
+
+  // enviado depois do ticket aberto (a ferramenta salva e logo envia o PDF): entra no ticket que já existe
+  await gravar(sara, { action: 'add', row: linha({ id: 'r7', cond: 'Jardim Azul', uf: 'CE', status: 'Fechado' }) });
+  r = await gravar(sara, { action: 'relatorio', id: 'r7', nome: 'outro.pdf', pdf: PDF });
+  assert.equal(r.status, 200, r.texto);
+  const [t7] = await ticketsDe('r7');
+  assert.equal((await anexosDe(t7.id)).length, 1);
+
+  // só PDF, e só de renegociação que existe
+  assert.equal((await gravar(sara, { action: 'relatorio', id: 'r7', nome: 'x.pdf', pdf: Buffer.from('<html>').toString('base64') })).status, 400);
+  assert.equal((await gravar(sara, { action: 'relatorio', id: 'nao-existe', nome: 'x.pdf', pdf: PDF })).status, 400);
+  assert.equal((await gravar(sara, { action: 'relatorio', id: 'r7', sheet: 'tickets', nome: 'x.pdf', pdf: PDF })).status, 400, 'só na aba das renegociações');
 });

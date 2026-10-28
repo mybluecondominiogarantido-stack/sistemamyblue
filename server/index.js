@@ -94,7 +94,7 @@ async function criarApp(cfg) {
   // Controle de Emissão de Boletos: o cadastro acompanha a carteira de condomínios
   const boletosCarteira = criarBoletosCarteira({ db, documentos, espera: cfg.esperaCarteiraMs ?? 3000 });
   // Controle de Renegociações: renegociação salva como Fechado vira ticket para a assistente de crédito
-  const renegociacoes = criarRenegociacoes({ db, seg, modulos, registros, avisos, expediente });
+  const renegociacoes = criarRenegociacoes({ db, seg, modulos, registros, avisos, expediente, cfg });
   // Implantação: lembretes (fila sem designação, prazo para iniciar, documentos pendentes); o intervalo é ligado em iniciar()
   const rotinasImplantacao = criarRotinasImplantacao({ db, seg, avisos, expediente });
   // Solicitação de Contrato: prazo da minuta vencido

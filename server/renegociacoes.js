@@ -9,6 +9,7 @@
  *
  * Renegociação que já tem ticket: o que mudou nas condições vira um comentário no mesmo ticket (antes → depois).
  * Se o ticket já estava resolvido ou cancelado, ele é reaberto para a assistente aplicar as condições novas.
+ * O PDF do relatório de garantia, quando a ferramenta envia ("relatorio"), fica guardado e vai anexado no ticket.
  * Só contam as gravações de uma renegociação ("add" e "update"); importar a base e corrigir a planilha não
  * abrem ticket, nem as renegociações que já estavam fechadas antes de existir o ticket.
  * Nada aqui derruba a gravação da ferramenta: um erro só vai para o log.
@@ -27,6 +28,8 @@ const TIPO = { nome: 'Renegociação fechada', prazo_horas: 9, prioridade: 'alta
 const COLUNAS = { condominio: 'Condomínio', estado: 'Estado', status: 'Status' };
 // condições levadas para o ticket, na ordem; "antes" é a coluna com o valor anterior à renegociação
 const CONDICOES = [
+  { campo: 'tipo', rotulo: 'Tipo de negociação', coluna: 'Tipo de negociação', tipo: 'texto' },
+  { campo: 'tipo_outro', rotulo: 'Tipo (outro)', coluna: 'Tipo (outro)', tipo: 'texto' },
   { campo: 'taxa', rotulo: 'Taxa de serviço', coluna: 'Taxa de Serviço (%)', antes: 'Taxa Anterior (%)', tipo: 'pct' },
   { campo: 'tarifa', rotulo: 'Tarifa bancária por boleto', coluna: 'Tarifa Bancária (R$)', antes: 'Tarifa Anterior (R$)', tipo: 'reais' },
   { campo: 'vop', rotulo: 'VOP mensal', coluna: 'VOP Mensal (R$)', tipo: 'reais' },
@@ -35,6 +38,8 @@ const CONDICOES = [
   { campo: 'vigencia', rotulo: 'Início da vigência', coluna: 'Início vigência', tipo: 'data' },
   { campo: 'data', rotulo: 'Data da negociação', coluna: 'Data', tipo: 'data' },
   { campo: 'antecipacoes', rotulo: 'Antecipações', coluna: 'Antecipações (R$)', tipo: 'reais' },
+  { campo: 'antecipacao_dia', rotulo: 'Dia da antecipação (todo mês)', coluna: 'Dia antecipação', tipo: 'texto' },
+  { campo: 'vencimento_dia', rotulo: 'Dia do vencimento (todo mês)', coluna: 'Dia vencimento', tipo: 'texto' },
   { campo: 'honorarios', rotulo: 'Honorários', coluna: 'Honorários', tipo: 'texto' },
   { campo: 'val_boletos', rotulo: 'Val. boletos', coluna: 'Val. Boletos', tipo: 'texto' },
   { campo: 'obs', rotulo: 'Observações', coluna: 'Observações', tipo: 'texto' },
@@ -75,8 +80,9 @@ function formatar(v, tipo, fuso) {
   return s.slice(0, 2000);
 }
 
-function criarRenegociacoes({ db, seg, modulos, registros, avisos, expediente }) {
+function criarRenegociacoes({ db, seg, modulos, registros, avisos, expediente, cfg = {} }) {
   const fuso = expediente.config.fuso;
+  const limiteAnexoMb = cfg.limiteAnexoMb || 10;
 
   async function cabecalho(m) {
     return (await modulos.cabecalhoDoHtml(m, (m.config.colecoes || {})[COLECAO])) || (await registros.cabecalho(m.slug, COLECAO)) || [];
@@ -133,6 +139,13 @@ function criarRenegociacoes({ db, seg, modulos, registros, avisos, expediente })
   // uma gravação por vez em cada renegociação (duas pessoas salvando juntas não abrem dois tickets)
   const travar = (t, id) => t.q('SELECT pg_advisory_xact_lock(hashtext($1))', ['renegociacao|' + id]);
 
+  async function anexar(t, ticketId, rel, usuarioId) {
+    const a = await t.um(`INSERT INTO ticket_anexos (ticket_id, nome, tipo, tamanho, conteudo, interno, enviado_por)
+      VALUES ($1, $2, 'application/pdf', $3, $4, FALSE, $5) RETURNING id`, [ticketId, rel.nome, rel.conteudo.length, rel.conteudo, usuarioId]);
+    await registrar(t, ticketId, usuarioId, 'anexo', null, false, { anexo: a.id, nome: rel.nome, tamanho: rel.conteudo.length });
+    await t.q('UPDATE tickets SET atualizado_em = now() WHERE id = $1', [ticketId]);
+  }
+
   async function abrirTicket(req, id, lida) {
     const u = req.usuario;
     const setor = await db.um('SELECT id, nome FROM setores WHERE nome = $1', [SETOR]);
@@ -162,6 +175,8 @@ function criarRenegociacoes({ db, seg, modulos, registros, avisos, expediente })
       else if (r0) await registrar(t, novo, null, 'carteira_sem_cadastro', null, true, { carteira: r0.carteira });
       if (!cond) await registrar(t, novo, null, 'condominio_nao_identificado', null, false, { condominio: lida.condominio, uf: lida.estado });
       await t.q('INSERT INTO renegociacao_tickets (item_id, ticket_id, condicoes) VALUES ($1, $2, $3::jsonb)', [id, novo, JSON.stringify(lida.condicoes)]);
+      const rel = await t.um('SELECT nome, conteudo FROM renegociacao_relatorios WHERE item_id = $1', [id]);
+      if (rel) await anexar(t, novo, rel, u.id);
       return novo;
     });
     if (!ticket) return null;
@@ -221,6 +236,26 @@ function criarRenegociacoes({ db, seg, modulos, registros, avisos, expediente })
     return { ticket: tk.id, acao: reabrir ? 'reaberto' : 'comentado' };
   }
 
+  /* PDF do relatório de garantia enviado pela ferramenta (base64): fica guardado e, se a renegociação já tem ticket,
+     entra como anexo nele (senão, entra quando o ticket for aberto). */
+  async function guardarRelatorio(req, id, nome, pdf) {
+    const buf = Buffer.from(String(pdf || ''), 'base64');
+    if (!buf.length || buf.subarray(0, 5).toString('latin1') !== '%PDF-') return { erro: 'Envie o relatório de garantia em PDF.' };
+    if (buf.length > limiteAnexoMb * 1024 * 1024) return { erro: `O relatório passa de ${limiteAnexoMb} MB.` };
+    if (!(await registros.obter(MODULO, COLECAO, id))) return { erro: 'Renegociação não encontrada.' };
+    const arquivo = String(nome || '').replace(/[\\/\r\n"]/g, '_').trim().slice(0, 200) || 'relatorio-de-garantia.pdf';
+    const ticket = await db.tx(async (t) => {
+      await travar(t, id);
+      await t.q(`INSERT INTO renegociacao_relatorios (item_id, nome, tamanho, conteudo, enviado_por) VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (item_id) DO UPDATE SET nome = excluded.nome, tamanho = excluded.tamanho, conteudo = excluded.conteudo,
+          enviado_por = excluded.enviado_por, enviado_em = now()`, [id, arquivo, buf.length, buf, req.usuario.id]);
+      const v = await t.um('SELECT ticket_id FROM renegociacao_tickets WHERE item_id = $1', [id]);
+      if (v) await anexar(t, v.ticket_id, { nome: arquivo, conteudo: buf }, req.usuario.id);
+      return v ? v.ticket_id : null;
+    });
+    return { ok: true, ticket };
+  }
+
   /* a planilha interna acompanha esta coleção? (só então vale buscar a linha anterior) */
   const acompanha = (m, colecao) => m.slug === MODULO && colecao === COLECAO;
 
@@ -240,7 +275,7 @@ function criarRenegociacoes({ db, seg, modulos, registros, avisos, expediente })
     }
   }
 
-  return { acompanha, aoGravar };
+  return { acompanha, aoGravar, guardarRelatorio };
 }
 
 module.exports = { criarRenegociacoes, MODULO, TIPO };

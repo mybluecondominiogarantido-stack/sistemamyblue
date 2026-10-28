@@ -138,13 +138,13 @@ module.exports = [
       await quadro(t, 'renegociacoes').locator('#nova_condominio').waitFor({ timeout: 15000 });
       await noQuadro(t, 'renegociacoes', "document.querySelectorAll('#ticket_respSel option').forEach(function(o){ if (o.value && !/^Outro/.test(o.text)) { o.text = 'Sara Alves'; o.value = 'Sara Alves'; } });");
     },
-    abertura: ['Para o Sucesso do Cliente.', ['Registrar uma renegociação', 'Dashboard e perda de receita', 'Central de dados e relatório', 'Tickets do CS']],
+    abertura: ['Para o Sucesso do Cliente.', ['Registrar uma renegociação', 'Dashboard e perda de receita', 'Central de dados e relatório', 'Tickets do CS', 'O ticket para o Crédito']],
     async gravar(t) {
       const f = quadro(t, 'renegociacoes');
       const N = '1 · Nova renegociação';
       await t.legenda('Anexe o <b>relatório de garantia (PDF)</b> para preencher condomínio, VOP e taxa sozinhos, ou preencha à mão.', { etapa: N, ms: 400 });
       await t.mostrar(f.locator('text=Anexar relatório de garantia').first(), 2600);
-      await t.digitar(f.locator('#nova_condominio'), 'Cond. Lago Sul');
+      await t.digitar(f.locator('#nova_condominio'), 'Res. Primavera');
       await t.escolher(f.locator('#nova_estado'), 'CE');
       await t.preencherCampo(f.locator('#nova_data'), hoje());
       await t.preencherCampo(f.locator('#nova_vigencia'), hoje().slice(0, 8) + '28');
@@ -159,7 +159,8 @@ module.exports = [
       await t.digitar(f.locator('#nova_tarifaNova'), '1,90');
       await t.escolher(f.locator('#nova_tipoNeg'), 'Renegociação de taxa');
       await t.legenda('A <b>perda de receita</b> é calculada sozinha. Clique em <b>Salvar renegociação</b>.', { etapa: N, ms: 1600 });
-      await t.clicar(f.locator('#novaSave'), { depois: 1800 });
+      await t.clicar(f.locator('#novaSave'), { depois: 600 });
+      await t.legenda('Salva como <b>Fechado</b>, o portal abre sozinho um ticket para a <b>assistente de crédito</b> do condomínio, com as condições (e o PDF do relatório, se anexado).', { etapa: N, ms: 2600 });
 
       const P = '2 · Dashboard';
       await t.legenda('O <b>Dashboard</b> mostra fechados, em negociação e a <b>perda de receita</b>: média, mensal e no ano.', { etapa: P, ms: 300 });
@@ -178,13 +179,18 @@ module.exports = [
       const K = '4 · Tickets do CS';
       await t.legenda('Em <b>Tickets</b>, registre as solicitações do CS: assunto, quem pediu, prioridade e prazo.', { etapa: K, ms: 300 });
       await t.clicar(f.locator('button.tab:has-text("Tickets")'), { depois: 1200 });
-      await t.digitar(f.locator('#ticket_assunto'), 'Ajuste de boleto — Cond. Lago Sul', { atraso: 26 });
+      await t.digitar(f.locator('#ticket_assunto'), 'Ajuste de boleto — Res. Primavera', { atraso: 26 });
       await t.digitar(f.locator('#ticket_solicitante'), 'Síndico');
       await t.escolher(f.locator('#ticket_prioridade'), 'Média', { depois: 900 });
       await t.legenda('O prazo de conclusão sai da prioridade (dias úteis). Clique em <b>Salvar ticket</b>.', { etapa: K, ms: 1400 });
       await t.clicar(f.locator('#ticketSave'), { depois: 2400 });
+
+      const R = '5 · O ticket para o Crédito';
+      await t.legenda('O ticket da renegociação fechada fica em <b>Tickets → Abertos por mim</b>. Mudou uma condição? Salve de novo: o mesmo ticket recebe um comentário.', { etapa: R, ms: 600 });
+      await t.clicar('#lateral a[href="#/tickets"]', { depois: 1300 });
+      await t.clicar('nav.abas a[href="#/tickets/fila/abertos"]', { depois: 2800 });
     },
-    resumo: ['<b>Nova renegociação</b>: anexe o PDF ou preencha à mão', '<b>Dashboard</b>: perda de receita no mês e no ano', '<b>Central de dados</b>, <b>Relatório mensal</b> e <b>Tickets</b>'],
+    resumo: ['<b>Nova renegociação</b>: anexe o PDF ou preencha à mão', '<b>Fechado</b> abre o ticket para a assistente de crédito', '<b>Dashboard</b>, <b>Central de dados</b>, <b>Relatório mensal</b> e <b>Tickets</b>'],
   },
 
   {
