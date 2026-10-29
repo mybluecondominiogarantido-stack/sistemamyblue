@@ -83,7 +83,7 @@ function montarDados(i, { executivo, responsavel, documentos = [], diferencas = 
     protocolo: i.protocolo || '',
     emitido: `Emitido em ${quando(new Date())}${usuario ? ` por ${usuario}` : ''}`,
     condominio: f.nome || i.condominio || 'Implantação',
-    subtitulo: [`Origem: ${origemTexto}`, executivo, f.uf, `Etapa: ${{ rascunho: 'rascunho', diretoria: 'na diretoria', fila: 'na fila', em_implantacao: 'em implantação', pendencia: 'pendência com o comercial', concluida: 'concluída', na_carteira: 'na Carteira', cancelada: 'cancelada' }[i.etapa]}`].filter(Boolean).join(' · '),
+    subtitulo: [`Origem: ${origemTexto}`, executivo, f.uf, `Etapa: ${{ rascunho: 'rascunho', diretoria: 'na diretoria', fila: 'na fila', em_implantacao: 'em implantação', pendencia: 'pendência com o comercial', concluida: 'concluída', na_carteira: 'na Base de Clientes', cancelada: 'cancelada' }[i.etapa]}`].filter(Boolean).join(' · '),
     rotulo_diferencas: i.origem === 'entrega' ? 'Diferente do aprovado pela diretoria' : 'Diferente da análise',
     diferencas: diferencas.map((x) => `${x.rotulo.replace(/ \((%|R\$)\)$/, '')} ${typeof x.valor === 'number' ? (/R\$/.test(x.rotulo) ? reais(x.valor) : /%/.test(x.rotulo) ? pct(x.valor) : x.valor) : x.valor} (${i.origem === 'entrega' ? 'aprovado' : 'análise'}: ${typeof x.analise === 'number' ? (/R\$/.test(x.rotulo) ? reais(x.analise) : /%/.test(x.rotulo) ? pct(x.analise) : x.analise) : x.analise})`),
     secoes,

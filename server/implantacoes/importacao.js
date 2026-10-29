@@ -304,7 +304,7 @@ function conferir({ formulario, controle }, portal) {
       condominio: f.nome, cnpj: f.cnpj, uf: f.uf, inicio: f.inicio_contrato, mes: (f.inicio_contrato || '').slice(0, 7), ano: f.inicio_contrato ? Number(f.inicio_contrato.slice(0, 4)) : null,
       formulario: f, etapas: null, concluida: true, situacao: 'pronta', motivo: '' };
     completar(it, r);
-    if (!it.carteira) avisos.push('não achado na Carteira (pelo CNPJ ou pelo nome)');
+    if (!it.carteira) avisos.push('não achado na Base de Clientes (pelo CNPJ ou pelo nome)');
     itens.push(it);
   }
 

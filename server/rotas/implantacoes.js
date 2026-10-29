@@ -1,9 +1,9 @@
 'use strict';
 /*
- * Implantação: do contrato assinado à Carteira. Toda implantação começa de um contrato: o comercial (executivo de negócios)
+ * Implantação: do contrato assinado à Base de Clientes. Toda implantação começa de um contrato: o comercial (executivo de negócios)
  * escolhe um contrato concluído no portal (Solicitação de Contrato, com as condições fechadas) ou anexa o contrato
  * assinado fora do portal com o retorno da análise; preenche o formulário e anexa os documentos; o setor Implantação
- * conduz; a coordenação confirma a entrada na Carteira.
+ * conduz; a coordenação confirma a entrada na Base de Clientes.
  *
  * Etapas: rascunho → fila (enviada, aguardando designação) → em_implantacao → concluida → na_carteira.
  *         juridico: contrato assinado fora do portal, com a advogada para registrar as condições (depois segue sozinha
@@ -344,7 +344,7 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
       const nada = { designar: false, iniciar: false, pendencia: false, carteira: false, editar: false, tirar_documentos: false, enviar: false,
         cancelar: false, impedimento: false, onboarding: false, justificar_onboarding: false, pedir_autorizacao: false, autorizar: false };
       return { ...nada, ver: interno, interno, etapas: emAndamento, concluir: emAndamento, documentos: doSetor || autDocs, marcar_documentos: doSetor || autDocs,
-        // concluída fora da Carteira: a coordenação confirma a entrada (com a conferência de ID e CNPJ repetidos)
+        // concluída fora da Base de Clientes: a coordenação confirma a entrada (com a conferência de ID e CNPJ repetidos)
         carteira: p.coordenacao && i.etapa === 'concluida',
         obs_controle: doSetor || autTudo, editar_setor: doSetor || autTudo, importada: true };
     }
@@ -838,9 +838,9 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     if (erroEtapas) return erro(res, 400, erroEtapas);
     // quem fez o onboarding: começa com quem é responsável pela implantação
     if (['marcado', 'realizado'].includes(etapas.onboarding.situacao) && !etapas.onboarding.por) etapas.onboarding.por = i.responsavel_id || req.usuario.id;
-    // importada das planilhas: o condomínio em geral já está na Carteira com esse ID
+    // importada das planilhas: o condomínio em geral já está na Base de Clientes com esse ID
     if (!i.importacao_id && etapas.vouch.id && etapas.vouch.id !== antes.vouch.id && await db.um('SELECT 1 FROM condominios WHERE codigo = $1', [etapas.vouch.id])) {
-      return erro(res, 409, `O ID Vouch ${etapas.vouch.id} já está na Carteira.`);
+      return erro(res, 409, `O ID Vouch ${etapas.vouch.id} já está na Base de Clientes.`);
     }
     await db.tx(async (t) => {
       await t.q('UPDATE implantacoes SET etapas = $2::jsonb, atualizado_em = now() WHERE id = $1', [i.id, JSON.stringify(etapas)]);
@@ -919,7 +919,7 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
   function faltasParaConcluir(i) {
     return F.faltasConcluir(i.etapas).filter((x) => !(i.importacao_id && /^Informar a data em que o onboarding/.test(x)));
   }
-  /* importada: o condomínio já está na Carteira? (ligado na importação, pelo ID Vouch, pelo CNPJ ou pelo nome) */
+  /* importada: o condomínio já está na Base de Clientes? (ligado na importação, pelo ID Vouch, pelo CNPJ ou pelo nome) */
   async function jaNaCarteira(i) {
     if (i.condominio_id) {
       const c = await db.um('SELECT id, codigo FROM condominios WHERE id = $1', [i.condominio_id]);
@@ -951,9 +951,9 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     if (lista.length) return erro(res, 400, 'Faltam etapas para concluir.', { faltas: lista });
     const semOnboarding = !F.onboardingFeito(i.etapas);
     if (i.importacao_id) {
-      // histórico das planilhas: conclui sem avisos e sem ficha. Já na Carteira: só liga ao cadastro (nada é criado,
-      // então não duplica). Fora da Carteira (ex.: contratos que ainda vão começar): fica concluída, e a coordenação
-      // confirma a entrada na Carteira, com a conferência de ID e CNPJ repetidos.
+      // histórico das planilhas: conclui sem avisos e sem ficha. Já na Base de Clientes: só liga ao cadastro (nada é criado,
+      // então não duplica). Fora da Base de Clientes (ex.: contratos que ainda vão começar): fica concluída, e a coordenação
+      // confirma a entrada na Base de Clientes, com a conferência de ID e CNPJ repetidos.
       const cart = await jaNaCarteira(i);
       await db.tx(async (t) => {
         if (cart) await t.q("UPDATE implantacoes SET etapa = 'na_carteira', condominio_id = $2, concluido_em = now(), atualizado_em = now() WHERE id = $1", [i.id, cart.id]);
@@ -972,7 +972,7 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     if (parceiros) await db.q('INSERT INTO implantacao_eventos (implantacao_id, usuario_id, tipo, detalhe) VALUES ($1, $2, $3, $4::jsonb)', [i.id, req.usuario.id, 'parceiros', JSON.stringify(parceiros)]);
     const coord = (await pessoasDoSetor(db, seg, SETOR)).gestores;
     await avisos.notificar(coord.length ? coord : await administradores(db), { link: link(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: true,
-      titulo: `Pronta para a Carteira · ${i.protocolo} · ${i.condominio}`, texto: `${req.usuario.nome} concluiu a implantação de ${i.condominio}. Confira os dados e confirme a entrada na Carteira.` });
+      titulo: `Pronta para a Base de Clientes · ${i.protocolo} · ${i.condominio}`, texto: `${req.usuario.nome} concluiu a implantação de ${i.condominio}. Confira os dados e confirme a entrada na Base de Clientes.` });
     await avisos.notificar(await donos(db, i), { link: link(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: false,
       titulo: `Implantação concluída · ${i.protocolo} · ${i.condominio}`, texto: `O setor Implantação concluiu a implantação de ${i.condominio}.` });
     res.json({ ok: true, parceiros });
@@ -999,7 +999,7 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
   r.get('/api/implantacoes/:id/carteira', async (req, res) => {
     const c = await carregar(req, res);
     if (!c) return;
-    if (!c.pd.carteira) return erro(res, 403, 'Só a coordenação do setor Implantação confirma a entrada na Carteira.');
+    if (!c.pd.carteira) return erro(res, 403, 'Só a coordenação do setor Implantação confirma a entrada na Base de Clientes.');
     const dados = await previaCarteira(c.i);
     res.json({ dados, duplicados: await duplicados(dados) });
   });
@@ -1008,7 +1008,7 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     const c = await carregar(req, res);
     if (!c) return;
     const { i, pd } = c;
-    if (!pd.carteira) return erro(res, 403, 'Só a coordenação do setor Implantação confirma a entrada na Carteira.');
+    if (!pd.carteira) return erro(res, 403, 'Só a coordenação do setor Implantação confirma a entrada na Base de Clientes.');
     const b = req.body && req.body.dados && typeof req.body.dados === 'object' ? req.body.dados : {};
     const campos = ['codigo', 'nome', 'situacao', 'comarca', 'vencimento', 'administradora', 'forma_envio', 'executivo', 'inicio_contrato', 'razao_social', 'cnpj',
       'sindico_nome', 'sindico_telefone', 'sindico_email', 'observacoes'];
@@ -1017,19 +1017,19 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     const d = v.dados;
     if (!d.inicio_contrato) return erro(res, 400, 'Informe o início do contrato (vigência).');
     if (d.cnpj && d.cnpj.replace(/\D/g, '').length !== 14) return erro(res, 400, `CNPJ incompleto (${d.cnpj}): são 14 dígitos.`);
-    // o síndico vai para a Carteira (no histórico das planilhas, quando houver)
+    // o síndico vai para a Base de Clientes (no histórico das planilhas, quando houver)
     if (!i.importacao_id && !d.sindico_nome) return erro(res, 400, 'Informe o nome do síndico.');
     if ((!i.importacao_id || d.sindico_telefone) && d.sindico_telefone.replace(/\D/g, '').length < 10) return erro(res, 400, 'Informe o telefone do síndico com DDD.');
     if ((!i.importacao_id || d.sindico_email) && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.sindico_email)) return erro(res, 400, 'Informe um e-mail válido do síndico.');
     const dup = await duplicados(d);
-    if (dup.some((x) => x.codigo === d.codigo)) return erro(res, 409, `O ID Vouch ${d.codigo} já está na Carteira.`);
-    if (dup.length) return erro(res, 409, `Já existe na Carteira um condomínio com este CNPJ: ${dup[0].nome} (ID ${dup[0].codigo}).`);
+    if (dup.some((x) => x.codigo === d.codigo)) return erro(res, 409, `O ID Vouch ${d.codigo} já está na Base de Clientes.`);
+    if (dup.length) return erro(res, 409, `Já existe na Base de Clientes um condomínio com este CNPJ: ${dup[0].nome} (ID ${dup[0].codigo}).`);
     const cols = Object.keys(d);
     const id = await db.tx(async (t) => {
       const { id: novo } = await t.um(`INSERT INTO condominios (${cols.join(', ')}, atualizado_por) VALUES (${cols.map((_, k) => '$' + (k + 1)).join(', ')}, $${cols.length + 1}) RETURNING id`,
         [...cols.map((k) => d[k]), req.usuario.id]);
       await t.q("UPDATE implantacoes SET etapa = 'na_carteira', condominio_id = $2, atualizado_em = now() WHERE id = $1", [i.id, novo]);
-      // a assistente de crédito que recebeu a ficha de transição fica na Carteira
+      // a assistente de crédito que recebeu a ficha de transição fica na Base de Clientes
       await t.q(`UPDATE condominios c SET assistente_credito = u.nome FROM implantacao_fichas f JOIN usuarios u ON u.id = f.destino_id
         WHERE c.id = $2 AND f.implantacao_id = $1 AND c.assistente_credito = ''`, [i.id, novo]);
       await evento(t, i.id, req.usuario.id, 'carteira', { condominio_id: novo, codigo: d.codigo, nome: d.nome });
@@ -1039,7 +1039,7 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     // o Controle de Emissão de Boletos acompanha a carteira
     if (boletosCarteira) boletosCarteira.agendar(req.usuario);
     if (!i.importacao_id) await avisos.notificar([...(await donos(db, i)), i.responsavel_id], { link: link(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: false,
-      titulo: `Na Carteira · ${d.nome}`, texto: `${i.condominio} entrou na Carteira (ID ${d.codigo}).` });
+      titulo: `Na Base de Clientes · ${d.nome}`, texto: `${i.condominio} entrou na Base de Clientes (ID ${d.codigo}).` });
     res.status(201).json({ ok: true, condominio_id: id });
   });
 

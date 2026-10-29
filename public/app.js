@@ -237,8 +237,8 @@
         '<a href="#/tickets" class="' + (rota.indexOf('#/tickets') === 0 && rota.indexOf('#/tickets/painel') !== 0 ? 'on' : '') + '">' + IC.ticket + '<span>Tickets</span>' +
         '<i data-contador="fila" class="contador" hidden></i></a>' +
         (souEquipe() ? '<a href="#/tickets/painel" class="' + (rota.indexOf('#/tickets/painel') === 0 ? 'on' : '') + '">' + IC.grafico + 'Painel de tickets</a>' : '') +
-        '<div class="grupo">Carteira</div>' +
-        '<a href="#/carteira" class="' + (rota.indexOf('#/carteira') === 0 ? 'on' : '') + '">' + IC.casa + 'Carteira de condomínios</a>' +
+        '<div class="grupo">Clientes</div>' +
+        '<a href="#/carteira" class="' + (rota.indexOf('#/carteira') === 0 ? 'on' : '') + '">' + IC.casa + 'Base de Clientes</a>' +
         (resumoCredito && resumoCredito.acesso ? '<div class="grupo">Análise de Crédito</div><a href="#/credito" class="' + (rota.indexOf('#/credito') === 0 ? 'on' : '') + '">' + IC.escudo +
           '<span>Análise de Crédito</span><i data-contador="credito" class="contador" hidden></i></a>' : '') +
         (resumoCt && resumoCt.acesso ? '<div class="grupo">Jurídico</div><a href="#/contratos" class="' + (rota.indexOf('#/contratos') === 0 ? 'on' : '') + '">' + IC.documento +
@@ -611,8 +611,8 @@
           (coord ? '' :
           '<div><label class="rot">Perfil</label><div class="grade-2">' +
           '<label class="opcao-radio"><input type="radio" name="uPapel" value="usuario"' + (u.papel === 'usuario' || !PAPEL[u.papel] ? ' checked' : '') + '><div><b>Usuário</b><span>Abre só as ferramentas marcadas abaixo.</span></div></label>' +
-          '<label class="opcao-radio"><input type="radio" name="uPapel" value="supervisor"' + (u.papel === 'supervisor' ? ' checked' : '') + '><div><b>Supervisor</b><span>Gerencia o(s) setor(es) dele: usuários comuns, ferramentas, equipe e tipos de demanda; na Carteira, o que estiver liberado em Carteira: quem edita. Vê e direciona os tickets de todos os setores. Mesmos poderes do coordenador.</span></div></label>' +
-          '<label class="opcao-radio"><input type="radio" name="uPapel" value="coordenador"' + (u.papel === 'coordenador' ? ' checked' : '') + '><div><b>Coordenador</b><span>Gerencia o(s) setor(es) dele: usuários comuns, ferramentas, equipe e tipos de demanda; na Carteira, o que estiver liberado em Carteira: quem edita. Vê e direciona os tickets de todos os setores.</span></div></label>' +
+          '<label class="opcao-radio"><input type="radio" name="uPapel" value="supervisor"' + (u.papel === 'supervisor' ? ' checked' : '') + '><div><b>Supervisor</b><span>Gerencia o(s) setor(es) dele: usuários comuns, ferramentas, equipe e tipos de demanda; na Base de Clientes, o que estiver liberado em Base de Clientes: quem edita. Vê e direciona os tickets de todos os setores. Mesmos poderes do coordenador.</span></div></label>' +
+          '<label class="opcao-radio"><input type="radio" name="uPapel" value="coordenador"' + (u.papel === 'coordenador' ? ' checked' : '') + '><div><b>Coordenador</b><span>Gerencia o(s) setor(es) dele: usuários comuns, ferramentas, equipe e tipos de demanda; na Base de Clientes, o que estiver liberado em Base de Clientes: quem edita. Vê e direciona os tickets de todos os setores.</span></div></label>' +
           '<label class="opcao-radio"><input type="radio" name="uPapel" value="admin"' + (u.papel === 'admin' ? ' checked' : '') + '><div><b>Administrador</b><span>Acessa tudo e gerencia usuários, módulos e dados.</span></div></label></div></div>' +
           '<label class="opcao-radio" style="margin:0"><input type="checkbox" id="uSup"' + (u.supervisor_tickets ? ' checked' : '') + '><div><b>Supervisão da Central de Tickets</b>' +
           '<span>Vê os tickets de todos os setores e direciona: troca o responsável, transfere, muda situação, prioridade e prazo. Para quem acompanha a empresa toda (ex.: Gerência). Não dá acesso à administração.</span><span id="uSupPerfil" hidden><b>Já vem com o perfil Coordenador e Supervisor.</b></span></div></label>' +
@@ -684,7 +684,7 @@
     }
   }
 
-  /* tudo o que uma pessoa acessa, num lugar só (perfil, setores, marcações, ferramentas, Carteira, tickets) */
+  /* tudo o que uma pessoa acessa, num lugar só (perfil, setores, marcações, ferramentas, Base de Clientes, tickets) */
   async function verAcessosPessoa(id) {
     var j;
     try { j = await api('GET', '/api/admin/usuarios/' + id + '/acessos'); } catch (e) { toast(e.message, 'erro'); return; }
@@ -701,7 +701,7 @@
       sec('Central de Tickets') + '<div class="caixa-opcoes" style="max-height:none">' +
       linha('Vê os tickets de', j.tickets.todos_setores ? 'todos os setores' : (j.tickets.setores.length ? esc(j.tickets.setores.join(', ')) + ' (e os que abriu)' : 'só os que abriu')) +
       linha('Distribui (responsável, prioridade, prazo) em', j.tickets.todos_setores ? 'todos os setores' : (j.tickets.lider_em.length ? esc(j.tickets.lider_em.join(', ')) : '—')) + '</div>' +
-      sec('Carteira de condomínios') + '<div class="caixa-opcoes" style="max-height:none">' + linha('Consultar', sim) +
+      sec('Base de Clientes') + '<div class="caixa-opcoes" style="max-height:none">' + linha('Consultar', sim) +
       j.carteira.map(function (c) { return linha(esc(c.rotulo), c.pode ? sim + (c.motivo ? ' <span class="sec" style="display:inline">' + esc(c.motivo) + '</span>' : '') : nao); }).join('') + '</div>' +
       sec('Ferramentas que abre (' + j.ferramentas.length + ')') + '<div class="caixa-opcoes" style="max-height:none">' +
       (j.ferramentas.length ? j.ferramentas.map(function (f) {
@@ -829,10 +829,10 @@
   /* Quem abre a ferramenta, se edita ou só consulta e com qual papel: a mesma tela para a administração e para a
      coordenação do setor (que pode liberar pessoas de qualquer setor). Os papéis de ferramentas com aba "Acessos"
      própria são lidos e gravados no formato delas. */
-  /* Controle de Emissão de Boletos: o cadastro vem da Carteira de condomínios. A 1ª vez a coordenação
+  /* Controle de Emissão de Boletos: o cadastro vem da Base de Clientes. A 1ª vez a coordenação
      confere aqui (nomes parecidos, condomínios fora da carteira); depois o portal aplica sozinho. */
   async function secaoCarteiraBoletos(cont, slug) {
-    cont.innerHTML = '<div class="ajuda">Comparando o cadastro com a Carteira…</div>';
+    cont.innerHTML = '<div class="ajuda">Comparando o cadastro com a Base de Clientes…</div>';
     var p;
     try { p = await api('GET', '/api/admin/modulos/' + slug + '/carteira'); } catch (e) { cont.innerHTML = '<div class="msg erro">' + esc(e.message) + '</div>'; return; }
     var MES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
@@ -856,24 +856,24 @@
         '<div class="tabela-wrap" style="max-height:340px;overflow-y:auto"><table><thead><tr><th></th>' + cab.map(function (c) { return '<th>' + c + '</th>'; }).join('') + '</tr></thead><tbody>' + linhas.join('') + '</tbody></table></div></details>' : '';
     };
     cont.innerHTML =
-      (p.ativa ? '<div class="msg ok">Automático ligado: quando a Carteira muda ou uma competência é criada, o controle recebe as mudanças a partir de <b>' + comp(p.comp) + '</b> (primeira competência ainda sem emissão).</div>'
-        : '<div class="msg aviso">Confira e aplique uma vez. Depois disso, cada mudança na Carteira (e cada competência criada) chega sozinha ao controle.</div>') +
-      '<p class="ajuda">Vinculados à Carteira pelo ID Vouch: <b>' + p.vinculados + '</b>. As mudanças valem a partir de <b>' + comp(p.comp) + '</b>: os meses em andamento continuam como estão (inclusive o vencimento).</p>' +
-      (p.avisos.length ? '<div class="msg aviso">Fora do controle por vencimento não reconhecido na Carteira: ' + p.avisos.map(function (a) { return esc(a.nome) + ' (' + esc(a.motivo) + ')'; }).join(', ') + '.</div>' : '') +
-      (!pend ? '<div class="msg ok" style="margin-top:8px">O cadastro do controle está igual à Carteira.</div>' :
-        tabela('Nomes parecidos', 'Mesmo condomínio com outra grafia? Marque para vincular (o controle passa a seguir a Carteira). Desmarcado fica para depois.', ['No controle', 'Na Carteira', 'Muda'],
+      (p.ativa ? '<div class="msg ok">Automático ligado: quando a Base de Clientes muda ou uma competência é criada, o controle recebe as mudanças a partir de <b>' + comp(p.comp) + '</b> (primeira competência ainda sem emissão).</div>'
+        : '<div class="msg aviso">Confira e aplique uma vez. Depois disso, cada mudança na Base de Clientes (e cada competência criada) chega sozinha ao controle.</div>') +
+      '<p class="ajuda">Vinculados à Base de Clientes pelo ID Vouch: <b>' + p.vinculados + '</b>. As mudanças valem a partir de <b>' + comp(p.comp) + '</b>: os meses em andamento continuam como estão (inclusive o vencimento).</p>' +
+      (p.avisos.length ? '<div class="msg aviso">Fora do controle por vencimento não reconhecido na Base de Clientes: ' + p.avisos.map(function (a) { return esc(a.nome) + ' (' + esc(a.motivo) + ')'; }).join(', ') + '.</div>' : '') +
+      (!pend ? '<div class="msg ok" style="margin-top:8px">O cadastro do controle está igual à Base de Clientes.</div>' :
+        tabela('Nomes parecidos', 'Mesmo condomínio com outra grafia? Marque para vincular (o controle passa a seguir a Base de Clientes). Desmarcado fica para depois.', ['No controle', 'Na Base de Clientes', 'Muda'],
           p.parecidos.map(function (x) {
             return '<tr><td>' + marca(x.k, x.mesma_uf) + '</td><td>' + esc(x.nome) + ' <span class="sec">' + esc(x.uf) + '</span></td><td>' + esc(x.nome_carteira) + ' <span class="sec">' + esc(x.uf_carteira) + '</span>' +
               (x.mesma_uf ? '' : ' <span class="etiqueta ambar">UF diferente</span>') + (x.situacao_carteira === 'DISTRATADO' ? ' <span class="etiqueta cinza">distratado</span>' : '') + '</td><td>' + (mudancas(altPor[x.k]) || '—') + '</td></tr>';
           })) +
-        tabela('Novos na Carteira', 'Entram a partir da competência indicada (no mês seguinte à vigência, o 1º boleto sai pela Implantação). Distratados só ficam registrados na aba Distratados.', ['Condomínio', 'Responsável', 'Vencimento', 'Entra'],
+        tabela('Novos na Base de Clientes', 'Entram a partir da competência indicada (no mês seguinte à vigência, o 1º boleto sai pela Implantação). Distratados só ficam registrados na aba Distratados.', ['Condomínio', 'Responsável', 'Vencimento', 'Entra'],
           p.novos.map(function (x) {
             var d = x.dados;
             return '<tr><td>' + marca(x.k, true) + '</td><td><b>' + esc(d.nome) + '</b> <span class="sec">' + esc(d.uf) + '</span></td><td>' + esc(d.resp) + '</td><td>' + venc(d) + '</td><td>' + (d.sit === 'Distrato' ? '<span class="etiqueta cinza">distratado</span>' : comp(d.desde)) + '</td></tr>';
           })) +
-        tabela('Mudanças da Carteira', 'Distrato, responsável, UF, vencimento ou nome diferentes da Carteira.', ['Condomínio', 'Muda'],
+        tabela('Mudanças da Base de Clientes', 'Distrato, responsável, UF, vencimento ou nome diferentes da Base de Clientes.', ['Condomínio', 'Muda'],
           alts.map(function (a) { return '<tr><td>' + marca(a.k, true) + '</td><td><b>' + esc(a.nome) + '</b></td><td>' + mudancas(a) + '</td></tr>'; })) +
-        tabela('No controle e não na Carteira', 'Marque os que devem sair do controle a partir de ' + comp(p.comp) + ' (ficam como distratados).', ['Condomínio', 'Responsável'],
+        tabela('No controle e não na Base de Clientes', 'Marque os que devem sair do controle a partir de ' + comp(p.comp) + ' (ficam como distratados).', ['Condomínio', 'Responsável'],
           p.fora.map(function (x) { return '<tr><td>' + marca(x.k, false) + '</td><td><b>' + esc(x.nome) + '</b> <span class="sec">' + esc(x.uf) + '</span></td><td>' + esc(x.resp) + '</td></tr>'; })) +
         '<div class="linha" style="margin-top:12px"><button class="btn primary sm" type="button" id="btAplicarCarteira">Aplicar no controle</button><span class="ajuda" style="margin:0">Quem estiver com o controle aberto vê em alguns segundos. Tudo fica no Histórico da ferramenta.</span></div>');
     var bt = $('#btAplicarCarteira', cont);
@@ -968,7 +968,7 @@
     if (location.hash.indexOf('#/admin/modulos') !== 0) return; // a pessoa já foi para outra tela
     $('#conteudo').innerHTML = '<div class="pagina"><h1>Ferramentas do setor</h1><p class="sub">As ferramentas dos seus setores. Envie uma versão nova do HTML, volte para uma anterior e escolha quem abre cada uma (do seu setor ou de outros), se edita ou só consulta e com qual papel.</p>' +
       '<div class="painel"><div class="cab-painel"><b style="font-family:var(--display)" id="qtdMods"></b><span class="espaco"></span>' +
-      '<button class="btn ghost" id="btCartAcessos">' + IC.casa + 'Carteira de condomínios: quem edita</button>' +
+      '<button class="btn ghost" id="btCartAcessos">' + IC.casa + 'Base de Clientes: quem edita</button>' +
       '<button class="btn primary" id="btNovaFerr">' + IC.mais + 'Nova ferramenta</button>' +
       '<input class="campo" id="buscaMod" type="search" placeholder="Pesquisar módulo, setor ou arquivo…" aria-label="Pesquisar módulo" style="max-width:320px"></div>' +
       '<div class="tabela-wrap"><table><thead><tr><th>Módulo</th><th>Setor</th><th>Arquivo em uso</th></tr></thead><tbody id="tbMods">' +
@@ -1012,7 +1012,7 @@
           titulo: mod.nome, largo: true,
           corpo: '<style>.titulo-sec{font-family:var(--display);font-size:15px;margin:22px 0 10px;padding-top:18px;border-top:1px solid var(--border)}.titulo-sec:first-child{margin-top:0;padding-top:0;border-top:0}</style><div class="pilha">' + htmlArquivoModulo(mod) +
             (mod.pendente ? '<div class="msg aviso">Aguardando a aprovação da administração. Até lá, só a coordenação do setor abre esta ferramenta.</div>' : '') +
-            (mod.slug === 'boletos' ? '<h4 class="titulo-sec">Cadastro pela Carteira de condomínios</h4><div id="edCarteira"></div>' : '') +
+            (mod.slug === 'boletos' ? '<h4 class="titulo-sec">Cadastro pela Base de Clientes</h4><div id="edCarteira"></div>' : '') +
             '<h4 class="titulo-sec">Quem abre e com qual papel</h4><div id="edAcessos"></div></div>',
           pe: '<a class="btn ghost" href="#/m/' + esc(mod.slug) + '" id="btAbrirMod" style="margin-right:auto">' + IC.novaAba + 'Abrir</a><button class="btn ghost" data-fechar>Fechar</button>',
           aoFechar: function () { if (location.hash.indexOf('#/admin/modulos') === 0) paginaModulosCoord(); },
@@ -1040,7 +1040,7 @@
     $('#conteudo').innerHTML = '<div class="pagina"><h1>Módulos e dados</h1><p class="sub">Cada módulo é uma das centrais de ferramentas (um arquivo HTML). Envie novas versões, escolha onde os dados ficam e quem pode abrir.</p>' +
       '<div class="painel"><div class="cab-painel"><b style="font-family:var(--display)" id="qtdMods"></b><span class="espaco"></span>' +
       '<button class="btn ghost" id="btSetores">Setores</button>' +
-      '<button class="btn ghost" id="btCartAcessos">' + IC.casa + 'Carteira: quem edita</button>' +
+      '<button class="btn ghost" id="btCartAcessos">' + IC.casa + 'Base de Clientes: quem edita</button>' +
       '<button class="btn ghost" id="btLote">' + IC.enviar + 'Enviar vários HTMLs</button>' +
       '<button class="btn ghost" id="btZipMods" title="A versão em uso de cada ferramenta, num arquivo .zip">' + IC.baixar + 'Baixar ferramentas (.zip)</button>' +
       '<button class="btn ghost" id="btBackup" title="Todas as tabelas, com os arquivos (.jsonl.gz). Tem dados de negócio: guarde em local com acesso restrito.">' + IC.baixar + 'Backup do banco</button>' +
@@ -1241,7 +1241,7 @@
           '<label class="fl" for="mLivres" style="margin-top:12px;display:block">Chaves gravadas sem conferir conflito</label><input class="campo" id="mLivres" value="' + esc(((mod.config && mod.config.chaves_livres) || []).join(', ')) + '" placeholder="^pp:conferido$">' +
           '<div class="ajuda">Por padrão, se outra pessoa alterou um dado depois que a página abriu, a gravação é recusada e a ferramenta avisa. Chaves que combinarem aqui (dados calculados, preferências) gravam por cima sem conferir.</div></details></div>' +
           secPlanilha +
-          (mod.slug === 'boletos' ? '<h4 class="titulo-sec">Cadastro pela Carteira de condomínios</h4><div id="edCarteira"></div>' : '') +
+          (mod.slug === 'boletos' ? '<h4 class="titulo-sec">Cadastro pela Base de Clientes</h4><div id="edCarteira"></div>' : '') +
 
           '<h4 class="titulo-sec">Quem abre e com qual papel</h4><div id="edAcessos"></div>' +
 
@@ -2052,7 +2052,7 @@
     carregar();
   }
 
-  /* ======================= Carteira de condomínios ======================= */
+  /* ======================= Base de Clientes ======================= */
   var CART_SIT = { ATIVO: ['Ativo', 'verde'], DISTRATADO: ['Distratado', 'cinza'] };
   // "EDUARDO SOUSA - 4663" → { nome: 'Eduardo Sousa', ramal: '4663' }
   function pessoaCarteira(v) {
@@ -2072,12 +2072,12 @@
   function unicos(lista) { return lista.filter(function (v, i, a) { return v && a.indexOf(v) === i; }).sort(function (a, b) { return a.localeCompare(b, 'pt-BR'); }); }
 
   /* o que o portal identificou sobre quem pode o quê na carteira: o que quem está vendo pode (e por quê)
-     e quem tem cada permissão hoje. A configuração fica em Ferramentas do setor → Carteira de condomínios. */
+     e quem tem cada permissão hoje. A configuração fica em Ferramentas do setor → Base de Clientes. */
   function quadroAcessoCarteira(a) {
     if (!a) return '';
     var pode = a.voce.pode;
     var resumo = eu.papel === 'admin' ? 'edita tudo' : pode.length ? pode.length + ' permiss' + (pode.length === 1 ? 'ão' : 'ões') + ' de edição' : 'só consulta';
-    var configura = eu.papel === 'admin' ? '<a href="#/admin/modulos" data-carteira-acessos>Módulos e dados → Carteira: quem edita</a>' : gestorSetor() ? '<a href="#/admin/modulos" data-carteira-acessos>Ferramentas do setor → Carteira de condomínios</a>' : 'Ferramentas do setor → Carteira de condomínios (administração e coordenação)';
+    var configura = eu.papel === 'admin' ? '<a href="#/admin/modulos" data-carteira-acessos>Módulos e dados → Base de Clientes: quem edita</a>' : gestorSetor() ? '<a href="#/admin/modulos" data-carteira-acessos>Ferramentas do setor → Base de Clientes</a>' : 'Ferramentas do setor → Base de Clientes (administração e coordenação)';
     return '<details class="painel" style="padding:12px 16px;margin-bottom:16px"><summary style="cursor:pointer;display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
       '<b>Seu acesso:</b><span class="etiqueta azul">' + esc(a.voce.nivel) + (a.voce.setores.length ? ' · ' + esc(a.voce.setores.join(', ')) : '') + '</span><span>' + esc(resumo) + '</span>' +
       '<span class="ajuda" style="margin:0 0 0 auto">ver quem edita o quê</span></summary>' +
@@ -2090,10 +2090,10 @@
       '<p class="ajuda" style="margin:8px 0 0">Administração: ' + esc(a.admins.join(', ') || '—') + '. Onde se configura: ' + configura + '.</p></details>';
   }
 
-  /* Carteira: quem edita o quê. A administração muda tudo (perfis, setores e pessoas); coordenação e supervisão liberam
+  /* Base de Clientes: quem edita o quê. A administração muda tudo (perfis, setores e pessoas); coordenação e supervisão liberam
      pessoas nas permissões do setor delas (ex.: Crédito → Assistente de crédito). Ver a carteira é de todos. */
   async function editorCarteiraAcessos() {
-    var m = modal({ titulo: 'Carteira de condomínios — quem edita o quê', largo: true, corpo: '<div id="edCart">' + carregandoHtml() + '</div>', pe: '<button class="btn ghost" data-fechar>Fechar</button>' });
+    var m = modal({ titulo: 'Base de Clientes — quem edita o quê', largo: true, corpo: '<div id="edCart">' + carregandoHtml() + '</div>', pe: '<button class="btn ghost" data-fechar>Fechar</button>' });
     var cont = $('#edCart', m);
     async function carregar() {
       var q;
@@ -2150,7 +2150,7 @@
 
   async function paginaCarteira(aba) {
     aba = aba === 'responsaveis' || aba === 'novos' ? aba : 'condominios';
-    definirBarra('<span class="setor">Carteira</span><span class="sep">/</span><span class="nome">' + ({ responsaveis: 'Equipes', novos: 'Adicionar novos' }[aba] || 'Condomínios') + '</span>');
+    definirBarra('<span class="setor">Clientes</span><span class="sep">/</span><span class="nome">' + ({ responsaveis: 'Equipes', novos: 'Adicionar novos' }[aba] || 'Condomínios') + '</span>');
     $('#conteudo').innerHTML = carregandoHtml();
     var j;
     try { j = await api('GET', '/api/carteira'); } catch (e) { toast(e.message, 'erro'); return; }
@@ -2166,7 +2166,7 @@
     function tile(rotulo, valor, extra, alerta) {
       return '<div class="tile' + (alerta ? ' alerta' : '') + '"><span class="rot-tile">' + rotulo + '</span><b>' + valor + '</b>' + (extra ? '<span class="sec">' + extra + '</span>' : '') + '</div>';
     }
-    $('#conteudo').innerHTML = '<div class="pagina"><h1>Carteira de condomínios</h1>' +
+    $('#conteudo').innerHTML = '<div class="pagina"><h1>Base de Clientes</h1>' +
       '<p class="sub">Os condomínios atendidos e quem cuida de cada um: analista de cobrança, analista extrajudicial (ApoioCob) e assistente de crédito.</p>' +
       quadroAcessoCarteira(j.acesso) +
       (conds.length ? '<div class="tiles" style="margin-bottom:20px;grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">' +
@@ -2181,7 +2181,10 @@
       '<a href="#/carteira/responsaveis" class="' + (aba === 'responsaveis' ? 'on' : '') + '">Equipes</a>' +
       (adicionar ? '<a href="#/carteira/novos" class="' + (aba === 'novos' ? 'on' : '') + '">Adicionar novos</a>' : '') + '</nav><div id="cCorpo"></div></div>';
 
-    var acoes = (admin ? '<button class="btn primary" id="btCNovo">' + IC.mais + 'Novo condomínio</button>' : '');
+    // síndico, telefone e e-mail vindos do Controle de Síndicos: para quem edita os dados do condomínio
+    var sindicosEdit = (j.campos_editaveis || []).indexOf('sindico_nome') >= 0;
+    var acoes = (sindicosEdit ? '<button class="btn" id="btCSind">' + IC.pessoas + 'Síndicos do Controle de Síndicos</button>' : '') +
+      (admin ? '<button class="btn primary" id="btCNovo">' + IC.mais + 'Novo condomínio</button>' : '');
 
     if (aba === 'novos' && adicionar) { desenharNovos(); return; }
     if (!conds.length) {
@@ -2192,7 +2195,60 @@
 
     function ligarAcoes() {
       if ($('#btCNovo')) $('#btCNovo').onclick = function () { editarCondominio(null); };
+      if ($('#btCSind')) $('#btCSind').onclick = sindicosDoControle;
       $$('[data-carteira-acessos]').forEach(function (a) { a.onclick = function (e) { e.preventDefault(); editorCarteiraAcessos(); }; });
+    }
+
+    /* ---------- síndicos: a base de contatos do Controle de Síndicos → síndico, telefone e e-mail da ficha ---------- */
+    async function sindicosDoControle() {
+      var m = modal({ titulo: 'Síndicos do Controle de Síndicos', largo: true, corpo: '<div id="sdCorpo">' + carregandoHtml() + '</div>', pe: '<button class="btn ghost" data-fechar>Fechar</button>' });
+      var p;
+      try { p = await api('GET', '/api/carteira/sindicos'); } catch (e) { $('#sdCorpo', m).innerHTML = '<div class="msg erro">' + esc(e.message) + '</div>'; return; }
+      var ROT = { sindico_nome: 'Síndico', sindico_telefone: 'Telefone', sindico_email: 'E-mail' };
+      var muda = function (x) {
+        return Object.keys(ROT).filter(function (k) { return x.campos[k]; }).map(function (k) {
+          var de = x.campos[k][0], para = x.campos[k][1];
+          return ROT[k] + ': ' + (de ? '<s style="color:var(--muted)">' + esc(de) + '</s> → ' : '') + '<b>' + esc(para) + '</b>';
+        }).join('<br>');
+      };
+      var grupo = function (tipo, titulo, ajuda, marcado) {
+        var l = p.mudancas.filter(function (x) { return x.tipo === tipo; });
+        return l.length ? '<details open style="margin-top:12px"><summary style="cursor:pointer;font-weight:800">' + titulo + ' (' + l.length + ')</summary><p class="ajuda" style="margin:6px 0">' + ajuda +
+          ' <a href="#" data-sd-todos="' + tipo + '">marcar todos</a> · <a href="#" data-sd-nenhum="' + tipo + '">desmarcar todos</a></p>' +
+          '<div class="tabela-wrap" style="max-height:320px;overflow-y:auto"><table><thead><tr><th></th><th>Condomínio</th><th>O que muda</th></tr></thead><tbody>' +
+          l.map(function (x) {
+            return '<tr><td><input type="checkbox" data-sd="' + x.id + '" data-sd-tipo="' + tipo + '"' + (marcado ? ' checked' : '') + ' aria-label="Gravar"></td><td><b>' + esc(x.nome) + '</b> <span class="sec">' + esc([x.comarca, 'ID ' + x.codigo].filter(Boolean).join(' · ')) + '</span>' +
+              (x.situacao !== 'ATIVO' ? ' <span class="etiqueta cinza">' + esc(x.situacao.toLowerCase()) + '</span>' : '') + '</td><td>' + muda(x) + '</td></tr>';
+          }).join('') + '</tbody></table></div></details>' : '';
+      };
+      $('#sdCorpo', m).innerHTML = !p.contatos ? '<div class="msg aviso">O Controle de Síndicos ainda não tem contatos ativos.</div>' :
+        '<p class="ajuda" style="margin-top:0">Contatos ativos no Controle de Síndicos: <b>' + p.contatos + '</b>, ligados a <b>' + p.ligados + '</b> condomínio(s) da Base de Clientes pelo nome e pela UF. ' +
+          'Já iguais: <b>' + p.iguais + '</b>. Mais de um síndico no mesmo condomínio vão juntos, separados por " / ". Campo vazio no Controle de Síndicos não apaga o que já está na ficha.</p>' +
+        (!p.mudancas.length ? '<div class="msg ok">O síndico, o telefone e o e-mail da Base de Clientes já estão iguais ao Controle de Síndicos.</div>' :
+          grupo('preencher', 'Preencher (ficha sem esses dados)', 'Os dados entram onde a ficha está em branco.', true) +
+          grupo('atualizar', 'Atualizar (ficha com dados diferentes)', 'A ficha já tem outro valor: confira antes de gravar. O valor antigo fica no histórico do condomínio.', false)) +
+        (p.nao_achados.length ? '<details style="margin-top:12px"><summary style="cursor:pointer;font-weight:800">Não achados na Base de Clientes (' + p.nao_achados.length + ')</summary><p class="ajuda" style="margin:6px 0">Nome ou UF diferente da Base de Clientes. Acerte o nome no Controle de Síndicos (aba da carteira) e confira de novo.</p>' +
+          '<div class="tabela-wrap" style="max-height:260px;overflow-y:auto"><table><thead><tr><th>No Controle de Síndicos</th><th>Síndico</th></tr></thead><tbody>' +
+          p.nao_achados.map(function (x) { return '<tr><td>' + esc(x.cond) + '</td><td>' + esc(x.sindicos.join(' / ')) + '</td></tr>'; }).join('') + '</tbody></table></div></details>' : '') +
+        (p.sem_contato ? '<p class="ajuda" style="margin-top:12px">Condomínios ativos que continuam sem síndico (sem contato no Controle de Síndicos): <b>' + p.sem_contato + '</b>.</p>' : '');
+      $$('[data-sd-todos],[data-sd-nenhum]', m).forEach(function (a) {
+        a.onclick = function (e) {
+          e.preventDefault();
+          var tipo = a.getAttribute('data-sd-todos') || a.getAttribute('data-sd-nenhum'), on = a.hasAttribute('data-sd-todos');
+          $$('input[data-sd-tipo="' + tipo + '"]', m).forEach(function (i) { i.checked = on; });
+        };
+      });
+      if (!p.mudancas.length) return;
+      $('.modal-pe', m).insertAdjacentHTML('beforeend', '<button class="btn primary" id="sdOk">Gravar na Base de Clientes</button>');
+      $('#sdOk', m).onclick = async function () {
+        var ids = $$('input[data-sd]', m).filter(function (i) { return i.checked; }).map(function (i) { return Number(i.getAttribute('data-sd')); });
+        if (!ids.length) { toast('Marque ao menos um condomínio.', 'erro'); return; }
+        var bt = this; bt.disabled = true;
+        try {
+          var r = await api('POST', '/api/carteira/sindicos', { ids: ids });
+          m.fechar(); toast(r.atualizados + ' condomínio(s) atualizado(s) com o síndico do Controle de Síndicos.', 'ok'); paginaCarteira(aba);
+        } catch (e) { bt.disabled = false; toast(e.message, 'erro'); }
+      };
     }
 
     /* ---------- adicionar novos: planilha de implantação → escolhe a vigência → digita o ID Vouch ---------- */
@@ -2321,26 +2377,34 @@
           return '<option value="' + esc(fn.campo + '|' + p) + '">' + esc(pessoaCarteira(p).nome) + '</option>';
         }).join('') + '</optgroup>';
       }).join('');
-      // 5 colunas de largura fixa: cabe na tela sem rolar para o lado (ID, UF, vencimento e situação vão junto do nome)
-      var cols = [['nome', 'Condomínio (Apelido Vouch)', '30%']]
-        .concat(funcoes.map(function (fn) { return [fn.campo, fn.rotulo.replace(' (ApoioCob)', ''), '18%']; }))
-        .concat([['administradora', 'Administradora', '16%']]);
+      // vigências que existem na base (mês/ano), da mais recente para a mais antiga, com quantos entraram em cada uma
+      if (f.semVig && !f.vig) f.vig = 'sem';
+      var porVig = {};
+      conds.forEach(function (c) { var k = c.inicio_contrato ? c.inicio_contrato.slice(0, 7) : 'sem'; porVig[k] = (porVig[k] || 0) + 1; });
+      var qtd = function (n) { return ' (' + n + ' condomínio' + (n === 1 ? '' : 's') + ')'; };
+      var vigencias = Object.keys(porVig).filter(function (k) { return k !== 'sem'; }).sort().reverse().map(function (k) {
+        return '<option value="' + k + '">' + mesAno(k) + qtd(porVig[k]) + '</option>';
+      }).join('') + (porVig.sem ? '<option value="sem">Sem vigência' + qtd(porVig.sem) + '</option>' : '');
+      // 6 colunas de largura fixa: cabe na tela sem rolar para o lado (ID, UF, vencimento e situação vão junto do nome)
+      var cols = [['nome', 'Condomínio (Apelido Vouch)', '26%']]
+        .concat(funcoes.map(function (fn) { return [fn.campo, fn.rotulo.replace(' (ApoioCob)', ''), '15%']; }))
+        .concat([['sindico_nome', 'Síndico', '16%'], ['administradora', 'Administradora', '13%']]);
       $('#cCorpo').innerHTML = '<div class="painel"><div class="cab-painel">' +
-        '<input class="campo" id="cfQ" type="search" placeholder="Buscar nome, razão social, CNPJ ou ID Vouch…" style="max-width:280px">' +
+        '<input class="campo" id="cfQ" type="search" placeholder="Buscar nome, ID, CNPJ ou síndico…" style="max-width:280px">' +
         '<select class="campo" id="cfSit" style="max-width:150px"><option value="ATIVO">Ativos</option><option value="DISTRATADO">Distratados</option><option value="">Todas as situações</option></select>' +
         '<select class="campo" id="cfUf" style="max-width:130px"><option value="">Todas as UFs</option>' + unicos(conds.map(function (c) { return c.comarca; })).map(function (u) { return '<option>' + esc(u) + '</option>'; }).join('') + '</select>' +
         '<select class="campo" id="cfAdm" style="max-width:190px"><option value="">Todas as administradoras</option>' + unicos(conds.map(function (c) { return c.administradora; })).map(function (u) { return '<option>' + esc(u) + '</option>'; }).join('') + '</select>' +
         '<select class="campo" id="cfPes" style="max-width:220px"><option value="">Todos os responsáveis</option>' + pessoas + '</select>' +
         '<label class="linha" style="font-weight:700;font-size:13px;color:var(--muted)"><input type="checkbox" id="cfSem"> sem responsável</label>' +
-        '<label class="linha" style="font-weight:700;font-size:13px;color:var(--muted)"><input type="checkbox" id="cfSemVig"> sem vigência</label>' +
+        '<select class="campo" id="cfVig" style="max-width:230px" title="Mês/ano em que o condomínio entrou"><option value="">Todas as vigências</option>' + vigencias + '</select>' +
         '<span class="espaco"></span>' + acoes + '</div>' +
         '<div class="tabela-wrap"><table class="tabela-carteira"><colgroup>' + cols.map(function (c) { return '<col style="width:' + c[2] + '">'; }).join('') + '</colgroup><thead><tr>' + cols.map(function (c) {
           return '<th data-ordem="' + c[0] + '" style="cursor:pointer" title="Ordenar">' + esc(c[1]) + ' <span data-seta="' + c[0] + '"></span></th>';
         }).join('') + '</tr></thead><tbody id="tbC"></tbody></table></div>' +
         '<div class="ajuda" id="cTotal" style="padding:10px 16px;border-top:1px solid var(--border)"></div></div>';
-      $('#cfQ').value = f.q; $('#cfSit').value = f.situacao; $('#cfUf').value = f.uf; $('#cfAdm').value = f.adm; $('#cfPes').value = f.pessoa; $('#cfSem').checked = !!f.semResp; $('#cfSemVig').checked = !!f.semVig;
+      $('#cfQ').value = f.q; $('#cfSit').value = f.situacao; $('#cfUf').value = f.uf; $('#cfAdm').value = f.adm; $('#cfPes').value = f.pessoa; $('#cfSem').checked = !!f.semResp; $('#cfVig').value = porVig[f.vig] ? f.vig : '';
       function filtrar() {
-        f = { q: $('#cfQ').value.trim(), situacao: $('#cfSit').value, uf: $('#cfUf').value, adm: $('#cfAdm').value, pessoa: $('#cfPes').value, semResp: $('#cfSem').checked, semVig: $('#cfSemVig').checked, ordem: f.ordem, desc: f.desc };
+        f = { q: $('#cfQ').value.trim(), situacao: $('#cfSit').value, uf: $('#cfUf').value, adm: $('#cfAdm').value, pessoa: $('#cfPes').value, semResp: $('#cfSem').checked, vig: $('#cfVig').value, ordem: f.ordem, desc: f.desc };
         guardar('carteira.filtros', f);
         var t = normal(f.q), dig = f.q.replace(/\D/g, '');
         var pes = f.pessoa ? f.pessoa.split('|') : null;
@@ -2350,8 +2414,9 @@
           if (f.adm && c.administradora !== f.adm) return false;
           if (pes && c[pes[0]] !== pes[1]) return false;
           if (f.semResp && !funcoes.some(function (fn) { return !c[fn.campo]; })) return false;
-          if (f.semVig && c.inicio_contrato) return false;
-          if (t && normal(c.nome + ' ' + c.razao_social + ' ' + c.codigo + ' ' + c.administradora).indexOf(t) < 0 && !(dig.length >= 4 && c.cnpj.replace(/\D/g, '').indexOf(dig) >= 0)) return false;
+          if (f.vig && (c.inicio_contrato ? c.inicio_contrato.slice(0, 7) : 'sem') !== f.vig) return false;
+          if (t && normal([c.nome, c.razao_social, c.codigo, c.administradora, c.sindico_nome, c.sindico_email, c.sindico_telefone].join(' ')).indexOf(t) < 0 &&
+            !(dig.length >= 4 && (c.cnpj + ' ' + c.sindico_telefone).replace(/[^\d ]/g, '').split(' ').some(function (n) { return n.indexOf(dig) >= 0; }))) return false;
           return true;
         });
         lista.sort(function (a, b) {
@@ -2366,6 +2431,8 @@
               (c.inicio_contrato ? ' · vigência ' + mesAno(c.inicio_contrato) : ' · <span style="color:#9a6512">sem vigência</span>') + '</span>' +
             (c.razao_social ? '<span class="sec corta" title="' + esc(c.razao_social + (c.cnpj ? ' · ' + c.cnpj : '')) + '">' + esc(c.razao_social) + '</span>' : '') + '</td>' +
             funcoes.map(function (fn) { return '<td>' + celPessoa(c[fn.campo]) + '</td>'; }).join('') +
+            '<td>' + (c.sindico_nome ? esc(c.sindico_nome) : '<span style="color:var(--muted)">—</span>') +
+              (c.sindico_telefone ? '<span class="sec">' + esc(c.sindico_telefone) + '</span>' : '') + (c.sindico_email ? '<span class="sec corta" title="' + esc(c.sindico_email) + '">' + esc(c.sindico_email) + '</span>' : '') + '</td>' +
             '<td>' + esc(c.administradora && c.administradora !== '-' ? c.administradora : '—') + (c.forma_envio ? '<span class="sec">' + esc(c.forma_envio) + '</span>' : '') + '</td></tr>';
         }).join('') || '<tr><td colspan="' + cols.length + '"><div class="vazio" style="border:0;padding:34px">Nenhum condomínio com estes filtros.</div></td></tr>';
         $('#cTotal').textContent = lista.length + ' de ' + conds.length + ' condomínio' + (conds.length === 1 ? '' : 's');
@@ -2373,7 +2440,7 @@
       }
       var espera;
       $('#cfQ').oninput = function () { clearTimeout(espera); espera = setTimeout(filtrar, 200); };
-      $$('#cfSit,#cfUf,#cfAdm,#cfPes,#cfSem,#cfSemVig').forEach(function (el) { el.onchange = filtrar; });
+      $$('#cfSit,#cfUf,#cfAdm,#cfPes,#cfSem,#cfVig').forEach(function (el) { el.onchange = filtrar; });
       $$('th[data-ordem]').forEach(function (th) {
         th.onclick = function () { var o = th.getAttribute('data-ordem'); f.desc = f.ordem === o ? !f.desc : false; f.ordem = o; filtrar(); };
       });
@@ -2465,7 +2532,7 @@
       var novo = !c;
       c = c || { situacao: 'ATIVO' };
       // condomínio novo: quem tem o cadastro preenche tudo. Condomínio existente: só os campos liberados para a pessoa
-      // (Carteira: quem edita), os mesmos que o servidor aceita
+      // (Base de Clientes: quem edita), os mesmos que o servidor aceita
       var editCampos = j.campos_editaveis || [];
       var tudoLiberado = Object.keys(ROTULO_CAMPO).every(function (cp) { return editCampos.indexOf(cp) >= 0; });
       var ro = novo ? !admin : !tudoLiberado;
@@ -2500,7 +2567,7 @@
           '<div class="grade-3">' + campo('cdSind', 'Síndico', c.sindico_nome, ' maxlength="160"', lib('sindico_nome')) + campo('cdSindTel', 'Telefone do síndico', c.sindico_telefone, ' maxlength="40"', lib('sindico_telefone')) +
             campo('cdSindEmail', 'E-mail do síndico', c.sindico_email, ' maxlength="160" type="email"', lib('sindico_email')) + '</div>' +
           '<div class="grade-3">' + funcoes.map(function (fn) { return campo('cd_' + fn.campo, esc(fn.rotulo), c[fn.campo], ' maxlength="120" list="cdl_' + fn.campo + '" placeholder="NOME - RAMAL"', lib(fn.campo)); }).join('') + '</div>' +
-          (parcial ? '<div class="ajuda">Você altera só os campos liberados para você; os outros ficam travados.' + (j.acesso ? ' Quem edita o quê: <b>Seu acesso</b>, no alto da Carteira.' : ' Para mudar o que você pode editar, fale com a coordenação do seu setor.') + '</div>' : '') +
+          (parcial ? '<div class="ajuda">Você altera só os campos liberados para você; os outros ficam travados.' + (j.acesso ? ' Quem edita o quê: <b>Seu acesso</b>, no alto da Base de Clientes.' : ' Para mudar o que você pode editar, fale com a coordenação do seu setor.') + '</div>' : '') +
           '<div class="grade-3">' + campo('cdInicio', 'Vigência do contrato' + (novo ? ' *' : ''), mesAno(c.inicio_contrato), ' maxlength="7" inputmode="numeric" placeholder="mm/aaaa"', lib('inicio_contrato')) +
           campo('cdExec', 'Executivo de negócios', c.executivo, ' maxlength="120" list="cdExecs"', lib('executivo')) + '</div>' +
           '<div><label class="rot" for="cdObs">Observações</label><textarea class="campo" id="cdObs" rows="3" maxlength="4000"' + (ro && !lib('observacoes') ? ' readonly' : '') + '>' + esc(c.observacoes || '') + '</textarea></div>' +
@@ -4088,24 +4155,24 @@
   var resumoImp = null;
   var ETAPA_IMP = {
     rascunho: ['Rascunho', 'cinza'], diretoria: ['Na diretoria', 'ambar'], juridico: ['Com o Jurídico · condições do contrato', 'ambar'], fila: ['Na fila · aguardando designação', 'azul'], em_implantacao: ['Em implantação', 'azul'],
-    pendencia: ['Pendência com o comercial', 'ambar'], concluida: ['Concluída · aguardando a Carteira', 'verde'], na_carteira: ['Na Carteira', 'verde'], cancelada: ['Cancelada', 'cinza'],
+    pendencia: ['Pendência com o comercial', 'ambar'], concluida: ['Concluída · aguardando a Base de Clientes', 'verde'], na_carteira: ['Na Base de Clientes', 'verde'], cancelada: ['Cancelada', 'cinza'],
   };
-  var ABAS_IMP = [['minhas', 'Minhas solicitações'], ['fila', 'Fila do setor'], ['carteira', 'Aguardando Carteira'], ['todas', 'Todas']];
+  var ABAS_IMP = [['minhas', 'Minhas solicitações'], ['fila', 'Fila do setor'], ['carteira', 'Aguardando a Base de Clientes'], ['todas', 'Todas']];
   var EVENTO_IMP = {
     criada: 'criou a implantação', formulario: 'alterou o formulário', documento: 'anexou um documento', documento_removido: 'removeu um documento',
     enviada: 'enviou ao setor Implantação', reenviada: 'reenviou depois da pendência', cancelada: 'cancelou',
     designada: 'designou', iniciada: 'iniciou a implantação', etapas: 'atualizou as etapas', pendencia: 'devolveu com pendência',
-    concluida: 'concluiu a implantação', parceiros: 'levou o condomínio à base de Parceiros', carteira: 'confirmou a entrada na Carteira', contrato: 'recebeu as condições fechadas do contrato', contrato_corrigido: 'recebeu a correção das condições do contrato',
+    concluida: 'concluiu a implantação', parceiros: 'levou o condomínio à base de Parceiros', carteira: 'confirmou a entrada na Base de Clientes', contrato: 'recebeu as condições fechadas do contrato', contrato_corrigido: 'recebeu a correção das condições do contrato',
     diretoria_pedida: 'pediu a aprovação da diretoria', diretoria_aprovou: 'aprovou taxa e boleto', diretoria_recusou: 'não aprovou taxa e boleto',
     juridico: 'enviou o contrato assinado ao Jurídico', juridico_cancelou: 'cancelou a conferência do contrato (a implantação voltou ao executivo)',
     autorizacao_pedida: 'pediu autorização para editar', autorizacao: 'autorizou', autorizacao_recusada: 'não autorizou o pedido para editar', autorizacao_revogada: 'revogou uma autorização para editar',
     impedimento: 'marcou impedimento (prazo pausado)', retomada: 'retomou o prazo', onboarding_justificado: 'justificou o onboarding fora do prazo',
     documento_marcado: 'marcou recebido sem arquivo', documento_desmarcado: 'desfez a marcação de recebido', cobranca_prazo: 'cobrou o prazo', meta_documentacao: 'marcou a meta de documentação à mão', cobranca_documentos: 'cobrou documentos do executivo',
   };
-  var ETAPA_SETOR_IMP = [['documentacao', 'Documentação', 'Obrigatórios conferidos; os pendentes seguem com alerta ao executivo.'], ['vouch', 'Cadastro no sistema (Vouch)', 'O ID vai direto para a Carteira.'],
+  var ETAPA_SETOR_IMP = [['documentacao', 'Documentação', 'Obrigatórios conferidos; os pendentes seguem com alerta ao executivo.'], ['vouch', 'Cadastro no sistema (Vouch)', 'O ID vai direto para a Base de Clientes.'],
     ['onboarding', 'Onboarding', 'Reunião de boas-vindas com o síndico. Marcado ou realizado: data e hora obrigatórias. Ao salvar como Marcado, o portal envia o convite do Outlook (1h, com link do Teams) para quem conduz, as pessoas do setor CS e o síndico.'],
-    ['boletos', 'Emissão de boletos', 'Primeira emissão pelo novo contrato. O 1º vencimento já vem do formulário: altere só se ficou definida outra data. Obrigatório ao marcar "Boletos emitidos"; o prazo do onboarding e a pós-implantação contam dele. O vencimento padrão é o do formulário e é o que vai para a Carteira.'],
-    ['envio', 'Envio dos boletos', 'Vai para a Carteira como forma de envio.']];
+    ['boletos', 'Emissão de boletos', 'Primeira emissão pelo novo contrato. O 1º vencimento já vem do formulário: altere só se ficou definida outra data. Obrigatório ao marcar "Boletos emitidos"; o prazo do onboarding e a pós-implantação contam dele. O vencimento padrão é o do formulário e é o que vai para a Base de Clientes.'],
+    ['envio', 'Envio dos boletos', 'Vai para a Base de Clientes como forma de envio.']];
   var UFS = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'];
 
   async function carregarMetaImp(forcar) {
@@ -4123,7 +4190,7 @@
     var n = (r.fila || 0) + (r.minhas || 0) + (r.carteira || 0) + (r.pendencias || 0);
     b.textContent = n;
     b.hidden = !n;
-    b.title = [r.fila ? r.fila + ' na fila' : '', r.minhas ? r.minhas + ' com você' : '', r.carteira ? r.carteira + ' aguardando a Carteira' : '',
+    b.title = [r.fila ? r.fila + ' na fila' : '', r.minhas ? r.minhas + ' com você' : '', r.carteira ? r.carteira + ' aguardando a Base de Clientes' : '',
       r.pendencias ? r.pendencias + ' com pendência' : ''].filter(Boolean).join(' · ');
   }
   function origemImp(i) {
@@ -4139,7 +4206,7 @@
      as listas de trabalho ficam no Painel de atividades (Fila, Mês vigente, Controle, Pós-implantação) e em Depois da conclusão. */
   var ABAS_PAINEL = [['dashboard', 'Dashboard', 'grafico'], ['atividades', 'Painel de atividades', 'camadas'], ['depois', 'Depois da conclusão', 'enviar'], ['minhas', 'Minhas solicitações', 'documento']];
   var VISOES_ATIV = [['fila', 'Fila'], ['mes', 'Mês vigente'], ['controle', 'Controle'], ['pos', 'Pós-implantação']];
-  var VISOES_DEPOIS = [['carteira', 'Aguardando Carteira'], ['fichas', 'Fichas de transição'], ['antecipacoes', 'Antecipações']];
+  var VISOES_DEPOIS = [['carteira', 'Aguardando a Base de Clientes'], ['fichas', 'Fichas de transição'], ['antecipacoes', 'Antecipações']];
   // endereços antigos (Implantação e Acompanhamento) levam ao lugar novo
   var ANTIGAS_IMP = { fila: 'atividades/fila', todas: 'atividades/controle', carteira: 'depois/carteira' };
   var ANTIGAS_ACOMP = { painel: 'dashboard', mes: 'atividades/mes', controle: 'atividades/controle', pos: 'atividades/pos', onboarding: 'dashboard', documentacao: 'dashboard',
@@ -4148,12 +4215,12 @@
     mes: 'Implantações cujo contrato começa no mês, na ordem do 1º vencimento. A partir do dia da virada (Parâmetros), a tela mostra o mês seguinte.',
     controle: 'A planilha <b>Controle Implantações</b>, uma linha por implantação, preenchida sozinha pelo formulário, pelo contrato e pelas etapas do setor. A <b>Obs.</b> quem conduz escreve direto na célula. O botão <b>Excel</b> baixa a planilha completa, com os filtros aplicados.',
     pos: 'Depois de assumir e de emitir os boletos, a Assistente de Implantação faz três etapas, com prazo em dias úteis: <b>espólios</b>, <b>levantamento de pendências</b> e a <b>1ª prestação de contas</b>. Lembrete 1 dia útil antes e no dia; atrasada, alerta por dia útil a ela e à coordenação.',
-    fichas: 'Cada ficha de transição vai ao Crédito em até <b>5 dias úteis</b> da conclusão. A assistente de crédito vem da Carteira; sem ela, a <b>supervisão de Crédito</b> escolhe.',
+    fichas: 'Cada ficha de transição vai ao Crédito em até <b>5 dias úteis</b> da conclusão. A assistente de crédito vem da Base de Clientes; sem ela, a <b>supervisão de Crédito</b> escolhe.',
     antecipacoes: 'Vem do bloco "Cashback e antecipação" do formulário. <b>Marque</b> e envie ao <b>Controle de Repasses</b>: o Gestor confirma e a antecipação vira regra lá.',
     parametros: 'Cada mudança vale a partir da data escolhida: os envios anteriores continuam calculados com a regra da época.',
   };
   var SIT_COMERCIAL = { rascunho: ['Rascunho', 'cinza'], diretoria: ['Na diretoria', 'ambar'], juridico: ['Com o Jurídico', 'ambar'], fila: ['Na fila do setor', 'azul'], em_implantacao: ['Em implantação', 'azul'],
-    pendencia: ['Pendência com você', 'ambar'], concluida: ['Concluída · aguardando a Carteira', 'verde'], na_carteira: ['Na Carteira', 'verde'], cancelada: ['Cancelada', 'cinza'] };
+    pendencia: ['Pendência com você', 'ambar'], concluida: ['Concluída · aguardando a Base de Clientes', 'verde'], na_carteira: ['Na Base de Clientes', 'verde'], cancelada: ['Cancelada', 'cinza'] };
   var SELOS_IMP = [['documentacao', 'Doc'], ['vouch', 'Vouch'], ['onboarding', 'Onb'], ['boletos', 'Bol'], ['envio', 'Env']];
   function selosImp(feitas) {
     return '<span class="selos-imp" aria-label="' + SELOS_IMP.filter(function (s) { return feitas && feitas[s[0]]; }).length + ' de 5 etapas feitas">' +
@@ -4203,7 +4270,7 @@
     var contAba = { atividades: cont.pos, depois: nDepois };
     var minha = p.equipe && !gestao && String(f.analista) === String(eu.id);
     $('#conteudo').innerHTML = '<div class="pagina" style="max-width:1400px">' +
-      '<div class="cab-acomp"><div class="tit-acomp"><h1>Painel de implantação</h1><p class="sub" style="margin:0">Do contrato assinado à Carteira: números do ano, atividades do setor e o que vem depois da conclusão.' + (p.diretoria && !p.coordenacao && !p.admin && !p.equipe ? ' <b>Diretoria: só consulta.</b>' : '') + '</p></div><span class="espaco"></span>' +
+      '<div class="cab-acomp"><div class="tit-acomp"><h1>Painel de implantação</h1><p class="sub" style="margin:0">Do contrato assinado à Base de Clientes: números do ano, atividades do setor e o que vem depois da conclusão.' + (p.diretoria && !p.coordenacao && !p.admin && !p.equipe ? ' <b>Diretoria: só consulta.</b>' : '') + '</p></div><span class="espaco"></span>' +
       '<div class="status-acomp"><i></i><b>Dados do portal</b><span>' + esc(agora) + '</span><button class="btn icon ghost" id="acRecarregar" aria-label="Atualizar">' + IC.recarregar + '</button></div>' +
       '<button class="btn ghost" id="acExcel">' + IC.baixar + 'Excel</button>' + (podeParam || (interno && aba === 'parametros') ? '<a class="btn ghost' + (aba === 'parametros' ? ' on' : '') + '" href="#/implantacao/parametros">' + IC.lapis + 'Parâmetros</a>' : '') +
       (comercial ? '<button class="btn primary" id="btNovaImp">' + IC.mais + 'Nova implantação</button>' : '') + '</div>' +
@@ -4465,25 +4532,25 @@
       linhas: itens.map(function (i) { var c = i.l && i.l.concluir; return [i.protocolo || '', i.condominio, i.uf, (ETAPA_IMP[i.etapa] || [i.etapa])[0], i.l ? i.l.pct : '', i.responsavel_nome || '', i.iniciado_em ? dataBr(String(i.iniciado_em).slice(0, 10)) : '', c && c.vence ? dataBr(c.vence) : '', i.pendentes.join('; ')]; }) }] };
   }
 
-  /* ---------- Depois da conclusão · Aguardando Carteira (gestão): a coordenação confere e confirma ---------- */
+  /* ---------- Depois da conclusão · Aguardando a Base de Clientes (gestão): a coordenação confere e confirma ---------- */
   function aguardandoCarteiraImp(j, raiz, recarregar) {
     var pf = j.perfil, coord = !!(pf.coordenacao || pf.admin);
     var lista = j.linhas.filter(function (l) { return l.etapa === 'concluida' && passaAcomp(l, { semAno: true, semMes: true }); });
-    raiz.innerHTML = '<section class="painel"><div class="cab-painel"><h2>Aguardando Carteira</h2><span class="espaco"></span><span class="ajuda" style="margin:0">concluídas: a coordenação confere os dados e confirma a entrada na Carteira</span></div>' +
+    raiz.innerHTML = '<section class="painel"><div class="cab-painel"><h2>Aguardando a Base de Clientes</h2><span class="espaco"></span><span class="ajuda" style="margin:0">concluídas: a coordenação confere os dados e confirma a entrada na Base de Clientes</span></div>' +
       '<div class="tabela-wrap"><table><thead><tr><th>Condomínio</th><th>Conduzida por</th><th>Concluída em</th><th>Etapas</th><th></th></tr></thead><tbody>' +
       (lista.map(function (l) {
         return '<tr class="clicavel" data-imp="' + l.id + '"><td><b>' + esc(l.condominio) + '</b><span class="sec">' + esc([l.protocolo || (l.numero ? 'Nº ' + l.numero : ''), l.uf].filter(Boolean).join(' · ')) + '</span></td><td>' + esc(l.responsavel_nome || '—') + '</td>' +
           '<td>' + (l.concluido_em ? dataBr(String(l.concluido_em).slice(0, 10)) : '—') + '</td><td>' + selosImp(l.feitas) + '</td>' +
           '<td>' + (coord ? '<button class="btn primary sm" data-carteira-imp="' + l.id + '">Confirmar entrada</button>' : '') + '</td></tr>';
-      }).join('') || '<tr><td colspan="5"><div class="vazio" style="border:0;padding:30px">Nenhuma implantação aguardando a Carteira.</div></td></tr>') + '</tbody></table></div>' +
-      '<p class="ajuda" style="margin:0;padding:8px 16px 14px">Vão para a Carteira os dados do formulário e das etapas, com o nome, o telefone e o e-mail do síndico. O portal recusa ID Vouch ou CNPJ que já estão na Carteira.</p></section>';
+      }).join('') || '<tr><td colspan="5"><div class="vazio" style="border:0;padding:30px">Nenhuma implantação aguardando a Base de Clientes.</div></td></tr>') + '</tbody></table></div>' +
+      '<p class="ajuda" style="margin:0;padding:8px 16px 14px">Vão para a Base de Clientes os dados do formulário e das etapas, com o nome, o telefone e o e-mail do síndico. O portal recusa ID Vouch ou CNPJ que já estão na Base de Clientes.</p></section>';
     $$('[data-carteira-imp]', raiz).forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); confirmarCarteiraImp({ id: Number(b.getAttribute('data-carteira-imp')) }, recarregar); }; });
     irImpAcomp(raiz);
   }
 
   /* ---------- Minhas solicitações (comercial): a situação de cada implantação e o que falta de você ---------- */
   async function minhasImp(abas, p) {
-    $('#conteudo').innerHTML = '<div class="pagina" style="max-width:1400px"><div class="cab-acomp"><div class="tit-acomp"><h1>Painel de implantação</h1><p class="sub" style="margin:0">Suas implantações, do contrato assinado à Carteira: em que situação cada uma está e o que falta de você.</p></div><span class="espaco"></span>' +
+    $('#conteudo').innerHTML = '<div class="pagina" style="max-width:1400px"><div class="cab-acomp"><div class="tit-acomp"><h1>Painel de implantação</h1><p class="sub" style="margin:0">Suas implantações, do contrato assinado à Base de Clientes: em que situação cada uma está e o que falta de você.</p></div><span class="espaco"></span>' +
       '<button class="btn primary" id="btNovaImp">' + IC.mais + 'Nova implantação</button></div>' +
       (abas.length > 1 ? '<nav class="abas abas-acomp">' + abas.map(function (a) { return '<a href="#/implantacao/' + a[0] + '" class="' + (a[0] === 'minhas' ? 'on' : '') + '">' + (IC[a[2]] || '') + esc(a[1]) + '</a>'; }).join('') + '</nav>' : '') +
       '<div class="filtros-acomp"><span class="espaco"></span><label class="busca-acomp">' + IC.busca + '<input type="search" id="qImp" placeholder="Buscar condomínio, CNPJ ou protocolo…" aria-label="Buscar condomínio, CNPJ ou protocolo"></label></div><div id="corpoImp"></div></div>';
@@ -4505,7 +4572,7 @@
         tileAcomp('Pendência com você', n(function (i) { return i.etapa === 'pendencia'; }), 'o prazo do setor está pausado', { cor: n(function (i) { return i.etapa === 'pendencia'; }) ? 'red' : '' }) +
         tileAcomp('Documentos a enviar', n(falta), 'implantações com documento faltando') +
         tileAcomp('Rascunhos', n(function (i) { return i.etapa === 'rascunho'; }), 'ainda não enviados') +
-        tileAcomp('Na Carteira', n(function (i) { return i.etapa === 'na_carteira'; }), 'entraram na Carteira') + '</div>' +
+        tileAcomp('Na Base de Clientes', n(function (i) { return i.etapa === 'na_carteira'; }), 'entraram na Base de Clientes') + '</div>' +
         '<section class="painel"><div class="cab-painel"><h2>Suas implantações</h2><span class="espaco"></span><span class="ajuda" style="margin:0">Abrir: acompanhar o andamento, anexar o que falta e responder à pendência</span></div>' +
         '<div class="tabela-wrap"><table><thead><tr><th>Protocolo · Condomínio</th><th>Situação</th><th>Assistente</th><th>Falta de você</th><th></th></tr></thead><tbody>' +
         (l.map(function (i) {
@@ -4676,7 +4743,7 @@
       selImp('uf', 'Estado do contrato', f.uf || '', [['', 'Escolha']].concat(UFS.map(function (u) { return [u, u]; }))) +
       campoImp('cidade', 'Cidade', f.cidade) +
       campoImp('uh_total', 'Número total de unidades', f.uh_total, { ref: r(ref.uh_total), difs: difs, ajuda: 'Vale o número da convenção.' }) +
-      campoImp('dia_vencimento', 'Vencimento padrão (dia)', f.dia_vencimento, { ref: r(ref.dia_vencimento), difs: difs, ph: '1 a 31', ajuda: 'O dia de vencimento do condomínio: é o que vai para a Carteira.' }) +
+      campoImp('dia_vencimento', 'Vencimento padrão (dia)', f.dia_vencimento, { ref: r(ref.dia_vencimento), difs: difs, ph: '1 a 31', ajuda: 'O dia de vencimento do condomínio: é o que vai para a Base de Clientes.' }) +
       selImp('entrega', 'Condomínio de entrega?', f.entrega ? 'sim' : 'nao', [['nao', 'Não'], ['sim', 'Sim']]) +
       campoImp('construtora', 'Construtora', f.construtora, { se: 'entrega:sim' }) +
       campoImp('construtora_contato', 'Contato da construtora', f.construtora_contato, { se: 'entrega:sim', span: 2 }) + '</div></section>' +
@@ -5271,21 +5338,21 @@
     var dd = j.dados;
     var c = function (k, rot, extra) { return campoCr('k_' + k, rot, dd[k], extra); };
     var mo = modal({
-      titulo: 'Confirmar a entrada na Carteira', largo: true,
-      corpo: (j.duplicados.length ? '<div class="msg aviso" style="margin-bottom:12px">Já existe na Carteira: ' + esc(j.duplicados.map(function (x) { return x.nome + ' (ID ' + x.codigo + ')'; }).join('; ')) + '. Confira antes de incluir.</div>'
-        : '<div class="msg ok" style="margin-bottom:12px">Nenhum condomínio com este ID ou CNPJ na Carteira.</div>') +
-        '<div class="grade-3">' + c('codigo', 'ID Vouch', { ajuda: 'Da etapa Cadastro no sistema.' }) + c('nome', 'Nome na Carteira', { ajuda: 'Sugerido a partir da razão social.' }) + c('situacao', 'Situação') +
+      titulo: 'Confirmar a entrada na Base de Clientes', largo: true,
+      corpo: (j.duplicados.length ? '<div class="msg aviso" style="margin-bottom:12px">Já existe na Base de Clientes: ' + esc(j.duplicados.map(function (x) { return x.nome + ' (ID ' + x.codigo + ')'; }).join('; ')) + '. Confira antes de incluir.</div>'
+        : '<div class="msg ok" style="margin-bottom:12px">Nenhum condomínio com este ID ou CNPJ na Base de Clientes.</div>') +
+        '<div class="grade-3">' + c('codigo', 'ID Vouch', { ajuda: 'Da etapa Cadastro no sistema.' }) + c('nome', 'Nome na Base de Clientes', { ajuda: 'Sugerido a partir da razão social.' }) + c('situacao', 'Situação') +
         c('razao_social', 'Razão social', { span: 2 }) + c('cnpj', 'CNPJ') + c('comarca', 'UF') + c('vencimento', 'Vencimento padrão', { ajuda: 'O dia do formulário (não o 1º vencimento).' }) + c('inicio_contrato', 'Início do contrato (vigência)', { tipo: 'date' }) +
         c('administradora', 'Administradora') + selCr('k_forma_envio', 'Forma de envio do boleto', dd.forma_envio, [['', 'Escolha'], ['E-MAIL', 'E-mail'], ['IMPRESSO', 'Impresso'], ['IMPRESSO/E-MAIL', 'Impresso/E-mail']]) + c('executivo', 'Executivo') + '</div>' +
         '<span class="rot" style="margin-top:12px">Síndico (do formulário)</span><div class="grade-3">' + c('sindico_nome', 'Nome do síndico') + c('sindico_telefone', 'Telefone do síndico') + c('sindico_email', 'E-mail do síndico', { tipo: 'email' }) + '</div>' +
         '<label class="rot" for="k_observacoes" style="margin-top:12px">Observações</label><textarea class="campo" id="k_observacoes" rows="2">' + esc(dd.observacoes) + '</textarea>' +
-        '<div class="ajuda">Analista de cobrança, extrajudicial e assistente de crédito são escolhidos depois, na ficha do condomínio na Carteira.</div>',
-      pe: '<button class="btn ghost" data-fechar>Ainda não</button><button class="btn primary" id="kOk">Confirmar e incluir na Carteira</button>',
+        '<div class="ajuda">Analista de cobrança, extrajudicial e assistente de crédito são escolhidos depois, na ficha do condomínio na Base de Clientes.</div>',
+      pe: '<button class="btn ghost" data-fechar>Ainda não</button><button class="btn primary" id="kOk">Confirmar e incluir na Base de Clientes</button>',
     });
     $('#kOk', mo).onclick = async function () {
       var dados = {};
       Object.keys(dd).forEach(function (k) { var el = $('#k_' + k, mo); dados[k] = el ? el.value.trim() : dd[k]; });
-      try { await api('POST', '/api/implantacoes/' + i.id + '/carteira', { dados: dados }); mo.fechar(); toast('Condomínio incluído na Carteira.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+      try { await api('POST', '/api/implantacoes/' + i.id + '/carteira', { dados: dados }); mo.fechar(); toast('Condomínio incluído na Base de Clientes.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
     };
   }
 
@@ -5473,9 +5540,9 @@
       var mo = modal({
         titulo: 'Etapas · ' + l.condominio, largo: true,
         corpo: '<p class="ajuda" style="margin:0 0 14px">' + esc(protocolo(l)) + (imp ? ' · importada do histórico das planilhas: conclui sem avisos e sem ficha de transição. ' + (l.controle.ligada_carteira
-            ? '<b>Já está na Carteira</b> (ligada ao cadastro na importação): ao concluir, nada é criado lá.'
-            : '<b>Ainda não achada na Carteira</b>: ao concluir, o portal procura de novo pelo ID Vouch, CNPJ e nome; se não achar, abre a implantação para a coordenação confirmar a entrada (ele recusa ID ou CNPJ repetido).')
-            : ' · ao concluir, a coordenação é avisada para conferir e confirmar a entrada na Carteira.') + '</p>' +
+            ? '<b>Já está na Base de Clientes</b> (ligada ao cadastro na importação): ao concluir, nada é criado lá.'
+            : '<b>Ainda não achada na Base de Clientes</b>: ao concluir, o portal procura de novo pelo ID Vouch, CNPJ e nome; se não achar, abre a implantação para a coordenação confirmar a entrada (ele recusa ID ou CNPJ repetido).')
+            : ' · ao concluir, a coordenação é avisada para conferir e confirmar a entrada na Base de Clientes.') + '</p>' +
           '<div class="pilha">' +
           '<div class="grade-2"><div><span class="rot">1 · Documentação</span>' + marca('mEtDoc', 'Documentação conferida', e.documentacao.feito) + '</div>' + campoCr('mEtVouch', '2 · ID Vouch', e.vouch.id, { ph: 'ex.: 90012', ajuda: /^planilha-/.test(e.vouch.id) ? '"' + esc(e.vouch.id) + '" é provisório (a planilha só dizia que o Vouch foi feito): troque pelo ID do Vouch.' : '' }) + '</div>' +
           '<div class="grade-2">' + selCr('mEtOnb', '3 · Onboarding', o.situacao, [['a_marcar', 'A marcar'], ['marcado', 'Marcado'], ['realizado', 'Realizado'], ['sindico_myblue', 'Síndico MyBlue']]) +
@@ -5506,11 +5573,11 @@
             var rc = await api('POST', '/api/implantacoes/' + l.id + '/concluir', {});
             if (rc.carteira === 'confirmar') {
               mo.fechar();
-              toast('Concluída. Não está na Carteira: confirme a entrada.', 'ok');
+              toast('Concluída. Não está na Base de Clientes: confirme a entrada.', 'ok');
               location.hash = '#/implantacao/' + l.id;
               return;
             }
-            toast(imp ? 'Concluída (já estava na Carteira: nada foi criado lá).' : 'Concluída: a coordenação foi avisada para confirmar a Carteira.', 'ok');
+            toast(imp ? 'Concluída (já estava na Base de Clientes: nada foi criado lá).' : 'Concluída: a coordenação foi avisada para confirmar a Base de Clientes.', 'ok');
           } else toast('Etapas salvas.', 'ok');
           mo.fechar();
           if (recarregar) recarregar();
@@ -5726,7 +5793,7 @@
         (aj ? '<span class="sec" style="color:var(--amber)">ajuste: ' + esc(aj) + '</span>' : '') + (e.mudou ? '<span class="sec" style="color:var(--amber)">o formulário mudou depois do cadastro</span>' : '');
     }
     if (e.situacao === 'devolvida') return etq(['DEVOLVIDA', 'vermelha']) + '<span class="sec">' + quando(e.decidida_em) + (e.decidida_por_nome ? ' por ' + esc(e.decidida_por_nome) : '') + ': "' + esc(e.motivo) + '"</span>';
-    return etq([e.atualizacao ? 'ATUALIZAÇÃO ENVIADA' : 'ENVIADA', e.atualizacao ? 'ambar' : 'azul']) + '<span class="sec">' + quando(e.enviada_em) + ' · aguardando o Gestor' + (l.etapa !== 'na_carteira' ? ' (aparece no Controle de Repasses quando entrar na Carteira)' : '') + '</span>' +
+    return etq([e.atualizacao ? 'ATUALIZAÇÃO ENVIADA' : 'ENVIADA', e.atualizacao ? 'ambar' : 'azul']) + '<span class="sec">' + quando(e.enviada_em) + ' · aguardando o Gestor' + (l.etapa !== 'na_carteira' ? ' (aparece no Controle de Repasses quando entrar na Base de Clientes)' : '') + '</span>' +
       (e.atualizacao && e.antes ? '<span class="sec">antes: ' + reais(e.antes.valor) + ', dia ' + esc(e.antes.dia) + ', ' + fim(e.antes.fim) + '</span>' : '') + (e.mudou ? '<span class="sec" style="color:var(--amber)">o formulário mudou depois do envio</span>' : '');
   }
   function antecipacoesAcomp(j, raiz, recarregar) {
@@ -5743,7 +5810,7 @@
       raiz.innerHTML = '<div class="cards-acomp">' + tileAcomp('Antecipações em ' + periodo, lista.length, 'contratos com início ' + (f.mes ? 'no mês' : 'no ano')) +
         tileAcomp('Valor ' + (f.mes ? 'no mês' : 'no ano'), reais(total), lista.length ? 'média de ' + reais(total / lista.length) : '') +
         tileAcomp('Cadastradas no Controle de Repasses', cad.length, cad.filter(function (l) { return l.antecipacao_envio.ajuste; }).length + ' com ajuste do Gestor') +
-        tileAcomp('Aguardando', agu.length, agu.length ? 'com o Gestor' + (agu.filter(function (l) { return l.etapa !== 'na_carteira'; }).length ? ' · ' + agu.filter(function (l) { return l.etapa !== 'na_carteira'; }).length + ' à espera da Carteira' : '') : '') +
+        tileAcomp('Aguardando', agu.length, agu.length ? 'com o Gestor' + (agu.filter(function (l) { return l.etapa !== 'na_carteira'; }).length ? ' · ' + agu.filter(function (l) { return l.etapa !== 'na_carteira'; }).length + ' à espera da Base de Clientes' : '') : '') +
         tileAcomp('Devolvidas', dev.length, dev.length ? 'corrigir e reenviar' : '', { cor: dev.length ? 'red' : '' }) + '</div>' +
         '<section class="painel"><div class="cab-painel"><h2>Antecipações · ' + esc(periodo) + '</h2><span class="espaco"></span>' +
         (j.pode.antecipacao ? '<span class="ajuda" style="margin:0">' + nMarc + ' marcada(s)</span><button class="btn primary sm" id="anEnviar"' + (nMarc ? '' : ' disabled') + '>Enviar marcadas ao Controle de Repasses (' + nMarc + ')</button>' : '') + '</div>' +
@@ -5818,7 +5885,7 @@
           var sit = x.situacao === 'a_enviar' ? etq(['A ENVIAR', 'ambar']) + (x.faltas ? '<span class="sec">faltam campos em azul (' + x.faltas + ')</span>' : '<span class="sec">pronta para enviar</span>')
             : x.situacao === 'devolvida' ? etq(['DEVOLVIDA COM PERGUNTA', 'vermelha']) + '<span class="sec">' + (x.devolvida_em ? dataBr(String(x.devolvida_em).slice(0, 10)).slice(0, 5) : '') + (x.devolvida_por ? ' por ' + esc(x.devolvida_por) : '') + ' · responder</span>'
               : x.situacao === 'recebida' ? etq(['RECEBIDA', 'verde']) + '<span class="sec">versão ' + x.versao + ' confirmada</span>' : etq(['ENVIADA', 'azul']) + '<span class="sec">aguardando confirmação</span>';
-          return '<tr class="clicavel" data-ficha="' + x.id + '"><td><a href="#/implantacao/' + x.id + '/ficha"><b>' + esc(x.condominio) + '</b></a><span class="sec">' + esc([x.protocolo, x.uf, x.concluido_em ? 'concluída ' + dataBr(String(x.concluido_em).slice(0, 10)).slice(0, 5) : ''].filter(Boolean).join(' · ')) + (x.na_carteira ? '' : ' · ainda não está na Carteira') + '</span></td>' +
+          return '<tr class="clicavel" data-ficha="' + x.id + '"><td><a href="#/implantacao/' + x.id + '/ficha"><b>' + esc(x.condominio) + '</b></a><span class="sec">' + esc([x.protocolo, x.uf, x.concluido_em ? 'concluída ' + dataBr(String(x.concluido_em).slice(0, 10)).slice(0, 5) : ''].filter(Boolean).join(' · ')) + (x.na_carteira ? '' : ' · ainda não está na Base de Clientes') + '</span></td>' +
             '<td>' + esc(x.responsavel_nome || '—') + '</td><td>' + (x.destino_nome ? esc(x.destino_nome) : x.versao ? '<span class="sec" style="display:inline">a supervisão escolhe</span>' : '—') + '</td>' +
             '<td>' + (x.versao ? 'v' + x.versao + (x.versao >= x.limite ? ' de ' + x.limite : '') : '—') + '</td><td>' + sit + '</td><td>' + prazo + '</td></tr>';
         }).join('') || '<tr><td colspan="6"><div class="vazio" style="border:0;padding:30px">Nenhuma ficha aqui.</div></td></tr>') + '</tbody></table></div>' +
@@ -5978,7 +6045,7 @@
           '<div class="linha" style="gap:8px">' + [['todas', 'Todas'], ['pronta', 'Prontas'], ['aviso', 'Com aviso'], ['decisao', 'Decisão'], ['fora', 'De fora']].map(function (s) {
             return '<button class="pilula-acomp' + (estado.sit === s[0] ? ' on' : '') + '" data-imp-sit="' + s[0] + '">' + esc(s[1]) + ' <span class="n">' + (s[0] === 'todas' ? p.itens.length : r[s[0]]) + '</span></button>';
           }).join('') + '</div>' +
-          '<div class="tabela-wrap" style="max-height:60vh;overflow:auto"><table style="min-width:1100px"><thead><tr><th>Entra</th><th>Nº</th><th>Condomínio</th><th>Origem</th><th>Início</th><th class="num">%</th><th>Executivo</th><th>Implantado por</th><th>Carteira</th><th>Situação</th></tr></thead><tbody>' +
+          '<div class="tabela-wrap" style="max-height:60vh;overflow:auto"><table style="min-width:1100px"><thead><tr><th>Entra</th><th>Nº</th><th>Condomínio</th><th>Origem</th><th>Início</th><th class="num">%</th><th>Executivo</th><th>Implantado por</th><th>Base de Clientes</th><th>Situação</th></tr></thead><tbody>' +
           itens.map(function (x) {
             var marca = x.situacao === 'fora' ? '' : x.situacao === 'decisao' ? '<input type="checkbox" data-imp-incluir="' + esc(x.chave) + '"' + (estado.incluir[x.chave] ? ' checked' : '') + ' aria-label="Incluir">'
               : '<input type="checkbox" data-imp-pular="' + esc(x.chave) + '"' + (estado.pular[x.chave] ? '' : ' checked') + ' aria-label="Importar">';
@@ -6016,7 +6083,7 @@
           return [x.numero || '', x.linha_forms || '', x.fonte, x.ano || '', x.condominio, x.cnpj, x.uf, x.inicio ? dataBr(x.inicio) : '', x.pct == null ? '' : x.pct, x.executivo, x.responsavel, x.carteira,
             SIT_IMP[x.situacao][0], x.motivo, x.avisos.join('; ')];
         });
-        exportarAcomp = { nome: 'Conferencia importacao', abas: [{ titulo: 'Conferência', cab: ['Nº', 'Linha do Forms', 'Origem', 'Ano', 'Condomínio', 'CNPJ', 'UF', 'Início', '%', 'Executivo', 'Implantado por', 'Carteira', 'Situação', 'Motivo', 'Avisos'], linhas: linhas },
+        exportarAcomp = { nome: 'Conferencia importacao', abas: [{ titulo: 'Conferência', cab: ['Nº', 'Linha do Forms', 'Origem', 'Ano', 'Condomínio', 'CNPJ', 'UF', 'Início', '%', 'Executivo', 'Implantado por', 'Base de Clientes', 'Situação', 'Motivo', 'Avisos'], linhas: linhas },
           { titulo: 'Por mês', cab: ['Mês', 'Contratos', '100%', '% médio'], linhas: estado.previa.resumo.por_mes.map(function (m) { return [m.mes, m.contratos, m.concluidos, m.pct_medio]; }) }] };
         $('#acExcel').click();
       };
@@ -6127,10 +6194,10 @@
         (pf.responder ? '<label class="rot" for="fResp" style="margin-top:10px">Sua resposta</label><textarea class="campo" id="fResp" rows="2"></textarea><div class="linha" style="justify-content:flex-end;margin-top:8px">' +
           '<button class="btn ghost sm" id="btResponderFicha">Responder sem mudar a ficha</button>' + (pf.enviar ? '<button class="btn primary sm" id="btResponderVersao">Responder e enviar nova versão (' + proxima + ' de ' + f.limite + ')</button>' : '') + '</div>' : '') + '</div>';
     }
-    // para quem vai: a assistente de crédito da Carteira ou, sem ela, a supervisão de Crédito (que escolhe e grava na Carteira)
-    if (!f.versao && ed) html += f.para ? '<div class="msg info" style="margin-bottom:16px"><div><b>Vai para ' + esc(f.para.nome) + '</b>, a assistente de crédito do condomínio na Carteira. Ela recebe no sino e por e-mail, abre a ficha pelo link e confirma o recebimento ou devolve com uma pergunta.</div></div>'
-      : '<div class="msg aviso" style="margin-bottom:16px"><div><b>O condomínio ainda não tem assistente de crédito na Carteira.</b> A ficha vai para a supervisão de Crédito, que escolhe a assistente; a escolhida recebe a ficha e fica como a assistente de crédito do condomínio na Carteira.</div></div>';
-    if (f.versao && !f.destino) html += '<div class="msg aviso" style="margin-bottom:16px"><div><b>Com a supervisão de Crédito:</b> ' + (pf.escolher ? 'escolha a assistente de crédito. A escolhida recebe a ficha no sino e por e-mail e fica gravada na Carteira; quem conduz é avisada.' : 'ela escolhe a assistente de crédito. Quem conduz é avisada no sino quando ela for escolhida.') + '</div></div>';
+    // para quem vai: a assistente de crédito da Base de Clientes ou, sem ela, a supervisão de Crédito (que escolhe e grava na Base de Clientes)
+    if (!f.versao && ed) html += f.para ? '<div class="msg info" style="margin-bottom:16px"><div><b>Vai para ' + esc(f.para.nome) + '</b>, a assistente de crédito do condomínio na Base de Clientes. Ela recebe no sino e por e-mail, abre a ficha pelo link e confirma o recebimento ou devolve com uma pergunta.</div></div>'
+      : '<div class="msg aviso" style="margin-bottom:16px"><div><b>O condomínio ainda não tem assistente de crédito na Base de Clientes.</b> A ficha vai para a supervisão de Crédito, que escolhe a assistente; a escolhida recebe a ficha e fica como a assistente de crédito do condomínio na Base de Clientes.</div></div>';
+    if (f.versao && !f.destino) html += '<div class="msg aviso" style="margin-bottom:16px"><div><b>Com a supervisão de Crédito:</b> ' + (pf.escolher ? 'escolha a assistente de crédito. A escolhida recebe a ficha no sino e por e-mail e fica gravada na Base de Clientes; quem conduz é avisada.' : 'ela escolhe a assistente de crédito. Quem conduz é avisada no sino quando ela for escolhida.') + '</div></div>';
     if (ed && !f.versao && chip) html += '<div class="msg aviso" style="margin-bottom:16px"><div>Envie a ficha ao Crédito <b>até ' + dataBr(f.prazo.vence) + '</b> (' + f.prazo.dias + ' dias úteis da conclusão). Você recebe um lembrete 1 dia útil antes e no dia; passou do prazo, um alerta por dia útil, também para a coordenação.</div></div>';
     if (ed) html += '<p class="ajuda" style="margin:0 0 14px">Revise e complete os <b style="color:var(--man)">campos em azul</b>; o resto vem do portal. Um dado errado se corrige no formulário ou na etapa, e a ficha acompanha.' +
       (f.versao && f.mudou.length ? ' <b>Mudou desde a versão ' + f.versao + ':</b> ' + esc(f.mudou.join('; ')) + '.' : '') + '</p>';
@@ -6182,7 +6249,7 @@
     if ($('#btSalvarFicha')) $('#btSalvarFicha').onclick = async function () { try { var r = await salvar(); toast(r.faltas.length ? 'Ficha salva. Para enviar, falta: ' + r.faltas.length + '.' : 'Ficha salva: pronta para enviar.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
     var enviar = function (resposta) {
       var mo = modal({ titulo: f.versao ? 'Enviar a versão ' + proxima + ' de ' + f.limite : f.para ? 'Enviar para ' + f.para.nome : 'Enviar à supervisão de Crédito',
-        corpo: '<p class="ajuda" style="margin-top:0">' + (f.destino || f.para ? 'Vai para ' + esc((f.destino || f.para).nome) + ', que confirma o recebimento no portal.' : 'O condomínio ainda não tem assistente de crédito na Carteira: vai para a supervisão de Crédito, que escolhe a assistente.') +
+        corpo: '<p class="ajuda" style="margin-top:0">' + (f.destino || f.para ? 'Vai para ' + esc((f.destino || f.para).nome) + ', que confirma o recebimento no portal.' : 'O condomínio ainda não tem assistente de crédito na Base de Clientes: vai para a supervisão de Crédito, que escolhe a assistente.') +
           ' A versão enviada fica guardada como está, com o PDF para o CPD.</p>' +
           (f.versao ? '<label class="rot" for="mFichaMot">O que mudou nesta versão (obrigatório)</label><textarea class="campo" id="mFichaMot" rows="2"></textarea>' : ''),
         pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mFichaOk">Enviar</button>' });
@@ -6211,7 +6278,7 @@
     });
     if ($('#btDestinoFicha')) $('#btDestinoFicha').onclick = function () {
       var mo = modal({ titulo: 'Escolher a assistente de crédito', corpo: selCr('mFichaDest', 'Assistente de crédito', j.credito.length ? j.credito[0].id : '', j.credito.map(function (x) { return [x.id, x.nome]; })) +
-        '<div class="ajuda">A assistente é avisada no portal e por e-mail. Quando o condomínio estiver na Carteira, ela fica como a assistente de crédito dele.</div>',
+        '<div class="ajuda">A assistente é avisada no portal e por e-mail. Quando o condomínio estiver na Base de Clientes, ela fica como a assistente de crédito dele.</div>',
         pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mFichaDestOk">Encaminhar</button>' });
       $('#mFichaDestOk', mo).onclick = async function () { try { await api('POST', '/api/implantacoes/' + i.id + '/ficha/destino', { usuario_id: Number($('#mFichaDest', mo).value) }); mo.fechar(); toast('Encaminhada.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
     };
@@ -6225,7 +6292,7 @@
     };
   }
 
-  /* ---------- linha do tempo: o dia em que foi enviada, designada, iniciada, concluída e entrou na Carteira ---------- */
+  /* ---------- linha do tempo: o dia em que foi enviada, designada, iniciada, concluída e entrou na Base de Clientes ---------- */
   function htmlLinhaTempoImp(d) {
     var i = d.implantacao, st = d.setor || {};
     if (!i.enviado_em || i.importacao_id || ['rascunho', 'diretoria', 'juridico', 'cancelada'].indexOf(i.etapa) >= 0) return '';
@@ -6244,7 +6311,7 @@
       marco('des', !!i.responsavel_id, 'Designada', designada ? dia(designada.criado_em) : '', i.responsavel_id ? (designada ? hora(designada.criado_em) + ' · ' : '') + 'para ' + esc(i.responsavel_nome || '') : 'aguardando a coordenação') +
       marco('ini', !!i.iniciado_em, 'Iniciada', dia(i.iniciado_em), i.iniciado_em ? hora(i.iniciado_em) + ' · ' + esc(i.responsavel_nome || '') : i.prazo_inicio && i.responsavel_id ? prazoCr(i.prazo_inicio, i.etapa).replace('Até ', 'iniciar até ') : '') +
       marco('con', !!i.concluido_em, 'Concluída', dia(i.concluido_em), concluirSub) +
-      marco('cart', i.etapa === 'na_carteira', 'Na Carteira', carteira ? dia(carteira.criado_em) : '', i.etapa === 'na_carteira' ? (carteira && carteira.detalhe && carteira.detalhe.codigo ? 'ID ' + esc(carteira.detalhe.codigo) : '') : i.etapa === 'concluida' ? 'aguardando a coordenação confirmar' : '') +
+      marco('cart', i.etapa === 'na_carteira', 'Na Base de Clientes', carteira ? dia(carteira.criado_em) : '', i.etapa === 'na_carteira' ? (carteira && carteira.detalhe && carteira.detalhe.codigo ? 'ID ' + esc(carteira.detalhe.codigo) : '') : i.etapa === 'concluida' ? 'aguardando a coordenação confirmar' : '') +
       '</ol></section>';
   }
 
@@ -6271,7 +6338,7 @@
     if (pd.iniciar) acoes += '<button class="btn primary sm" id="btIniImp">Iniciar implantação</button>';
     if (pd.pendencia) acoes += '<button class="btn ghost sm" id="btPendImp">Devolver com pendência</button>';
     if (pd.concluir) acoes += '<button class="btn primary sm" id="btConclImp"' + (d.faltas_etapas.length ? ' disabled title="' + esc(d.faltas_etapas.join(' ')) + '"' : '') + '>Concluir implantação</button>';
-    if (pd.carteira) acoes += '<button class="btn primary sm" id="btCartImp">Confirmar na Carteira</button>';
+    if (pd.carteira) acoes += '<button class="btn primary sm" id="btCartImp">Confirmar na Base de Clientes</button>';
     definirBarra('<span class="setor">Painel de implantação</span><span class="sep">/</span><span class="nome">' + esc(i.protocolo || (i.numero_planilha ? 'Nº ' + i.numero_planilha : 'Rascunho')) + '</span>', acoes);
     var difs = {};
     d.diferencas.forEach(function (x) { difs[x.campo] = x; });
@@ -6287,7 +6354,7 @@
       '<h1>' + esc(i.condominio || 'Nova implantação') + '</h1><p class="sub" style="margin:0">' + esc([i.cnpj, i.uf].filter(Boolean).join(' · ')) + '</p></div>' +
       '<dl class="info-ticket" style="min-width:260px">' + (i.protocolo ? '<dt>Protocolo</dt><dd>' + esc(i.protocolo) + '</dd>' : '') +
       '<dt>Pedida por</dt><dd>' + esc(i.solicitante_nome || '—') + '</dd>' + (i.responsavel_nome ? '<dt>Conduz</dt><dd>' + esc(i.responsavel_nome) + '</dd>' : '') + '</dl></div>';
-    // os dias de cada passo (enviada, designada, iniciada, concluída, na Carteira) ficam na linha do tempo
+    // os dias de cada passo (enviada, designada, iniciada, concluída, na Base de Clientes) ficam na linha do tempo
     html += htmlLinhaTempoImp(d);
     html += htmlContratoImp(d);
     if (i.origem === 'entrega') html += htmlEntregaImp(d);
@@ -6375,7 +6442,7 @@
     if ($('#btConclImp')) $('#btConclImp').onclick = async function () {
       var parc = (i.formulario.parceria === 'sim' && (i.formulario.parceiros || []).length) ? ' Como há parceria, o setor Parceiros é avisado e o condomínio entra na Prestação de Contas ligado ao parceiro (comissão a definir).' : '';
       var onb = d.onboarding_pendente ? '<br><br><b>O onboarding ainda não foi feito.</b> Dá para concluir: o alerta continua na implantação até registrar o onboarding' + (d.setor && d.setor.onboarding && d.setor.onboarding.limite ? ' (prazo até ' + dataBr(d.setor.onboarding.limite) + ')' : '') + '; se o prazo vencer, é preciso justificar.' : '';
-      if (!(await confirmar('Concluir a implantação', 'A coordenação é avisada para confirmar a entrada na Carteira.' + parc + onb, 'Concluir'))) return;
+      if (!(await confirmar('Concluir a implantação', 'A coordenação é avisada para confirmar a entrada na Base de Clientes.' + parc + onb, 'Concluir'))) return;
       try { await api('POST', '/api/implantacoes/' + i.id + '/concluir', {}); toast('Implantação concluída.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
     };
     if ($('#btCartImp')) $('#btCartImp').onclick = function () { confirmarCarteiraImp(i, recarregar); };

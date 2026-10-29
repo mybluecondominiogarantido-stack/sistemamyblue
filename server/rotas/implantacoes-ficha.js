@@ -2,7 +2,7 @@
 /*
  * Ficha de transição (complementa server/rotas/implantacoes.js): abre na conclusão da implantação, já preenchida
  * (server/implantacoes/ficha.js); quem conduz completa os campos em azul e envia à assistente de crédito do condomínio
- * na Carteira (sem ela, à supervisão de Crédito, que escolhe e o portal grava na Carteira). A assistente de crédito
+ * na Base de Clientes (sem ela, à supervisão de Crédito, que escolhe e o portal grava na Base de Clientes). A assistente de crédito
  * confirma o recebimento ou devolve com uma pergunta; cada envio é uma versão (até 3; mais, só com a liberação da
  * coordenação de Implantação), com o PDF no papel timbrado (-v1, -v2…) para o CPD.
  * Prazo: ficha_dias (5) dias úteis da conclusão até o primeiro envio; devolução e nova versão não reabrem.
@@ -26,7 +26,7 @@ function rotasFicha(r, deps) {
   }
   const membrosCredito = async () => (await db.q(`SELECT u.id, u.nome FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id JOIN usuarios u ON u.id = sm.usuario_id
     WHERE s.nome = $1 AND u.ativo ORDER BY u.nome`, [SETOR_CREDITO])).rows;
-  /* a assistente de crédito do condomínio na Carteira (pelo condomínio ligado ou pelo ID Vouch) */
+  /* a assistente de crédito do condomínio na Base de Clientes (pelo condomínio ligado ou pelo ID Vouch) */
   async function daCarteira(i) {
     const vouch = (i.etapas && i.etapas.vouch && i.etapas.vouch.id) || '';
     const c = i.condominio_id ? await db.um('SELECT assistente_credito FROM condominios WHERE id = $1', [i.condominio_id])
@@ -121,7 +121,7 @@ function rotasFicha(r, deps) {
     const rascunho = FI.montar(i, ficha.dados, ctx);
     const conteudo = pf.editar || !ultima ? rascunho : ultima.conteudo;
     const destino = ficha.destino_id ? await db.um('SELECT id, nome FROM usuarios WHERE id = $1', [ficha.destino_id]) : null;
-    // antes do envio: para quem vai (a assistente de crédito do condomínio na Carteira; sem ela, a supervisão de Crédito escolhe)
+    // antes do envio: para quem vai (a assistente de crédito do condomínio na Base de Clientes; sem ela, a supervisão de Crédito escolhe)
     const para = destino || ficha.versao ? null : await daCarteira(i);
     const devolucao = ficha.situacao === 'devolvida' ? eventos.filter((e) => e.tipo === 'ficha_devolvida').pop() || null : null;
     res.json({
@@ -170,7 +170,7 @@ function rotasFicha(r, deps) {
     const resposta = texto(b.resposta, 1500);
     if (versao > 1 && motivo.length < 5) return erro(res, 400, 'Diga o que mudou nesta versão.');
     if (ficha.situacao === 'devolvida' && resposta.length < 3) return erro(res, 400, 'Responda a pergunta da assistente de crédito.');
-    // para quem: a mesma pessoa das versões anteriores; senão a assistente de crédito da Carteira; senão a supervisão escolhe
+    // para quem: a mesma pessoa das versões anteriores; senão a assistente de crédito da Base de Clientes; senão a supervisão escolhe
     let destino = ficha.destino_id ? await db.um('SELECT id, nome FROM usuarios WHERE id = $1 AND ativo', [ficha.destino_id]) : null;
     if (!destino) destino = await daCarteira(i);
     const ctx = await contexto(i, { destino_id: destino ? destino.id : null }, req.usuario);
@@ -190,17 +190,17 @@ function rotasFicha(r, deps) {
     } else {
       await avisos.notificar(await supervisaoCredito(), { link: linkFicha(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: true,
         titulo: `Ficha de transição para distribuir · ${i.condominio}`,
-        texto: `${req.usuario.nome} enviou a ficha de transição de ${i.condominio}, que ainda não tem assistente de crédito na Carteira. Escolha a assistente no portal.` });
+        texto: `${req.usuario.nome} enviou a ficha de transição de ${i.condominio}, que ainda não tem assistente de crédito na Base de Clientes. Escolha a assistente no portal.` });
     }
     res.json({ ok: true, versao, para: destino ? destino.nome : null });
   });
 
-  /* a supervisão de Crédito escolhe a assistente (e o portal grava na Carteira, se o condomínio já estiver lá) */
+  /* a supervisão de Crédito escolhe a assistente (e o portal grava na Base de Clientes, se o condomínio já estiver lá) */
   r.post('/api/implantacoes/:id/ficha/destino', json, async (req, res) => {
     const c = await carregarFicha(req, res);
     if (!c) return;
     const { i, pf } = c;
-    if (!pf.escolher) return erro(res, 403, 'Só a supervisão de Crédito escolhe a assistente, quando a Carteira ainda não tem.');
+    if (!pf.escolher) return erro(res, 403, 'Só a supervisão de Crédito escolhe a assistente, quando a Base de Clientes ainda não tem.');
     const alvo = (await membrosCredito()).find((x) => x.id === Number(req.body && req.body.usuario_id));
     if (!alvo) return erro(res, 400, 'Escolha alguém do setor Crédito.');
     await db.tx(async (t) => {

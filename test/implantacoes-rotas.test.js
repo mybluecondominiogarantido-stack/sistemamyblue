@@ -319,7 +319,7 @@ test('concluir: aviso à coordenação e ao setor Parceiros, e o condomínio ent
   const ap = (await avisosDe('parceiros@teste.com')).pop();
   assert.match(ap.titulo, /^Condomínio novo com parceiro/);
   assert.match(ap.texto, /Alfa Administradora/);
-  assert.match((await avisosDe('coord@teste.com')).pop().titulo, /^Pronta para a Carteira/);
+  assert.match((await avisosDe('coord@teste.com')).pop().titulo, /^Pronta para a Base de Clientes/);
   assert.equal((await coord('GET', '/api/implantacoes/resumo')).json.carteira, 1);
 });
 
@@ -329,7 +329,7 @@ test('Carteira: a coordenação confere os dados (ID Vouch e envio vêm das etap
   assert.deepEqual([p.dados.codigo, p.dados.nome, p.dados.comarca, p.dados.forma_envio, p.dados.vencimento, p.dados.inicio_contrato],
     ['90001', 'Fictício', 'CE', 'E-MAIL', '10', '2026-11-01']);
   assert.deepEqual(p.duplicados, []);
-  // o síndico vem do formulário e é obrigatório na Carteira
+  // o síndico vem do formulário e é obrigatório na Base de Clientes
   assert.ok(p.dados.sindico_nome && p.dados.sindico_email && p.dados.sindico_telefone);
   assert.equal((await coord('POST', `/api/implantacoes/${idI}/carteira`, { dados: { ...p.dados, sindico_email: 'sem-arroba' } })).status, 400);
   assert.equal((await coord('POST', `/api/implantacoes/${idI}/carteira`, { dados: { ...p.dados, sindico_telefone: '9999' } })).status, 400);

@@ -210,7 +210,7 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
   });
 
   /* Tudo o que uma pessoa acessa, num lugar só: perfil, setores (e se é líder), marcações, cada ferramenta que abre
-     (por quê, se edita ou só consulta, com quais papéis), o que pode na Carteira e na Central de Tickets. */
+     (por quê, se edita ou só consulta, com quais papéis), o que pode na Base de Clientes e na Central de Tickets. */
   r.get('/api/admin/usuarios/:id/acessos', async (req, res) => {
     const id = Number(req.params.id);
     const esc = await escopoDe(req);
@@ -574,7 +574,7 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     res.json({ ok: true, papeis: lista });
   });
 
-  /* ===================== Carteira: quem edita o quê ===================== */
+  /* ===================== Base de Clientes: quem edita o quê ===================== */
   // a administração configura tudo; coordenação e supervisão liberam pessoas nas permissões do setor delas
   r.get('/api/admin/carteira/acessos', async (req, res) => {
     const vigentes = await regras.regras();
