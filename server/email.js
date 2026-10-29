@@ -10,7 +10,8 @@
  *     desliga por padrão nos tenants a partir do fim de 2026.
  *  2. SMTP comum: SMTP_HOST, SMTP_PORT, SMTP_USUARIO, SMTP_SENHA, EMAIL_REMETENTE.
  *
- * enviar({ para: { nome, email }, subject, text, html })
+ * enviar({ para: { nome, email }, subject, text, html, inline? })
+ *  inline: [{ cid, nome, tipo, arquivo }] imagens embutidas no HTML (src="cid:…"), ex.: a logo dos avisos
  *
  * Agenda (só no Microsoft 365): o convite do onboarding da Implantação é uma reunião no calendário da caixa
  * EMAIL_REMETENTE, com link do Teams. Pede "Application Calendars.ReadWrite" no aplicativo, restrito à mesma caixa.
@@ -23,6 +24,13 @@
 function lerRemetente(s) {
   const m = /^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/.exec(String(s || ''));
   return m ? { nome: m[1].trim(), email: m[2].trim() } : { nome: '', email: String(s || '').trim() };
+}
+
+/* imagem embutida lida uma vez do disco (base64) */
+const cacheInline = new Map();
+function lerInline(x) {
+  if (!cacheInline.has(x.arquivo)) cacheInline.set(x.arquivo, require('fs').readFileSync(x.arquivo).toString('base64'));
+  return cacheInline.get(x.arquivo);
 }
 
 function criarEnvioGraph(e, fetchFn) {
@@ -93,6 +101,9 @@ function criarEnvioGraph(e, fetchFn) {
         subject: msg.subject,
         body: { contentType: 'HTML', content: msg.html || msg.text },
         toRecipients: [{ emailAddress: { address: msg.para.email, name: msg.para.nome } }],
+        ...(msg.inline && msg.inline.length ? { attachments: msg.inline.map((x) => ({
+          '@odata.type': '#microsoft.graph.fileAttachment', name: x.nome, contentType: x.tipo, contentBytes: lerInline(x), contentId: x.cid, isInline: true,
+        })) } : {}),
         ...(remetente.nome ? { from: { emailAddress: { address: remetente.email, name: remetente.nome } } } : {}),
       },
       saveToSentItems: false,
@@ -121,6 +132,7 @@ function criarEnvioSmtp(e) {
       }
       await transporte.sendMail({
         from: remetente, to: { name: msg.para.nome, address: msg.para.email }, subject: msg.subject, text: msg.text, html: msg.html,
+        ...(msg.inline && msg.inline.length ? { attachments: msg.inline.map((x) => ({ filename: x.nome, path: x.arquivo, cid: x.cid, contentType: x.tipo })) } : {}),
       });
     },
   };
