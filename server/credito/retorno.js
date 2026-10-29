@@ -275,4 +275,32 @@ function emailEntrega(r, ctx, { assinatura = process.env.CREDITO_ASSINATURA_EMAI
   };
 }
 
-module.exports = { montarDados, gerarPdf, rodarGerador, resumoExecutivo, emailEntrega, nomeArquivo, observacoesStatus };
+/*
+ * Detalhes do e-mail de entrega no layout dos avisos (server/email-layout.js):
+ * a cor e a etiqueta seguem o status (reprovada vermelha, com ressalvas ou pendente amarela, aprovada verde).
+ */
+const TOM_STATUS = {
+  aprovada: { tom: 'ok', etiqueta: 'Análise aprovada' },
+  ressalvas: { tom: 'acao', etiqueta: 'Aprovada com ressalvas' },
+  pendente: { tom: 'acao', etiqueta: 'Análise pendente' },
+  reprovada: { tom: 'alerta', etiqueta: 'Análise reprovada' },
+};
+function emailDetalhes(r, ctx, { anexo, assinatura = process.env.CREDITO_ASSINATURA_EMAIL || 'Setor Análise de Crédito — MyBlue' } = {}) {
+  const nome = String(ctx.formulario?.razao_social || '').replace(/^condom[ií]nio\s+/i, '');
+  const p = r.precificacao;
+  const st = TOM_STATUS[r.status.codigo] || TOM_STATUS.aprovada;
+  const motivos = (r.status.motivos || []).map((x) => x.texto || x.mensagem || x).filter((x) => typeof x === 'string' && x);
+  const aviso = !motivos.length ? null
+    : r.status.codigo === 'reprovada' ? { tom: 'alerta', titulo: motivos.length > 1 ? 'Motivos da reprovação' : 'Motivo da reprovação', texto: motivos.join(' ') }
+      : r.status.codigo === 'ressalvas' ? { tom: 'acao', titulo: motivos.length > 1 ? 'Ressalvas' : 'Ressalva', texto: motivos.join(' ') }
+        : { tom: 'acao', titulo: 'Pendências', texto: motivos.join(' ') };
+  return {
+    tom: st.tom, etiqueta: st.etiqueta, titulo: 'Retorno da análise de crédito',
+    intro: `Prezados, segue o retorno da análise do **Condomínio ${nome}**.`,
+    destaque: r.status.rotulo,
+    linhas: [['Condições', p ? `${fmtPct(p.taxa_adm)} ADM + ${fmtBRL(p.boleto)}/boleto` : null], ['Escopo', `${uh(r.escopo.uh_escopo ?? 0)} UH`], ['Protocolo', ctx.protocolo || null]],
+    aviso, anexo, nota: 'Os detalhes e os próximos passos estão no PDF, no portal.', botao: 'Ver retorno completo', assinatura,
+  };
+}
+
+module.exports = { montarDados, gerarPdf, rodarGerador, resumoExecutivo, emailEntrega, emailDetalhes, nomeArquivo, observacoesStatus };

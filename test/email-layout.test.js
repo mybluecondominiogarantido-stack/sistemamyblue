@@ -39,7 +39,9 @@ test('o e-mail tem logo, etiqueta, quadro, botão com link e motivo; o texto do 
     detalhes: { assunto: 'Aprovação pendente: “Ferramenta Fictícia”', linhas: [['Ferramenta', 'Ferramenta Fictícia'], ['Vazio', null]] },
   }, { portalUrl: 'https://portal.teste/', destinatario: { nome: 'Executiva Fictícia' } });
   assert.equal(m.subject, 'Aprovação pendente: “Ferramenta Fictícia”');
-  assert.match(m.html, /src="https:\/\/portal\.teste\/img\/logo\.png"/);
+  assert.match(m.html, /src="cid:logo-myblue"/);
+  assert.equal(m.inline[0].cid, 'logo-myblue');
+  assert.ok(require('fs').existsSync(m.inline[0].arquivo));
   assert.match(m.html, /Aguardando sua aprovação/);
   assert.match(m.html, /href="https:\/\/portal\.teste\/#\/admin\/modulos"/);
   assert.match(m.html, /Ver prévia e aprovar/);
@@ -63,9 +65,9 @@ test('o título "A · B · C" vira título e linha de referência; destaque, ane
   assert.doesNotMatch(m.html, /Olá, /); // sem destinatário e texto já começa com "Prezados"
 });
 
-test('sem PORTAL_URL o e-mail sai sem botão e com o nome no lugar da logo', () => {
+test('sem PORTAL_URL o e-mail sai sem botão, mas com a logo embutida', () => {
   const m = montarHtml({ tipo: 'comissao', titulo: 'Seu demonstrativo está disponível', texto: 'Confira.', link: '#/premiacoes/1' }, {});
-  assert.doesNotMatch(m.html, /img\/logo\.png/);
+  assert.match(m.html, /cid:logo-myblue/);
   assert.doesNotMatch(m.html, /<a href=/);
 });
 

@@ -2,7 +2,7 @@
 /*
  * Layout dos e-mails de aviso do portal (modelo aprovado em out/2026).
  *
- * montarHtml(aviso, opcoes) → { subject, html, text }
+ * montarHtml(aviso, opcoes) → { subject, html, text, inline }  (inline: imagens embutidas, hoje só a logo)
  *  aviso: { tipo, titulo, texto, link, detalhes? }
  *  opcoes: { portalUrl, destinatario: { nome } }
  *
@@ -25,6 +25,9 @@
  *  }
  * Nos textos, **trecho** sai em negrito.
  */
+
+/* logo dos e-mails: public/img/logo-email.png (300×88, fundo branco), enviada como anexo interno */
+const LOGO = { cid: 'logo-myblue', nome: 'logo-myblue.png', tipo: 'image/png', arquivo: require('path').join(__dirname, '..', 'public', 'img', 'logo-email.png') };
 
 const TONS = {
   acao: { bg: '#FFF4E0', fg: '#9A5B00', borda: '#E0A100', etiqueta: 'Ação necessária' },
@@ -140,9 +143,8 @@ function montarHtml(n, op = {}) {
   if (d.pre) bloco.push(`<div style="margin:0 0 20px 0;padding:14px 16px;background:#F5F9FB;border:1px solid #E1EAEE;border-radius:10px;font-size:14px;line-height:21px;color:#3C5660;white-space:pre-wrap;">${esc(d.pre)}</div>`);
   if (nota) bloco.push(`<p style="margin:0 0 20px 0;font-size:13px;line-height:20px;color:#4A616B;">&#9432; ${rico(nota)}</p>`);
 
-  const logo = portal
-    ? `<img src="${esc(portal)}/img/logo.png" width="150" alt="MyBlue · Condomínio Garantido" style="display:block;width:150px;height:auto;border:0;font-family:Arial,sans-serif;font-size:18px;font-weight:bold;color:#1597A8;">`
-    : '<span style="font-family:Arial,sans-serif;font-size:18px;font-weight:bold;color:#1597A8;">MyBlue</span>';
+  // a logo vai embutida no e-mail (anexo interno "cid"): o Outlook bloqueia imagem de endereço externo e mostraria só o texto
+  const logo = `<img src="cid:${LOGO.cid}" width="150" height="44" alt="MyBlue" style="display:block;width:150px;height:44px;border:0;font-family:Arial,sans-serif;font-size:18px;font-weight:bold;color:#1597A8;">`;
   const btn = link ? `
    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:6px 0 12px 0;"><tr><td align="center" bgcolor="#1597A8" style="border-radius:8px;background:#1597A8;">
     <!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${esc(link)}" style="height:46px;v-text-anchor:middle;width:260px;" arcsize="18%" stroke="f" fillcolor="#1597A8"><w:anchorlock/><center style="color:#ffffff;font-family:Arial,sans-serif;font-size:15px;font-weight:bold;">${esc(botao)}</center></v:roundrect><![endif]-->
@@ -194,7 +196,7 @@ function montarHtml(n, op = {}) {
     '\n— Portal MyBlue (mensagem automática, não responda)',
   ].filter((x) => x !== null && x !== '').join('\n');
 
-  return { subject: d.assunto || n.titulo, html, text };
+  return { subject: d.assunto || n.titulo, html, text, inline: [LOGO] };
 }
 
-module.exports = { montarHtml, classificar, separarLista };
+module.exports = { montarHtml, classificar, separarLista, LOGO };

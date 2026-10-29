@@ -129,3 +129,19 @@ test('próximos passos da skill somam os obrigatórios do portal (CNPJ, validade
   assert.ok(d.proximos_passos.some((p) => /Regularizar o CNPJ/.test(p)));
   assert.equal(d.proximos_passos.filter((p) => /validade/.test(p)).length, 1); // a skill já trouxe: não repete
 });
+
+test('e-mail de entrega: a cor segue o status (reprovada vermelha, ressalvas amarela, aprovada verde)', () => {
+  const { r, ctx } = caso();
+  const { montarHtml } = require('../server/email-layout');
+  const det = (codigo, rotulo, motivos = []) => R.emailDetalhes({ ...r, status: { codigo, rotulo, motivos } }, ctx, { anexo: 'Ficticio.pdf' });
+  const rep = det('reprovada', 'REPROVADA', [{ codigo: 'inadimplencia', texto: 'Inadimplência média acima do limite.' }]);
+  assert.equal(rep.tom, 'alerta');
+  assert.equal(rep.etiqueta, 'Análise reprovada');
+  assert.deepEqual(rep.aviso, { tom: 'alerta', titulo: 'Motivo da reprovação', texto: 'Inadimplência média acima do limite.' });
+  assert.match(montarHtml({ tipo: 'credito', titulo: 'Retorno', texto: '', detalhes: rep }, {}).html, /#FDECEC/);
+  assert.equal(det('ressalvas', 'APROVADA COM RESSALVAS', [{ texto: 'Convenção sem registro.' }]).tom, 'acao');
+  const ok = det('aprovada', 'APROVADA');
+  assert.equal(ok.tom, 'ok');
+  assert.equal(ok.aviso, null);
+  assert.match(ok.intro, /Residencial Exemplo & Cia/);
+});

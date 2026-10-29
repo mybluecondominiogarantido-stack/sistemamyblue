@@ -87,3 +87,17 @@ test('Microsoft 365: agenda cria a reunião com Teams no calendário da caixa re
   // sem Microsoft 365 (SMTP), não há agenda
   assert.equal(criarEnvioEmail({ SMTP_HOST: 'smtp.exemplo.com' }).agenda, undefined);
 });
+
+test('a logo vai como anexo interno (cid) no Microsoft 365', async () => {
+  const { LOGO } = require('../server/email-layout');
+  const ms = microsoftFalsa();
+  const correio = criarEnvioEmail(ENV, ms.fetchFn);
+  await correio.enviar({ para: { nome: 'Pessoa Fictícia', email: 'ficticia@exemplo.com' }, subject: 'Teste', html: `<img src="cid:${LOGO.cid}">`, inline: [LOGO] });
+  const envio = ms.chamadas.find((c) => c.url.endsWith('/sendMail'));
+  const anexo = JSON.parse(envio.init.body).message.attachments[0];
+  assert.equal(anexo['@odata.type'], '#microsoft.graph.fileAttachment');
+  assert.equal(anexo.contentId, 'logo-myblue');
+  assert.equal(anexo.isInline, true);
+  assert.equal(anexo.contentType, 'image/png');
+  assert.ok(Buffer.from(anexo.contentBytes, 'base64').subarray(1, 4).toString() === 'PNG');
+});
