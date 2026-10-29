@@ -289,3 +289,56 @@ test('quem só consulta a Gestão de Premiações vê, mas não envia demonstrat
   assert.match(r.json.erro, /só de consulta/);
   assert.equal((await leitor('POST', '/api/comissao/planilhas', { modulo: 'premiacoes', competencia: '2026-11', pedidos: [] })).status, 403);
 });
+
+test('Cobrança pelo Acompanhamento de Resultados: a gestão escolhe a vigência e puxa o resultado de cada analista', async () => {
+  const ACOMP = 'acompanhamento-de-resultados';
+  // sem a ferramenta no portal não há de onde puxar
+  assert.equal((await gestor('GET', '/api/comissao/cobranca?modulo=premiacoes')).status, 404);
+  await ctx.db.q(`INSERT INTO modulos (slug, nome, armazenamento, adaptador, fonte_dados) VALUES ($1, 'Acompanhamento de Resultados', 'compartilhado', 'claude-db', 'interno')`, [ACOMP]);
+  const gravar = (colecao, docId, dados) => ctx.db.q(`INSERT INTO documentos (modulo_slug, colecao, doc_id, dados, seq) VALUES ($1, $2, $3, $4::jsonb, nextval('documentos_seq'))`,
+    [ACOMP, colecao, docId, JSON.stringify(dados)]);
+  const cond = (nome, ini, aberto, extra = {}) => ({ nome, razao: nome.toUpperCase(), uf: 'CE', comp: '2026-09', status: 'apurado', vencCad: '5', ve: '2026-09-08', fim: '2026-10-08',
+    tab: 20, ini: ini.length, iniLista: ini, emAberto: aberto, recebidos: ini.filter((u) => !aberto.includes(u)), atual: aberto.length, rec: ini.length - aberto.length,
+    meta: Math.round(ini.length * 0.3 * 10) / 10, res: Math.round((ini.length - aberto.length - ini.length * 0.3) * 10) / 10, pctIni: ini.length / 20, acordos: [], sinais: [],
+    analista: 'EDUARDO SOUSA', ...extra });
+  await gravar('comp', '2026-09', { comp: '2026-09', dataCorte: '2026-10-28', fechado: { em: '2026-10-28T17:26:00Z', por: 'Coordenação' } });
+  await gravar('lote', '2026-09__EDUARDO_SOUSA__1', { an: 'EDUARDO_SOUSA', comp: '2026-09', parte: 1, itens: {
+    1: { d: '2026-10-28', r: cond('Beach Sun', ['A1', 'A2', 'A3', 'A4'], ['A1']) },
+    2: { d: '2026-10-28', r: cond('Eco Brasil', ['B1', 'B2', 'B3'], ['B1', 'B2', 'B3'], { acordos: [{ unidade: 'B3', origem: 'sinalizado', conta: false }] }) },
+    3: { d: '2026-10-28', r: cond('Ferrara', ['C1', 'C2', 'C3', 'C4', 'C5'], ['C1', 'C2', 'C3', 'C4']) },
+    4: { d: '2026-10-28', r: { nome: 'Sem Boleto', razao: 'SEM BOLETO', comp: '2026-09', status: 'sem_boletos', analista: 'EDUARDO SOUSA' } },
+  } });
+  await gravar('lote', '2026-09__EDUARDO_SOUSA__2', { an: 'EDUARDO_SOUSA', comp: '2026-09', parte: 2, itens: {
+    5: { d: '2026-10-28', r: cond('Galeria Princesa', ['D1', 'D2'], ['D2']) },
+  } });
+  // a supervisão confirmou o acordo da B3, retirou duas unidades do inicial do Ferrara e passou a Galeria para a Thainá só neste mês
+  await gravar('reg', '2026-09__2', { k: 'ECO BRASIL|2026-09', cob: [], dec: { B3: 'confirmado' } });
+  await gravar('ret', '2026-09__3', { k: 'FERRARA|2026-09', lista: [{ u: 'C1', motivo: 'acordo antigo' }, { u: 'C2', motivo: 'acordo antigo' }] });
+  await gravar('reg', '2026-09__5', { k: 'GALERIA PRINCESA|2026-09', anMes: 'THAINA SOUZA' });
+  // a outra vigência ainda está aberta
+  await gravar('lote', '2026-10__EDUARDO_SOUSA__1', { an: 'EDUARDO_SOUSA', comp: '2026-10', parte: 1, itens: { 9: { r: { ...cond('Beach Sun', ['A1'], []), comp: '2026-10' } } } });
+
+  // só quem usa a Gestão de Premiações
+  assert.equal((await ana('GET', '/api/comissao/cobranca?modulo=premiacoes')).status, 403);
+  assert.equal((await gestor('GET', '/api/comissao/cobranca?modulo=premiacoes&competencia=09-2026')).status, 400);
+
+  const lista = await gestor('GET', '/api/comissao/cobranca?modulo=premiacoes');
+  assert.equal(lista.status, 200, lista.texto);
+  assert.deepEqual(lista.json.competencias.map((c) => [c.competencia, c.fechado]), [['2026-10', false], ['2026-09', true]]);
+
+  const r = await gestor('GET', '/api/comissao/cobranca?modulo=premiacoes&competencia=2026-09');
+  assert.equal(r.status, 200, r.texto);
+  assert.equal(r.json.fechado, true);
+  assert.equal(r.json.sem_boletos, 1);
+  assert.deepEqual(r.json.analistas.map((a) => a.nome), ['EDUARDO SOUSA', 'THAINA SOUZA']);
+  const ed = Object.fromEntries(r.json.analistas[0].condominios.map((c) => [c.nome, c]));
+  assert.deepEqual(Object.keys(ed).sort(), ['Beach Sun', 'Eco Brasil', 'Ferrara']);
+  assert.deepEqual([ed['Beach Sun'].inicial, ed['Beach Sun'].atual, ed['Beach Sun'].situacao], [4, 1, 'na_meta']);
+  // acordo confirmado: a B3 conta como paga
+  assert.deepEqual([ed['Eco Brasil'].inicial, ed['Eco Brasil'].atual, ed['Eco Brasil'].recebidos, ed['Eco Brasil'].situacao], [3, 2, 1, 'na_meta']);
+  // retiradas do inicial: 3 no inicial, 2 em aberto, meta refeita (0,9)
+  assert.deepEqual([ed.Ferrara.inicial, ed.Ferrara.atual, ed.Ferrara.meta, ed.Ferrara.situacao, ed.Ferrara.janela_aberta], [3, 2, 0.9, 'na_meta', false]);
+  assert.equal(r.json.analistas[1].condominios[0].nome, 'Galeria Princesa');
+
+  assert.equal((await gestor('GET', '/api/comissao/cobranca?modulo=premiacoes&competencia=2026-08')).status, 404);
+});

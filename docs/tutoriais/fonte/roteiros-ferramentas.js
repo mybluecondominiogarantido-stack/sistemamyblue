@@ -545,8 +545,7 @@ module.exports = [
       await cen.admin('POST', '/api/armazenamento/premiacoes', { set: chaves });
       const pedidos = await cen.admin('POST', '/api/comissao/planilhas', { modulo: 'premiacoes', competencia: comp, avisar_email: false, pedidos: [
         { chave: 'cr1', usuario_id: logins.sc, nome: 'Bruna Reis', tipo: 'credito', titulo: 'Planilha de envio de boletos' },
-        { chave: 'cr2', usuario_id: logins.sc, nome: 'Davi Rocha', tipo: 'credito', titulo: 'Planilha de envio de boletos' },
-        { chave: 'cb1', usuario_id: logins.sb, nome: 'Marcos Lima', tipo: 'cobranca', titulo: 'Controle de cobrança (devedores do período)' }] });
+        { chave: 'cr2', usuario_id: logins.sc, nome: 'Davi Rocha', tipo: 'credito', titulo: 'Planilha de envio de boletos' }] });
       const xlsx = require(path.join(process.env.BIBLIOTECAS || '', 'node_modules', 'xlsx'));
       const wb = xlsx.utils.book_new();
       xlsx.utils.book_append_sheet(wb, xlsx.utils.aoa_to_sheet(D.planilhaCredito(new Date(), 'Bruna Reis'), { cellDates: true }), 'Acompanhamento');

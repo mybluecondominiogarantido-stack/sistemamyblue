@@ -397,10 +397,11 @@ module.exports = [
         { chave: 'cb2', usuario_id: ids['sara@myblue.com.br'], nome: 'Sara Alves', cargo: 'Analista de Cobrança', setor: 'Cobrança', valor: 540,
           html: doc({ nome: 'Sara Alves', cargo: 'Analista de Cobrança', setor: 'Cobrança', linhas: conds(12, -1), total: 540 }), leitores: [{ usuario_id: ids['lia@myblue.com.br'], motivo: 'lider' }] },
       ] });
-      // a gestão pede à coordenadora da Cobrança os controles da equipe (Planilhas do mês)
+      // a gestão pede ao coordenador do Crédito as planilhas da equipe (Planilhas do mês);
+      // a Cobrança não manda planilha: a gestão puxa do Acompanhamento de Resultados
       await cen.admin('POST', '/api/comissao/planilhas', { modulo: 'premiacoes', competencia: comp, avisar_email: false, pedidos: [
-        { chave: 'cb1', usuario_id: ids['lia@myblue.com.br'], nome: 'Marcos Lima', tipo: 'cobranca', titulo: 'Controle de cobrança (devedores do período)' },
-        { chave: 'cb2', usuario_id: ids['lia@myblue.com.br'], nome: 'Sara Alves', tipo: 'cobranca', titulo: 'Controle de cobrança (devedores do período)' }] });
+        { chave: 'cr1', usuario_id: ids['caio@myblue.com.br'], nome: 'Bruna Reis', tipo: 'credito', titulo: 'Planilha de envio de boletos' },
+        { chave: 'cr2', usuario_id: ids['caio@myblue.com.br'], nome: 'Davi Rocha', tipo: 'credito', titulo: 'Planilha de envio de boletos' }] });
     },
     abertura: ['O seu demonstrativo de premiação, todo mês, no portal.', ['Onde fica', 'Conferir e Estou ciente', 'Coordenação: enviar as planilhas da equipe', 'Líderes: a equipe']],
     async gravar(t) {
@@ -422,19 +423,21 @@ module.exports = [
 
       const P = '3 · Coordenação';
       await t.legenda('O <b>coordenador do setor</b> recebe o pedido das planilhas do mês da equipe, com um aviso só.', { etapa: P, ms: 300 });
-      await t.ctx.clearCookies(); // sai da sessão do analista para entrar como coordenadora
-      await t.entrar('lia@myblue.com.br', require('./cenario').SENHA);
+      await t.ctx.clearCookies(); // sai da sessão do analista para entrar como coordenador do Crédito
+      await t.entrar('caio@myblue.com.br', require('./cenario').SENHA);
       await t.ir('#/premiacoes', 1600);
       await t.legenda('Em <b>Planilhas para enviar</b>, uma linha por pessoa: clique em <b>Enviar planilha</b> e escolha o arquivo (Excel, CSV ou PDF).', { etapa: P, ms: 300 });
       const pasta = require('fs').mkdtempSync(require('path').join(require('os').tmpdir(), 'tut-'));
-      const arq = require('path').join(pasta, 'controle-cobranca-marcos.csv');
-      require('fs').writeFileSync(arq, 'Condomínio;Vencimento;Devedores inicial;Devedores atual\nCond. Jardim Azul;5;12;7\nCond. Primavera;10;30;17\n');
-      await t.enviarArquivo('.pedido-plan:has-text("Marcos Lima") label.btn', '.pedido-plan:has-text("Marcos Lima") input[data-plan]', arq, { depois: 2400 });
+      const arq = require('path').join(pasta, 'envio-boletos-bruna.csv');
+      require('fs').writeFileSync(arq, 'Condomínio;Vencimento;Data envio\nCond. Jardim Azul;10/11/2026;28/10/2026\nCond. Primavera;15/11/2026;03/11/2026\n');
+      await t.enviarArquivo('.pedido-plan:has-text("Bruna Reis") label.btn', '.pedido-plan:has-text("Bruna Reis") input[data-plan]', arq, { depois: 2400 });
       await t.legenda('Um arquivo por pessoa. Quando todas estão enviadas, a gestão recebe <b>um aviso só</b>. Você acompanha: <b>Enviada</b> e depois <b>Recebida e conferida</b>.', { etapa: P, ms: 300 });
       await t.mostrar('.planilhas-mes', 3200);
 
       const L = '4 · Líderes';
       await t.legenda('Coordenação, supervisão, gerência e diretoria veem também os demonstrativos da equipe, na aba <b>Minha equipe</b>.', { etapa: L, ms: 300 });
+      await t.ctx.clearCookies(); // a coordenadora da Cobrança acompanha os demonstrativos da equipe dela
+      await t.entrar('lia@myblue.com.br', require('./cenario').SENHA);
       await t.ir('#/premiacoes/equipe', 1600);
       await t.mostrar('.tiles', 2800);
       await t.mostrar('tr.clicavel', 2800);
