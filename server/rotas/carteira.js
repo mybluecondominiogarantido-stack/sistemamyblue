@@ -1,14 +1,15 @@
 'use strict';
 /*
- * Aba Carteira de condomínios.
+ * Aba Base de Clientes.
  * Todos que entram no portal consultam (a carteira não é exportada). Quem edita o quê (dados do condomínio, cada coluna de responsável,
  * adicionar novos, cadastrar/importar) vem das regras de acesso (server/regras.js), configuradas em
- * Ferramentas do setor → Carteira de condomínios. A administração pode tudo.
+ * Ferramentas do setor → Base de Clientes. A administração pode tudo.
  * Cada alteração fica no histórico (auditoria) com o que mudou, quem mudou e quando.
  */
 const express = require('express');
 const { FUNCOES, CAMPOS, SITUACOES, interpretar, normalizar } = require('../carteira');
 const { interpretarImplantacao, compararComCarteira } = require('../implantacao');
+const sindicosCarteira = require('../sindicos-carteira');
 
 const COLUNAS = CAMPOS.map((c) => c.campo);
 const ROTULOS = { codigo: 'ID Vouch', situacao: 'situação', comarca: 'UF', nome: 'nome', vencimento: 'vencimento', administradora: 'administradora', forma_envio: 'forma de envio',
@@ -19,7 +20,7 @@ const SELECT = `SELECT c.id, ${COLUNAS.filter((x) => x !== 'inicio_contrato').ma
   to_char(c.inicio_contrato, 'YYYY-MM-DD') AS inicio_contrato, c.criado_em, c.atualizado_em, u.nome AS atualizado_por_nome
   FROM condominios c LEFT JOIN usuarios u ON u.id = c.atualizado_por`;
 
-function rotasCarteira({ db, seg, regras, boletosCarteira }) {
+function rotasCarteira({ db, seg, regras, boletosCarteira, documentos }) {
   const r = express.Router();
   const json = express.json({ limit: '1mb' });
   r.use('/api/carteira', seg.exigirLogin);
@@ -29,12 +30,13 @@ function rotasCarteira({ db, seg, regras, boletosCarteira }) {
     next();
   });
   // quem edita o quê vem das regras de acesso (Ferramentas do setor → Carteira); consultar é de todos
-  const QUEM_LIBERA = ' Quem libera: a administração (Módulos e dados → Carteira: quem edita) ou, nas permissões do setor dela, a coordenação/supervisão (Ferramentas do setor → Carteira de condomínios: quem edita).';
+  const QUEM_LIBERA = ' Quem libera: a administração (Módulos e dados → Base de Clientes: quem edita) ou, nas permissões do setor dela, a coordenação/supervisão (Ferramentas do setor → Base de Clientes: quem edita).';
   const exigir = (chave, msg) => async (req, res, next) => {
     try { if (await regras.pode(req.usuario, chave)) return next(); return res.status(403).json({ erro: msg + QUEM_LIBERA }); } catch (e) { return next(e); }
   };
   const soCadastro = exigir('carteira.cadastro', 'Você não tem permissão para cadastrar, excluir ou importar condomínios.');
   const soAdicionar = exigir('carteira.adicionar', 'Você não tem permissão para adicionar condomínios novos.');
+  const soDados = exigir('carteira.dados', 'Você não tem permissão para alterar os dados do condomínio (síndico, telefone e e-mail).');
 
   /* colunas de responsável que a pessoa altera e transfere */
   async function funcoesEditaveis(u) {
@@ -95,6 +97,31 @@ function rotasCarteira({ db, seg, regras, boletosCarteira }) {
       pode_editar: await regras.pode(req.usuario, 'carteira.cadastro'), campos_editaveis: await camposEditaveis(req.usuario),
       funcoes_editaveis: await funcoesEditaveis(req.usuario), pode_adicionar: await regras.pode(req.usuario, 'carteira.adicionar'), // quem edita o quê: só para administração, coordenação e supervisão (usuário comum só consulta e não vê a lista)
       acesso: req.usuario.papel === 'admin' || seg.GESTORES_DE_SETOR.includes(req.usuario.papel) ? await quadroDeAcesso(req.usuario) : null });
+  });
+
+  /* ===================== síndicos do Controle de Síndicos ===================== */
+  // o que a base de contatos do CS muda no síndico, telefone e e-mail de cada condomínio (nada é gravado aqui)
+  async function planoSindicos() {
+    const contatos = documentos ? await documentos.listar(sindicosCarteira.MODULO, sindicosCarteira.COLECAO) : [];
+    const condominios = (await db.q('SELECT id, codigo, nome, comarca, situacao, sindico_nome, sindico_telefone, sindico_email FROM condominios')).rows;
+    return sindicosCarteira.planejar(contatos, condominios);
+  }
+
+  r.get('/api/carteira/sindicos', soDados, async (req, res) => {
+    res.json(await planoSindicos());
+  });
+
+  // grava nos condomínios escolhidos (refaz a conferência na hora: vale o que está no Controle de Síndicos agora)
+  r.post('/api/carteira/sindicos', soDados, json, async (req, res) => {
+    const ids = new Set((Array.isArray(req.body && req.body.ids) ? req.body.ids : []).map(Number).filter(Number.isInteger));
+    if (!ids.size) return erro(res, 400, 'Escolha ao menos um condomínio.');
+    const alvo = (await planoSindicos()).mudancas.filter((m) => ids.has(m.id));
+    await db.tx(async (t) => {
+      for (const m of alvo) await gravar(t, m.id, Object.fromEntries(Object.entries(m.campos).map(([k, [, para]]) => [k, para])), req.usuario.id);
+    });
+    for (const m of alvo) await seg.auditar(req, 'condominio_editado', null, { id: m.id, nome: m.nome, mudancas: m.campos, origem: 'Controle de Síndicos' });
+    if (alvo.length) await seg.auditar(req, 'carteira_sindicos', null, { condominios: alvo.length });
+    res.json({ atualizados: alvo.length });
   });
 
   r.get('/api/carteira/:id', async (req, res) => {

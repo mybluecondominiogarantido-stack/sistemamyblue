@@ -2,8 +2,8 @@
 /*
  * Quem pode o quê no portal (fora das ferramentas, que têm a janela "Quem abre e com qual papel"):
  * cada permissão tem uma regra { niveis, setores, pessoas } definida pela administração em
- * Módulos e dados → Carteira: quem edita (a coordenação/supervisão libera pessoas nas permissões do setor dela, em
- * Ferramentas do setor → Carteira de condomínios: quem edita). A administração pode tudo, sempre.
+ * Módulos e dados → Base de Clientes: quem edita (a coordenação/supervisão libera pessoas nas permissões do setor dela, em
+ * Ferramentas do setor → Base de Clientes: quem edita). A administração pode tudo, sempre.
  *
  *  - niveis: perfis que recebem a permissão ('coordenador', 'supervisor', 'usuario');
  *  - setores: se tiver algum, o perfil só vale para quem é desses setores (vazio = qualquer setor);
@@ -15,22 +15,22 @@
 const NIVEIS = { coordenador: 'Coordenação', supervisor: 'Supervisão', usuario: 'Usuário' };
 
 const PERMISSOES = [
-  { chave: 'carteira.dados', grupo: 'Carteira de condomínios', rotulo: 'Editar os dados do condomínio',
+  { chave: 'carteira.dados', grupo: 'Base de Clientes', rotulo: 'Editar os dados do condomínio',
     descricao: 'Situação, UF, nome, vencimento, administradora, forma de envio, executivo, vigência, razão social, CNPJ e observações.',
     padrao: { niveis: [], setores: [] } },
-  { chave: 'carteira.analista_cobranca', grupo: 'Carteira de condomínios', rotulo: 'Editar e transferir o Analista de cobrança',
+  { chave: 'carteira.analista_cobranca', grupo: 'Base de Clientes', rotulo: 'Editar e transferir o Analista de cobrança',
     descricao: 'Quem cuida de cada condomínio na Cobrança (os tickets da Cobrança sobre o condomínio vão para essa pessoa).',
     padrao: { niveis: ['coordenador', 'supervisor'], setores: ['Cobrança'] } },
-  { chave: 'carteira.analista_extrajudicial', grupo: 'Carteira de condomínios', rotulo: 'Editar e transferir o Analista extrajudicial (ApoioCob)',
+  { chave: 'carteira.analista_extrajudicial', grupo: 'Base de Clientes', rotulo: 'Editar e transferir o Analista extrajudicial (ApoioCob)',
     descricao: 'Quem cuida da cobrança extrajudicial de cada condomínio.',
     padrao: { niveis: [], setores: [] } },
-  { chave: 'carteira.assistente_credito', grupo: 'Carteira de condomínios', rotulo: 'Editar e transferir o Assistente de crédito',
+  { chave: 'carteira.assistente_credito', grupo: 'Base de Clientes', rotulo: 'Editar e transferir o Assistente de crédito',
     descricao: 'Quem cuida de cada condomínio no Crédito (os tickets do Crédito sobre o condomínio vão para essa pessoa).',
     padrao: { niveis: ['coordenador', 'supervisor'], setores: ['Crédito'] } },
-  { chave: 'carteira.adicionar', grupo: 'Carteira de condomínios', rotulo: 'Adicionar condomínios novos pela planilha de implantação',
+  { chave: 'carteira.adicionar', grupo: 'Base de Clientes', rotulo: 'Adicionar condomínios novos pela planilha de implantação',
     descricao: 'Aba "Adicionar novos": lê a planilha de implantação e cadastra os condomínios da vigência escolhida.',
     padrao: { niveis: ['coordenador', 'supervisor'], setores: [] } },
-  { chave: 'carteira.cadastro', grupo: 'Carteira de condomínios', rotulo: 'Cadastrar e excluir condomínios, mudar o ID e importar a planilha',
+  { chave: 'carteira.cadastro', grupo: 'Base de Clientes', rotulo: 'Cadastrar e excluir condomínios, mudar o ID e importar a planilha',
     descricao: 'Botão "Novo condomínio", "Remover", o ID Vouch e a importação da planilha inteira.',
     padrao: { niveis: [], setores: [] } },
   { chave: 'credito.diretoria', grupo: 'Análise de Crédito', rotulo: 'Chancelar análises de crédito (diretoria)',

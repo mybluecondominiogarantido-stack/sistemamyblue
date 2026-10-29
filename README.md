@@ -79,7 +79,7 @@ Resumo por perfil:
 | Ferramentas do setor (HTML, versões, quem abre e papel) | — | setores dele (HTML novo em ferramenta não isolada aguarda aprovação) | todas, mais *Módulos e dados* completo |
 | Equipe e tipos de demanda | — | líderes e tipos dos setores dele | todos os setores |
 | Tickets | os do setor dele e os que abriu | todos os setores (a Supervisão da Central de Tickets vem com o perfil) | todos |
-| Carteira | consulta + o que estiver liberado em *Carteira: quem edita* | idem, e libera pessoas nas permissões do setor dele | tudo |
+| Carteira | consulta + o que estiver liberado em *Base de Clientes: quem edita* | idem, e libera pessoas nas permissões do setor dele | tudo |
 | Histórico, backup, setores, Central de Links | — | — | sim |
 
 - Marcações à parte, no cadastro (só a administração): **Supervisão da Central de Tickets** (vê e direciona os tickets
@@ -130,9 +130,9 @@ O **Controle de Emissão de Boletos** (Crédito) e o **Controle de Síndicos** (
 - **Quem fez:** o portal identifica cada pessoa como `mb-<id do usuário>`. Registros antigos, feitos ainda no Claude, guardam o id do Claude (`u_…`). Para mostrar o nome dessas pessoas, coloque no `config` do módulo `"pessoas_legadas": {"u_…": "Nome"}`.
 - **Dados:** em *Módulos e dados* aparecem as coleções com a contagem de documentos, o CSV de cada uma e o JSON completo.
 
-## Carteira de condomínios
+## Base de Clientes
 
-Menu **Carteira → Carteira de condomínios**. Reúne os condomínios atendidos e quem cuida de cada um:
+Menu **Clientes → Base de Clientes** (antes *Carteira de condomínios*). Reúne os condomínios atendidos e quem cuida de cada um:
 
 | Função | Coluna na planilha |
 |---|---|
@@ -140,10 +140,11 @@ Menu **Carteira → Carteira de condomínios**. Reúne os condomínios atendidos
 | Analista extrajudicial (ApoioCob, prestador de serviços) | ANALISTA EXTRAJUDICIAL |
 | Assistente de crédito | ASSISTENTE CRÉDITO |
 
-- **Condomínios:** indicadores (ativos, comarcas, pessoas por função, ativos sem responsável), busca por nome, razão social, CNPJ ou ID, filtros por situação, UF, administradora e responsável, e ordenação por coluna. Clique no condomínio para ver a ficha completa e o histórico de alterações.
+- **Condomínios:** indicadores (ativos, comarcas, pessoas por função, ativos sem responsável), busca por nome, razão social, CNPJ, ID ou síndico (nome, telefone ou e-mail), filtros por situação, UF, administradora, responsável e **vigência** (mês/ano em que o condomínio entrou, com quantos entraram em cada uma, ou *Sem vigência*), coluna **Síndico** (nome, telefone e e-mail) e ordenação por coluna. Clique no condomínio para ver a ficha completa e o histórico de alterações.
+- **Síndicos do Controle de Síndicos** (botão na aba Condomínios, para quem edita os dados do condomínio): lê os contatos ativos da ferramenta Controle de Síndicos (coleção `contatos`), liga cada um ao condomínio pelo nome e pela UF e mostra o que muda no síndico, telefone e e-mail da ficha: **Preencher** (ficha em branco, já marcados) e **Atualizar** (ficha com outro valor, desmarcados para conferir), mais os não achados. Mais de um síndico no mesmo condomínio vão juntos, separados por " / "; campo vazio no Controle de Síndicos nunca apaga a ficha. Grava só os marcados, com histórico (origem *Controle de Síndicos*).
 - **Equipes:** quantos condomínios ativos cada pessoa tem, por UF. Quem pode transferir aquela função usa **Transferir** para passar a carteira de uma pessoa (toda ou só alguns condomínios) para outra.
-- **Quem pode o quê:** todos que entram no portal consultam (não há botão de exportar). Cadastrar, editar os dados, cada responsável, adicionar novos e transferir são permissões configuráveis em *Carteira: quem edita* (padrões e regras em [Acessos](docs/acessos/LEIAME.md#carteira-de-condomínios)). Toda alteração fica no histórico do condomínio (o que mudou, quem e quando).
-- **Adicionar novos** (aba da Carteira, para administrador, coordenador e supervisor): envie a planilha *Controle de Implantações* do jeito que ela é (.xlsx ou .csv), escolha a **vigência** (mês/ano tirado da coluna **DATA CONTRATO**) e confira a lista. O portal mostra só os condomínios que ainda não estão na carteira (os parecidos com um existente vêm desmarcados), ignora os marcados para desconsiderar, os repetidos e os sem data de contrato. Para cada um: digitar o **ID Vouch** (obrigatório) e conferir o apelido sugerido. Os responsáveis (analista de cobrança, analista extrajudicial, assistente de crédito) podem ser escolhidos ali: o administrador escolhe todos e cada coordenador/supervisor só o do setor dele; o que ficar em branco é preenchido depois na ficha. Entram como Ativo, com UF, vencimento, administradora, forma de envio, **executivo de negócios** (coluna EXECUTIVO), **CNPJ** (coluna CNPJ; o portal confere os dígitos e avisa quando o Excel cortou o número em notação científica, com um campo para digitar na hora) e o nº do formulário e quem implantou nas observações.
+- **Quem pode o quê:** todos que entram no portal consultam (não há botão de exportar). Cadastrar, editar os dados, cada responsável, adicionar novos e transferir são permissões configuráveis em *Base de Clientes: quem edita* (padrões e regras em [Acessos](docs/acessos/LEIAME.md#carteira-de-condomínios)). Toda alteração fica no histórico do condomínio (o que mudou, quem e quando).
+- **Adicionar novos** (aba da Base de Clientes, para administrador, coordenador e supervisor): envie a planilha *Controle de Implantações* do jeito que ela é (.xlsx ou .csv), escolha a **vigência** (mês/ano tirado da coluna **DATA CONTRATO**) e confira a lista. O portal mostra só os condomínios que ainda não estão na carteira (os parecidos com um existente vêm desmarcados), ignora os marcados para desconsiderar, os repetidos e os sem data de contrato. Para cada um: digitar o **ID Vouch** (obrigatório) e conferir o apelido sugerido. Os responsáveis (analista de cobrança, analista extrajudicial, assistente de crédito) podem ser escolhidos ali: o administrador escolhe todos e cada coordenador/supervisor só o do setor dele; o que ficar em branco é preenchido depois na ficha. Entram como Ativo, com UF, vencimento, administradora, forma de envio, **executivo de negócios** (coluna EXECUTIVO), **CNPJ** (coluna CNPJ; o portal confere os dígitos e avisa quando o Excel cortou o número em notação científica, com um campo para digitar na hora) e o nº do formulário e quem implantou nas observações.
 - Condomínios novos entram pela aba **Adicionar novos** (o antigo *Importar CSV* e o *Exportar CSV* saíram da tela).
 - Os dados da carteira **não vão para o Git** (o repositório é público): entram só pelo portal. Arquivos `.csv` ficam fora do Git.
 
@@ -155,7 +156,7 @@ Demandas internas entre os setores: quem precisa de algo de outro setor abre um 
 
 **Fluxo**
 
-1. **Abrir:** qualquer pessoa logada escolhe o setor, o tipo de demanda (opcional) e diz se a demanda é de **um condomínio** (escolhido na Carteira de condomínios) ou **interna**. Depois descreve, define a prioridade e pode anexar arquivos.
+1. **Abrir:** qualquer pessoa logada escolhe o setor, o tipo de demanda (opcional) e diz se a demanda é de **um condomínio** (escolhido na Base de Clientes) ou **interna**. Depois descreve, define a prioridade e pode anexar arquivos.
 2. **Para quem vai:**
    - **Condomínio, setor Cobrança ou Crédito:** vai direto para a pessoa da carteira do condomínio (Cobrança → *analista de cobrança*, Crédito → *assistente de crédito*), que recebe o aviso por e-mail. A pessoa é encontrada pelo nome (sem acento e sem o ramal) entre a equipe do setor no portal; se não estiver cadastrada, o ticket vai para o líder e a equipe vê o aviso interno.
    - **Interna, ou setor que não usa a carteira:** entra na fila do setor sem responsável e os líderes recebem o aviso (sino, som e e-mail). Se o setor não tiver líder, a equipe inteira recebe.
@@ -166,7 +167,7 @@ Demandas internas entre os setores: quem precisa de algo de outro setor abre um 
 
 **Renegociação fechada (Controle de Renegociações → Crédito)**
 
-Quando o CS salva uma renegociação que passou a ser **Fechado**, o portal abre sozinho um ticket para o **Crédito**, tipo *Renegociação fechada*, em nome de quem fechou, com as condições na descrição (tipo de negociação, taxa e tarifa antes → depois, VOP, boletos, fidelização, vigência, antecipação e os dias de antecipação e vencimento, observações) e o **PDF do relatório de garantia** anexado, quando o CS anexou na ferramenta. O condomínio é procurado na Carteira pelo **nome e pela UF** (sem acento, sem "Cond."/"Residencial", romano = número, "1" final opcional); achando um só, o ticket vai direto para a **assistente de crédito** dele, como qualquer ticket de condomínio. Sem condomínio identificado, vai para a fila do Crédito e quem fechou recebe um aviso para conferir o nome.
+Quando o CS salva uma renegociação que passou a ser **Fechado**, o portal abre sozinho um ticket para o **Crédito**, tipo *Renegociação fechada*, em nome de quem fechou, com as condições na descrição (tipo de negociação, taxa e tarifa antes → depois, VOP, boletos, fidelização, vigência, antecipação e os dias de antecipação e vencimento, observações) e o **PDF do relatório de garantia** anexado, quando o CS anexou na ferramenta. O condomínio é procurado na Base de Clientes pelo **nome e pela UF** (sem acento, sem "Cond."/"Residencial", romano = número, "1" final opcional); achando um só, o ticket vai direto para a **assistente de crédito** dele, como qualquer ticket de condomínio. Sem condomínio identificado, vai para a fila do Crédito e quem fechou recebe um aviso para conferir o nome.
 
 - Salvar de novo com outras condições (ou fechar de novo depois de reabrir a negociação) **não abre outro ticket**: o que mudou vira um comentário no mesmo ticket (antes → depois), com aviso por e-mail. Se o ticket já estava resolvido ou cancelado, ele volta para *Novo*, com prazo novo.
 - O tipo *Renegociação fechada* é criado sozinho no 1º ticket (9 h úteis, prioridade alta) e pode ser ajustado em *Equipes e tipos de demanda* (não renomeie: com outro nome, o portal cria o tipo de novo).

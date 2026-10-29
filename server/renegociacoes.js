@@ -3,8 +3,8 @@
  * Controle de Renegociações → Central de Tickets.
  *
  * Quando o CS salva uma renegociação que passou a ser "Fechado", o portal abre um ticket para o Crédito
- * (tipo "Renegociação fechada") com as condições fechadas. O condomínio é procurado na Carteira pelo nome e
- * pela UF; achando, o ticket vai direto para a assistente de crédito da Carteira (mesma regra dos tickets).
+ * (tipo "Renegociação fechada") com as condições fechadas. O condomínio é procurado na Base de Clientes pelo nome e
+ * pela UF; achando, o ticket vai direto para a assistente de crédito da Base de Clientes (mesma regra dos tickets).
  * Não achando, cai na fila do Crédito para o líder distribuir, e quem fechou é avisado para conferir o nome.
  *
  * Renegociação que já tem ticket: o que mudou nas condições vira um comentário no mesmo ticket (antes → depois).
@@ -160,7 +160,7 @@ function criarRenegociacoes({ db, seg, modulos, registros, avisos, expediente, c
     const titulo = `Renegociação fechada: ${nome}`.slice(0, 160);
     const descricao = [
       `${u.nome} fechou a renegociação no ${ORIGEM}. Aplicar as novas condições no Crédito.`,
-      cond ? null : `Condomínio não identificado na Carteira ("${lida.condicoes.condominio}"): o líder confere e distribui.`,
+      cond ? null : `Condomínio não identificado na Base de Clientes ("${lida.condicoes.condominio}"): o líder confere e distribui.`,
       '', `Condomínio: ${nome}`, ...linhasCondicoes(lida.condicoes),
     ].filter((x) => x !== null).join('\n');
 
@@ -187,15 +187,15 @@ function criarRenegociacoes({ db, seg, modulos, registros, avisos, expediente, c
       await avisos.notificar([auto.id], { ...base, tipo: 'atribuido', titulo: `Novo ticket #${ticket} para você`,
         texto: `${u.nome} fechou a renegociação de ${nome} no ${ORIGEM}. O ticket #${ticket} veio direto para você por ser condomínio da sua carteira.` });
     } else {
-      const motivo = !cond ? ' O condomínio não foi identificado na Carteira: confira e distribua.'
-        : r0 ? ' A assistente da Carteira não está na equipe do Crédito no portal: distribua o ticket.' : ' O condomínio não tem assistente de crédito na Carteira: distribua o ticket.';
+      const motivo = !cond ? ' O condomínio não foi identificado na Base de Clientes: confira e distribua.'
+        : r0 ? ' A assistente da Base de Clientes não está na equipe do Crédito no portal: distribua o ticket.' : ' O condomínio não tem assistente de crédito na Base de Clientes: distribua o ticket.';
       await avisos.notificar(await avisos.triagemDoSetor(setor.id), { ...base, tipo: 'novo', titulo: `Novo ticket para ${setor.nome}`,
         texto: `${u.nome} fechou a renegociação de ${nome} no ${ORIGEM} (ticket #${ticket}).${motivo}` });
     }
     // quem fechou confere o nome (o aviso é para a própria pessoa: sem autor)
     if (!cond) {
       await avisos.notificar([u.id], { ticket_id: ticket, autor_id: null, tipo: 'aviso', email: false, titulo: `Condomínio não identificado no ticket #${ticket}`,
-        texto: `Não achei "${lida.condicoes.condominio}" na Carteira. O ticket #${ticket} foi para a fila do Crédito; confira o nome do condomínio na renegociação.` });
+        texto: `Não achei "${lida.condicoes.condominio}" na Base de Clientes. O ticket #${ticket} foi para a fila do Crédito; confira o nome do condomínio na renegociação.` });
     }
     return { ticket, acao: 'criado' };
   }

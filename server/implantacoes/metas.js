@@ -5,7 +5,7 @@
  * (server/rotas/implantacoes-acompanhamento.js) lê o banco e chama estas.
  *
  * Regras (decididas com a operação):
- *  - % concluído = etapas feitas ÷ 5 (concluída ou na Carteira = 100%). "Síndico MyBlue" conta como onboarding feito.
+ *  - % concluído = etapas feitas ÷ 5 (concluída ou na Base de Clientes = 100%). "Síndico MyBlue" conta como onboarding feito.
  *  - Onboarding: em até onboarding_dias (30) depois do 1º vencimento, que o setor informa na etapa Emissão de boletos
  *    (até lá vale a previsão: o primeiro dia de vencimento do formulário a partir do início do contrato). Síndico MyBlue = batida; "A marcar" entra na carteira com o prazo correndo.
  *  - Documentação: os documentos da meta em até documentacao_dias (60) depois da data da documentação (envio do formulário).

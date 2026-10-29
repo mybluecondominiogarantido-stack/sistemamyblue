@@ -211,7 +211,7 @@ test('condomínio fora da carteira: fila do Crédito para o líder, e quem fecho
   assert.equal(t.condominio_id, null);
   assert.equal(t.responsavel_id, null);
   assert.equal(t.titulo, 'Renegociação fechada: Cond. Lago Sul · CE');
-  assert.ok(t.descricao.includes('Condomínio não identificado na Carteira'));
+  assert.ok(t.descricao.includes('Condomínio não identificado na Base de Clientes'));
   assert.ok(emails.some((x) => x.para.email === 'lia@teste.com'), 'líder distribui');
   const ev = (await lia('GET', `/api/tickets/${t.id}`)).json.eventos;
   assert.ok(ev.some((e) => e.tipo === 'condominio_nao_identificado' && e.detalhe.condominio === 'Cond. Lago Sul'));
