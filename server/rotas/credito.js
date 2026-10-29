@@ -642,7 +642,7 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
     });
     await seg.auditar(req, 'credito_liberada', null, { analise: a.id, protocolo: atual.protocolo, status: resultado.status.rotulo });
     await avisos.notificar(await donos(a), { link: link(a.id), autor_id: req.usuario.id, tipo: 'credito', email: true, titulo: email.assunto, texto: email.corpo.replace(/\n+/g, ' ').replace('Detalhes e próximos passos no PDF.', 'O PDF está no portal, com os detalhes e os próximos passos.'),
-      detalhes: { destaque: resultado.status && resultado.status.rotulo ? String(resultado.status.rotulo).toUpperCase() : null, anexo: nomeArq, assinatura: 'Setor de Análise de Crédito — MyBlue' } });
+      detalhes: retorno.emailDetalhes(resultado, { ...ctx, protocolo: atual.protocolo }, { anexo: nomeArq }) });
     res.json({ ok: true, email, resumo });
   });
 
