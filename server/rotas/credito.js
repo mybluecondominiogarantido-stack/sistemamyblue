@@ -497,6 +497,12 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
       link: link(a.id), autor_id: req.usuario.id, tipo: 'credito', email: true,
       titulo: `${tipo} · ${protocolo} · ${a.condominio}`,
       texto: `${req.usuario.nome} enviou ${a.condominio} para análise de crédito. Prazo de resposta ao executivo: ${pz.executivo.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' })}.`,
+      detalhes: {
+        intro: reenvio && !a.origem_id ? `**${req.usuario.nome}** enviou o que faltava para a análise. O prazo voltou a contar.` : `**${req.usuario.nome}** enviou um condomínio para análise de crédito.`,
+        botao: reenvio && !a.origem_id ? 'Retomar análise' : 'Abrir análise',
+        linhas: [['Condomínio', a.condominio], ['Protocolo', protocolo], ['Enviado por', req.usuario.nome],
+          ['Responder ao executivo até', pz.executivo.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' })]],
+      },
     });
     res.json({ protocolo, etapa, prazo_analista: pz.analista, prazo_executivo: pz.executivo });
     // a IA lê os PDFs em segundo plano: o analista encontra os dados já lançados para conferir
@@ -635,7 +641,8 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
       await evento(t, a.id, req.usuario.id, 'liberada', { status: resultado.status.rotulo, condensado, resumo });
     });
     await seg.auditar(req, 'credito_liberada', null, { analise: a.id, protocolo: atual.protocolo, status: resultado.status.rotulo });
-    await avisos.notificar(await donos(a), { link: link(a.id), autor_id: req.usuario.id, tipo: 'credito', email: true, titulo: email.assunto, texto: email.corpo.replace(/\n+/g, ' ').replace('Detalhes e próximos passos no PDF.', 'O PDF está no portal, com os detalhes e os próximos passos.') });
+    await avisos.notificar(await donos(a), { link: link(a.id), autor_id: req.usuario.id, tipo: 'credito', email: true, titulo: email.assunto, texto: email.corpo.replace(/\n+/g, ' ').replace('Detalhes e próximos passos no PDF.', 'O PDF está no portal, com os detalhes e os próximos passos.'),
+      detalhes: { destaque: resultado.status && resultado.status.rotulo ? String(resultado.status.rotulo).toUpperCase() : null, anexo: nomeArq, assinatura: 'Setor de Análise de Crédito — MyBlue' } });
     res.json({ ok: true, email, resumo });
   });
 
