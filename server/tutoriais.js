@@ -40,7 +40,7 @@ const TUTORIAIS = [
   { slug: 'portal-primeiro-acesso', grupo: 'Primeiros passos', publico: 'todos', titulo: 'Primeiro acesso e o portal',
     descricao: 'Entrar e criar a senha, a tela inicial, o menu, abrir uma ferramenta, os avisos e a sua conta.' },
   { slug: 'carteira-condominios', grupo: 'Primeiros passos', publico: 'todos', titulo: 'Base de Clientes',
-    descricao: 'Buscar um condomínio e ver quem é o responsável por ele em cada setor.' },
+    descricao: 'Buscar um condomínio, ver quem é o responsável em cada setor e o síndico, e filtrar pela vigência.' },
   { slug: 'central-de-links', grupo: 'Primeiros passos', publico: 'todos', titulo: 'Central de Links',
     descricao: 'Os links úteis da empresa num lugar só.' },
   { slug: 'minhas-premiacoes', grupo: 'Primeiros passos', publico: 'todos', titulo: 'Minhas Premiações',
