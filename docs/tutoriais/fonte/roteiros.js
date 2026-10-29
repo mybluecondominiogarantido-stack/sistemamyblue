@@ -359,25 +359,35 @@ module.exports = [
     nome: 'carteira-condominios',
     entrar: 'marcos@myblue.com.br',
     inicio: '#/carteira',
-    abertura: ['Quem cuida de cada condomínio, em cada setor.', ['Buscar um condomínio', 'Filtrar por responsável', 'Ver a carteira de cada pessoa']],
+    abertura: ['Os condomínios da MyBlue, quem cuida de cada um e o síndico.', ['Buscar um condomínio', 'O síndico', 'Filtrar por responsável e vigência', 'Ver a carteira de cada pessoa']],
     async gravar(t) {
-      await t.legenda('A <b>Carteira de condomínios</b> mostra os condomínios da MyBlue e quem é o responsável em cada setor.', { etapa: '1 · A carteira', ms: 600 });
+      await t.legenda('A <b>Base de Clientes</b> mostra os condomínios da MyBlue, quem é o responsável em cada setor e o síndico.', { etapa: '1 · A Base de Clientes', ms: 600 });
       await t.mostrar('.tiles', 3000, { dx: 0.4 });
-      await t.legenda('Busque pelo <b>nome</b>, razão social, <b>CNPJ</b> ou <b>ID</b>.', { etapa: '2 · Buscar', ms: 400 });
+      await t.legenda('Busque pelo <b>nome</b>, <b>ID</b>, <b>CNPJ</b> ou pelo <b>síndico</b>.', { etapa: '2 · Buscar', ms: 400 });
       await t.digitar('#cfQ', 'solar', { atraso: 110, depois: 1200 });
-      await t.legenda('Clique no condomínio para ver os dados, os responsáveis e o histórico de mudanças.', { etapa: '2 · Buscar', ms: 400 });
+      await t.legenda('Clique no condomínio para ver os dados, os responsáveis, o síndico e o histórico de mudanças.', { etapa: '2 · Buscar', ms: 400 });
       await t.clicar('#tbC tr.clicavel', { depois: 3800 });
       await t.clicar(fecharModal, { depois: 600 });
+      const S = '3 · O síndico';
+      await t.legenda('A coluna <b>Síndico</b> traz o nome, o telefone e o e-mail do síndico de cada condomínio.', { etapa: S, ms: 400 });
+      await t.clicar('#cfQ', { depois: 150 }); await t.p.locator('#cfQ').fill(''); await t.pausa(500);
+      await t.mostrar('th[data-ordem="sindico_nome"]', 2600);
+      await t.legenda('A busca também acha pelo nome ou telefone do síndico.', { etapa: S, ms: 300 });
+      await t.digitar('#cfQ', 'teresa', { atraso: 110, depois: 2200 });
       await t.clicar('#cfQ', { depois: 150 }); await t.p.locator('#cfQ').fill(''); await t.pausa(700);
-      await t.legenda('Filtre por <b>responsável</b>, UF, administradora ou situação.', { etapa: '3 · Filtrar', ms: 500 });
-      await t.escolher('#cfPes', { value: 'analista_cobranca|MARCOS LIMA - 4701' }, { depois: 2600 });
-      await t.escolher('#cfPes', { value: '' }, { depois: 800 });
-      await t.legenda('Na aba <b>Equipes</b>: quantos condomínios cada pessoa tem, por função.', { etapa: '4 · Equipes', ms: 500 });
+      const F = '4 · Filtrar';
+      await t.legenda('Filtre por <b>responsável</b>, UF, administradora ou situação.', { etapa: F, ms: 500 });
+      await t.escolher('#cfPes', { value: 'analista_cobranca|MARCOS LIMA - 4701' }, { depois: 2400 });
+      await t.escolher('#cfPes', { value: '' }, { depois: 600 });
+      await t.legenda('Em <b>Vigência</b>, escolha o mês: aparecem os condomínios que entraram nele. Ao lado de cada mês, quantos foram.', { etapa: F, ms: 400 });
+      await t.escolher('#cfVig', { index: 2 }, { depois: 2800 });
+      await t.escolher('#cfVig', { value: '' }, { depois: 600 });
+      await t.legenda('Na aba <b>Equipes</b>: quantos condomínios cada pessoa tem, por função.', { etapa: '5 · Equipes', ms: 500 });
       await t.clicar('nav.abas a[href="#/carteira/responsaveis"]', { depois: 2400 });
-      await t.legenda('Clique no número para ver a lista de condomínios da pessoa.', { etapa: '4 · Equipes', ms: 300 });
+      await t.legenda('Clique no número para ver a lista de condomínios da pessoa.', { etapa: '5 · Equipes', ms: 300 });
       await t.mostrar('[data-ver]', 2600);
     },
-    resumo: ['Busca por nome, CNPJ ou ID', 'Filtro por responsável, UF, administradora e situação', 'Aba <b>Equipes</b>: a carteira de cada pessoa'],
+    resumo: ['Busca por nome, ID, CNPJ ou síndico', 'Coluna <b>Síndico</b> · filtros por responsável e <b>vigência</b>', 'Aba <b>Equipes</b>: a carteira de cada pessoa · Marketing: <b>Lista do Marketing</b>'],
   },
 
   {
