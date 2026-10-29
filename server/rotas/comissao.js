@@ -10,12 +10,13 @@
  * Ninguém mais: nem a supervisão de tickets, nem coordenadores de outros setores, nem os colegas.
  * Reenviar cria uma nova versão; a anterior fica guardada e sai das listas.
  *
- * Planilhas do mês: a gestão pede a planilha de cada pessoa (Crédito, Cobrança, metas dos setores…) a quem
+ * Planilhas do mês: a gestão pede a planilha de cada pessoa (Crédito, Implantação, metas dos setores…) a quem
  * envia — normalmente o coordenador do setor, que recebe um aviso só com a lista da equipe. Ele envia um arquivo
  * por pessoa em "Minhas Premiações"; quem pediu recebe um aviso só, quando todas foram enviadas, e importa na
  * ferramenta. Quem envia nunca vê a ferramenta, as regras ou valores.
  */
 const express = require('express');
+const { MODULO_ACOMPANHAMENTO, competencias, resultadoCobranca } = require('../cobranca-resultados');
 
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 const nomeComp = (c) => { const [a, m] = c.split('-'); return `${MESES[Number(m) - 1].replace(/^./, (x) => x.toUpperCase())}/${a}`; };
@@ -198,6 +199,27 @@ function rotasComissao({ db, seg, cfg, avisos, acessos }) {
     await db.q('UPDATE comissao_relatorios SET ciente_em = COALESCE(ciente_em, now()), aberto_em = COALESCE(aberto_em, now()) WHERE id = $1', [rel.id]);
     await seg.auditar(req, 'comissao_ciente', rel.modulo_slug, { competencia: rel.competencia, relatorio: rel.id });
     res.json({ ok: true });
+  });
+
+  /* ===================== Cobrança pelo Acompanhamento de Resultados ===================== */
+  // a gestão escolhe a vigência (competência dos vencimentos) e puxa o resultado de cada analista,
+  // sem pedir a planilha da Cobrança; sem competencia, volta a lista das vigências que o Acompanhamento tem
+  r.get('/api/comissao/cobranca', async (req, res) => {
+    if (!(await podeEnviar(req.usuario, req.query.modulo))) return erro(res, 403, 'Só quem usa a Gestão de Premiações puxa a Cobrança.');
+    const comp = req.query.competencia == null ? null : String(req.query.competencia);
+    if (comp !== null && !COMP_RE.test(comp)) return erro(res, 400, 'Vigência inválida.');
+    if (!(await db.um('SELECT 1 FROM modulos WHERE slug = $1', [MODULO_ACOMPANHAMENTO]))) return erro(res, 404, 'O Acompanhamento de Resultados não está no portal.');
+    res.set('Cache-Control', 'no-store');
+    if (comp === null) {
+      const { rows } = await db.q(`SELECT colecao, doc_id, CASE WHEN colecao = 'comp' THEN dados ELSE jsonb_build_object('comp', dados->>'comp') END AS dados
+        FROM documentos WHERE modulo_slug = $1 AND colecao IN ('comp', 'lote', 'mes') AND dados IS NOT NULL`, [MODULO_ACOMPANHAMENTO]);
+      return res.json({ competencias: competencias(rows) });
+    }
+    const { rows } = await db.q(`SELECT colecao, doc_id, dados FROM documentos WHERE modulo_slug = $1 AND dados IS NOT NULL
+      AND ((colecao = 'comp' AND doc_id = $2) OR (colecao IN ('lote', 'mes', 'reg', 'ret') AND doc_id LIKE $3))`, [MODULO_ACOMPANHAMENTO, comp, comp + '\\_\\_%']);
+    const r2 = resultadoCobranca(rows, comp);
+    if (!r2.analistas.length) return erro(res, 404, `O Acompanhamento de Resultados não tem condomínios apurados em ${nomeComp(comp)}.`);
+    res.json(r2);
   });
 
   /* ===================== planilhas do mês ===================== */
