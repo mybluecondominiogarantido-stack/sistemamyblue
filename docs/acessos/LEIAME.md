@@ -114,9 +114,11 @@ para as outras pessoas. A **coordenação** abre sem precisar ser marcada, mas *
 
 ## Carteira de condomínios
 
-**Todos veem a carteira**: quem consulta vê todos os dados dos condomínios (o portal não tem botão de exportar, mas o
-que aparece na tela pode ser copiado). O resto é permissão configurável em **Ferramentas do setor → Carteira de condomínios: quem edita**
-(administração: também em Módulos e dados → Carteira: quem edita). Cada permissão tem uma regra: perfis (Coordenação,
+A tela se chama **Base de Clientes** (antes *Carteira de condomínios*).
+
+**Todos veem a carteira**: quem consulta vê todos os dados dos condomínios (o único download é a *Lista do Marketing*, com permissão própria; o
+que aparece na tela pode ser copiado). O resto é permissão configurável em **Ferramentas do setor → Base de Clientes: quem edita**
+(administração: também em Módulos e dados → Base de Clientes: quem edita). Cada permissão tem uma regra: perfis (Coordenação,
 Supervisão, Usuário), setores (vazio = qualquer setor) e pessoas liberadas uma a uma. A administração pode tudo, sempre.
 
 | Permissão | Padrão |
@@ -127,6 +129,7 @@ Supervisão, Usuário), setores (vazio = qualquer setor) e pessoas liberadas uma
 | Editar e transferir o Assistente de crédito | Coordenação e Supervisão do Crédito |
 | Adicionar condomínios novos pela planilha de implantação | Coordenação e Supervisão de qualquer setor |
 | Cadastrar e excluir condomínios, mudar o ID e importar a planilha (cadastrar inclui preencher os dados do condomínio novo) | só a administração |
+| Baixar a Lista do Marketing (condomínio, UF, síndico, telefone e e-mail dos ativos, em .xlsx) | Coordenação e Supervisão do Marketing |
 
 - A coordenação e a supervisão liberam pessoas nas permissões do setor delas (ex.: Crédito → Assistente de crédito).
   Perfis e setores de cada regra são da administração.
@@ -267,7 +270,6 @@ rotas da comissão. Nada de administração, de outras ferramentas ou dos ticket
 | Central de Ferramentas — Cobrança / Gestão | Cobrança | calculadoras | abre | dados só no navegador de cada pessoa |
 | Central de Ferramentas — Crédito | Crédito | Balancetes, Consumos, Divisor, Gerador, Montador, Moradores, Nobre | abre | dados só no navegador de cada pessoa |
 | Controle de Emissão de Boletos | Crédito | Painel, Comparativo, Controle, Cadastro, Distratados, Feriados, Histórico | edita ou só consulta | já respeita o "só consulta" na tela; os condomínios vêm da Carteira (conferência na janela da ferramenta, pela coordenação do Crédito) |
-| Controle de Síndicos | Crédito | Resumo, Base, Histórico, Ignorar, Marketing, Cópia de segurança | edita ou só consulta | já respeita o "só consulta" na tela |
 | Controle de Renegociações e Tickets | CS | Dashboard, Central de dados, Nova Renegociação, Relatório mensal, Tickets | edita ou só consulta | — |
 | Prestação de Contas — Comissão de Parceiros | Parceiros | Lançamento, Prestações do mês, Parceiros, Condomínios | edita ou só consulta | alimenta o PartnerChip e as Comissões |
 | Controle de Pedidos — Suprimentos | Suprimentos | Geral, Janelas, Mensal | edita ou só consulta | — |

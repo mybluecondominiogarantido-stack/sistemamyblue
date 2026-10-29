@@ -171,20 +171,6 @@ const FERRAMENTAS = {
       ], dica: 'Depois da primeira conferência, toda mudança na Carteira e toda competência criada (<i>Criar próximo mês</i>) chegam sozinhas ao controle. Nomes parecidos e condomínios fora da Carteira continuam esperando a conferência na janela.' },
     ],
   },
-  sindicos: {
-    video: true,
-    nome: 'Controle de Síndicos',
-    descricao: 'Compara a extração do Vouch com a base de contatos dos síndicos e gera a lista do Marketing.',
-    dados: 'A base de contatos fica no banco do portal e é compartilhada pela equipe, ao vivo. Cada edição fica no histórico da ferramenta.',
-    abas: [
-      ['1. Atualizar pelo Vouch', 'Cole as colunas Apelido e Síndico da extração do Vouch (ou carregue o arquivo .xlsx/.csv) e compare com a base. A ferramenta mostra o que mudou e só grava o que você confirmar.'],
-      ['2. Base de contatos', 'A base dos síndicos, editável direto na tabela: telefone, e-mail, situação. Filtros de ativos, inativos (saíram), sem telefone e sem e-mail.'],
-      ['3. Lista do Marketing', 'A lista pronta para o Marketing, para baixar em planilha.'],
-      ['Ignorar', 'Condomínios que não devem gerar alerta na comparação.'],
-      ['Histórico', 'Registro das importações, edições e downloads.'],
-      ['Cópia de segurança', 'Baixar e restaurar uma cópia de toda a base.'],
-    ],
-  },
   comissoes: {
     video: true,
     nome: 'Comissões de Novos Condomínios',
@@ -397,7 +383,7 @@ const SETORES = [
   {
     nome: 'Crédito', arquivo: 'credito',
     papel: 'Prepara prestações de contas, balancetes, recibos e controles de consumo dos condomínios.',
-    ferramentas: ['credito', 'boletos', 'sindicos'], carteira: 'assistente de crédito',
+    ferramentas: ['credito', 'boletos'], carteira: 'assistente de crédito',
     recebe: [
       ['Prestação de contas', 27, 'media', 'Condomínio e mês de referência.'],
       ['Balancete', 27, 'media', 'Condomínio e período.'],

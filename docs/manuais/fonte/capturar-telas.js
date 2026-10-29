@@ -40,9 +40,8 @@ const HTML = (t) => `<!doctype html><html><head><meta charset="utf-8"><title>${t
 
   // ferramentas: HTML de exemplo para os cartões não aparecerem "sem arquivo"
   const titulos = { credito: 'Central de Ferramentas — Crédito', cobranca: 'Central de Ferramentas — Cobrança', renegociacoes: 'Controle de Renegociações',
-    suprimentos: 'Controle de Pedidos', parceiros: 'Prestação de Contas — Parceiros', boletos: 'Controle de Emissão de Boletos', sindicos: 'Controle de Síndicos' };
+    suprimentos: 'Controle de Pedidos', parceiros: 'Prestação de Contas — Parceiros', boletos: 'Controle de Emissão de Boletos' };
   for (const [slug, t] of Object.entries(titulos)) await api(a, 'PUT', `/api/admin/modulos/${slug}/arquivo`, HTML(t), true);
-  await api(a, 'PATCH', '/api/admin/modulos/sindicos', { setor_id: S('Crédito') });
 
   // carteira de condomínios (fictícia)
   const conds = [['Cond. Jardim Azul', 'SP'], ['Ed. Solar das Palmeiras', 'SP'], ['Res. Primavera', 'CE'], ['Cond. Vila Rica', 'PE'], ['Ed. Aurora', 'SP'], ['Res. Bela Vista', 'BA']];

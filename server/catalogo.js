@@ -142,18 +142,6 @@ const MODULOS = [
     config: { titulo: 'Controle de Emissão de Boletos' },
   },
   {
-    slug: 'sindicos',
-    nome: 'Controle de Síndicos',
-    descricao: 'Extração do Vouch × base de contatos dos síndicos × lista do Marketing.',
-    setor: 'CS',
-    icone: 'pessoas',
-    ordem: 2,
-    armazenamento: 'navegador',
-    adaptador: 'claude-db',
-    fonte_dados: 'interno',
-    config: { titulo: 'Controle de Síndicos' },
-  },
-  {
     // relatorios_comissao: é a única ferramenta que pode enviar os demonstrativos para "Minhas Premiações".
     slug: 'premiacoes',
     nome: 'Gestão de Premiações',

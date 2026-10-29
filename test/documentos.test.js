@@ -50,8 +50,11 @@ before(async () => {
   await new Promise((ok) => servidor.listen(0, '127.0.0.1', ok));
   base = `http://127.0.0.1:${servidor.address().port}`;
   admin = await entrar('admin@teste.com', 'Admin1234');
+  // outra ferramenta ligada ao banco de documentos (como as feitas no Claude), criada como no painel
+  await ctx.db.q(`INSERT INTO modulos (slug, nome, setor_id, adaptador, armazenamento, fonte_dados)
+    SELECT 'contatos-teste', 'Contatos (teste)', id, 'claude-db', 'navegador', 'interno' FROM setores WHERE nome = 'CS'`);
   ana = await pessoa('Ana Souza', 'ana@teste.com', ['boletos']);
-  beto = await pessoa('Beto Lima', 'beto@teste.com', ['sindicos']);
+  beto = await pessoa('Beto Lima', 'beto@teste.com', ['contatos-teste']);
 });
 
 after(async () => {
@@ -59,10 +62,11 @@ after(async () => {
   await ctx.db.fechar();
 });
 
-test('os dois módulos novos vêm no catálogo, ligados ao banco de documentos', async () => {
+test('o Controle de Emissão de Boletos vem no catálogo, ligado ao banco de documentos', async () => {
   const { modulos } = (await admin('GET', '/api/admin/modulos')).json;
   const b = modulos.find((m) => m.slug === 'boletos');
-  const s = modulos.find((m) => m.slug === 'sindicos');
+  const s = modulos.find((m) => m.slug === 'contatos-teste');
+  assert.equal(modulos.find((m) => m.slug === 'sindicos'), undefined); // o Controle de Síndicos saiu do catálogo
   assert.equal(b.adaptador, 'claude-db');
   assert.equal(b.setor_nome, 'Crédito');
   assert.equal(s.adaptador, 'claude-db');
@@ -115,7 +119,7 @@ test('limites: corpo precisa ser objeto e caber em 256 KB', async () => {
 
 test('acesso: só quem tem o módulo; área particular data/users fica escondida dos outros', async () => {
   assert.equal((await beto.c('GET', '/api/db/boletos')).status, 403);
-  assert.equal((await ana.c('GET', '/api/db/sindicos')).status, 403);
+  assert.equal((await ana.c('GET', '/api/db/contatos-teste')).status, 403);
   assert.equal((await ana.c('GET', '/api/db/renegociacoes')).status, 404, 'módulo que não é do Claude');
 
   const minha = `data/users/mb-${ana.id}/prefs`;
@@ -126,13 +130,13 @@ test('acesso: só quem tem o módulo; área particular data/users fica escondida
 });
 
 test('trava curta (acquire): o segundo espera, o mesmo holder renova', async () => {
-  await beto.c('POST', '/api/db/sindicos', { ops: [{ op: 'set', path: 'contatos/c001', data: { cond: 'A' } }] });
-  const a = await beto.c('POST', '/api/db/sindicos/trava', { path: 'contatos/c001', holder: 'aba-1', ttlMs: 5000 });
+  await beto.c('POST', '/api/db/contatos-teste', { ops: [{ op: 'set', path: 'contatos/c001', data: { cond: 'A' } }] });
+  const a = await beto.c('POST', '/api/db/contatos-teste/trava', { path: 'contatos/c001', holder: 'aba-1', ttlMs: 5000 });
   assert.equal(a.json.acquired, true);
-  const b = await admin('POST', '/api/db/sindicos/trava', { path: 'contatos/c001', holder: 'aba-2', ttlMs: 5000 });
+  const b = await admin('POST', '/api/db/contatos-teste/trava', { path: 'contatos/c001', holder: 'aba-2', ttlMs: 5000 });
   assert.equal(b.json.acquired, false);
   assert.ok(b.json.expiresAt);
-  assert.equal((await beto.c('POST', '/api/db/sindicos/trava', { path: 'contatos/c001', holder: 'aba-1' })).json.acquired, true);
+  assert.equal((await beto.c('POST', '/api/db/contatos-teste/trava', { path: 'contatos/c001', holder: 'aba-1' })).json.acquired, true);
 });
 
 test('nomes das pessoas: usuários do portal e ids antigos do Claude', async () => {
@@ -163,17 +167,17 @@ test('admin vê a contagem, baixa CSV e o JSON; a página recebe window.claude',
 });
 
 test('importar arquivo de dados do Claude substitui tudo e avisa quem está com a tela aberta', async () => {
-  const antes = (await beto.c('GET', '/api/db/sindicos')).json.seq;
-  const r = await admin('POST', '/api/admin/modulos/sindicos/documentos', { modulo: 'sindicos', documentos: { 'contatos/c900': { cond: 'Novo' }, 'meta/estado': { origem: 'teste' } } });
+  const antes = (await beto.c('GET', '/api/db/contatos-teste')).json.seq;
+  const r = await admin('POST', '/api/admin/modulos/contatos-teste/documentos', { modulo: 'contatos-teste', documentos: { 'contatos/c900': { cond: 'Novo' }, 'meta/estado': { origem: 'teste' } } });
   assert.equal(r.status, 200, r.texto);
   assert.equal(r.json.total, 2);
-  const tudo = (await beto.c('GET', '/api/db/sindicos')).json.docs.map((d) => `${d.c}/${d.id}`).sort();
+  const tudo = (await beto.c('GET', '/api/db/contatos-teste')).json.docs.map((d) => `${d.c}/${d.id}`).sort();
   assert.deepEqual(tudo, ['contatos/c900', 'meta/estado']);
-  const mud = (await beto.c('GET', `/api/db/sindicos?desde=${antes}`)).json.docs;
+  const mud = (await beto.c('GET', `/api/db/contatos-teste?desde=${antes}`)).json.docs;
   assert.ok(mud.some((d) => d.id === 'c001' && d.d === null), 'o que saiu chega como exclusão');
-  assert.equal((await admin('POST', '/api/admin/modulos/boletos/documentos', { modulo: 'sindicos', documentos: {} })).status, 400);
+  assert.equal((await admin('POST', '/api/admin/modulos/boletos/documentos', { modulo: 'contatos-teste', documentos: {} })).status, 400);
   assert.equal((await admin('POST', '/api/admin/modulos/renegociacoes/documentos', { documentos: {} })).status, 404);
-  assert.equal((await beto.c('POST', '/api/admin/modulos/sindicos/documentos', { documentos: {} })).status, 403);
+  assert.equal((await beto.c('POST', '/api/admin/modulos/contatos-teste/documentos', { documentos: {} })).status, 403);
 });
 
 test('ferramenta nova feita como artefato do Claude passa a usar o banco de documentos ao enviar o HTML', async () => {

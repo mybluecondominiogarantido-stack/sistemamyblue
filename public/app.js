@@ -2181,9 +2181,8 @@
       '<a href="#/carteira/responsaveis" class="' + (aba === 'responsaveis' ? 'on' : '') + '">Equipes</a>' +
       (adicionar ? '<a href="#/carteira/novos" class="' + (aba === 'novos' ? 'on' : '') + '">Adicionar novos</a>' : '') + '</nav><div id="cCorpo"></div></div>';
 
-    // síndico, telefone e e-mail vindos do Controle de Síndicos: para quem edita os dados do condomínio
-    var sindicosEdit = (j.campos_editaveis || []).indexOf('sindico_nome') >= 0;
-    var acoes = (sindicosEdit ? '<button class="btn" id="btCSind">' + IC.pessoas + 'Síndicos do Controle de Síndicos</button>' : '') +
+    // Lista do Marketing: os síndicos dos ativos em planilha (permissão própria em Base de Clientes: quem edita)
+    var acoes = (j.pode_marketing ? '<button class="btn" id="btCMkt">' + IC.baixar + 'Lista do Marketing</button>' : '') +
       (admin ? '<button class="btn primary" id="btCNovo">' + IC.mais + 'Novo condomínio</button>' : '');
 
     if (aba === 'novos' && adicionar) { desenharNovos(); return; }
@@ -2195,60 +2194,22 @@
 
     function ligarAcoes() {
       if ($('#btCNovo')) $('#btCNovo').onclick = function () { editarCondominio(null); };
-      if ($('#btCSind')) $('#btCSind').onclick = sindicosDoControle;
+      if ($('#btCMkt')) $('#btCMkt').onclick = listaMarketing;
       $$('[data-carteira-acessos]').forEach(function (a) { a.onclick = function (e) { e.preventDefault(); editorCarteiraAcessos(); }; });
     }
 
-    /* ---------- síndicos: a base de contatos do Controle de Síndicos → síndico, telefone e e-mail da ficha ---------- */
-    async function sindicosDoControle() {
-      var m = modal({ titulo: 'Síndicos do Controle de Síndicos', largo: true, corpo: '<div id="sdCorpo">' + carregandoHtml() + '</div>', pe: '<button class="btn ghost" data-fechar>Fechar</button>' });
-      var p;
-      try { p = await api('GET', '/api/carteira/sindicos'); } catch (e) { $('#sdCorpo', m).innerHTML = '<div class="msg erro">' + esc(e.message) + '</div>'; return; }
-      var ROT = { sindico_nome: 'Síndico', sindico_telefone: 'Telefone', sindico_email: 'E-mail' };
-      var muda = function (x) {
-        return Object.keys(ROT).filter(function (k) { return x.campos[k]; }).map(function (k) {
-          var de = x.campos[k][0], para = x.campos[k][1];
-          return ROT[k] + ': ' + (de ? '<s style="color:var(--muted)">' + esc(de) + '</s> → ' : '') + '<b>' + esc(para) + '</b>';
-        }).join('<br>');
-      };
-      var grupo = function (tipo, titulo, ajuda, marcado) {
-        var l = p.mudancas.filter(function (x) { return x.tipo === tipo; });
-        return l.length ? '<details open style="margin-top:12px"><summary style="cursor:pointer;font-weight:800">' + titulo + ' (' + l.length + ')</summary><p class="ajuda" style="margin:6px 0">' + ajuda +
-          ' <a href="#" data-sd-todos="' + tipo + '">marcar todos</a> · <a href="#" data-sd-nenhum="' + tipo + '">desmarcar todos</a></p>' +
-          '<div class="tabela-wrap" style="max-height:320px;overflow-y:auto"><table><thead><tr><th></th><th>Condomínio</th><th>O que muda</th></tr></thead><tbody>' +
-          l.map(function (x) {
-            return '<tr><td><input type="checkbox" data-sd="' + x.id + '" data-sd-tipo="' + tipo + '"' + (marcado ? ' checked' : '') + ' aria-label="Gravar"></td><td><b>' + esc(x.nome) + '</b> <span class="sec">' + esc([x.comarca, 'ID ' + x.codigo].filter(Boolean).join(' · ')) + '</span>' +
-              (x.situacao !== 'ATIVO' ? ' <span class="etiqueta cinza">' + esc(x.situacao.toLowerCase()) + '</span>' : '') + '</td><td>' + muda(x) + '</td></tr>';
-          }).join('') + '</tbody></table></div></details>' : '';
-      };
-      $('#sdCorpo', m).innerHTML = !p.contatos ? '<div class="msg aviso">O Controle de Síndicos ainda não tem contatos ativos.</div>' :
-        '<p class="ajuda" style="margin-top:0">Contatos ativos no Controle de Síndicos: <b>' + p.contatos + '</b>, ligados a <b>' + p.ligados + '</b> condomínio(s) da Base de Clientes pelo nome e pela UF. ' +
-          'Já iguais: <b>' + p.iguais + '</b>. Mais de um síndico no mesmo condomínio vão juntos, separados por " / ". Campo vazio no Controle de Síndicos não apaga o que já está na ficha.</p>' +
-        (!p.mudancas.length ? '<div class="msg ok">O síndico, o telefone e o e-mail da Base de Clientes já estão iguais ao Controle de Síndicos.</div>' :
-          grupo('preencher', 'Preencher (ficha sem esses dados)', 'Os dados entram onde a ficha está em branco.', true) +
-          grupo('atualizar', 'Atualizar (ficha com dados diferentes)', 'A ficha já tem outro valor: confira antes de gravar. O valor antigo fica no histórico do condomínio.', false)) +
-        (p.nao_achados.length ? '<details style="margin-top:12px"><summary style="cursor:pointer;font-weight:800">Não achados na Base de Clientes (' + p.nao_achados.length + ')</summary><p class="ajuda" style="margin:6px 0">Nome ou UF diferente da Base de Clientes. Acerte o nome no Controle de Síndicos (aba da carteira) e confira de novo.</p>' +
-          '<div class="tabela-wrap" style="max-height:260px;overflow-y:auto"><table><thead><tr><th>No Controle de Síndicos</th><th>Síndico</th></tr></thead><tbody>' +
-          p.nao_achados.map(function (x) { return '<tr><td>' + esc(x.cond) + '</td><td>' + esc(x.sindicos.join(' / ')) + '</td></tr>'; }).join('') + '</tbody></table></div></details>' : '') +
-        (p.sem_contato ? '<p class="ajuda" style="margin-top:12px">Condomínios ativos que continuam sem síndico (sem contato no Controle de Síndicos): <b>' + p.sem_contato + '</b>.</p>' : '');
-      $$('[data-sd-todos],[data-sd-nenhum]', m).forEach(function (a) {
-        a.onclick = function (e) {
-          e.preventDefault();
-          var tipo = a.getAttribute('data-sd-todos') || a.getAttribute('data-sd-nenhum'), on = a.hasAttribute('data-sd-todos');
-          $$('input[data-sd-tipo="' + tipo + '"]', m).forEach(function (i) { i.checked = on; });
-        };
-      });
-      if (!p.mudancas.length) return;
-      $('.modal-pe', m).insertAdjacentHTML('beforeend', '<button class="btn primary" id="sdOk">Gravar na Base de Clientes</button>');
-      $('#sdOk', m).onclick = async function () {
-        var ids = $$('input[data-sd]', m).filter(function (i) { return i.checked; }).map(function (i) { return Number(i.getAttribute('data-sd')); });
-        if (!ids.length) { toast('Marque ao menos um condomínio.', 'erro'); return; }
-        var bt = this; bt.disabled = true;
-        try {
-          var r = await api('POST', '/api/carteira/sindicos', { ids: ids });
-          m.fechar(); toast(r.atualizados + ' condomínio(s) atualizado(s) com o síndico do Controle de Síndicos.', 'ok'); paginaCarteira(aba);
-        } catch (e) { bt.disabled = false; toast(e.message, 'erro'); }
-      };
+    /* ---------- Lista do Marketing: condomínio, UF, síndico, telefone e e-mail dos ativos (.xlsx) ---------- */
+    async function listaMarketing() {
+      var bt = this; bt.disabled = true;
+      try {
+        var r = await fetch('/api/carteira/marketing', { credentials: 'same-origin', cache: 'no-store' });
+        if (!r.ok) { var e = {}; try { e = await r.json(); } catch (x) { /* sem JSON */ } throw new Error(e.erro || 'Erro ' + r.status); }
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(await r.blob());
+        a.download = 'Lista do Marketing ' + new Date().toLocaleDateString('pt-BR').replace(/\//g, '-') + '.xlsx';
+        document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      } catch (e) { toast(e.message, 'erro'); }
+      bt.disabled = false;
     }
 
     /* ---------- adicionar novos: planilha de implantação → escolhe a vigência → digita o ID Vouch ---------- */

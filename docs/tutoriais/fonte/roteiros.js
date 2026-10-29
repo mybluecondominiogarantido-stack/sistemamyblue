@@ -1372,7 +1372,7 @@ module.exports = [
       const E = '3 · Editar';
       await t.legenda('Para liberar outra ferramenta ou redefinir a senha, clique na pessoa.', { etapa: E, ms: 300 });
       await t.clicar('#tbUsu tr:has-text("Davi Rocha")', { depois: 1000 });
-      await t.clicar('input[name=uMod][value=sindicos]', { depois: 800 });
+      await t.clicar('input[name=uMod][value=boletos]', { depois: 800 });
       await t.legenda('<b>Redefinir senha</b> gera uma senha temporária nova. Para bloquear o acesso, desmarque <b>Usuário ativo</b>.', { etapa: E, ms: 400 });
       await t.mostrar('#btResetSenha', 2000);
       await t.mostrar('#uAtivo', 2000);
