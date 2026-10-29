@@ -9,7 +9,7 @@
 const express = require('express');
 const { FUNCOES, CAMPOS, SITUACOES, interpretar, normalizar } = require('../carteira');
 const { interpretarImplantacao, compararComCarteira } = require('../implantacao');
-const sindicosCarteira = require('../sindicos-carteira');
+const { criarXlsx } = require('../xlsx');
 
 const COLUNAS = CAMPOS.map((c) => c.campo);
 const ROTULOS = { codigo: 'ID Vouch', situacao: 'situação', comarca: 'UF', nome: 'nome', vencimento: 'vencimento', administradora: 'administradora', forma_envio: 'forma de envio',
@@ -36,7 +36,7 @@ function rotasCarteira({ db, seg, regras, boletosCarteira, documentos }) {
   };
   const soCadastro = exigir('carteira.cadastro', 'Você não tem permissão para cadastrar, excluir ou importar condomínios.');
   const soAdicionar = exigir('carteira.adicionar', 'Você não tem permissão para adicionar condomínios novos.');
-  const soDados = exigir('carteira.dados', 'Você não tem permissão para alterar os dados do condomínio (síndico, telefone e e-mail).');
+  const soMarketing = exigir('carteira.marketing', 'Você não tem permissão para baixar a Lista do Marketing.');
 
   /* colunas de responsável que a pessoa altera e transfere */
   async function funcoesEditaveis(u) {
@@ -95,33 +95,21 @@ function rotasCarteira({ db, seg, regras, boletosCarteira, documentos }) {
     const { rows } = await db.q(`${SELECT} ORDER BY c.nome, c.comarca`);
     res.json({ condominios: rows, funcoes: FUNCOES.map((f) => ({ campo: f.campo, rotulo: f.rotulo })), situacoes: SITUACOES,
       pode_editar: await regras.pode(req.usuario, 'carteira.cadastro'), campos_editaveis: await camposEditaveis(req.usuario),
-      funcoes_editaveis: await funcoesEditaveis(req.usuario), pode_adicionar: await regras.pode(req.usuario, 'carteira.adicionar'), // quem edita o quê: só para administração, coordenação e supervisão (usuário comum só consulta e não vê a lista)
+      funcoes_editaveis: await funcoesEditaveis(req.usuario), pode_adicionar: await regras.pode(req.usuario, 'carteira.adicionar'), pode_marketing: await regras.pode(req.usuario, 'carteira.marketing'), // quem edita o quê: só para administração, coordenação e supervisão (usuário comum só consulta e não vê a lista)
       acesso: req.usuario.papel === 'admin' || seg.GESTORES_DE_SETOR.includes(req.usuario.papel) ? await quadroDeAcesso(req.usuario) : null });
   });
 
-  /* ===================== síndicos do Controle de Síndicos ===================== */
-  // o que a base de contatos do CS muda no síndico, telefone e e-mail de cada condomínio (nada é gravado aqui)
-  async function planoSindicos() {
-    const contatos = documentos ? await documentos.listar(sindicosCarteira.MODULO, sindicosCarteira.COLECAO) : [];
-    const condominios = (await db.q('SELECT id, codigo, nome, comarca, situacao, sindico_nome, sindico_telefone, sindico_email FROM condominios')).rows;
-    return sindicosCarteira.planejar(contatos, condominios);
-  }
-
-  r.get('/api/carteira/sindicos', soDados, async (req, res) => {
-    res.json(await planoSindicos());
-  });
-
-  // grava nos condomínios escolhidos (refaz a conferência na hora: vale o que está no Controle de Síndicos agora)
-  r.post('/api/carteira/sindicos', soDados, json, async (req, res) => {
-    const ids = new Set((Array.isArray(req.body && req.body.ids) ? req.body.ids : []).map(Number).filter(Number.isInteger));
-    if (!ids.size) return erro(res, 400, 'Escolha ao menos um condomínio.');
-    const alvo = (await planoSindicos()).mudancas.filter((m) => ids.has(m.id));
-    await db.tx(async (t) => {
-      for (const m of alvo) await gravar(t, m.id, Object.fromEntries(Object.entries(m.campos).map(([k, [, para]]) => [k, para])), req.usuario.id);
-    });
-    for (const m of alvo) await seg.auditar(req, 'condominio_editado', null, { id: m.id, nome: m.nome, mudancas: m.campos, origem: 'Controle de Síndicos' });
-    if (alvo.length) await seg.auditar(req, 'carteira_sindicos', null, { condominios: alvo.length });
-    res.json({ atualizados: alvo.length });
+  /* ===================== Lista do Marketing ===================== */
+  // os síndicos dos condomínios ativos (só quem tem síndico, telefone ou e-mail), em planilha
+  r.get('/api/carteira/marketing', soMarketing, async (req, res) => {
+    const { rows } = await db.q(`SELECT nome, comarca, sindico_nome, sindico_telefone, sindico_email FROM condominios
+      WHERE situacao = 'ATIVO' AND (sindico_nome <> '' OR sindico_telefone <> '' OR sindico_email <> '') ORDER BY nome, comarca`);
+    await seg.auditar(req, 'carteira_marketing', null, { condominios: rows.length });
+    res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.set('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(`Lista do Marketing ${new Date().toISOString().slice(0, 10)}.xlsx`)}`);
+    res.set('Cache-Control', 'private, no-store');
+    res.send(criarXlsx([{ titulo: 'Síndicos', cab: ['Condomínio', 'UF', 'Síndico', 'Telefone', 'E-mail'],
+      linhas: rows.map((c) => [c.nome, c.comarca, c.sindico_nome, c.sindico_telefone, c.sindico_email]) }]));
   });
 
   r.get('/api/carteira/:id', async (req, res) => {

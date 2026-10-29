@@ -32,7 +32,7 @@ LANG=pt_BR.UTF-8 node docs/tutoriais/fonte/gravar-tutoriais.js <pasta-de-saída>
 |---|---|
 | `fonte/gravador.js` | Grava a tela pelo screencast do Chromium, desenha o cursor e os cliques, monta a faixa de legenda e gera o MP4 e o VTT. |
 | `fonte/cenario.js` | As pessoas, setores, carteira, tickets e links fictícios. |
-| `fonte/dados-ficticios.js` | Dados inventados do Controle de Boletos e do Controle de Síndicos. |
+| `fonte/dados-ficticios.js` | Dados inventados do Controle de Boletos. |
 | `fonte/roteiros.js` | O passo a passo de cada vídeo do portal (perfis). |
 | `fonte/roteiros-ferramentas.js` | O passo a passo de cada ferramenta. |
 | `fonte/fontes/` | A fonte Nunito Sans das legendas (licença SIL Open Font License). |

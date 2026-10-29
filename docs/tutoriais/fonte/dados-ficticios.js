@@ -1,7 +1,7 @@
 'use strict';
 /*
  * Dados inventados para gravar as ferramentas que guardam documentos no banco do portal
- * (Controle de Emissão de Boletos e Controle de Síndicos). Nomes, telefones e e-mails são fictícios.
+ * (Controle de Emissão de Boletos). Nomes, telefones e e-mails são fictícios.
  */
 const CONDS = ['Jardim Azul', 'Solar das Palmeiras', 'Primavera', 'Vila Rica', 'Aurora', 'Bela Vista', 'Monte Verde', 'Atlântico', 'Bosque Real',
   'Porto Seguro', 'Horizonte', 'Das Flores', 'Lago Sul', 'Mirante', 'Sol Nascente', 'Serra Azul', 'Copacabana', 'Vale Verde', 'Recanto',
@@ -51,26 +51,7 @@ function boletos(agora = new Date()) {
   return { 'config/cadastro': { conds }, 'config/feriados': feriados, [`meses/${comp}`]: { comp, antecedencia: 10, itens } };
 }
 
-/* Controle de Síndicos: a base de contatos */
-function sindicos() {
-  const docs = { 'meta/estado': { origem: 'dados de exemplo', seedEm: '2026-10-01' } };
-  CONDS.forEach((nome, i) => {
-    const slug = nome.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z]+/g, '');
-    docs['contatos/' + id(i)] = {
-      cond: nome, sind: SINDICOS[i], ativo: true, saiu: '', env: 'S', obs: '', incl: '2026-09-15',
-      tel: i % 6 === 5 ? '' : `(85) 90000-${String(1000 + i * 37).slice(-4)}`,
-      email: i % 8 === 7 ? '' : `sindico.${slug}@exemplo.com.br`,
-    };
-  });
-  docs['ignorar/i1'] = { nome: 'Cond. Teste Interno', motivo: 'Condomínio de teste, não é cliente' };
-  return docs;
-}
 
-/* a extração do Vouch colada no vídeo: dois síndicos novos e um condomínio que saiu */
-function extracaoVouch() {
-  const linhas = CONDS.slice(0, 22).map((c, i) => [c, i === 3 ? 'Mariana Torres (Morador)' : i === 9 ? 'Otávio Brandão (Externo)' : SINDICOS[i] + ' (Morador)']);
-  return ['Apelido\tSíndico', ...linhas.map((l) => l.join('\t'))].join('\n');
-}
 
 /* Prestação de Contas — Comissão de Parceiros: parceiros, carteira, lançamentos de janeiro até o mês
    anterior e o controle de envio/pagamento. Devolve as gravações no formato da ferramenta ({sheet, item}). */
@@ -298,7 +279,7 @@ table{width:100%;border-collapse:collapse;font-size:9.3px}th{background:#1d4a6e;
 <div class="r"><span>Exemplo com dados fictícios · Portal MyBlue</span><span>${nome} · pág. 1</span></div></section></body></html>`;
 }
 
-module.exports = { boletos, sindicos, extracaoVouch, prestacao, implantacoes, moradores, viagens, comissionamento, relatorioGarantia, planilhaCredito, demonstrativo, compAnterior, CONDS };
+module.exports = { boletos, prestacao, implantacoes, moradores, viagens, comissionamento, relatorioGarantia, planilhaCredito, demonstrativo, compAnterior, CONDS };
 
 /* troca o valor de uma constante de lista embutida no HTML (casando os colchetes), mantendo o resto do arquivo */
 function trocarLista(html, nome, valor) {

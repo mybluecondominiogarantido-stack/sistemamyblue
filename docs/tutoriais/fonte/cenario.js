@@ -43,7 +43,7 @@ async function montarCenario(base, { ferramentas = {} } = {}) {
   const S = (n) => eq.setores.find((s) => s.nome === n).id;
 
   const titulos = { credito: 'Central de Ferramentas — Crédito', cobranca: 'Central de Ferramentas — Cobrança', renegociacoes: 'Controle de Renegociações',
-    suprimentos: 'Controle de Pedidos', parceiros: 'Prestação de Contas — Parceiros', boletos: 'Controle de Emissão de Boletos', sindicos: 'Controle de Síndicos',
+    suprimentos: 'Controle de Pedidos', parceiros: 'Prestação de Contas — Parceiros', boletos: 'Controle de Emissão de Boletos',
     premiacoes: 'Gestão de Premiações' };
   for (const [slug, t] of Object.entries(titulos)) {
     await a('PUT', `/api/admin/modulos/${slug}/arquivo`, ferramentas[slug] ? fs.readFileSync(ferramentas[slug]) : exemplo(t));
@@ -56,7 +56,6 @@ async function montarCenario(base, { ferramentas = {} } = {}) {
   }
   // a Prestação de Contas grava no banco do portal, compartilhado pela equipe
   if (ferramentas.parceiros) await a('PATCH', '/api/admin/modulos/parceiros', { armazenamento: 'compartilhado' });
-  await a('PATCH', '/api/admin/modulos/sindicos', { setor_id: S('Crédito') });
 
   // carteira de condomínios
   const conds = [['Cond. Jardim Azul', 'SP'], ['Ed. Solar das Palmeiras', 'SP'], ['Res. Primavera', 'CE'], ['Cond. Vila Rica', 'PE'], ['Ed. Aurora', 'SP'], ['Res. Bela Vista', 'BA']];

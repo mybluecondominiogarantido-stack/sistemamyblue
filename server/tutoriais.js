@@ -71,8 +71,6 @@ const TUTORIAIS = [
     descricao: 'As ferramentas do setor de Crédito.' },
   { slug: 'ferramenta-boletos', grupo: 'Ferramentas', publico: { modulo: 'boletos' }, titulo: 'Controle de Emissão de Boletos',
     descricao: 'Marcar a emissão dos boletos da competência, acompanhar a meta e fechar o mês.' },
-  { slug: 'ferramenta-sindicos', grupo: 'Ferramentas', publico: { modulo: 'sindicos' }, titulo: 'Controle de Síndicos',
-    descricao: 'Comparar a extração do Vouch com a base de contatos e gerar a lista do Marketing.' },
   { slug: 'ferramenta-renegociacoes', grupo: 'Ferramentas', publico: { modulo: 'renegociacoes' }, titulo: 'Controle de Renegociações e Tickets',
     descricao: 'Registrar renegociações, acompanhar a perda de receita e os tickets do CS.' },
   { slug: 'ferramenta-partnerchip', grupo: 'Ferramentas', publico: { modulo: 'partnerchip-resultados' }, titulo: 'PartnerChip — Resultados',

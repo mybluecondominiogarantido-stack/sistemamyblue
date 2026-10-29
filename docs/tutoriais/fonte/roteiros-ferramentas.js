@@ -246,59 +246,6 @@ module.exports = [
   },
 
   {
-    nome: 'ferramenta-sindicos',
-    ferramenta: 'sindicos',
-    entrar: 'caio@myblue.com.br',
-    inicio: '#/m/sindicos',
-    async preparar(cen) {
-      await cen.admin('POST', '/api/admin/modulos/sindicos/documentos', { modulo: 'sindicos', origem: 'exemplo', documentos: D.sindicos() });
-    },
-    async ajustar(t) {
-      // o exemplo do campo de colar traz nomes de pessoas: troca por um fictício
-      await quadro(t, 'sindicos').locator('#paste').waitFor({ timeout: 15000 });
-      await noQuadro(t, 'sindicos', "document.getElementById('paste').placeholder = 'Apelido\\tSíndico\\nJardim Azul\\tCarlos Menezes (Morador)';");
-    },
-    abertura: ['Vouch × base de contatos × lista do Marketing.', ['Atualizar pelo Vouch', 'Corrigir a base de contatos', 'Baixar a lista do Marketing']],
-    async gravar(t) {
-      const f = quadro(t, 'sindicos');
-      const V = '1 · Atualizar pelo Vouch';
-      await t.legenda('Copie do Excel as colunas <b>Apelido</b> e <b>Síndico</b> da extração do Vouch e cole aqui (ou carregue o arquivo).', { etapa: V, ms: 300 });
-      await t.clicar(f.locator('#paste'), { depois: 300 });
-      await f.locator('#paste').fill(D.extracaoVouch());
-      await t.pausa(1400);
-      await t.clicar(f.locator('#btnCompare'), { depois: 1800 });
-      await t.legenda('O resumo mostra o que mudou: síndicos novos, trocados, que saíram e condomínios fora do Vouch.', { etapa: V, ms: 300 });
-      await t.mostrar(f.locator('.tile.t-trocado'), 2400);
-      await t.clicar(f.locator('.tile.t-trocado'), { depois: 1400 });
-      await t.legenda('Para cada síndico novo, complete <b>telefone</b> e <b>e-mail</b> e diga o que fazer com o anterior.', { etapa: V, ms: 300 });
-      await t.digitar(f.locator('input[placeholder="Telefone"]').first(), '(85) 90000-4321');
-      await t.digitar(f.locator('input[placeholder="E-mail"]').first(), 'mariana.torres@exemplo.com.br', { atraso: 22 });
-      await t.legenda('Nada é gravado até você clicar em <b>Confirmar atualização</b> e confirmar o resumo.', { etapa: V, ms: 900 });
-      await t.clicar(f.locator('#btnConfirm'), { depois: 1800 });
-      await t.clicar(f.locator('button:visible:text-is("Confirmar")'), { depois: 2400 });
-
-      const B = '2 · Base de contatos';
-      await t.legenda('A <b>Base de contatos</b> é editável direto na tabela. Os atalhos mostram quem está sem telefone ou e-mail.', { etapa: B, ms: 300 });
-      await t.clicar(f.locator('button:has-text("2. Base de contatos")'), { depois: 1400 });
-      await t.clicar(f.locator('button:has-text("Sem telefone:")'), { depois: 1400 });
-      await t.digitar(f.locator('input[placeholder="falta telefone"]').first(), '(85) 90000-7788', { depois: 600 });
-      await t.p.keyboard.press('Tab'); await t.pausa(1200);
-      await t.legenda('Síndico que saiu: <b>Marcar como saiu</b>. Ele deixa de ir para a lista do Marketing.', { etapa: B, ms: 300 });
-      await t.mostrar(f.locator('button:has-text("Marcar como saiu")').first(), 2400);
-
-      const M = '3 · Lista do Marketing';
-      await t.legenda('A <b>Lista do Marketing</b> sai pronta: copie ou baixe em Excel ou CSV.', { etapa: M, ms: 300 });
-      await t.clicar(f.locator('button:has-text("3. Lista do Marketing")'), { depois: 1600 });
-      await t.mostrar(f.locator('#btnXlsx'), 2400);
-      await t.legenda('<b>Ignorar</b> tira condomínios de teste da comparação. O <b>Histórico</b> guarda importações, edições e downloads.', { etapa: M, ms: 300 });
-      await t.clicar(f.locator('button:has-text("Histórico")').first(), { depois: 2400 });
-      await t.legenda('Em <b>Cópia de segurança</b>, exporte toda a base de vez em quando.', { etapa: M, ms: 300 });
-      await t.clicar(f.locator('button:has-text("Cópia de segurança")'), { depois: 1000 });
-      await t.mostrar(f.locator('#btnExport'), 2400);
-    },
-    resumo: ['Cole a extração do Vouch → <b>Comparar com a base</b> → <b>Confirmar</b>', '<b>Base de contatos</b> editável, com atalhos do que falta', '<b>Lista do Marketing</b> em Excel ou CSV'],
-  },
-  {
     nome: 'ferramenta-parceiros',
     ferramenta: 'parceiros',
     entrar: 'paula@myblue.com.br',
