@@ -4,16 +4,16 @@
 
 - **Ferramenta nova** → criar o tutorial: entrada no catálogo (`server/tutoriais.js`, `publico: { modulo: '<slug>' }`),
   `video: true` na ferramenta em `docs/manuais/fonte/setores.js`, roteiro em `docs/tutoriais/fonte/roteiros-ferramentas.js`,
-  gravar e enviar o `.mp4` + `.vtt` em Administração → Tutoriais.
+  gravar e enviar o `.mp4` + `.vtt` em Configurações → Ferramentas → Tutoriais em vídeo.
 - **Ferramenta atualizada** (HTML novo enviado no portal) → atualizar o roteiro se a tela ou o fluxo mudou e regravar.
-  A página Administração → Tutoriais avisa "ferramenta atualizada — regravar" e lista as ferramentas sem tutorial.
+  A página Configurações → Ferramentas → Tutoriais em vídeo avisa "ferramenta atualizada — regravar" e lista as ferramentas sem tutorial.
 - Como gravar: `docs/tutoriais/LEIAME.md`. O HTML da ferramenta vem do portal (versão em uso, botão
   Baixar em Versões anteriores, ou tabela `modulo_versoes`) e fica **fora do repositório**.
 
 ## Acessos ficam no portal, não no HTML
 
 - Quem abre, se edita ou só consulta e o papel de cada pessoa em cada ferramenta são definidos no portal
-  (janela da ferramenta → **Quem abre e com qual papel**). Ferramenta nova não cria aba "Acessos" nem lista de nomes:
+  (**Configurações → Acessos → Ferramentas**; tudo o que é permissão fica em Configurações → Acessos). Ferramenta nova não cria aba "Acessos" nem lista de nomes:
   lê `window.__MYBLUE__.usuario.papeis` e `.somente_leitura` (contrato e mapa das ferramentas em `docs/acessos/LEIAME.md`).
 - A administração tem todos os papéis em todas as ferramentas (o portal entrega isso ao HTML; não é preciso marcar).
 - Papel novo numa ferramenta → a administração cadastra os papéis dela no portal com o mesmo identificador usado no HTML.

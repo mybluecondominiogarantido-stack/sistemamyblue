@@ -88,6 +88,26 @@ textarea.campo{min-height:80px;resize:vertical}
 .nav a.on svg{color:var(--teal-d)}
 .nav a .aberto{width:7px;height:7px;border-radius:50%;background:var(--teal);margin-left:auto;flex-shrink:0}
 .nav a.inativo{opacity:.55}
+/* Configurações: um item só, no pé do menu (administração, coordenação e supervisão) */
+.nav.nav-config{flex:none;overflow:visible;border-top:1px solid var(--border);padding:8px 10px}
+/* abas das seções de Configurações (topo de cada página) e as abas internas de Acessos */
+.abas-config{margin-bottom:22px}
+.abas-config a{display:inline-flex;align-items:center;gap:7px}
+.abas-config a svg{width:16px;height:16px}
+.sub-abas{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 16px}
+.sub-abas a{font-weight:800;font-size:13px;color:var(--ink-2);text-decoration:none;padding:6px 13px;border-radius:999px;border:1px solid var(--border-2);background:var(--surface)}
+.sub-abas a:hover{border-color:var(--teal);color:var(--teal-d)}
+.sub-abas a.on{background:var(--teal-bg);border-color:var(--teal);color:var(--teal-d)}
+.dividido{display:grid;grid-template-columns:270px minmax(0,1fr);gap:16px;align-items:start}
+.dividido>*{min-width:0}
+.lista-sel{max-height:70vh;overflow:auto}
+.lista-sel .grupo{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--faint);font-weight:800;padding:12px 14px 4px}
+.lista-sel a{display:flex;gap:8px;align-items:center;padding:8px 14px;color:var(--ink);text-decoration:none;font-weight:700;font-size:13.5px;border-left:3px solid transparent}
+.lista-sel a:hover{background:var(--surface-2)}
+.lista-sel a.on{background:var(--teal-bg);border-left-color:var(--teal);color:var(--teal-d)}
+.lista-sel a span{flex:1;min-width:0}
+.lista-sel a small{font-size:11.5px;color:var(--muted);font-weight:700;white-space:nowrap}
+@media (max-width:900px){.dividido{grid-template-columns:minmax(0,1fr)}.lista-sel{max-height:280px}}
 .lateral .pe{border-top:1px solid var(--border);padding:12px 14px;display:flex;align-items:center;gap:10px}
 .avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(150deg,var(--teal),var(--blue));color:#fff;display:grid;place-items:center;font-weight:800;font-size:14px;flex-shrink:0}
 .avatar{overflow:hidden}

@@ -70,8 +70,8 @@ function classificar(tipo, titulo) {
 }
 
 const MOTIVOS = {
-  versao_aguardando: 'você aprova ferramentas em Módulos e dados',
-  ferramenta_nova: 'você aprova ferramentas em Módulos e dados',
+  versao_aguardando: 'você aprova ferramentas em Configurações → Ferramentas',
+  ferramenta_nova: 'você aprova ferramentas em Configurações → Ferramentas',
   versao_aprovada: 'você enviou esta versão',
   versao_recusada: 'você enviou esta versão',
   ferramenta_aprovada: 'você cadastrou ou gere esta ferramenta',

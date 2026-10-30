@@ -363,9 +363,9 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     if (daCoordenacao && avisos) {
       const admins = (await db.q("SELECT id FROM usuarios WHERE papel = 'admin' AND ativo")).rows.map((x) => x.id);
       await avisos.notificar(admins, { tipo: 'ferramenta_nova', titulo: 'Ferramenta nova aguardando aprovação',
-        texto: `${req.usuario.nome} cadastrou "${nome}". Confira o HTML em Módulos e dados e aprove para liberar às pessoas.`, link: '#/admin/modulos', email: true, autor_id: req.usuario.id,
+        texto: `${req.usuario.nome} cadastrou "${nome}". Confira o HTML em Configurações → Ferramentas e aprove para liberar às pessoas.`, link: '#/config/ferramentas', email: true, autor_id: req.usuario.id,
         detalhes: { assunto: `Ferramenta nova para liberar: “${nome}”`, titulo: 'Ferramenta nova cadastrada', intro: `**${req.usuario.nome}** cadastrou uma ferramenta nova. Confira o HTML e aprove para liberar às pessoas.`,
-          linhas: [['Ferramenta', nome], ['Cadastrada por', req.usuario.nome], ['Onde aprovar', 'Módulos e dados']] } });
+          linhas: [['Ferramenta', nome], ['Cadastrada por', req.usuario.nome], ['Onde aprovar', 'Configurações → Ferramentas']] } });
     }
     res.status(201).json({ slug, pendente: daCoordenacao });
   });
@@ -462,9 +462,9 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
       if (avisos) {
         const admins = (await db.q("SELECT id FROM usuarios WHERE papel = 'admin' AND ativo")).rows.map((x) => x.id);
         await avisos.notificar(admins, { tipo: 'versao_aguardando', titulo: 'HTML novo aguardando aprovação',
-          texto: `${req.usuario.nome} enviou uma versão nova de "${m.nome}". Veja a prévia e aprove em Módulos e dados.`, link: '#/admin/modulos', email: true, autor_id: req.usuario.id,
+          texto: `${req.usuario.nome} enviou uma versão nova de "${m.nome}". Veja a prévia e aprove em Configurações → Ferramentas.`, link: '#/config/ferramentas', email: true, autor_id: req.usuario.id,
           detalhes: { assunto: `Aprovação pendente: nova versão de “${m.nome}”`, titulo: 'Nova versão de HTML para revisar', intro: `**${req.usuario.nome}** enviou uma nova versão de uma ferramenta do portal. Ela só entra em uso depois da sua aprovação.`,
-            linhas: [['Ferramenta', m.nome], ['Enviado por', req.usuario.nome], ['Onde aprovar', 'Módulos e dados']] } });
+            linhas: [['Ferramenta', m.nome], ['Enviado por', req.usuario.nome], ['Onde aprovar', 'Configurações → Ferramentas']] } });
       }
       return res.json({ ok: true, versao: id, aguardando_aprovacao: true, aviso });
     }
@@ -482,7 +482,7 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     await seg.auditar(req, 'versao_aprovada', m.slug, { versao: v.id });
     if (avisos && v.enviado_por) {
       await avisos.notificar([v.enviado_por], { tipo: 'versao_aprovada', titulo: 'Versão nova aprovada',
-        texto: `A versão nova de "${m.nome}" foi aprovada e já está em uso.`, link: '#/admin/modulos', email: true, autor_id: req.usuario.id,
+        texto: `A versão nova de "${m.nome}" foi aprovada e já está em uso.`, link: '#/config/ferramentas', email: true, autor_id: req.usuario.id,
         detalhes: { assunto: `Aprovada: a nova versão de “${m.nome}” já está em uso`, titulo: 'Sua versão foi aprovada', intro: `A nova versão de **${m.nome}** foi aprovada e já está em uso por todas as pessoas com acesso.`,
           linhas: [['Ferramenta', m.nome], ['Aprovada por', req.usuario.nome]] } });
     }
@@ -496,7 +496,7 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     if (avisos && v.enviado_por) {
       const m = await modulos.obter(req.params.slug);
       await avisos.notificar([v.enviado_por], { tipo: 'versao_recusada', titulo: 'Versão nova não aprovada',
-        texto: `A versão nova de "${m ? m.nome : req.params.slug}" não foi aprovada pela administração. A versão em uso continua a mesma.`, link: '#/admin/modulos', email: true, autor_id: req.usuario.id });
+        texto: `A versão nova de "${m ? m.nome : req.params.slug}" não foi aprovada pela administração. A versão em uso continua a mesma.`, link: '#/config/ferramentas', email: true, autor_id: req.usuario.id });
     }
     res.json({ ok: true });
   });
@@ -627,7 +627,7 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     if (avisos) {
       const gestores = await acessos.gestoresDoSetor(m.setor_id);
       await avisos.notificar([m.criado_por, ...gestores], { tipo: 'ferramenta_aprovada', titulo: 'Ferramenta aprovada',
-        texto: `"${m.nome}" foi aprovada e já aparece para as pessoas liberadas.`, link: '#/admin/modulos', email: true, autor_id: req.usuario.id,
+        texto: `"${m.nome}" foi aprovada e já aparece para as pessoas liberadas.`, link: '#/config/ferramentas', email: true, autor_id: req.usuario.id,
         detalhes: { assunto: `Liberada: “${m.nome}” já aparece no portal`, titulo: 'Ferramenta aprovada', intro: `**${m.nome}** foi aprovada e já aparece no portal para as pessoas liberadas.`,
           linhas: [['Ferramenta', m.nome], ['Aprovada por', req.usuario.nome]] } });
     }
