@@ -1445,6 +1445,13 @@
           '(usuários, outras ferramentas, backup). Ela continua lendo e gravando os próprios dados. Antes de ligar numa ferramenta em uso, abra e teste: ' +
           'o que ela guardar "só no navegador" passa a valer só enquanto a página estiver aberta, e ferramentas que usam IndexedDB ou Web Worker podem não funcionar isoladas.</span></div></label>' +
 
+          // datas de nascimento e admissão do cadastro de Pessoas (aniversários e tempo de casa); só ferramentas do Claude leem
+          '<div' + (mod.adaptador === 'claude-db' ? '' : ' hidden') + '>' +
+          '<h4 class="titulo-sec">Datas da equipe</h4>' +
+          '<label class="opcao-radio"><input type="checkbox" id="mDatasEquipe"' + (mod.config && mod.config.datas_equipe ? ' checked' : '') + '><div><b>Receber as datas da equipe</b>' +
+          '<span>A ferramenta passa a ler o nome, os setores, a data de nascimento e a data de admissão de quem está ativo no portal (cadastro em Pessoas), ' +
+          'para mostrar aniversários e tempo de casa. Ligue só nas ferramentas que precisam disso: quem abre a ferramenta vê essas datas.</span></div></label></div>' +
+
           // ferramentas do Claude guardam tudo no banco de documentos: esta escolha não se aplica a elas
           '<div' + (mod.adaptador === 'claude-db' ? ' hidden' : '') + '>' +
           '<h4 class="titulo-sec">Onde ficam os dados salvos pela ferramenta</h4>' +
@@ -1541,7 +1548,7 @@
           await api('PATCH', '/api/admin/modulos/' + mod.slug, {
             nome: $('#mNome', m).value, descricao: $('#mDesc', m).value, setor_id: $('#mSetor', m).value || null,
             icone: $('#mIcone', m).value, ordem: Number($('#mOrdem', m).value) || 0, ativo: $('#mAtivo', m).checked,
-            armazenamento: arm, fonte_dados: fonte, isolada: $('#mIsolada', m).checked,
+            armazenamento: arm, fonte_dados: fonte, isolada: $('#mIsolada', m).checked, datas_equipe: $('#mDatasEquipe', m).checked,
             chaves_locais: $('#mLocais', m).value.split(',').map(function (s) { return s.trim(); }).filter(Boolean),
             chaves_livres: $('#mLivres', m).value.split(',').map(function (s) { return s.trim(); }).filter(Boolean),
           });
