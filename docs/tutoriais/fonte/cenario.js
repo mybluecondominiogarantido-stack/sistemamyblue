@@ -18,6 +18,15 @@ const EXTRAS = {
   'partnerchip-resultados': ['PartnerChip — Resultados', 'Comercial', 'grafico'],
   'central-patrocinio': ['Central de Patrocínio', 'Administrativa/Financeira', 'documento'],
   'gestao-de-viagens': ['Gestão de Viagens', 'Administrativa/Financeira', 'app'],
+  'repasses': ['Controle de Repasses', 'Crédito', 'app'],
+  'central-de-ferramentas-gestao-credito': ['Central de Ferramentas — Gestão Crédito', 'Crédito', 'calculadora'],
+  'biblioteca-de-hsm-credito-implantacao': ['Biblioteca de HSM — Crédito e Implantação', 'Crédito', 'carteira'],
+  'acompanhamento-de-resultados': ['Acompanhamento de Resultados', 'Cobrança', 'aperto'],
+  'ajuste-de-mailing': ['Ajuste de Mailing', 'Cobrança', 'caixa'],
+  'analise-de-espolio': ['Análise de Espólio', 'Cobrança', 'app'],
+  'biblioteca-de-hsm': ['Biblioteca de HSM', 'Cobrança', 'documento'],
+  'curadoria-da-base': ['Curadoria da Base', 'Cobrança', 'grafico'],
+  'controle-de-brindes': ['Controle de Brindes', 'Marketing', 'app'],
 };
 const exemplo = (t) => `<!doctype html><html><head><meta charset="utf-8"><title>${t}</title></head><body style="font-family:sans-serif;padding:40px;color:#13323a"><h2>${t}</h2><p>Ferramenta de exemplo.</p></body></html>`;
 
@@ -59,11 +68,15 @@ async function montarCenario(base, { ferramentas = {} } = {}) {
 
   // carteira de condomínios
   const conds = [['Cond. Jardim Azul', 'SP'], ['Ed. Solar das Palmeiras', 'SP'], ['Res. Primavera', 'CE'], ['Cond. Vila Rica', 'PE'], ['Ed. Aurora', 'SP'], ['Res. Bela Vista', 'BA']];
+  // síndicos fictícios (o distratado fica sem)
+  const sindicos = [['Carlos Menezes', '(11) 90000-1234'], ['Helena Duarte', '(11) 90000-2345'], ['Rui Fontes', '(85) 90000-3456'],
+    ['Teresa Lins', '(81) 90000-4567'], ['Otávio Brandão', '(11) 90000-5678'], ['', '']];
   const cond = {};
   for (const [i, [nome, uf]] of conds.entries()) {
     cond[nome] = (await a('POST', '/api/carteira', { codigo: String(301 + i), inicio_contrato: `2026-0${4 + i}-01`, executivo: i % 2 ? 'Bruna Reis' : 'Davi Rocha', nome, comarca: uf, situacao: i === 5 ? 'DISTRATADO' : 'ATIVO', vencimento: 'Dia 10', administradora: i % 2 ? 'Própria' : 'Adm. Exemplo',
       analista_cobranca: i < 4 ? 'MARCOS LIMA - 4701' : 'ANA COSTA - 4702', assistente_credito: i % 2 ? 'DAVI ROCHA - 4711' : 'BRUNA REIS - 4710',
-      analista_extrajudicial: i % 2 ? 'APOIOCOB — ANA' : '', razao_social: nome.toUpperCase(), cnpj: `12.345.678/000${i + 1}-9${i}` })).id;
+      analista_extrajudicial: i % 2 ? 'APOIOCOB — ANA' : '', razao_social: nome.toUpperCase(), cnpj: `12.345.678/000${i + 1}-9${i}`,
+      sindico_nome: sindicos[i][0], sindico_telefone: sindicos[i][1], sindico_email: sindicos[i][0] ? `sindico${i + 1}@exemplo.com.br` : '' })).id;
   }
 
   // Central de Links

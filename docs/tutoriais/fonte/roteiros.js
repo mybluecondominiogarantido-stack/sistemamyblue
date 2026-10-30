@@ -278,7 +278,7 @@ async function passosJor(base) {
     },
     iniciar: (s) => ok('iniciar', s('POST', `/api/implantacoes/${j.implantacao}/iniciar`, {})),
     async etapasEConcluir(s) {
-      await ok('etapas', s('PATCH', `/api/implantacoes/${j.implantacao}/etapas`, { etapas: { documentacao: { feito: true }, vouch: { id: '90001' }, onboarding: { situacao: 'realizado', data: hoje() }, boletos: { feito: true, primeiro_vencimento: dia10() }, envio: { forma: 'email' } } }));
+      await ok('etapas', s('PATCH', `/api/implantacoes/${j.implantacao}/etapas`, { etapas: { documentacao: { feito: true }, vouch: { id: '90001' }, onboarding: { situacao: 'realizado', data: hoje(), hora: '10:00' }, boletos: { feito: true, primeiro_vencimento: dia10() }, envio: { forma: 'email' } } }));
       await ok('concluir implantação', s('POST', `/api/implantacoes/${j.implantacao}/concluir`, {}));
     },
     async carteira() {
@@ -359,25 +359,35 @@ module.exports = [
     nome: 'carteira-condominios',
     entrar: 'marcos@myblue.com.br',
     inicio: '#/carteira',
-    abertura: ['Quem cuida de cada condomínio, em cada setor.', ['Buscar um condomínio', 'Filtrar por responsável', 'Ver a carteira de cada pessoa']],
+    abertura: ['Os condomínios da MyBlue, quem cuida de cada um e o síndico.', ['Buscar um condomínio', 'O síndico', 'Filtrar por responsável e vigência', 'Ver a carteira de cada pessoa']],
     async gravar(t) {
-      await t.legenda('A <b>Carteira de condomínios</b> mostra os condomínios da MyBlue e quem é o responsável em cada setor.', { etapa: '1 · A carteira', ms: 600 });
+      await t.legenda('A <b>Base de Clientes</b> mostra os condomínios da MyBlue, quem é o responsável em cada setor e o síndico.', { etapa: '1 · A Base de Clientes', ms: 600 });
       await t.mostrar('.tiles', 3000, { dx: 0.4 });
-      await t.legenda('Busque pelo <b>nome</b>, razão social, <b>CNPJ</b> ou <b>ID</b>.', { etapa: '2 · Buscar', ms: 400 });
+      await t.legenda('Busque pelo <b>nome</b>, <b>ID</b>, <b>CNPJ</b> ou pelo <b>síndico</b>.', { etapa: '2 · Buscar', ms: 400 });
       await t.digitar('#cfQ', 'solar', { atraso: 110, depois: 1200 });
-      await t.legenda('Clique no condomínio para ver os dados, os responsáveis e o histórico de mudanças.', { etapa: '2 · Buscar', ms: 400 });
+      await t.legenda('Clique no condomínio para ver os dados, os responsáveis, o síndico e o histórico de mudanças.', { etapa: '2 · Buscar', ms: 400 });
       await t.clicar('#tbC tr.clicavel', { depois: 3800 });
       await t.clicar(fecharModal, { depois: 600 });
+      const S = '3 · O síndico';
+      await t.legenda('A coluna <b>Síndico</b> traz o nome, o telefone e o e-mail do síndico de cada condomínio.', { etapa: S, ms: 400 });
+      await t.clicar('#cfQ', { depois: 150 }); await t.p.locator('#cfQ').fill(''); await t.pausa(500);
+      await t.mostrar('th[data-ordem="sindico_nome"]', 2600);
+      await t.legenda('A busca também acha pelo nome ou telefone do síndico.', { etapa: S, ms: 300 });
+      await t.digitar('#cfQ', 'teresa', { atraso: 110, depois: 2200 });
       await t.clicar('#cfQ', { depois: 150 }); await t.p.locator('#cfQ').fill(''); await t.pausa(700);
-      await t.legenda('Filtre por <b>responsável</b>, UF, administradora ou situação.', { etapa: '3 · Filtrar', ms: 500 });
-      await t.escolher('#cfPes', { value: 'analista_cobranca|MARCOS LIMA - 4701' }, { depois: 2600 });
-      await t.escolher('#cfPes', { value: '' }, { depois: 800 });
-      await t.legenda('Na aba <b>Equipes</b>: quantos condomínios cada pessoa tem, por função.', { etapa: '4 · Equipes', ms: 500 });
+      const F = '4 · Filtrar';
+      await t.legenda('Filtre por <b>responsável</b>, UF, administradora ou situação.', { etapa: F, ms: 500 });
+      await t.escolher('#cfPes', { value: 'analista_cobranca|MARCOS LIMA - 4701' }, { depois: 2400 });
+      await t.escolher('#cfPes', { value: '' }, { depois: 600 });
+      await t.legenda('Em <b>Vigência</b>, escolha o mês: aparecem os condomínios que entraram nele. Ao lado de cada mês, quantos foram.', { etapa: F, ms: 400 });
+      await t.escolher('#cfVig', { index: 2 }, { depois: 2800 });
+      await t.escolher('#cfVig', { value: '' }, { depois: 600 });
+      await t.legenda('Na aba <b>Equipes</b>: quantos condomínios cada pessoa tem, por função.', { etapa: '5 · Equipes', ms: 500 });
       await t.clicar('nav.abas a[href="#/carteira/responsaveis"]', { depois: 2400 });
-      await t.legenda('Clique no número para ver a lista de condomínios da pessoa.', { etapa: '4 · Equipes', ms: 300 });
+      await t.legenda('Clique no número para ver a lista de condomínios da pessoa.', { etapa: '5 · Equipes', ms: 300 });
       await t.mostrar('[data-ver]', 2600);
     },
-    resumo: ['Busca por nome, CNPJ ou ID', 'Filtro por responsável, UF, administradora e situação', 'Aba <b>Equipes</b>: a carteira de cada pessoa'],
+    resumo: ['Busca por nome, ID, CNPJ ou síndico', 'Coluna <b>Síndico</b> · filtros por responsável e <b>vigência</b>', 'Aba <b>Equipes</b>: a carteira de cada pessoa · Marketing: <b>Lista do Marketing</b>'],
   },
 
   {
@@ -1203,9 +1213,10 @@ module.exports = [
       await t.mostrar('#pendDash', 3000);
       await t.clicar('[data-pend="doc"]', { depois: 1400 });
       await t.legenda('<b>Documentação</b>: convenção, ata de eleição, ata da taxa ordinária e procuração em até 60 dias do envio do formulário.', { etapa: C, ms: 600 });
-      await t.legenda('<b>Cobrar</b> manda ao executivo, no portal e por e-mail, o que falta. Faltando 3 dias, o portal lembra sozinho.', { etapa: C, ms: 400 });
-      await t.clicar('[data-cobrar]', { depois: 1200 });
-      await t.clicar('#mOk', { depois: 2200 });
+      await t.legenda('Faltando algo do executivo, <b>Cobrar</b> manda a ele, no portal e por e-mail, o que falta; faltando 3 dias, o portal lembra sozinho. A <b>procuração</b> fica com a Implantação.', { etapa: C, ms: 400 });
+      await t.mostrar('[data-doc-acomp]', 2600);
+      await t.legenda('Clique num documento que falta para anexar ou marcar recebido. <b>Marcar à mão</b> registra a meta com o motivo.', { etapa: C, ms: 300 });
+      await t.mostrar('[data-marcar]', 2600);
 
       const D = '4 · Depois da conclusão e parâmetros';
       await t.ir('#/implantacao/depois/antecipacoes', 1600);

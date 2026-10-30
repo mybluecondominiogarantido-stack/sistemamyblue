@@ -23,6 +23,11 @@ LANG=pt_BR.UTF-8 node docs/tutoriais/fonte/gravar-tutoriais.js <pasta-de-saída>
   caminho de cada arquivo:
   `FERRAMENTAS='{"suprimentos":"/caminho/Controle_de_Pedidos.html","boletos":"…"}' node …`
   Sem o arquivo, o vídeo daquela ferramenta é pulado.
+- As ferramentas carregam bibliotecas (Excel, PDF, ZIP) do cdnjs. Sem internet na gravação, instale os mesmos
+  pacotes numa pasta com o npm e informe a pasta em `BIBLIOTECAS=/caminho` (a lista está em `PACOTES`, em
+  `fonte/gravador.js`; use as versões que o HTML pede, ex.: `xlsx@0.18.5`, `pdfjs-dist@3.11.174`).
+- A tela da gravação tem 1280 px de largura. No layout novo, as tabelas que não cabem viram cartões empilhados;
+  se isso acontecer, ponha `largura: 1600` no roteiro (o vídeo continua 1920×1080).
 - Saem dois arquivos por vídeo: `<nome>.mp4` (1920×1080, legenda na faixa de baixo) e `<nome>.vtt`
   (o passo a passo, que vira a lista clicável ao lado do vídeo no portal).
 
@@ -35,6 +40,7 @@ LANG=pt_BR.UTF-8 node docs/tutoriais/fonte/gravar-tutoriais.js <pasta-de-saída>
 | `fonte/dados-ficticios.js` | Dados inventados do Controle de Boletos. |
 | `fonte/roteiros.js` | O passo a passo de cada vídeo do portal (perfis). |
 | `fonte/roteiros-ferramentas.js` | O passo a passo de cada ferramenta. |
+| `fonte/ferramentas/` | Os roteiros das ferramentas mais novas, um arquivo por ferramenta. |
 | `fonte/fontes/` | A fonte Nunito Sans das legendas (licença SIL Open Font License). |
 
 Para um vídeo novo: inclua o tutorial no catálogo (`server/tutoriais.js`), escreva o roteiro com o

@@ -36,6 +36,7 @@ const HISTORICO = [
   ['2.4', '26/10/2026', 'Central de Tickets: a demanda passa a ser <b>Externa</b> (condomínio, síndico, propostas) ou <b>Interna</b> (demandas entre setores).'],
   ['2.5', '26/10/2026', 'Implantação: toda implantação começa de um <b>contrato assinado</b> (no portal, ou fora dele com o retorno da análise, e aí o Jurídico registra as condições antes de seguir ao setor).'],
   ['2.6', '28/10/2026', 'Controle de Renegociações: renegociação salva como <b>Fechado</b> abre sozinha o ticket <i>Renegociação fechada</i> para a assistente de crédito do condomínio, com as condições e o PDF do relatório de garantia; mudanças depois viram comentário no mesmo ticket. Tipo de negociação e dias da antecipação passam a ficar no banco do portal.'],
+  ['2.7', '30/10/2026', 'Ferramentas novas no manual do setor, com vídeo: <b>Cobrança</b> (Acompanhamento de Resultados, Curadoria da Base, Análise de Espólio, Biblioteca de HSM e Ajuste de Mailing), <b>Crédito</b> (Controle de Repasses, Central de Ferramentas – Gestão Crédito e Biblioteca de HSM – Crédito e Implantação) e <b>Marketing</b> (Controle de Brindes). Tutoriais das demais ferramentas regravados no layout novo.'],
 ];
 const VERSOES = (doc) => capVersoes({
   titulo: `Manutenção e controle de versão deste manual`,
