@@ -783,3 +783,7 @@ module.exports = [
     resumo: ['<b>Nova viagem</b>: dados, itens e cotações (marque a escolhida)', 'Ajuda de custo automática → <b>Enviar para aprovação</b> → aprovar', 'Informe o <b>valor pago</b> → <b>Realizada</b> · Dashboard de gastos'],
   },
 ];
+
+/* as ferramentas que entraram depois: um roteiro por arquivo, na pasta ferramentas/ */
+const PASTA = path.join(__dirname, 'ferramentas');
+module.exports.push(...fs.readdirSync(PASTA).filter((a) => a.endsWith('.js')).sort().map((a) => require(path.join(PASTA, a))));

@@ -324,8 +324,9 @@ const PACOTES = { 'pdf.js': ['pdfjs-dist', 'build'], xlsx: ['xlsx', 'dist'], jsp
 async function servirBibliotecas(ctx) {
   const pasta = process.env.BIBLIOTECAS;
   if (!pasta) return;
-  await ctx.route('https://cdnjs.cloudflare.com/ajax/libs/**', (rota) => {
-    const [lib, , arquivo] = new URL(rota.request().url()).pathname.split('/').slice(3);
+  // direto do cdnjs ou pela cópia do portal (/cdn/cdnjs/…, ou /t/<chave>/cdn/cdnjs/… na ferramenta isolada)
+  await ctx.route(/^https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/|\/cdn\/cdnjs\/ajax\/libs\//, (rota) => {
+    const [lib, , arquivo] = new URL(rota.request().url()).pathname.split('/ajax/libs/')[1].split('/');
     const local = PACOTES[lib] && path.join(pasta, 'node_modules', PACOTES[lib][0], PACOTES[lib][1], arquivo);
     if (!local || !fs.existsSync(local)) return rota.abort();
     return rota.fulfill({ path: local, contentType: 'application/javascript', headers: { 'Access-Control-Allow-Origin': '*' } });
