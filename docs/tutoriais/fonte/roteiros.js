@@ -278,7 +278,7 @@ async function passosJor(base) {
     },
     iniciar: (s) => ok('iniciar', s('POST', `/api/implantacoes/${j.implantacao}/iniciar`, {})),
     async etapasEConcluir(s) {
-      await ok('etapas', s('PATCH', `/api/implantacoes/${j.implantacao}/etapas`, { etapas: { documentacao: { feito: true }, vouch: { id: '90001' }, onboarding: { situacao: 'realizado', data: hoje() }, boletos: { feito: true, primeiro_vencimento: dia10() }, envio: { forma: 'email' } } }));
+      await ok('etapas', s('PATCH', `/api/implantacoes/${j.implantacao}/etapas`, { etapas: { documentacao: { feito: true }, vouch: { id: '90001' }, onboarding: { situacao: 'realizado', data: hoje(), hora: '10:00' }, boletos: { feito: true, primeiro_vencimento: dia10() }, envio: { forma: 'email' } } }));
       await ok('concluir implantação', s('POST', `/api/implantacoes/${j.implantacao}/concluir`, {}));
     },
     async carteira() {
