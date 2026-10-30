@@ -18,6 +18,15 @@ const EXTRAS = {
   'partnerchip-resultados': ['PartnerChip — Resultados', 'Comercial', 'grafico'],
   'central-patrocinio': ['Central de Patrocínio', 'Administrativa/Financeira', 'documento'],
   'gestao-de-viagens': ['Gestão de Viagens', 'Administrativa/Financeira', 'app'],
+  'repasses': ['Controle de Repasses', 'Crédito', 'app'],
+  'central-de-ferramentas-gestao-credito': ['Central de Ferramentas — Gestão Crédito', 'Crédito', 'calculadora'],
+  'biblioteca-de-hsm-credito-implantacao': ['Biblioteca de HSM — Crédito e Implantação', 'Crédito', 'carteira'],
+  'acompanhamento-de-resultados': ['Acompanhamento de Resultados', 'Cobrança', 'aperto'],
+  'ajuste-de-mailing': ['Ajuste de Mailing', 'Cobrança', 'caixa'],
+  'analise-de-espolio': ['Análise de Espólio', 'Cobrança', 'app'],
+  'biblioteca-de-hsm': ['Biblioteca de HSM', 'Cobrança', 'documento'],
+  'curadoria-da-base': ['Curadoria da Base', 'Cobrança', 'grafico'],
+  'controle-de-brindes': ['Controle de Brindes', 'Marketing', 'app'],
 };
 const exemplo = (t) => `<!doctype html><html><head><meta charset="utf-8"><title>${t}</title></head><body style="font-family:sans-serif;padding:40px;color:#13323a"><h2>${t}</h2><p>Ferramenta de exemplo.</p></body></html>`;
 
