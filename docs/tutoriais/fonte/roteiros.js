@@ -195,6 +195,46 @@ async function contratoTut(base, nome, { ate } = {}) {
   return id;
 }
 
+/* ---------- Demandas Jurídicas (dados fictícios) ---------- */
+/* dia útil de n dias corridos atrás (AAAA-MM-DD) e n dias depois de um dia */
+function diasAtras(n) {
+  const d = new Date(Date.now() - n * 864e5);
+  while ([0, 6].includes(new Date(d.toLocaleString('en-US', { timeZone: FUSO })).getDay())) d.setTime(d.getTime() - 864e5);
+  return d.toLocaleDateString('sv-SE', { timeZone: FUSO });
+}
+const depoisDe = (dia, n) => new Date(Date.parse(dia + 'T12:00:00Z') + n * 864e5).toISOString().slice(0, 10);
+/* a Tabela de prazos e as demandas de três meses (a advogada lança pelos colegas) */
+async function demandasTut(base) {
+  const lara = await sessaoCr(base, 'lara@myblue.com.br');
+  let { tipos } = await lara('PUT', '/api/juridico/tipos', { tipos: [{ nome: 'Contrato (garantia)', horas: 8 }, { nome: 'Aditivo', horas: 16 }, { nome: 'Rescisão', horas: 24 },
+    { nome: 'Análise de contrato de fornecedor', horas: 24 }, { nome: 'Contrato (parcerias)', horas: 16 }, { nome: 'Parecer', horas: 24 }] });
+  ({ tipos } = await lara('PUT', '/api/juridico/tipos', { tipos: tipos.map((t) => ({ id: t.id, nome: t.nome, horas: t.horas })), contratos_id: tipos[0].id }));
+  const T = (n) => tipos.find((t) => t.nome === n).id;
+  const { pessoas } = await lara('GET', '/api/juridico/meta');
+  const P = (n) => pessoas.find((x) => x.nome === n).id;
+  const nova = async (b) => { const r = await lara('POST', '/api/juridico/demandas', b); if (r.erro) throw new Error('demanda: ' + r.erro); return r.id; };
+  // entregues nos últimos três meses (duas fora do prazo), para os indicadores
+  const hist = [['Aditivo', 'Vera Campos', 'Residencial Jardim das Acácias', 80, 1], ['Rescisão', 'Sara Alves', 'Condomínio Solar do Bosque', 75, 2],
+    ['Análise de contrato de fornecedor', 'Rafa Nunes', 'Elevadores Exemplo Ltda.', 70, 5], ['Contrato (parcerias)', 'Vera Campos', 'Administradora Exemplo', 62, 1],
+    ['Aditivo', 'Tiago Moura', 'Edifício Mirante do Sol', 55, 2], ['Parecer', 'Nina Prado', 'Residencial Vila das Palmeiras', 48, 3],
+    ['Rescisão', 'Sara Alves', 'Condomínio Recanto Verde', 40, 6], ['Aditivo', 'Vera Campos', 'Condomínio Parque das Águas', 33, 1],
+    ['Contrato (parcerias)', 'Bruna Reis', 'Administradora Modelo', 26, 2], ['Análise de contrato de fornecedor', 'Rafa Nunes', 'Limpeza Exemplo Ltda.', 19, 3],
+    ['Parecer', 'Tiago Moura', 'Residencial Jardim das Acácias', 12, 2]];
+  for (const [tipo, quem, cliente, atras, dias] of hist) {
+    const sol = diasAtras(atras);
+    await nova({ tipo_id: T(tipo), solicitante_id: P(quem), cliente, solicitada_em: sol, entregue_em: depoisDe(sol, dias), status: 'concluido', responsavel_id: P('Lara Mendes') });
+  }
+  const ids = {};
+  ids.atrasada = await nova({ tipo_id: T('Rescisão'), solicitante_id: P('Nina Prado'), cliente: 'Condomínio Parque das Águas', objeto: 'Distrato do contrato de manutenção dos portões',
+    solicitada_em: diasAtras(9), status: 'em_andamento' });
+  ids.retornoVera = await nova({ tipo_id: T('Aditivo'), solicitante_id: P('Vera Campos'), cliente: 'Residencial Jardim das Acácias', objeto: 'Aditivo para a taxa extra da reforma da fachada',
+    solicitada_em: diasAtras(6), entregue_em: diasAtras(5), status: 'aguardando_retorno', responsavel_id: P('Lara Mendes'), observacoes: 'Falta a ata da assembleia que aprovou a obra.' });
+  await nova({ tipo_id: T('Contrato (parcerias)'), solicitante_id: P('Sara Alves'), cliente: 'Administradora Exemplo', objeto: 'Contrato de parceria para indicação de condomínios',
+    solicitada_em: diasAtras(3), entregue_em: diasAtras(2), status: 'aguardando_assinaturas', responsavel_id: P('Lara Mendes') });
+  await nova({ tipo_id: T('Análise de contrato de fornecedor'), solicitante_id: P('Rafa Nunes'), cliente: 'Segurança Exemplo Ltda.', objeto: 'Contrato de vigilância: conferir multa e reajuste' });
+  return ids;
+}
+
 /* ---------- Da Análise de Crédito à Implantação (um condomínio fictício do começo ao fim) ---------- */
 /* troca quem está no portal sem passar pela tela de login (o cartão do capítulo cobre a troca) */
 async function trocarPessoa(t, email) {
@@ -1355,6 +1395,99 @@ module.exports = [
       await t.legenda('Depois, a situação de agora, os tempos médios e quem está com cada contrato. Os encerrados ficam em Acompanhamento de demandas Jurídicas → <b>Controle</b>.', { etapa: P, ms: 3200 });
     },
     resumo: ['<b>Assumir</b> · 72h úteis para a minuta', '<b>Enviar minuta</b> · ajustes · <b>Enviado para assinatura</b> · <b>Assinado</b>', 'Registre as condições fechadas · <b>Concluir</b> · Dashboard Jurídico'],
+  },
+
+  {
+    nome: 'juridico-demandas-pedir',
+    entrar: 'vera@myblue.com.br',
+    inicio: '#/',
+    async preparar(cen, base) { cen.dj = await demandasTut(base); },
+    abertura: ['Tudo o que você pede ao Jurídico, com prazo e acompanhamento.', ['Abrir uma demanda', 'O prazo de entrega', 'Minhas demandas', 'Responder ao Jurídico']],
+    async gravar(t, cen) {
+      const A = '1 · Nova demanda';
+      await t.legenda('Aditivo, rescisão, análise de contrato de fornecedor, parecer: o que você pede ao Jurídico fica em <b>Jurídico → Demandas Jurídicas</b>.', { etapa: A, ms: 300 });
+      await t.clicar(menu('#/demandas-juridicas'), { depois: 1800, dx: 0.3 });
+      await t.legenda('Clique em <b>Nova demanda</b>.', { etapa: A, ms: 200 });
+      await t.clicar('#btNovaDj', { depois: 900 });
+      await t.legenda('Escolha a <b>atividade</b>: cada uma tem o seu prazo em horas úteis (8h = 1 dia útil), contado a partir do dia seguinte.', { etapa: A, ms: 300 });
+      await t.escolher('#djTipo', 'Aditivo (16h úteis)', { depois: 600 });
+      await t.mostrar('#djPrazo', 2600);
+      await t.legenda('Informe o <b>cliente</b> (a lista sugere os condomínios da Base de Clientes) e o que precisa ser feito.', { etapa: A, ms: 300 });
+      await t.digitar('#djCliente', 'Residencial Vila das Palmeiras');
+      await t.digitar('#djObjeto', 'Aditivo para incluir o seguro da obra na taxa extra', { atraso: 30 });
+      await t.legenda('<b>Enviar ao Jurídico</b>: o Jurídico recebe o aviso na hora, e o portal mostra o número e o prazo de entrega.', { etapa: A, ms: 300 });
+      await t.clicar('#djOk', { depois: 2600 });
+
+      const B = '2 · Acompanhar';
+      await t.legenda('Em <b>Minhas demandas</b> ficam todas as suas: a situação, o prazo, a entrega e se saiu dentro do prazo (SLA).', { etapa: B, ms: 600 });
+      await t.mostrar('#tbDj', 3000);
+      await t.legenda('O Jurídico mudou a situação? Você recebe o aviso. Esta está <b>Aguardando retorno</b>: o Jurídico precisa de algo seu.', { etapa: B, ms: 300 });
+      await t.clicar(`#tbDj tr[data-id="${cen.dj.retornoVera}"]`, { depois: 1600 });
+      await t.mostrar('.modal dl.info-ticket', 2600);
+      await t.legenda('Responda pelo <b>comentário</b>: o Jurídico recebe o aviso, e tudo fica no histórico da demanda.', { etapa: B, ms: 300 });
+      await t.digitar('#djComent', 'Ata enviada por e-mail agora há pouco.', { atraso: 35 });
+      await t.clicar('#djComentOk', { depois: 2400 });
+      await t.legenda('Contrato de garantia de condomínio novo continua na <b>Solicitação de Contrato</b>: ele aparece aqui sozinho.', { etapa: B, ms: 3400 });
+    },
+    resumo: ['<b>Jurídico → Demandas Jurídicas</b> · <b>Nova demanda</b>', 'Atividade, cliente e objeto · prazo em dias úteis', 'Acompanhe em <b>Minhas demandas</b> e responda pelo comentário'],
+  },
+  {
+    nome: 'juridico-demandas-conduzir',
+    entrar: 'lara@myblue.com.br',
+    inicio: '#/demandas-juridicas/todas',
+    async preparar(cen, base) {
+      cen.dj = await demandasTut(base);
+      cen.ctMinuta = await contratoTut(base, 'Edifício Mirante do Sol', { ate: 'minuta' });
+    },
+    abertura: ['A planilha de acompanhamento do Jurídico, dentro do portal.', ['Todas as demandas e as atrasadas', 'Responsável, situação e entrega', 'Lançar pelo solicitante', '% no SLA por atividade', 'Tabela de prazos']],
+    async gravar(t, cen) {
+      const A = '1 · Todas as demandas';
+      await t.legenda('Em <b>Todas as demandas</b>, os números de agora. A lista abre nas em aberto, com os pedidos da <b>Solicitação de Contrato</b> junto.', { etapa: A, ms: 600 });
+      await t.mostrar('#tilesDj', 3000);
+      await t.legenda('<b>Atrasada</b> não é um status que alguém marca: é a demanda sem entrega com o prazo vencido. Clique no quadro para filtrar.', { etapa: A, ms: 300 });
+      await t.clicar('[data-tile="atrasada"]', { depois: 1600 });
+
+      const B = '2 · Conduzir';
+      await t.clicar(`#tbDj tr[data-id="${cen.dj.atrasada}"]`, { depois: 1600 });
+      await t.legenda('Escolha o <b>responsável</b> e mude a <b>situação</b>. Quem pediu recebe o aviso a cada mudança.', { etapa: B, ms: 300 });
+      await t.escolher('#djResp', 'Lara Mendes', { depois: 700 });
+      await t.escolher('#djStatus', 'Aguardando assinaturas', { depois: 900 });
+      await t.legenda('Ao passar para <b>Aguardando assinaturas</b> ou <b>Concluído</b>, a data da entrega vem com hoje (dá para corrigir). É ela que conta no SLA.', { etapa: B, ms: 600 });
+      await t.mostrar('#djEntrega', 1800);
+      await t.clicar('#djSalvar', { depois: 2000 });
+
+      const C = '3 · Lançar pelo solicitante';
+      await t.legenda('Pedido que chegou por e-mail ou WhatsApp? Lance em <b>Nova demanda</b>, escolhendo quem pediu: o setor e o estado vêm do cadastro.', { etapa: C, ms: 300 });
+      await t.clicar('#btNovaDj', { depois: 900 });
+      await t.escolher('#djTipo', 'Parecer (24h úteis)', { depois: 500 });
+      await t.digitar('#djCliente', 'Condomínio Solar do Bosque');
+      await t.digitar('#djObjeto', 'Parecer sobre a cobrança de multa de mudança', { atraso: 30 });
+      await t.escolher('#djSolic', 'Bruna Reis', { depois: 900 });
+      await t.legenda('A <b>data da solicitação</b> pode ser de outro dia: o prazo é contado a partir dela.', { etapa: C, ms: 300 });
+      await t.mostrar('#djData', 1800);
+      await t.clicar('#djOk', { depois: 2400 });
+
+      const D = '4 · Solicitação de Contrato';
+      await t.legenda('Os contratos pedidos pelo comercial entram aqui sozinhos, com o prazo de 72h úteis da minuta. A primeira minuta enviada conta como a entrega.', { etapa: D, ms: 300 });
+      await t.escolher('#fStDj', 'Em aberto', { depois: 600 });
+      await t.escolher('#fOrDj', 'Só a Solicitação de Contrato', { depois: 1400 });
+      await t.mostrar(`#tbDj tr[data-id="ct-${cen.ctMinuta}"]`, 2600);
+      await t.escolher('#fOrDj', 'Lançadas aqui e contratos', { depois: 800 });
+
+      const E = '5 · Indicadores';
+      await t.legenda('Em <b>Indicadores (SLA)</b>, o % entregue no prazo por atividade e por mês, como no Resumo SLA da planilha, e por setor.', { etapa: E, ms: 300 });
+      await t.clicar('nav.abas a[href="#/demandas-juridicas/indicadores"]', { depois: 1800 });
+      await t.mostrar('#corpoDj section.painel table', 3600);
+      await t.rolar(500);
+      await t.pausa(1600);
+
+      const F = '6 · Tabela de prazos';
+      await t.legenda('Na <b>Tabela de prazos</b>, o Jurídico ajusta as horas de cada atividade. As demandas não entregues são recalculadas; as entregues guardam o SLA que tiveram.', { etapa: F, ms: 300 });
+      await t.clicar('nav.abas a[href="#/demandas-juridicas/prazos"]', { depois: 1800 });
+      await t.mostrar('#corpoDj table', 3200);
+      await t.legenda('No dia do prazo e quando ele passa, quem é responsável recebe o aviso no sino e por e-mail. <b>Baixar planilha</b> leva a lista para o Excel.', { etapa: F, ms: 3600 });
+    },
+    resumo: ['<b>Todas as demandas</b> · atrasadas automáticas', 'Responsável e situação · a entrega conta no SLA', '<b>Indicadores (SLA)</b> e <b>Tabela de prazos</b>'],
   },
 
   /* ======================= Gestão do setor ======================= */

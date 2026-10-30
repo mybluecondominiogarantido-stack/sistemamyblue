@@ -242,11 +242,15 @@
         '<a href="#/carteira" class="' + (rota.indexOf('#/carteira') === 0 ? 'on' : '') + '">' + IC.casa + 'Base de Clientes</a>' +
         (resumoCredito && resumoCredito.acesso ? '<div class="grupo">Análise de Crédito</div><a href="#/credito" class="' + (rota.indexOf('#/credito') === 0 ? 'on' : '') + '">' + IC.escudo +
           '<span>Análise de Crédito</span><i data-contador="credito" class="contador" hidden></i></a>' : '') +
-        (resumoCt && resumoCt.acesso ? '<div class="grupo">Jurídico</div><a href="#/contratos" class="' + (rota.indexOf('#/contratos') === 0 ? 'on' : '') + '">' + IC.documento +
+        // Jurídico: as telas dos contratos (quem tem acesso) e as Demandas Jurídicas (todo mundo pede ao Jurídico)
+        '<div class="grupo">Jurídico</div>' +
+        (resumoCt && resumoCt.acesso ? '<a href="#/contratos" class="' + (rota.indexOf('#/contratos') === 0 ? 'on' : '') + '">' + IC.documento +
           '<span>Solicitação de Contrato</span><i data-contador="contratos" class="contador" hidden></i></a>' +
           '<a href="#/acompanhamento-contratos" class="' + (rota.indexOf('#/acompanhamento-contratos') === 0 ? 'on' : '') + '">' + IC.historico +
           '<span>Acompanhamento de demandas Jurídicas</span><i data-contador="contratos-acomp" class="contador" hidden></i></a>' +
           (resumoCt.painel ? '<a href="#/dashboard-juridico" class="' + (rota.indexOf('#/dashboard-juridico') === 0 ? 'on' : '') + '">' + IC.grafico + '<span>Dashboard Jurídico</span></a>' : '') : '') +
+        '<a href="#/demandas-juridicas" class="' + (rota.indexOf('#/demandas-juridicas') === 0 ? 'on' : '') + '">' + IC.pasta +
+          '<span>Demandas Jurídicas</span><i data-contador="juridico" class="contador" hidden></i></a>' +
         (resumoImp && resumoImp.acesso ? '<div class="grupo">Implantação</div><a href="#/implantacao" class="' + (rota.indexOf('#/implantacao') === 0 ? 'on' : '') + '">' + IC.casa +
           '<span>Painel de implantação</span><i data-contador="implantacao" class="contador" hidden></i></a>' : '');
       // Comissões: a ferramenta (só para quem tem acesso) e os demonstrativos de cada pessoa
@@ -274,6 +278,7 @@
     desenharContadorCredito();
     desenharContadorImp();
     desenharContadorCt();
+    desenharContadorDj();
     if (resumoTickets) { var bc = $('#nav [data-contador=fila]'); if (bc) { bc.textContent = resumoTickets.minha_fila; bc.hidden = !resumoTickets.minha_fila; if (resumoTickets.minha_fila_atrasados) bc.classList.add('alerta'); } }
     $$('#nav a, #navConfig a').forEach(function (a) { a.addEventListener('click', function () { $('#casca').classList.remove('menu-aberto'); }); });
   }
@@ -330,6 +335,7 @@
     }
     if (partes[0] === 'acompanhamento-contratos') return paginaContratos('acompanhamento', partes[1]);
     if (partes[0] === 'dashboard-juridico') return paginaContratos('painel');
+    if (partes[0] === 'demandas-juridicas') return /^\d+$/.test(partes[1] || '') ? paginaDemandasJ('', Number(partes[1])) : paginaDemandasJ(partes[1]);
     if (partes[0] === 'premiacoes') return paginaComissoes(partes[1]);
     if (partes[0] === 'links') {
       if (partes[1] === 'gestao' && editorLinks()) return paginaGestaoLinks(partes[2]);
@@ -7603,6 +7609,425 @@
     };
   }
 
+  /* ======================= Demandas Jurídicas ======================= */
+  // tudo o que se pede ao Jurídico (no lugar da planilha de acompanhamento): prazo do tipo em dias úteis, entrega e SLA
+  var metaDj = null;
+  var resumoDj = null;
+  // filtros de cada lista (o Jurídico abre nas em aberto; quem pediu vê todas as suas)
+  var filtrosDj = { minhas: { q: '', status: '', tipo: '', ano: '' }, todas: { q: '', status: 'abertas', tipo: '', setor: '', origem: '', ano: '' } };
+  var STATUS_DJ = {
+    pendente: ['Pendente', 'cinza'], em_andamento: ['Em andamento', 'azul'], aguardando_retorno: ['Aguardando retorno', 'ambar'],
+    aguardando_assinaturas: ['Aguardando assinaturas', 'azul'], concluido: ['Concluído', 'verde'], contrato_perdido: ['Contrato perdido', 'cinza'],
+  };
+  var UFS_DJ = ['AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO'];
+  var ROTULO_CAMPO_DJ = { tipo_id: 'atividade', status: 'situação', solicitante_id: 'solicitante', solicitante_nome: 'solicitante', setor: 'setor', uf: 'estado', cliente: 'cliente',
+    objeto: 'objeto', observacoes: 'observações', responsavel_id: 'responsável', solicitada_em: 'data da solicitação', entregue_em: 'data da entrega', prazo: 'prazo', horas: 'horas' };
+
+  async function carregarMetaDj(forcar) {
+    if (!metaDj || forcar) metaDj = await api('GET', '/api/juridico/meta');
+    return metaDj;
+  }
+  async function atualizarDj() {
+    try { resumoDj = await api('GET', '/api/juridico/resumo'); } catch (e) { return; }
+    desenharContadorDj();
+  }
+  function desenharContadorDj() {
+    var b = $('#nav [data-contador=juridico]');
+    if (!b || !resumoDj) return;
+    var r = resumoDj;
+    var n = (r.pendentes || 0) + (r.atrasadas || 0) + (r.retorno || 0);
+    b.textContent = n;
+    b.hidden = !n;
+    b.title = [r.pendentes ? r.pendentes + ' pendente(s)' : '', r.atrasadas ? r.atrasadas + ' passaram do prazo' : '', r.retorno ? r.retorno + ' aguardando o seu retorno' : ''].filter(Boolean).join(' · ');
+  }
+  function etqDj(d) {
+    return etqCr(STATUS_DJ, d.status) + (d.atrasada ? ' ' + etq(['atrasada', 'vermelha']) : d.vence_hoje ? ' ' + etq(['vence hoje', 'ambar']) : '');
+  }
+  function slaDj(d) {
+    return d.sla === 'dentro' ? etq(['dentro', 'verde']) : d.sla === 'fora' ? etq(['fora', 'vermelha']) : '<span class="sec">—</span>';
+  }
+  function prazoTipoDj(t) { return t.horas + 'h úteis · ' + t.dias + (t.dias === 1 ? ' dia útil' : ' dias úteis'); }
+
+  async function paginaDemandasJ(aba, abrirId) {
+    var m;
+    try { m = await carregarMetaDj(true); } catch (e) { $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">' + esc(e.message) + '</div></div>'; return; }
+    var p = m.perfil;
+    var abas = [['minhas', 'Minhas demandas'], ['todas', 'Todas as demandas'], ['indicadores', 'Indicadores (SLA)'], ['prazos', 'Tabela de prazos'], ['importar', 'Importar planilha']]
+      .filter(function (a) { return a[0] === 'minhas' || (a[0] === 'importar' ? p.gerencia : p.ve_tudo); });
+    if (!abas.some(function (a) { return a[0] === aba; })) aba = p.ve_tudo ? 'todas' : 'minhas';
+    definirBarra('<span class="setor">Jurídico</span><span class="sep">/</span><span class="nome">Demandas Jurídicas · ' + esc(abas.find(function (a) { return a[0] === aba; })[1]) + '</span>');
+    $('#conteudo').innerHTML = '<div class="pagina"><div class="linha" style="align-items:flex-end;margin-bottom:6px"><div style="flex:1 1 420px"><h1>Demandas Jurídicas</h1>' +
+      '<p class="sub" style="margin:0">Peça ao Jurídico e acompanhe: cada atividade tem o seu prazo em horas úteis (8h = 1 dia útil). O SLA é a entrega até o prazo; os contratos pedidos pela Solicitação de Contrato aparecem aqui sozinhos.</p></div>' +
+      (['minhas', 'todas'].indexOf(aba) >= 0 ? '<button class="btn ghost" id="btXlsDj">' + IC.baixar + 'Baixar planilha</button>' : '') +
+      '<button class="btn primary" id="btNovaDj">' + IC.mais + 'Nova demanda</button></div>' +
+      (abas.length > 1 ? '<nav class="abas" style="margin-top:16px">' + abas.map(function (a) { return '<a href="#/demandas-juridicas/' + a[0] + '" class="' + (a[0] === aba ? 'on' : '') + '">' + esc(a[1]) + '</a>'; }).join('') + '</nav>' : '') +
+      '<div id="corpoDj"' + (abas.length > 1 ? '' : ' style="margin-top:16px"') + '></div></div>';
+    var recarregar = function () { paginaDemandasJ(aba); atualizarDj(); };
+    $('#btNovaDj').onclick = function () { novaDemandaDj(m, recarregar); };
+    if ($('#btXlsDj')) $('#btXlsDj').onclick = function () { location.href = '/api/juridico/demandas.xlsx?' + filtroUrlDj(aba); };
+    atualizarDj();
+    if (abrirId) detalheDj(abrirId, m, recarregar);
+    if (aba === 'indicadores') return abaIndicadoresDj();
+    if (aba === 'prazos') return abaPrazosDj(m);
+    if (aba === 'importar') return abaImportarDj();
+    return abaListaDj(m, aba, recarregar);
+  }
+  function filtroUrlDj(vis) {
+    var f = filtrosDj[vis];
+    return 'vis=' + vis + Object.keys(f).filter(function (k) { return f[k]; })
+      .map(function (k) { return '&' + k + '=' + encodeURIComponent(f[k]); }).join('');
+  }
+
+  /* ---------- lista (minhas ou todas) ---------- */
+  async function abaListaDj(m, vis, recarregar) {
+    var f = filtrosDj[vis];
+    var todas = vis === 'todas';
+    var opcoes = function (lista, atual) { return lista.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(o[0]) === String(atual) ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join(''); };
+    $('#corpoDj').innerHTML = (todas ? '<div id="tilesDj" class="tiles" style="margin-bottom:16px;grid-template-columns:repeat(auto-fill,minmax(140px,1fr))"></div>' : '') +
+      '<div class="painel"><div class="cab-painel" style="flex-wrap:wrap;gap:8px"><input class="campo" id="qDj" type="search" placeholder="Buscar por cliente, solicitante, objeto ou nº" style="max-width:300px" value="' + esc(f.q) + '">' +
+      '<select class="campo" id="fStDj" style="width:auto" aria-label="Situação">' + opcoes([['', 'Todas as situações'], ['abertas', 'Em aberto'], ['atrasada', 'Atrasadas']].concat(Object.keys(STATUS_DJ).map(function (k) { return [k, STATUS_DJ[k][0]]; })), f.status) + '</select>' +
+      '<select class="campo" id="fTpDj" style="width:auto" aria-label="Atividade">' + opcoes([['', 'Todas as atividades']].concat(m.tipos.map(function (t) { return [t.id, t.nome]; })), f.tipo) + '</select>' +
+      (todas ? '<select class="campo" id="fSeDj" style="width:auto" aria-label="Setor"></select><select class="campo" id="fOrDj" style="width:auto" aria-label="Origem">' +
+        opcoes([['', 'Lançadas aqui e contratos'], ['demanda', 'Só as lançadas aqui'], ['contrato', 'Só a Solicitação de Contrato']], f.origem) + '</select>' : '') +
+      '<select class="campo" id="fAnoDj" style="width:auto" aria-label="Ano da solicitação"></select></div>' +
+      '<div class="tabela-wrap"><table style="min-width:1080px"><thead><tr><th>Nº</th><th>Atividade</th><th>Solicitante</th><th>Cliente / objeto</th><th>Solicitada</th><th>Prazo</th><th>Entrega</th><th>Situação</th><th>SLA</th></tr></thead>' +
+      '<tbody id="tbDj"></tbody></table></div><div class="ajuda" id="rodapeDj" style="padding:10px 16px"></div></div>';
+    var seq = 0;
+    async function carregar() {
+      var meu = ++seq;
+      var r;
+      try { r = await api('GET', '/api/juridico/demandas?' + filtroUrlDj(vis)); } catch (e) { toast(e.message, 'erro'); return; }
+      if (meu !== seq) return;
+      var k = r.contadores;
+      var tile = function (rot, n, alerta, filtro) { return '<button class="tile' + (alerta && n ? ' alerta' : '') + '" data-tile="' + filtro + '" style="text-align:left;cursor:pointer"><span class="rot-tile">' + rot + '</span><b>' + (n == null ? '—' : n) + '</b></button>'; };
+      if ($('#tilesDj')) {
+        $('#tilesDj').innerHTML = tile('Pendentes', k.pendente, false, 'pendente') + tile('Em andamento', k.em_andamento, false, 'em_andamento') +
+          tile('Aguardando retorno', k.aguardando_retorno, false, 'aguardando_retorno') + tile('Aguardando assinaturas', k.aguardando_assinaturas, false, 'aguardando_assinaturas') +
+          tile('Passaram do prazo', k.atrasadas, true, 'atrasada') + tile('Entregues no mês', k.entregues_mes, false, '') +
+          '<div class="tile"><span class="rot-tile">No SLA no mês</span><b>' + (k.sla_mes == null ? '—' : String(k.sla_mes).replace('.', ',') + '%') + '</b></div>';
+        $$('#tilesDj [data-tile]').forEach(function (b) { b.onclick = function () { f.status = b.getAttribute('data-tile'); $('#fStDj').value = f.status; carregar(); }; });
+      }
+      if ($('#fSeDj')) $('#fSeDj').innerHTML = opcoes([['', 'Todos os setores']].concat(r.setores.map(function (s) { return [s, s]; })), f.setor);
+      $('#fAnoDj').innerHTML = opcoes([['', 'Todos os anos']].concat(r.anos.map(function (a) { return [a, a]; })), f.ano);
+      $('#tbDj').innerHTML = r.demandas.map(function (d) {
+        return '<tr class="clicavel" data-id="' + esc(d.id) + '"><td style="white-space:nowrap"><b>' + (d.origem === 'contrato' ? esc(d.ref) : '#' + esc(d.ref)) + '</b>' +
+          (d.origem === 'contrato' ? '<span class="sec">Solicitação de Contrato</span>' : '') + '</td><td>' + esc(d.tipo) + '</td>' +
+          '<td>' + esc(d.solicitante_nome || '—') + '<span class="sec">' + esc([d.setor, d.uf].filter(Boolean).join(' · ')) + '</span></td>' +
+          '<td style="max-width:320px"><b>' + esc(d.cliente || '—') + '</b>' + (d.objeto ? '<span class="sec corta" title="' + esc(d.objeto) + '">' + esc(d.objeto) + '</span>' : '') + '</td>' +
+          '<td style="white-space:nowrap">' + dataBr(d.solicitada_em) + '</td><td style="white-space:nowrap">' + dataBr(d.prazo) + '</td>' +
+          '<td style="white-space:nowrap">' + (d.entregue_em ? dataBr(d.entregue_em) : '<span class="sec">—</span>') + '</td>' +
+          '<td>' + etqDj(d) + (d.responsavel_nome ? '<span class="sec">' + esc(d.responsavel_nome) + '</span>' : '') + '</td><td>' + slaDj(d) + '</td></tr>';
+      }).join('') || '<tr><td colspan="9"><div class="vazio" style="border:0;padding:34px">' + (vis === 'minhas' && !r.total ? 'Você ainda não pediu nada ao Jurídico. Clique em <b>Nova demanda</b>.' : 'Nada com esses filtros.') + '</div></td></tr>';
+      $('#rodapeDj').textContent = r.demandas.length + ' de ' + r.total + ' demanda(s).';
+      $$('#tbDj tr[data-id]').forEach(function (tr) {
+        tr.onclick = function () {
+          var id = tr.getAttribute('data-id');
+          if (id.indexOf('ct-') === 0) { location.hash = '#/contratos/' + id.slice(3); return; }
+          detalheDj(Number(id), m, recarregar);
+        };
+      });
+    }
+    var espera;
+    $('#qDj').oninput = function () { f.q = this.value.trim(); clearTimeout(espera); espera = setTimeout(carregar, 300); };
+    [['#fStDj', 'status'], ['#fTpDj', 'tipo'], ['#fSeDj', 'setor'], ['#fOrDj', 'origem'], ['#fAnoDj', 'ano']].forEach(function (x) {
+      if ($(x[0])) $(x[0]).onchange = function () { f[x[1]] = this.value; carregar(); };
+    });
+    carregar();
+  }
+
+  /* ---------- formulário (nova e edição pelo Jurídico) ---------- */
+  function formDj(m, d, novo) {
+    var p = m.perfil, jur = p.juridico;
+    d = d || {};
+    var opt = function (v, rot, atual) { return '<option value="' + esc(v) + '"' + (String(v) === String(atual == null ? '' : atual) ? ' selected' : '') + '>' + esc(rot) + '</option>'; };
+    var tipos = m.tipos.filter(function (t) { return t.ativo || t.id === d.tipo_id; });
+    var solic = d.solicitante_id ? String(d.solicitante_id) : d.solicitante_nome ? 'outro' : novo ? String(m.eu.id) : '';
+    // quem pediu e já não está ativo, e o estado escrito de outro jeito (ex.: "DF/GO", da planilha), continuam na lista
+    var pessoas = m.pessoas.concat(d.solicitante_id && !m.pessoas.some(function (x) { return x.id === d.solicitante_id; }) ? [{ id: d.solicitante_id, nome: d.solicitante_nome }] : []);
+    var ufs = UFS_DJ.concat(d.uf && UFS_DJ.indexOf(d.uf) < 0 ? [d.uf] : []);
+    var html = '<div class="grade-2"><div><label class="rot" for="djTipo">Atividade</label><select class="campo" id="djTipo"><option value="">Escolha…</option>' +
+      tipos.map(function (t) { return opt(t.id, t.nome + ' (' + t.horas + 'h úteis)', d.tipo_id); }).join('') + '</select><div class="ajuda" id="djPrazo"></div></div>' +
+      '<div><label class="rot" for="djCliente">Cliente</label><input class="campo" id="djCliente" list="djConds" maxlength="200" value="' + esc(d.cliente || '') + '" placeholder="Condomínio, administradora, fornecedor…">' +
+      '<datalist id="djConds">' + m.condominios.map(function (n) { return '<option value="' + esc(n) + '">'; }).join('') + '</datalist></div></div>' +
+      '<div><label class="rot" for="djObjeto">Objeto da demanda</label><textarea class="campo" id="djObjeto" rows="3" maxlength="2000" placeholder="O que precisa ser feito">' + esc(d.objeto || '') + '</textarea></div>';
+    if (jur) {
+      html += '<div class="grade-2"><div><label class="rot" for="djSolic">Solicitante</label><select class="campo" id="djSolic">' +
+        pessoas.map(function (x) { return opt(x.id, x.nome, solic); }).join('') + opt('outro', 'Outra pessoa (sem cadastro no portal)', solic) + '</select>' +
+        '<input class="campo" id="djSolicNome" maxlength="120" placeholder="Nome de quem pediu" style="margin-top:6px" value="' + esc(d.solicitante_id ? '' : d.solicitante_nome || '') + '"' + (solic === 'outro' ? '' : ' hidden') + '></div>' +
+        '<div class="grade-2"><div><label class="rot" for="djSetor">Setor</label><input class="campo" id="djSetor" maxlength="80" value="' + esc(novo ? m.eu.setor : d.setor || '') + '"></div>' +
+        '<div><label class="rot" for="djUf">Estado</label><select class="campo" id="djUf">' + opt('', '—', d.uf) + ufs.map(function (u) { return opt(u, u, novo ? m.eu.uf : d.uf); }).join('') + '</select></div></div></div>' +
+        '<div class="grade-3"><div><label class="rot" for="djData">Data da solicitação</label><input class="campo" id="djData" type="date" max="' + m.hoje + '" value="' + esc(d.solicitada_em || m.hoje) + '"></div>' +
+        '<div><label class="rot" for="djStatus">Situação</label><select class="campo" id="djStatus">' + Object.keys(STATUS_DJ).map(function (k) { return opt(k, STATUS_DJ[k][0], d.status || 'pendente'); }).join('') + '</select></div>' +
+        '<div><label class="rot" for="djEntrega">Data da entrega</label><input class="campo" id="djEntrega" type="date" max="' + m.hoje + '" value="' + esc(d.entregue_em || '') + '"></div></div>' +
+        '<div class="grade-2"><div><label class="rot" for="djResp">Responsável no Jurídico</label><select class="campo" id="djResp">' + opt('', 'Ninguém ainda', d.responsavel_id) +
+        m.equipe.map(function (x) { return opt(x.id, x.nome, d.responsavel_id); }).join('') + '</select></div><div></div></div>';
+    } else {
+      html += '<div class="grade-2"><div><label class="rot" for="djUf">Estado</label><select class="campo" id="djUf">' + opt('', '—', m.eu.uf) + UFS_DJ.map(function (u) { return opt(u, u, m.eu.uf); }).join('') + '</select></div>' +
+        '<div><span class="rot">Solicitante</span><div style="padding:9px 0;font-weight:700">' + esc(m.eu.nome) + (m.eu.setor ? ' <span class="sec" style="display:inline">· ' + esc(m.eu.setor) + '</span>' : '') + '</div></div></div>';
+    }
+    html += '<div><label class="rot" for="djObs">Observações</label><textarea class="campo" id="djObs" rows="2" maxlength="2000">' + esc(d.observacoes || '') + '</textarea></div>';
+    return '<div class="pilha" style="gap:14px">' + html + '</div>';
+  }
+  function ligarFormDj(raiz, m) {
+    var mostrarPrazo = function () {
+      var t = m.tipos.find(function (x) { return String(x.id) === $('#djTipo', raiz).value; });
+      $('#djPrazo', raiz).textContent = t ? 'Prazo: ' + prazoTipoDj(t) + ', contados a partir do dia seguinte à solicitação.' : '';
+    };
+    $('#djTipo', raiz).onchange = mostrarPrazo;
+    mostrarPrazo();
+    // entregou (vai para assinatura ou concluiu): a entrega fica com hoje, se ainda não tem data
+    if ($('#djStatus', raiz)) $('#djStatus', raiz).onchange = function () {
+      if (['aguardando_assinaturas', 'concluido'].indexOf(this.value) >= 0 && !$('#djEntrega', raiz).value) $('#djEntrega', raiz).value = m.hoje;
+    };
+    if ($('#djSolic', raiz)) $('#djSolic', raiz).onchange = function () {
+      var v = this.value;
+      $('#djSolicNome', raiz).hidden = v !== 'outro';
+      var x = m.pessoas.find(function (y) { return String(y.id) === v; });
+      if (x) { $('#djSetor', raiz).value = x.setor || ''; if (x.uf) $('#djUf', raiz).value = x.uf; }
+    };
+  }
+  function lerFormDj(raiz, m) {
+    var b = { tipo_id: Number($('#djTipo', raiz).value) || null, cliente: $('#djCliente', raiz).value.trim(), objeto: $('#djObjeto', raiz).value.trim(),
+      observacoes: $('#djObs', raiz).value.trim(), uf: $('#djUf', raiz).value };
+    if (m.perfil.juridico) {
+      var s = $('#djSolic', raiz).value;
+      if (s === 'outro') { b.solicitante_id = null; b.solicitante_nome = $('#djSolicNome', raiz).value.trim(); } else b.solicitante_id = Number(s);
+      b.setor = $('#djSetor', raiz).value.trim();
+      b.solicitada_em = $('#djData', raiz).value;
+      b.status = $('#djStatus', raiz).value;
+      b.entregue_em = $('#djEntrega', raiz).value;
+      b.responsavel_id = Number($('#djResp', raiz).value) || null;
+    }
+    return b;
+  }
+
+  function novaDemandaDj(m, depois) {
+    var mo = modal({ titulo: 'Nova demanda para o Jurídico', largo: true,
+      corpo: (m.perfil.juridico ? '' : '<div class="msg info" style="margin-bottom:14px">O Jurídico recebe o aviso na hora. Você acompanha em <b>Minhas demandas</b> e é avisado quando a situação mudar. Contrato de garantia de condomínio novo é pedido em <b>Solicitação de Contrato</b>.</div>') + formDj(m, null, true),
+      pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="djOk">' + IC.enviar + 'Enviar ao Jurídico</button>' });
+    ligarFormDj(mo, m);
+    $('#djOk', mo).onclick = async function () {
+      var b = lerFormDj(mo, m);
+      if (!b.tipo_id) { toast('Escolha a atividade.', 'erro'); return; }
+      if (!b.cliente) { toast('Informe o cliente.', 'erro'); return; }
+      this.disabled = true;
+      try {
+        var r = await api('POST', '/api/juridico/demandas', b);
+        mo.fechar();
+        toast('Demanda #' + r.numero + ' registrada. Prazo de entrega: ' + dataBr(r.prazo) + '.', 'ok');
+        depois();
+      } catch (e) { toast(e.message, 'erro'); this.disabled = false; }
+    };
+  }
+
+  /* ---------- uma demanda: o Jurídico conduz; quem pediu acompanha e comenta ---------- */
+  async function detalheDj(id, m, depois) {
+    var j;
+    try { j = await api('GET', '/api/juridico/demandas/' + id); } catch (e) { toast(e.message, 'erro'); return; }
+    var d = j.demanda, pd = j.pode;
+    var resumo = '<dl class="info-ticket" style="margin:0 0 16px"><dt>Situação</dt><dd>' + etqDj(d) + '</dd><dt>Atividade</dt><dd>' + esc(d.tipo) + ' <span class="sec" style="display:inline">· ' + d.horas + 'h úteis</span></dd>' +
+      '<dt>Solicitada</dt><dd>' + dataBr(d.solicitada_em) + '</dd><dt>Prazo de entrega</dt><dd>' + dataBr(d.prazo) + '</dd>' +
+      '<dt>Entrega</dt><dd>' + (d.entregue_em ? dataBr(d.entregue_em) + ' ' + slaDj(d) : '—') + '</dd>' +
+      (pd.editar ? '' : '<dt>Cliente</dt><dd>' + esc(d.cliente) + '</dd><dt>Objeto</dt><dd style="white-space:pre-wrap">' + esc(d.objeto || '—') + '</dd>' +
+        '<dt>Solicitante</dt><dd>' + esc(d.solicitante_nome || '—') + (d.setor ? ' · ' + esc(d.setor) : '') + (d.uf ? ' · ' + esc(d.uf) : '') + '</dd>' +
+        '<dt>Responsável</dt><dd>' + esc(d.responsavel_nome || 'Ninguém ainda') + '</dd>' + (d.observacoes ? '<dt>Observações</dt><dd style="white-space:pre-wrap">' + esc(d.observacoes) + '</dd>' : '')) + '</dl>';
+    var nomeTipo = function (v) { var t = m.tipos.find(function (x) { return String(x.id) === String(v); }); return t ? t.nome : v; };
+    var valorEv = function (k, v) {
+      if (v == null || v === '') return '—';
+      if (k === 'status') return STATUS_DJ[v] ? STATUS_DJ[v][0] : v;
+      if (k === 'tipo_id') return nomeTipo(v);
+      if (/_em$|^prazo$/.test(k)) return dataBr(v);
+      if (k === 'responsavel_id' || k === 'solicitante_id') { var x = (m.pessoas || []).concat(m.equipe || []).find(function (y) { return y.id === v; }); return x ? x.nome : '#' + v; }
+      return String(v);
+    };
+    var historico = j.eventos.map(function (e) {
+      var x = e.detalhe || {};
+      var txt = e.tipo === 'criada' ? 'registrou a demanda' : e.tipo === 'importada' ? 'importou da planilha (linha ' + esc(x.linha) + ')'
+        : e.tipo === 'comentario' ? 'comentou: <span style="white-space:pre-wrap;font-weight:500">' + esc(x.texto) + '</span>'
+          : (e.tipo === 'status' ? 'mudou ' : 'alterou ') + Object.keys(x.para || {}).filter(function (k) { return ROTULO_CAMPO_DJ[k] && k !== 'horas' && k !== 'solicitante_nome' || (k === 'solicitante_nome' && !('solicitante_id' in x.para)); })
+            .map(function (k) { return esc(ROTULO_CAMPO_DJ[k]) + ': ' + esc(valorEv(k, x.de[k])) + ' → <b>' + esc(valorEv(k, x.para[k])) + '</b>'; }).join('; ');
+      return '<div><b style="color:var(--ink)">' + dataHoraCr(e.criado_em) + '</b> · ' + esc(e.usuario_nome || 'Sistema') + ' ' + txt + '</div>';
+    }).join('');
+    var mo = modal({ titulo: 'Demanda #' + d.numero + ' · ' + d.tipo + ' · ' + d.cliente, largo: true,
+      corpo: resumo + (pd.editar ? '<div id="djForm">' + formDj(m, d, false) + '</div>' : '') +
+        '<section style="margin-top:18px"><h3 style="margin:0 0 8px;font-size:14px">Histórico e comentários</h3><div class="pilha" style="gap:8px;font-size:13px;font-weight:600;color:var(--ink-2)">' + historico + '</div>' +
+        '<label class="rot" for="djComent" style="margin-top:12px">Comentário</label><textarea class="campo" id="djComent" rows="2" maxlength="3000" placeholder="' +
+        (pd.editar ? 'Mensagem para quem pediu (recebe aviso)' : 'Responda ao Jurídico ou mande uma informação (o Jurídico recebe aviso)') + '"></textarea>' +
+        '<div class="linha" style="justify-content:flex-end;margin-top:6px"><button class="btn ghost sm" id="djComentOk">' + IC.mensagem + 'Comentar</button></div></section>',
+      pe: (pd.excluir ? '<button class="btn ghost" id="djExcluir" style="margin-right:auto;color:var(--red)">Excluir</button>' : '') + '<button class="btn ghost" data-fechar>Fechar</button>' +
+        (pd.editar ? '<button class="btn primary" id="djSalvar">Salvar</button>' : '') });
+    if (pd.editar) ligarFormDj(mo, m);
+    $('#djComentOk', mo).onclick = async function () {
+      var t = $('#djComent', mo).value.trim();
+      if (!t) { toast('Escreva o comentário.', 'erro'); return; }
+      try { await api('POST', '/api/juridico/demandas/' + id + '/comentario', { texto: t }); mo.fechar(); toast('Comentário enviado.', 'ok'); detalheDj(id, m, depois); } catch (e) { toast(e.message, 'erro'); }
+    };
+    if ($('#djSalvar', mo)) $('#djSalvar', mo).onclick = async function () {
+      var b = lerFormDj(mo, m);
+      try {
+        var r = await api('PATCH', '/api/juridico/demandas/' + id, b);
+        mo.fechar();
+        toast(r.mudou.length ? 'Salvo.' : 'Nada mudou.', 'ok');
+        depois();
+      } catch (e) { toast(e.message, 'erro'); }
+    };
+    if ($('#djExcluir', mo)) $('#djExcluir', mo).onclick = async function () {
+      if (!(await confirmar('Excluir a demanda', 'A demanda #' + d.numero + ' e o histórico dela saem do portal. Não dá para desfazer.', 'Excluir', true))) return;
+      try { await api('DELETE', '/api/juridico/demandas/' + id); mo.fechar(); toast('Demanda excluída.', 'ok'); depois(); } catch (e) { toast(e.message, 'erro'); }
+    };
+  }
+
+  /* ---------- indicadores: % dentro do SLA por atividade e mês (como o Resumo SLA da planilha) ---------- */
+  var anoDj = null;
+  async function abaIndicadoresDj() {
+    var r;
+    try { r = await api('GET', '/api/juridico/indicadores' + (anoDj ? '?ano=' + anoDj : '')); } catch (e) { $('#corpoDj').innerHTML = '<div class="vazio">' + esc(e.message) + '</div>'; return; }
+    anoDj = r.ano;
+    var MES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+    var celula = function (c, forte) {
+      if (!c.total) return '<td style="text-align:center"><span class="sec">-</span></td>';
+      var cor = c.pct >= 90 ? 'var(--green)' : c.pct >= 70 ? '#9a6512' : 'var(--red)';
+      return '<td style="text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums" title="' + c.dentro + ' de ' + c.total + ' entregue(s) no prazo">' +
+        '<b style="color:' + cor + (forte ? ';font-size:14px' : '') + '">' + String(c.pct).replace('.', ',') + '%</b><span class="sec">' + c.dentro + '/' + c.total + '</span></td>';
+    };
+    var R = r.resumo;
+    var tile = function (rot, v, sub, alerta) { return '<div class="tile' + (alerta && v ? ' alerta' : '') + '"><span class="rot-tile">' + rot + '</span><b>' + (v == null ? '—' : v) + '</b>' + (sub ? '<span class="sec">' + sub + '</span>' : '') + '</div>'; };
+    $('#corpoDj').innerHTML = '<div class="filtros-ct" style="margin-bottom:14px"><span class="lbl">Ano</span>' + r.anos.map(function (a) { return '<button class="pill-ct' + (a === r.ano ? ' on' : '') + '" data-ano="' + a + '">' + a + '</button>'; }).join('') + '</div>' +
+      '<div class="tiles" style="margin-bottom:16px;grid-template-columns:repeat(auto-fill,minmax(170px,1fr))">' +
+        tile('Solicitadas em ' + r.ano, R.solicitadas) + tile('Entregues em ' + r.ano, R.entregues, R.dentro + ' no prazo') +
+        tile('No SLA em ' + r.ano, R.pct == null ? null : String(R.pct).replace('.', ',') + '%', 'entregues até o prazo') +
+        tile('Em aberto agora', R.abertas) + tile('Passaram do prazo', R.atrasadas, 'sem entrega, prazo vencido', true) + tile('Contratos perdidos', R.perdidos, 'solicitados em ' + r.ano) + '</div>' +
+      '<section class="painel"><div class="cab-painel"><h2>% dentro do SLA por atividade — ' + r.ano + '</h2></div>' +
+      '<div class="corpo" style="padding-top:0"><p class="ajuda" style="margin:0 0 8px">Pela data da entrega; só as demandas entregues. Embaixo de cada % , quantas foram no prazo do total entregue.</p></div>' +
+      '<div class="tabela-wrap"><table style="min-width:980px"><thead><tr><th>Atividade</th>' + MES.map(function (x) { return '<th style="text-align:center">' + x + '</th>'; }).join('') + '<th style="text-align:center">Ano</th></tr></thead><tbody>' +
+      (r.tipos.map(function (t) { return '<tr><td><b>' + esc(t.nome) + '</b></td>' + t.meses.map(function (c) { return celula(c); }).join('') + celula(t.total, true) + '</tr>'; }).join('') ||
+        '<tr><td colspan="14"><div class="vazio" style="border:0;padding:24px">Nenhuma entrega em ' + r.ano + '.</div></td></tr>') +
+      (r.tipos.length ? '<tr class="sel-ct"><td><b>Total</b></td>' + r.total.meses.map(function (c) { return celula(c); }).join('') + celula(r.total.total, true) + '</tr>' : '') +
+      '</tbody></table></div></section>' +
+      '<section class="painel" style="margin-top:16px"><div class="cab-painel"><h2>Por setor — ' + r.ano + '</h2></div><div class="tabela-wrap"><table><thead><tr><th>Setor</th><th style="text-align:right">Solicitadas</th>' +
+      '<th style="text-align:right">Entregues</th><th style="text-align:center">No SLA</th><th style="text-align:right">Em aberto agora</th></tr></thead><tbody>' +
+      (r.setores.map(function (s) {
+        return '<tr><td><b>' + esc(s.nome) + '</b></td><td style="text-align:right">' + s.solicitadas + '</td><td style="text-align:right">' + s.sla.total + '</td>' + celula(s.sla) + '<td style="text-align:right">' + s.abertas + '</td></tr>';
+      }).join('') || '<tr><td colspan="5"><span class="sec">Nada no ano.</span></td></tr>') + '</tbody></table></div></section>';
+    $$('#corpoDj [data-ano]').forEach(function (b) { b.onclick = function () { anoDj = Number(b.getAttribute('data-ano')); abaIndicadoresDj(); }; });
+  }
+
+  /* ---------- Tabela de prazos: o Jurídico edita; o prazo novo vale para as não entregues ---------- */
+  function abaPrazosDj(m) {
+    var edita = m.perfil.juridico;
+    var linhas = m.tipos.map(function (t) { return { id: t.id, nome: t.nome, horas: t.horas, ativo: t.ativo, contratos: t.contratos }; });
+    function desenhar() {
+      $('#corpoDj').innerHTML = '<div class="painel"><div class="cab-painel"><h2>Tabela de prazos</h2></div><div class="corpo" style="padding-top:0"><p class="ajuda" style="margin:0">' +
+        'O prazo de cada atividade, em horas úteis: cada 8h é um dia útil (arredondado para cima), contado a partir do dia seguinte à solicitação, sem fins de semana e feriados. ' +
+        'Mudou o prazo? As demandas ainda não entregues desse tipo são recalculadas; as entregues guardam o SLA que tiveram. Tipo que não se usa mais: desmarque <b>Em uso</b>.</p></div>' +
+        '<div class="tabela-wrap"><table><thead><tr><th>Tipo de atividade</th><th style="width:130px">Prazo (h úteis)</th><th>Dias úteis</th><th style="text-align:center">Em uso</th>' +
+        '<th style="text-align:center" title="Os pedidos da Solicitação de Contrato aparecem na lista e nos indicadores como esta atividade">Recebe a Solicitação de Contrato</th></tr></thead><tbody>' +
+        linhas.map(function (t, k) {
+          var dias = Math.max(1, Math.ceil((Number(t.horas) || 0) / 8));
+          return '<tr><td>' + (edita ? '<input class="campo" data-k="' + k + '" data-c="nome" maxlength="80" value="' + esc(t.nome) + '">' : '<b>' + esc(t.nome) + '</b>') + '</td>' +
+            '<td>' + (edita ? '<input class="campo" type="number" min="1" step="1" data-k="' + k + '" data-c="horas" value="' + esc(t.horas) + '">' : t.horas) + '</td>' +
+            '<td>' + (t.horas ? dias + (dias === 1 ? ' dia' : ' dias') : '—') + '</td>' +
+            '<td style="text-align:center"><input type="checkbox" data-k="' + k + '" data-c="ativo"' + (t.ativo ? ' checked' : '') + (edita ? '' : ' disabled') + ' aria-label="Em uso"></td>' +
+            '<td style="text-align:center"><input type="radio" name="djCt" data-k="' + k + '"' + (t.contratos ? ' checked' : '') + (edita && t.id ? '' : ' disabled') + ' aria-label="Recebe a Solicitação de Contrato"></td></tr>';
+        }).join('') + '</tbody></table></div>' +
+        (edita ? '<div class="linha" style="padding:12px 16px;justify-content:space-between"><button class="btn ghost" id="djMaisTipo">' + IC.mais + 'Novo tipo</button><button class="btn primary" id="djSalvarTipos">Salvar</button></div>' : '') +
+        '<div class="ajuda" style="padding:0 16px 14px">A Solicitação de Contrato tem o prazo próprio (' + m.horas_contrato + 'h úteis para a minuta), e a primeira minuta enviada conta como a entrega.</div></div>';
+      if (!edita) return;
+      $$('#corpoDj [data-c]').forEach(function (x) {
+        x.onchange = function () {
+          var t = linhas[Number(x.getAttribute('data-k'))], c = x.getAttribute('data-c');
+          t[c] = c === 'ativo' ? x.checked : c === 'horas' ? Number(x.value) : x.value;
+          if (c === 'horas') desenhar();
+        };
+      });
+      $$('#corpoDj input[name=djCt]').forEach(function (x) { x.onchange = function () { linhas.forEach(function (t, k) { t.contratos = String(k) === x.getAttribute('data-k'); }); }; });
+      $('#djMaisTipo').onclick = function () { linhas.push({ id: null, nome: '', horas: 8, ativo: true, contratos: false }); desenhar(); var n = $$('#corpoDj [data-c=nome]'); n[n.length - 1].focus(); };
+      $('#djSalvarTipos').onclick = async function () {
+        var ct = linhas.find(function (t) { return t.contratos; });
+        try {
+          var r = await api('PUT', '/api/juridico/tipos', { tipos: linhas.map(function (t) { return { id: t.id, nome: t.nome, horas: t.horas, ativo: t.ativo }; }), contratos_id: ct ? ct.id : null });
+          toast('Tabela salva.' + (r.recalculadas ? ' ' + r.recalculadas + ' demanda(s) em aberto com o prazo recalculado.' : ''), 'ok');
+          paginaDemandasJ('prazos');
+        } catch (e) { toast(e.message, 'erro'); }
+      };
+    }
+    desenhar();
+  }
+
+  /* ---------- importar a planilha "Acompanhamento — Atividades Jurídicas" ---------- */
+  async function abaImportarDj() {
+    var lotes = [];
+    try { lotes = (await api('GET', '/api/juridico/importacao')).lotes; } catch (e) { $('#corpoDj').innerHTML = '<div class="vazio">' + esc(e.message) + '</div>'; return; }
+    var ativo = lotes.find(function (l) { return !l.desfeita_em; });
+    $('#corpoDj').innerHTML = '<div class="painel"><div class="cab-painel"><h2>Importar a planilha do Jurídico</h2></div><div class="corpo pilha" style="gap:12px">' +
+      '<p class="ajuda" style="margin:0">Envie a planilha <b>Acompanhamento — Atividades Jurídicas</b> (.xlsx) do jeito que ela é. O portal acha os títulos sozinho, cria os tipos da <b>Tabela de Prazos</b> e mostra o que vai entrar antes de gravar. ' +
+      'Prazo, entrega e status vêm da planilha; o que já venceu entra como histórico, sem avisos. Os contratos de garantia que já estão na Solicitação de Contrato ficam de fora (para não contar duas vezes), a menos que você marque.</p>' +
+      (ativo ? '<div class="msg aviso">Já existe uma importação ativa (' + dataHoraCr(ativo.criado_em) + ', ' + ativo.ativas + ' demanda(s)). Para importar de novo, desfaça a anterior abaixo.</div>' :
+        '<div class="arquivo-envio"><input class="campo" id="djArq" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="flex:1;min-width:220px">' +
+        '<button class="btn primary" id="djLer">' + IC.enviar + 'Ler planilha</button></div>') + '<div id="djPrevia"></div></div></div>' +
+      (lotes.length ? '<section class="painel" style="margin-top:16px"><div class="cab-painel"><h2>Importações</h2></div><div class="tabela-wrap"><table><thead><tr><th>Quando</th><th>Quem</th><th style="text-align:right">Importadas</th><th style="text-align:right">No portal hoje</th><th></th></tr></thead><tbody>' +
+        lotes.map(function (l) {
+          return '<tr><td>' + dataHoraCr(l.criado_em) + '</td><td>' + esc(l.criado_por_nome || '—') + '</td><td style="text-align:right">' + (l.resumo.importadas || 0) + '</td><td style="text-align:right">' + l.ativas + '</td>' +
+            '<td style="text-align:right">' + (l.desfeita_em ? '<span class="sec">desfeita em ' + dataHoraCr(l.desfeita_em) + '</span>' : '<button class="btn ghost sm" data-desfazer="' + l.id + '">Desfazer</button>') + '</td></tr>';
+        }).join('') + '</tbody></table></div></section>' : '');
+    $$('#corpoDj [data-desfazer]').forEach(function (b) {
+      b.onclick = async function () {
+        if (!(await confirmar('Desfazer a importação', 'As demandas desta importação saem do portal. As que alguém já editou ou comentou ficam.', 'Desfazer', true))) return;
+        try { var r = await api('POST', '/api/juridico/importacao/' + b.getAttribute('data-desfazer') + '/desfazer', {}); toast(r.apagadas + ' removida(s)' + (r.mantidas.length ? '; ' + r.mantidas.length + ' ficaram (já tinham sido mexidas)' : '') + '.', 'ok'); abaImportarDj(); }
+        catch (e) { toast(e.message, 'erro'); }
+      };
+    });
+    if (!$('#djLer')) return;
+    var arquivo = null;
+    var lerBase64 = function (f) {
+      return new Promise(function (ok, falha) { var r = new FileReader(); r.onload = function () { ok(String(r.result).split(',')[1] || ''); }; r.onerror = function () { falha(new Error('Não foi possível ler o arquivo.')); }; r.readAsDataURL(f); });
+    };
+    $('#djLer').onclick = async function () {
+      var f = $('#djArq').files[0];
+      if (!f) { toast('Escolha a planilha.', 'erro'); return; }
+      $('#djPrevia').innerHTML = '<span class="ajuda">Lendo a planilha…</span>';
+      var pv;
+      try { arquivo = await lerBase64(f); pv = await api('POST', '/api/juridico/importacao/previa', { arquivo: arquivo }); } catch (e) { $('#djPrevia').innerHTML = '<div class="msg erro">' + esc(e.message) + '</div>'; return; }
+      var R = pv.resumo;
+      var lista = function (sit) { return pv.itens.filter(function (x) { return x.situacao === sit; }); };
+      var linhaIt = function (x, extra) {
+        return '<tr><td>' + (extra || '') + '</td><td>' + x.linha + '</td><td>' + esc(x.numero || '') + '</td><td>' + esc(x.tipo) + '</td><td>' + esc(x.solicitante_nome) + '</td><td>' + esc(x.cliente) + '</td>' +
+          '<td>' + dataBr(x.solicitada_em) + '</td><td>' + esc(x.motivo || x.avisos.join('; ')) + '</td></tr>';
+      };
+      var tabela = function (titulo, itens, marcar) {
+        if (!itens.length) return '';
+        return '<details class="painel"' + (marcar ? ' open' : '') + '><summary class="cab-painel" style="cursor:pointer"><h2 style="display:inline;font-size:14px">' + titulo + ' (' + itens.length + ')</h2></summary>' +
+          '<div class="tabela-wrap"><table><thead><tr><th>' + (marcar ? 'Importar?' : '') + '</th><th>Linha</th><th>#</th><th>Atividade</th><th>Solicitante</th><th>Cliente</th><th>Solicitada</th><th>Observação</th></tr></thead><tbody>' +
+          itens.map(function (x) { return linhaIt(x, marcar ? '<input type="checkbox" data-incluir="' + x.linha + '" aria-label="Importar a linha ' + x.linha + ' mesmo assim">' : ''); }).join('') + '</tbody></table></div></details>';
+      };
+      // avisos agrupados (ex.: "solicitante sem cadastro no portal" em muitas linhas)
+      var grupos = {};
+      lista('aviso').forEach(function (x) { x.avisos.forEach(function (a) { grupos[a] = (grupos[a] || 0) + 1; }); });
+      $('#djPrevia').innerHTML = '<div class="pilha" style="gap:12px">' +
+        '<div class="tiles" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">' +
+          '<div class="tile"><span class="rot-tile">Linhas</span><b>' + R.total + '</b></div><div class="tile"><span class="rot-tile">Vão entrar</span><b>' + (R.prontas + R.avisos) + '</b><span class="sec">' + R.avisos + ' com observação</span></div>' +
+          '<div class="tile"><span class="rot-tile">Já no portal</span><b>' + R.duplicadas + '</b><span class="sec">ficam de fora</span></div><div class="tile' + (R.erros ? ' alerta' : '') + '"><span class="rot-tile">Com erro</span><b>' + R.erros + '</b></div>' +
+          '<div class="tile"><span class="rot-tile">Tipos de atividade</span><b>' + pv.tipos.length + '</b><span class="sec">' + pv.tipos.filter(function (t) { return t.novo; }).length + ' novo(s)</span></div></div>' +
+        (Object.keys(grupos).length ? '<div class="msg info">' + Object.keys(grupos).map(function (a) { return grupos[a] + '× ' + esc(a); }).join('<br>') +
+          (grupos['solicitante sem cadastro no portal (fica o nome)'] ? '<br><span class="ajuda">O nome fica na demanda. Quem tiver o mesmo nome no portal é ligado automaticamente.</span>' : '') + '</div>' : '') +
+        tabela('Já estão no portal', lista('duplicada'), true) + tabela('Com erro (não entram)', lista('erro')) + tabela('Com observação', lista('aviso')) +
+        (pv.lote_ativo ? '' : '<div class="linha" style="justify-content:flex-end"><button class="btn primary" id="djImportar">' + IC.enviar + 'Importar ' + (R.prontas + R.avisos) + ' demanda(s)</button></div>') + '</div>';
+      var bt = $('#djImportar');
+      var contar = function () { if (bt) bt.innerHTML = IC.enviar + 'Importar ' + (R.prontas + R.avisos + $$('#djPrevia [data-incluir]:checked').length) + ' demanda(s)'; };
+      $$('#djPrevia [data-incluir]').forEach(function (c) { c.onchange = contar; });
+      if (bt) bt.onclick = async function () {
+        bt.disabled = true;
+        var incluir = $$('#djPrevia [data-incluir]:checked').map(function (c) { return Number(c.getAttribute('data-incluir')); });
+        try {
+          var r = await api('POST', '/api/juridico/importacao', { arquivo: arquivo, incluir: incluir });
+          toast(r.importadas + ' demanda(s) importada(s).', 'ok');
+          metaDj = null;
+          location.hash = '#/demandas-juridicas/todas';
+        } catch (e) { toast(e.message, 'erro'); bt.disabled = false; }
+      };
+    };
+  }
+
   async function iniciar() {
     try {
       var r = await fetch('/api/auth/eu', { credentials: 'same-origin' });
@@ -7620,13 +8045,14 @@
     try { resumoCredito = await api('GET', '/api/credito/resumo'); } catch (e) { /* aparece no próximo ciclo */ }
     try { resumoImp = await api('GET', '/api/implantacoes/resumo'); } catch (e) { /* aparece no próximo ciclo */ }
     try { resumoCt = await api('GET', '/api/contratos/resumo'); } catch (e) { /* aparece no próximo ciclo */ }
+    try { resumoDj = await api('GET', '/api/juridico/resumo'); } catch (e) { /* aparece no próximo ciclo */ }
     montarCasca();
     carregarTutoriais();
     atualizarResumo();
     atualizarComissao();
     buscarAvisos();
     $('#btSino').onclick = abrirAvisos;
-    setInterval(function () { atualizarResumo(); atualizarComissao(); atualizarCredito(); atualizarImp(); atualizarCt(); buscarAvisos(); verificarVersao(); }, 30 * 1000);
+    setInterval(function () { atualizarResumo(); atualizarComissao(); atualizarCredito(); atualizarImp(); atualizarCt(); atualizarDj(); buscarAvisos(); verificarVersao(); }, 30 * 1000);
     window.addEventListener('hashchange', rotear);
     rotear();
   }

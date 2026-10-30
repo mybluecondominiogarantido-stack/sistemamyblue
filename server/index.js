@@ -26,6 +26,7 @@ const { rotasCdn } = require('./rotas/cdn');
 const { rotasCredito } = require('./rotas/credito');
 const { rotasImplantacoes, criarRotinasImplantacao } = require('./rotas/implantacoes');
 const { rotasContratos, criarRotinasContratos } = require('./rotas/contratos');
+const { rotasJuridico, criarRotinasJuridico } = require('./rotas/juridico');
 
 function carregarEnv(arquivo) {
   if (!fs.existsSync(arquivo)) return;
@@ -99,7 +100,9 @@ async function criarApp(cfg) {
   const rotinasImplantacao = criarRotinasImplantacao({ db, seg, avisos, expediente });
   // Solicitação de Contrato: prazo da minuta vencido
   const rotinasContratos = criarRotinasContratos({ db, avisos, regras });
-  const ctx = { db, seg, modulos, registros, documentos, avisos, expediente, acessos, regras, boletosCarteira, renegociacoes, rotinasImplantacao, rotinasContratos, cfg };
+  // Demandas Jurídicas: vence hoje e passou do prazo
+  const rotinasJuridico = criarRotinasJuridico({ db, avisos, regras, expediente });
+  const ctx = { db, seg, modulos, registros, documentos, avisos, expediente, acessos, regras, boletosCarteira, renegociacoes, rotinasImplantacao, rotinasContratos, rotinasJuridico, cfg };
 
   const app = express();
   app.disable('x-powered-by');
@@ -132,6 +135,7 @@ async function criarApp(cfg) {
   app.use(rotasCredito(ctx));
   app.use(rotasImplantacoes(ctx));
   app.use(rotasContratos(ctx));
+  app.use(rotasJuridico(ctx));
 
   const publico = path.join(__dirname, '..', 'public');
   // versão da tela (o ?v= do app.js no index.html): a página aberta compara e avisa que há versão nova para recarregar
@@ -183,10 +187,11 @@ async function iniciar(cfg = lerConfig()) {
   servidor.listen(cfg.porta, () => {
     if (!cfg.silencioso) console.log(`Portal MyBlue rodando em http://localhost:${servidor.address().port}`);
   });
-  // rotinas da Implantação e da Solicitação de Contrato a cada 10 minutos (cada lembrete sai uma vez por dia útil)
+  // rotinas da Implantação, da Solicitação de Contrato e das Demandas Jurídicas a cada 10 minutos (cada lembrete sai uma vez por dia útil)
   const rodar = () => {
     ctx.rotinasImplantacao.executar().catch((e) => console.error('[implantação] rotina:', e.message));
     ctx.rotinasContratos.executar().catch((e) => console.error('[contratos] rotina:', e.message));
+    ctx.rotinasJuridico.executar().catch((e) => console.error('[jurídico] rotina:', e.message));
   };
   const rotinas = setInterval(rodar, 10 * 60 * 1000);
   rotinas.unref();

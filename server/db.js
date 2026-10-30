@@ -774,6 +774,71 @@ CREATE TABLE IF NOT EXISTS contrato_eventos (
 );
 CREATE INDEX IF NOT EXISTS idx_contrato_eventos ON contrato_eventos(contrato_id, criado_em);
 
+-- ===== Demandas Jurídicas (server/rotas/juridico.js) =====
+-- tudo o que se pede ao Jurídico (aditivos, rescisões, pareceres…), com o prazo do tipo em horas úteis (÷ 8 = dias úteis),
+-- a data da entrega e o SLA (entregue até o prazo). Os pedidos da Solicitação de Contrato entram na lista sozinhos (não ficam aqui).
+CREATE TABLE IF NOT EXISTS juridico_tipos (
+  id SERIAL PRIMARY KEY,
+  nome TEXT NOT NULL UNIQUE,
+  horas INTEGER NOT NULL CHECK (horas > 0),
+  ativo BOOLEAN NOT NULL DEFAULT TRUE,
+  ordem INTEGER NOT NULL DEFAULT 0,
+  -- o tipo em que aparecem os pedidos da Solicitação de Contrato (um só)
+  contratos BOOLEAN NOT NULL DEFAULT FALSE,
+  atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- planilha importada (dá para desfazer: apaga o que o lote criou e ninguém mexeu depois)
+CREATE TABLE IF NOT EXISTS juridico_importacoes (
+  id SERIAL PRIMARY KEY,
+  criado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  resumo JSONB NOT NULL DEFAULT '{}'::jsonb,
+  desfeita_em TIMESTAMPTZ,
+  desfeita_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS juridico_demandas (
+  id SERIAL PRIMARY KEY,
+  numero INTEGER NOT NULL UNIQUE,
+  tipo_id INTEGER NOT NULL REFERENCES juridico_tipos(id),
+  status TEXT NOT NULL DEFAULT 'pendente' CHECK (status IN ('pendente','em_andamento','aguardando_retorno','aguardando_assinaturas','concluido','contrato_perdido')),
+  solicitante_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  -- nome de quem pediu (o da pessoa do portal, ou o que veio da planilha quando ela não tem cadastro)
+  solicitante_nome TEXT NOT NULL DEFAULT '',
+  setor TEXT NOT NULL DEFAULT '',
+  uf TEXT NOT NULL DEFAULT '',
+  cliente TEXT NOT NULL DEFAULT '',
+  condominio_id INTEGER REFERENCES condominios(id) ON DELETE SET NULL,
+  objeto TEXT NOT NULL DEFAULT '',
+  observacoes TEXT NOT NULL DEFAULT '',
+  responsavel_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  solicitada_em DATE NOT NULL,
+  horas INTEGER NOT NULL,
+  prazo DATE NOT NULL,
+  entregue_em DATE,
+  aviso_vence_em DATE,
+  aviso_atraso_em DATE,
+  importacao_id INTEGER REFERENCES juridico_importacoes(id) ON DELETE SET NULL,
+  linha_planilha INTEGER,
+  criado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_juridico_demandas_status ON juridico_demandas(status);
+CREATE INDEX IF NOT EXISTS idx_juridico_demandas_solicitante ON juridico_demandas(solicitante_id);
+
+CREATE TABLE IF NOT EXISTS juridico_eventos (
+  id SERIAL PRIMARY KEY,
+  demanda_id INTEGER NOT NULL REFERENCES juridico_demandas(id) ON DELETE CASCADE,
+  usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  tipo TEXT NOT NULL,
+  detalhe JSONB NOT NULL DEFAULT '{}'::jsonb,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_juridico_eventos ON juridico_eventos(demanda_id, criado_em);
+
 -- renegociação do Controle de Renegociações que virou ticket para o Crédito (uma por renegociação)
 -- e as condições que o ticket já tem (as mudanças seguintes viram comentário no mesmo ticket)
 CREATE TABLE IF NOT EXISTS renegociacao_tickets (
@@ -804,7 +869,8 @@ const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 
   'analise_lancamentos', 'analise_exclusoes', 'analise_alertas', 'analise_eventos',
   'implantacao_protocolos', 'implantacoes', 'implantacao_documentos', 'implantacao_eventos', 'implantacao_liberacoes', 'implantacao_parametros',
   'implantacao_autorizacoes', 'implantacao_pausas', 'implantacao_fichas', 'implantacao_ficha_versoes', 'implantacao_antecipacoes', 'implantacao_importacoes',
-  'contrato_protocolos', 'contratos', 'contrato_documentos', 'contrato_eventos', 'renegociacao_tickets', 'renegociacao_relatorios'];
+  'contrato_protocolos', 'contratos', 'contrato_documentos', 'contrato_eventos', 'renegociacao_tickets', 'renegociacao_relatorios',
+  'juridico_tipos', 'juridico_importacoes', 'juridico_demandas', 'juridico_eventos'];
 const RLS = TABELAS.map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`).join(';\n');
 
 /* Ajustes em bancos já existentes (rodam a cada início e não fazem nada se já estiverem aplicados). */
