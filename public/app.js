@@ -549,40 +549,48 @@
   async function paginaUsuarios() {
     var coord = gestorSetor();
     barraConfig('Pessoas');
-    $('#conteudo').innerHTML = '<div class="pagina"><div class="carregando" style="position:static;background:none"><div><div class="giro"></div>Carregando…</div></div></div>';
-    var dados, mods;
-    try { dados = await api('GET', '/api/admin/usuarios'); mods = coord ? dados.modulos_disponiveis : (await carregarModulosAdmin()).modulos; } catch (e) { toast(e.message, 'erro'); return; }
-    var nomeMod = coord ? (dados.nomes_modulos || {}) : {}; mods.forEach(function (m) { nomeMod[m.slug] = m.nome; });
+    $('#conteudo').innerHTML = carregandoHtml();
+    var dados;
+    try { dados = await api('GET', '/api/admin/usuarios'); } catch (e) { toast(e.message, 'erro'); return; }
+    if (!naConfig('pessoas')) return; // a pessoa já foi para outra tela
+    // a pessoa escolhida vem do endereço (#/config/pessoas/12 ou #/config/pessoas/nova); sem escolha, abre a primeira ativa
+    var escolha = location.hash.split('/')[3] || '';
+    var atual = escolha === 'nova' ? null : dados.usuarios.find(function (u) { return u.id === Number(escolha); }) || dados.usuarios.find(function (u) { return u.ativo; }) || dados.usuarios[0] || null;
+    var mostrarInativos = !!(atual && !atual.ativo);
+    function situacao(u) { return !u.ativo ? '<span class="etiqueta cinza">desativado</span>' : u.trocar_senha ? '<span class="etiqueta ambar">1º acesso</span>' : ''; }
+    $('#conteudo').innerHTML = '<div class="pagina pagina-config">' + abasConfig('pessoas') +
+      cabConfig('Pessoas', (coord ? 'O cadastro das pessoas dos seus setores (e das que você criou): nome, e-mail, setor e se está ativa.' : 'O cadastro de cada pessoa: nome, e-mail, perfil, setor e se está ativa.') +
+        ' O que cada uma abre e pode fazer fica em <a href="#/config/acessos">Acessos</a>.', '<a class="btn primary" href="#/config/pessoas/nova">' + IC.mais + 'Nova pessoa</a>') +
+      '<div class="dividido"><div class="painel lista-sel" id="listaPes"><div class="faixa-busca"><input class="campo" id="fUsu" type="search" placeholder="Pesquisar pessoa…" aria-label="Pesquisar pessoa"></div>' +
+      '<label class="rodape-lista"><input type="checkbox" id="fInativos"' + (mostrarInativos ? ' checked' : '') + '> mostrar desativados</label>' +
+      dados.usuarios.map(function (u) {
+        var on = atual && u.id === atual.id;
+        return '<a href="#/config/pessoas/' + u.id + '" data-t="' + esc(normal(u.nome + ' ' + u.email)) + '" data-ativo="' + (u.ativo ? 1 : 0) + '" class="' + (on ? 'on ' : '') + (u.ativo ? '' : 'inativo') + '"' + (on ? ' aria-current="true"' : '') + '>' +
+          '<span>' + esc(u.nome) + '</span>' + (situacao(u) || '<small>' + esc(PAPEL[u.papel] || 'Usuário') + '</small>') + '</a>';
+      }).join('') + '<p class="ajuda" id="semPes" style="padding:10px 14px" hidden>Ninguém encontrado.</p></div>' +
+      '<div class="pilha" style="min-width:0"><div id="detPes"></div><div id="detPesAcessos"></div></div></div></div>';
 
-    var nomeSetor = {}; (dados.setores || []).forEach(function (x) { nomeSetor[x.id] = x.nome; });
-    Object.keys(dados.nomes_setores || {}).forEach(function (k) { nomeSetor[k] = dados.nomes_setores[k]; });
-    $('#conteudo').innerHTML = '<div class="pagina">' + abasConfig('pessoas') + '<h1>Pessoas</h1><p class="sub">' +
-      (coord ? 'O cadastro das pessoas dos seus setores (e das que você criou): nome, e-mail, setor e se está ativa.' : 'O cadastro de cada pessoa: nome, e-mail, perfil, setor e se está ativa.') +
-      ' O que cada uma abre e pode fazer fica em <a href="#/config/acessos">Acessos</a>.</p>' +
-      '<div class="painel"><div class="cab-painel"><input class="campo" id="fUsu" placeholder="Buscar por nome ou e-mail…" style="max-width:320px">' +
-      '<label class="linha" style="font-weight:700;font-size:13px;color:var(--muted)"><input type="checkbox" id="fInativos"> mostrar desativados</label><span class="espaco"></span>' +
-      '<button class="btn primary" id="btNovoUsu">' + IC.mais + 'Novo usuário</button></div>' +
-      '<div class="tabela-wrap"><table><thead><tr><th>Pessoa</th><th>Perfil</th><th>Ferramentas</th><th>Último acesso</th><th>Situação</th></tr></thead><tbody id="tbUsu"></tbody></table></div></div></div>';
-
-    function desenhar() {
-      var t = normal($('#fUsu').value);
-      var inativos = $('#fInativos').checked;
-      var lista = dados.usuarios.filter(function (u) { return (inativos || u.ativo) && (!t || normal(u.nome + ' ' + u.email).indexOf(t) >= 0); });
-      $('#tbUsu').innerHTML = lista.map(function (u) {
-        var ferr = u.papel === 'admin' ? '<span class="etiqueta azul">todas</span>' :
-          u.modulos.length ? '<span title="' + esc(u.modulos.map(function (s) { return nomeMod[s] || s; }).join('\n')) + '">' + u.modulos.length + (coord ? ' ferramenta(s)' : ' de ' + mods.length) + '</span>' : '<span class="etiqueta ambar">nenhuma</span>';
-        return '<tr class="clicavel" data-id="' + u.id + '"><td><div class="linha" style="flex-wrap:nowrap;gap:10px">' + avatarHtml(u, 34) + '<div><b>' + esc(u.nome) + '</b><span class="sec">' + esc(u.email) + '</span></div></div></td>' +
-          '<td>' + (PAPEL[u.papel] || 'Usuário') + (u.setores && u.setores.length ? '<span class="sec">' + esc(u.setores.map(function (x) { return nomeSetor[x] || ''; }).filter(Boolean).join(', ')) + '</span>' : '') + (u.supervisor_tickets ? ' <span class="etiqueta azul">supervisão tickets</span>' : '') + (u.editor_links ? ' <span class="etiqueta azul">central de links</span>' : '') + '</td><td>' + ferr + '</td><td>' + quando(u.ultimo_login) + '</td>' +
-          '<td>' + (!u.ativo ? '<span class="etiqueta cinza">desativado</span>' : u.trocar_senha ? '<span class="etiqueta ambar">aguardando 1º acesso</span>' : '<span class="etiqueta verde">ativo</span>') + '</td></tr>';
-      }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);font-weight:700;padding:30px">Nenhum usuário encontrado.</td></tr>';
-      $$('#tbUsu tr[data-id]').forEach(function (tr) {
-        tr.onclick = function () { editarUsuario(dados.usuarios.find(function (u) { return u.id === Number(tr.getAttribute('data-id')); })); };
+    function filtrar() {
+      var t = normal($('#fUsu').value), inativos = $('#fInativos').checked, algum = false;
+      $$('#listaPes a[data-t]').forEach(function (a) {
+        a.hidden = (!inativos && a.getAttribute('data-ativo') === '0' && !a.classList.contains('on')) || (!!t && a.getAttribute('data-t').indexOf(t) < 0);
+        if (!a.hidden) algum = true;
       });
+      $('#semPes').hidden = algum;
     }
-    $('#fUsu').oninput = desenhar;
-    $('#fInativos').onchange = desenhar;
-    $('#btNovoUsu').onclick = function () { editarUsuario(null); };
-    desenhar();
+    $('#fUsu').oninput = filtrar;
+    $('#fInativos').onchange = filtrar;
+    filtrar();
+    var on = $('#listaPes a.on'); if (on) on.scrollIntoView({ block: 'nearest' });
+    if (escolha === 'nova' || atual) editarUsuario(atual);
+    if (atual) {
+      var resumo = atual.papel === 'admin' ? 'Administração: abre todas as ferramentas, com todos os papéis.' :
+        (atual.modulos.length ? atual.modulos.length + (atual.modulos.length === 1 ? ' ferramenta liberada' : ' ferramentas liberadas') : 'Nenhuma ferramenta liberada') +
+        (atual.papel === 'coordenador' || atual.papel === 'supervisor' ? ', além das dos setores que coordena.' : '.') +
+        (atual.supervisor_tickets ? ' Supervisão da Central de Tickets.' : '') + (atual.editor_links ? ' Central de Links.' : '');
+      $('#detPesAcessos').innerHTML = '<div class="painel"><div class="cab-painel"><div style="min-width:0;flex:1"><h2 style="font-family:var(--display);font-size:16px;margin:0">O que ' + esc(atual.nome.split(' ')[0]) + ' acessa</h2>' +
+        '<p class="ajuda" style="margin:2px 0 0">' + esc(resumo) + '</p></div><a class="btn ghost" href="#/config/acessos/pessoa/' + atual.id + '">' + IC.cadeado + 'Ver e alterar em Acessos</a></div></div>';
+    }
 
     function editarUsuario(u) {
       var novo = !u;
@@ -591,8 +599,8 @@
       var blocoSetores = '<div><label class="rot">Setor' + (dados.setores.length > 1 ? '(es)' : '') + '</label><div class="caixa-opcoes" style="max-height:170px">' +
         dados.setores.map(function (x) { return '<label><input type="checkbox" name="uSetor" value="' + x.id + '"' + (setoresU.indexOf(x.id) >= 0 ? ' checked' : '') + '><span>' + esc(x.nome) + '</span></label>'; }).join('') + '</div>' +
         '<div class="ajuda">' + (coord ? 'A pessoa entra na equipe do setor na Central de Tickets.' : 'É o setor da pessoa: forma a equipe do setor na Central de Tickets e, para coordenador e supervisor, define o que eles gerenciam.') + '</div></div>';
-      var m = modal({
-        titulo: novo ? 'Novo usuário' : 'Editar usuário', largo: true,
+      var m = painelOuModal($('#detPes'), {
+        titulo: novo ? 'Nova pessoa' : u.nome, subtitulo: novo ? 'Depois de criar, o portal leva você para escolher o que ela acessa.' : 'Último acesso: ' + (u.ultimo_login ? esc(quando(u.ultimo_login)) : 'ainda não entrou'),
         corpo: '<form id="fU" class="pilha" novalidate><div class="grade-2">' +
           '<div><label class="rot" for="uNome">Nome</label><input class="campo" id="uNome" value="' + esc(u.nome) + '" required></div>' +
           '<div><label class="rot" for="uEmail">E-mail (login)</label><input class="campo" id="uEmail" type="email" value="' + esc(u.email) + '" required></div>' +
@@ -600,45 +608,48 @@
           '<div><label class="rot" for="uAdm">Data de admissão</label><input class="campo" id="uAdm" type="date" value="' + esc(u.data_admissao || '') + '" required></div></div>' +
           (!novo && (!u.data_nascimento || !u.data_admissao) ? '<div class="msg aviso" style="margin:0">Complete a data de nascimento e a de admissão: são obrigatórias para salvar.</div>' : '') +
           (coord ? '' :
-          '<div><label class="rot">Perfil</label><div class="grade-2">' +
-          '<label class="opcao-radio"><input type="radio" name="uPapel" value="usuario"' + (u.papel === 'usuario' || !PAPEL[u.papel] ? ' checked' : '') + '><div><b>Usuário</b><span>Abre só as ferramentas liberadas para ele em Acessos.</span></div></label>' +
-          '<label class="opcao-radio"><input type="radio" name="uPapel" value="supervisor"' + (u.papel === 'supervisor' ? ' checked' : '') + '><div><b>Supervisor</b><span>Gerencia o(s) setor(es) dele: usuários comuns, ferramentas, equipe e tipos de demanda; na Base de Clientes, o que estiver liberado em Acessos → Base de Clientes. Vê e direciona os tickets de todos os setores. Mesmos poderes do coordenador.</span></div></label>' +
-          '<label class="opcao-radio"><input type="radio" name="uPapel" value="coordenador"' + (u.papel === 'coordenador' ? ' checked' : '') + '><div><b>Coordenador</b><span>Gerencia o(s) setor(es) dele: usuários comuns, ferramentas, equipe e tipos de demanda; na Base de Clientes, o que estiver liberado em Acessos → Base de Clientes. Vê e direciona os tickets de todos os setores.</span></div></label>' +
-          '<label class="opcao-radio"><input type="radio" name="uPapel" value="admin"' + (u.papel === 'admin' ? ' checked' : '') + '><div><b>Administrador</b><span>Acessa tudo e cuida de todas as Configurações.</span></div></label></div></div>') +
+          '<div><label class="rot" for="uPapel">Perfil</label><select class="campo" id="uPapel">' + ['usuario', 'coordenador', 'supervisor', 'admin'].map(function (p) {
+            return '<option value="' + p + '"' + ((u.papel === p || (p === 'usuario' && !PAPEL[u.papel])) ? ' selected' : '') + '>' + PAPEL[p] + '</option>';
+          }).join('') + '</select><div class="ajuda" id="uPapelAjuda"></div></div>') +
           blocoSetores +
-          '<p class="ajuda" style="margin:0">As ferramentas que a pessoa abre, a Base de Clientes e as marcações ficam em <b>Configurações → Acessos</b>' +
-            (novo ? '. Depois de criar, o portal leva você até lá.' : '.') + '</p>' +
           (novo ? '<div><label class="rot" for="uSenha">Senha inicial (opcional)</label><input class="campo" id="uSenha" type="text" autocomplete="off" placeholder="Deixe em branco para gerar uma automaticamente"><div class="ajuda">A pessoa precisará trocar a senha no primeiro acesso.</div></div>' :
-            '<label class="linha" style="font-weight:700"><input type="checkbox" id="uAtivo"' + (u.ativo ? ' checked' : '') + '> Usuário ativo (desmarque para bloquear o acesso)</label>') +
+            '<div><span class="rot">Situação</span><label class="linha" style="font-weight:700"><span class="chave"><input type="checkbox" id="uAtivo"' + (u.ativo ? ' checked' : '') + ' aria-label="Pessoa ativa"><i></i></span>' +
+            '<span id="uAtivoTxt">' + (u.ativo ? 'Ativa: consegue entrar no portal' : 'Desativada: não consegue entrar') + '</span></label></div>') +
           '<div id="uMsg" class="msg erro" hidden></div></form>',
-        pe: (novo ? '' : '<button class="btn ghost" id="btResetSenha">Redefinir senha</button><a class="btn ghost" id="btVerAcessos" href="#/config/acessos/pessoa/' + u.id + '" style="margin-right:auto">' + IC.cadeado + 'Acessos desta pessoa</a>') +
-          '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="btSalvarU">' + (novo ? 'Criar usuário' : 'Salvar') + '</button>',
+        acoes: novo ? '' : '<button class="btn ghost sm" id="btResetSenha">Redefinir senha</button>',
+        pe: '<button class="btn primary" id="btSalvarU">' + (novo ? 'Criar pessoa' : 'Salvar') + '</button>',
       });
+      var AJUDA_PERFIL = { usuario: 'Abre só as ferramentas liberadas para ele em Acessos.', admin: 'Acessa tudo e cuida de todas as Configurações.',
+        coordenador: 'Gerencia os setores dele: pessoas, ferramentas, equipe, tipos de demanda e o que for do setor em Acessos. Vê e direciona os tickets de todos os setores.',
+        supervisor: 'Os mesmos poderes do coordenador, nos setores dele.' };
+      if ($('#uPapel', m)) { $('#uPapel', m).onchange = function () { $('#uPapelAjuda', m).textContent = AJUDA_PERFIL[this.value]; }; $('#uPapel', m).onchange(); }
+      if ($('#uAtivo', m)) $('#uAtivo', m).onchange = function () { $('#uAtivoTxt', m).textContent = this.checked ? 'Ativa: consegue entrar no portal' : 'Desativada: não consegue entrar'; };
       $('#btSalvarU', m).onclick = async function () {
         var corpo = {
           nome: $('#uNome', m).value, email: $('#uEmail', m).value, data_nascimento: $('#uNasc', m).value, data_admissao: $('#uAdm', m).value,
           setores: $$('input[name=uSetor]:checked', m).map(function (i) { return Number(i.value); }),
         };
         // ferramentas e marcações não vão daqui: ficam em Acessos (o servidor mantém o que já está marcado)
-        if (!coord) corpo.papel = $('input[name=uPapel]:checked', m).value;
+        if (!coord) corpo.papel = $('#uPapel', m).value;
         try {
           if (novo) {
             corpo.senha = $('#uSenha', m).value;
             var r = await api('POST', '/api/admin/usuarios', corpo);
             m.fechar();
             // depois de anotar a senha, segue para escolher o que a pessoa acessa
-            mostrarSenha('Usuário criado', corpo.email.trim().toLowerCase(), r.senha_temporaria, function () { location.hash = '#/config/acessos/pessoa/' + r.id; });
+            mostrarSenha('Pessoa criada', corpo.email.trim().toLowerCase(), r.senha_temporaria, function () { location.hash = '#/config/acessos/pessoa/' + r.id; });
+            location.hash = '#/config/pessoas/' + r.id;
+            return;
           } else {
             corpo.ativo = $('#uAtivo', m).checked;
             await api('PATCH', '/api/admin/usuarios/' + u.id, corpo);
             m.fechar();
-            toast('Usuário atualizado.', 'ok');
+            toast('Cadastro salvo.', 'ok');
           }
           paginaUsuarios();
         } catch (e) { var x = $('#uMsg', m); x.textContent = e.message; x.hidden = false; }
       };
       if (!novo) {
-        $('#btVerAcessos', m).onclick = function () { m.fechar(); };
         $('#btResetSenha', m).onclick = async function () {
           if (!(await confirmar('Redefinir senha', 'Será gerada uma senha temporária para <b>' + esc(u.nome) + '</b> e as sessões abertas dessa pessoa serão encerradas.', 'Redefinir'))) return;
           try {
@@ -680,14 +691,32 @@
   /* ======================= Configurações ======================= */
   /* Tudo o que se configura no portal, num lugar só. A administração vê todas as seções; a coordenação e a supervisão
      veem as mesmas telas, com os mesmos nomes, filtradas pelos setores delas (o servidor confere em cada rota). */
-  // [chave, nome, ícone, só administração]
-  var SECOES_CONFIG = [['pessoas', 'Pessoas', 'usuarios'], ['setores', 'Setores e equipes', 'pessoas'], ['acessos', 'Acessos', 'cadeado'],
-    ['ferramentas', 'Ferramentas', 'camadas'], ['sistema', 'Sistema', 'banco', true], ['historico', 'Histórico', 'historico', true]];
+  // [chave, nome, ícone, só administração, o que tem]
+  var SECOES_CONFIG = [['pessoas', 'Pessoas', 'usuarios', false, 'Cadastro, perfil e setor'], ['setores', 'Setores e equipes', 'pessoas', false, 'Líderes e tipos de demanda'],
+    ['acessos', 'Acessos', 'cadeado', false, 'Quem pode fazer o quê'], ['ferramentas', 'Ferramentas', 'camadas', false, 'HTML, versões e tutoriais'],
+    ['sistema', 'Sistema', 'banco', true, 'Backup, envios e e-mail'], ['historico', 'Histórico', 'historico', true, 'Quem mudou o quê']];
   function secoesConfig() { return SECOES_CONFIG.filter(function (s) { return !s[3] || eu.papel === 'admin'; }); }
+  // menu das seções, na coluna da esquerda da página (no celular vira uma faixa no topo)
   function abasConfig(atual) {
-    return '<nav class="abas abas-config" aria-label="Seções de Configurações">' + secoesConfig().map(function (s) {
-      return '<a href="#/config/' + s[0] + '" class="' + (s[0] === atual ? 'on' : '') + '"' + (s[0] === atual ? ' aria-current="page"' : '') + '>' + IC[s[2]] + s[1] + '</a>';
+    return '<nav class="cfg-nav" aria-label="Seções de Configurações"><h2>Configurações</h2>' + secoesConfig().map(function (s) {
+      return '<a href="#/config/' + s[0] + '" class="' + (s[0] === atual ? 'on' : '') + '"' + (s[0] === atual ? ' aria-current="page"' : '') + '>' + IC[s[2]] + '<b>' + s[1] + '</b><small>' + s[4] + '</small></a>';
     }).join('') + '</nav>';
+  }
+  // título da seção, com a explicação e (opcional) o botão principal à direita
+  function cabConfig(titulo, sub, acao) {
+    return '<div class="cab-config"><div><h1>' + titulo + '</h1><p class="sub">' + sub + '</p></div>' + (acao || '') + '</div>';
+  }
+  /* detalhe ao lado da lista: o mesmo contrato do modal() (corpo, pe, m.fechar, $('#x', m)), mas desenhado dentro da página.
+     Sem janela, não há "Cancelar/Fechar": esses botões saem, e fechar é só avisar quem chamou. */
+  function painelOuModal(cont, opts) {
+    if (!cont) return modal(opts);
+    cont.innerHTML = '<div class="painel painel-detalhe"><div class="cab-painel"><div style="min-width:0;flex:1"><h2>' + esc(opts.titulo) + '</h2>' +
+      (opts.subtitulo ? '<p class="ajuda">' + opts.subtitulo + '</p>' : '') + '</div>' + (opts.acoes || '') + '</div>' +
+      '<div class="corpo">' + (opts.corpo || '') + '</div>' + (opts.pe ? '<div class="pe-painel">' + opts.pe + '</div>' : '') + '</div>';
+    var el = cont.firstChild;
+    $$('[data-fechar]', el).forEach(function (b) { b.remove(); });
+    el.fechar = function () { if (opts.aoFechar) opts.aoFechar(); };
+    return el;
   }
   function barraConfig(nome, acoes) {
     definirBarra('<a class="setor" href="#/config" style="text-decoration:none">Configurações</a><span class="sep">/</span><span class="nome">' + esc(nome) + '</span>', acoes);
@@ -705,21 +734,34 @@
   }
 
   /* Sistema (administração): o que vale para o portal inteiro */
-  function paginaSistema() {
+  async function paginaSistema() {
     barraConfig('Sistema');
+    $('#conteudo').innerHTML = carregandoHtml();
+    var em = {};
+    try { em = (await api('GET', '/api/admin/equipes')).email || {}; } catch (e) { /* sem o estado do e-mail, o cartão só não mostra o remetente */ }
+    if (!naConfig('sistema')) return; // a pessoa já foi para outra tela
     var itens = [
       ['btBackup', IC.banco, 'Backup do banco', 'Todas as tabelas, com os arquivos (.jsonl.gz). Tem dados de negócio: guarde em local com acesso restrito.', IC.baixar + 'Baixar backup'],
       ['btZipMods', IC.camadas, 'Baixar ferramentas', 'A versão em uso de cada ferramenta, num arquivo .zip.', IC.baixar + 'Baixar .zip'],
       ['btLote', IC.enviar, 'Enviar vários HTMLs', 'Atualiza várias ferramentas de uma vez: o portal reconhece cada arquivo pelo título da página e publica na ferramenta certa.', IC.enviar + 'Escolher arquivos'],
+      ['btEmailTeste', IC.sino, 'Avisos por e-mail', em.ativo ? 'Enviando ' + (em.tipo === 'microsoft365' ? 'pelo Microsoft 365' : 'por SMTP') + ' como <b>' + esc(em.remetente || '') + '</b>.' :
+        'Não configurado: por enquanto os avisos aparecem só no portal (veja o README, seção Central de Tickets).', em.ativo ? 'Enviar e-mail de teste para mim' : ''],
     ];
-    $('#conteudo').innerHTML = '<div class="pagina">' + abasConfig('sistema') + '<h1>Sistema</h1><p class="sub">Ações sobre o portal inteiro. Só a administração vê esta seção.</p>' +
+    $('#conteudo').innerHTML = '<div class="pagina pagina-config">' + abasConfig('sistema') + cabConfig('Sistema', 'Ações sobre o portal inteiro. Só a administração vê esta seção.') +
       '<div class="cartoes">' + itens.map(function (x) {
-        return '<div class="cartao"><div class="cab"><div class="icone-mod">' + x[1] + '</div><div style="flex:1;min-width:0"><h3>' + x[2] + '</h3></div></div>' +
-          '<p>' + x[3] + '</p><div class="acoes"><button class="btn ghost sm" id="' + x[0] + '">' + x[4] + '</button></div></div>';
+        return '<div class="cartao"><div class="cab"><div class="icone-mod">' + x[1] + '</div><div style="flex:1;min-width:0"><h3>' + x[2] + '</h3></div>' +
+          (x[0] === 'btEmailTeste' && !em.ativo ? '<span class="etiqueta ambar">sem e-mail</span>' : '') + '</div>' +
+          '<p>' + x[3] + '</p>' + (x[4] ? '<div class="acoes"><button class="btn ghost sm" id="' + x[0] + '">' + x[4] + '</button></div>' : '') + '</div>';
       }).join('') + '</div></div>';
     $('#btBackup').onclick = function () { location.href = '/api/admin/backup'; };
     $('#btZipMods').onclick = function () { location.href = '/api/admin/modulos-em-uso.zip'; };
     $('#btLote').onclick = function () { envioEmLote(function () { recarregarModulosUsuario(); }); };
+    if ($('#btEmailTeste')) $('#btEmailTeste').onclick = async function () {
+      var bt = this; bt.disabled = true;
+      try { var r = await api('POST', '/api/admin/equipes/email-teste'); toast('E-mail de teste enviado para ' + r.para + '. Confira a caixa de entrada (e o lixo eletrônico).', 'ok'); }
+      catch (e) { toast(e.message, 'erro'); }
+      bt.disabled = false;
+    };
   }
 
   /* Acessos: quem pode fazer o quê. É o único lugar onde se libera e se tira acesso. */
@@ -736,8 +778,9 @@
     var abas = ABAS_ACESSOS.filter(function (a) { return pode[a[0]]; });
     if (!pode[aba]) aba = 'ferramentas';
     if (!naConfig('acessos')) return; // a pessoa já foi para outra tela
-    $('#conteudo').innerHTML = '<div class="pagina">' + abasConfig('acessos') + '<h1>Acessos</h1><p class="sub">Quem abre cada ferramenta, se edita ou só consulta, com qual papel, e as demais permissões do portal. ' +
-      'É aqui que se libera e se tira acesso.' + (admin ? '' : ' Você vê o que é dos setores que coordena.') + '</p>' +
+    $('#conteudo').innerHTML = '<div class="pagina pagina-config">' + abasConfig('acessos') +
+      cabConfig('Acessos', 'Quem abre cada ferramenta, se edita ou só consulta, com qual papel, e as demais permissões do portal. É aqui que se libera e se tira acesso.' +
+        (admin ? '' : ' Você vê o que é dos setores que coordena.')) +
       '<nav class="sub-abas" aria-label="Tipos de acesso">' + abas.map(function (a) {
         return '<a href="#/config/acessos/' + a[0] + '" class="' + (a[0] === aba ? 'on' : '') + '"' + (a[0] === aba ? ' aria-current="page"' : '') + '>' + a[1] + '</a>';
       }).join('') + '</nav><div id="corpoAc"><div class="ajuda">Carregando…</div></div></div>';
@@ -776,20 +819,51 @@
     if (on) on.scrollIntoView({ block: 'nearest' });
   }
 
+  function gruposFerramentas(mods) {
+    return porSetor(mods.map(function (x) { return Object.assign({}, x, { setor: x.setor_nome || 'Sem setor', setor_ordem: x.setor_ordem == null ? 999 : x.setor_ordem }); }))
+      .map(function (g) {
+        return { nome: g.setor, itens: g.itens.map(function (x) {
+          return { id: x.slug, nome: x.nome, busca: x.slug + ' ' + (x.nome_original || ''), extra: x.pendente ? '<span class="etiqueta ambar">aguardando</span>' : x.versao_pendente_id ? '<span class="etiqueta ambar">versão nova</span>' : x.ativo === false ? '<span class="etiqueta cinza">desativada</span>' : '' };
+        }) };
+      });
+  }
+  // ferramenta escolhida no endereço (#/config/ferramentas/<slug>)
+  function ferramentaEscolhida(mods) {
+    var slug = decodeURIComponent(location.hash.split('/')[3] || '');
+    return mods.find(function (x) { return x.slug === slug; }) || mods[0] || null;
+  }
+
   async function acessosFerramentas(cont, slug) {
     var mods;
     try { mods = (await api('GET', '/api/admin/modulos')).modulos; } catch (e) { cont.innerHTML = '<div class="msg erro">' + esc(e.message) + '</div>'; return; }
     if (!mods.length) { cont.innerHTML = '<div class="vazio">Nenhuma ferramenta nos seus setores. Peça à administração para conferir o setor no seu cadastro.</div>'; return; }
     var mod = mods.find(function (x) { return x.slug === slug; }) || mods[0];
-    var grupos = porSetor(mods.map(function (x) { return Object.assign({}, x, { setor: x.setor_nome || 'Sem setor', setor_ordem: x.setor_ordem == null ? 999 : x.setor_ordem }); }))
-      .map(function (g) {
-        return { nome: g.setor, itens: g.itens.map(function (x) { return { id: x.slug, nome: x.nome, extra: x.pendente ? '<span class="etiqueta ambar">aguardando</span>' : x.ativo ? '' : '<span class="etiqueta cinza">desativada</span>' }; }) };
-      });
+    var grupos = gruposFerramentas(mods);
     cont.innerHTML = '<div class="dividido">' + listaSelecao('buscaFerrAc', 'ferramenta', grupos, function (x) { return '#/config/acessos/ferramentas/' + encodeURIComponent(x.id); }, mod.slug) +
-      '<div class="painel"><div class="cab-painel"><div style="min-width:0"><h2>' + esc(mod.nome) + '</h2><span class="ajuda" style="margin:0">Setor dono: ' + esc(mod.setor_nome || 'sem setor') + '</span></div>' +
-      '<span class="espaco"></span><a class="btn ghost sm" href="#/m/' + esc(mod.slug) + '">' + IC.novaAba + 'Abrir a ferramenta</a></div><div class="corpo" id="edAcessosAc"></div></div></div>';
+      '<div style="min-width:0"><div class="painel"><div class="cab-painel"><div style="min-width:0"><h2>' + esc(mod.nome) + '</h2><span class="ajuda" style="margin:0">Setor dono: ' + esc(mod.setor_nome || 'sem setor') + '</span></div>' +
+      '<span class="espaco"></span><a class="btn ghost sm" href="#/m/' + esc(mod.slug) + '">' + IC.novaAba + 'Abrir a ferramenta</a></div><div class="corpo" id="edAcessosAc"></div></div>' +
+      (eu.papel === 'admin' ? '<div class="painel" style="margin-top:16px"><div class="cab-painel"><h2>Últimas alterações</h2><span class="espaco"></span>' +
+        '<a class="btn ghost sm" href="#/config/historico">Ver tudo no Histórico</a></div><div class="corpo" id="histAc"><div class="ajuda" style="margin:0">Carregando…</div></div></div>' : '') + '</div></div>';
     ligarListaSelecao('buscaFerrAc');
-    editorAcessos($('#edAcessosAc'), mod.slug);
+    var ed = $('#edAcessosAc');
+    ed.aoSalvar = function () { ultimasAlteracoes($('#histAc'), mod.slug); };
+    editorAcessos(ed, mod.slug);
+    ultimasAlteracoes($('#histAc'), mod.slug);
+  }
+
+  /* o que mudou na ferramenta (quem abre, papéis, versões), registrado sozinho no Histórico — só a administração lê */
+  async function ultimasAlteracoes(cont, slug) {
+    if (!cont) return;
+    var ev, nomes = {};
+    try {
+      ev = (await api('GET', '/api/admin/auditoria?modulo=' + encodeURIComponent(slug) + '&acao=modulo_&ocultar_aberturas=1&limite=6')).eventos
+        .concat((await api('GET', '/api/admin/auditoria?modulo=' + encodeURIComponent(slug) + '&acao=versao_&limite=4')).eventos)
+        .sort(function (a, b) { return b.id - a.id; }).slice(0, 6);
+      (await api('GET', '/api/admin/usuarios')).usuarios.forEach(function (u) { nomes[u.email] = u.nome; });
+    } catch (e) { cont.innerHTML = '<div class="ajuda" style="margin:0">' + esc(e.message) + '</div>'; return; }
+    cont.innerHTML = ev.length ? '<ul class="historico-mini">' + ev.map(function (x) {
+      return '<li><time>' + esc(quando(x.quando)) + '</time><span><b>' + esc(nomes[x.usuario_email] || x.usuario_email || '—') + '</b> · ' + esc(ROTULO_ACAO[x.acao] || x.acao) + '</span></li>';
+    }).join('') + '</ul>' : '<div class="ajuda" style="margin:0">Nenhuma alteração registrada ainda.</div>';
   }
 
   async function acessosPessoa(cont, id) {
@@ -1104,63 +1178,89 @@
     cont.innerHTML = '<div class="ajuda">Carregando quem tem acesso…</div>';
     var q;
     try { q = await api('GET', '/api/admin/modulos/' + slug + '/acesso'); } catch (e) { cont.innerHTML = '<div class="msg erro">' + esc(e.message) + '</div>'; return; }
-    var estado = {};
-    q.pessoas.forEach(function (p) { estado[p.id] = { abre: p.abre, consulta: p.somente_leitura, papeis: p.papeis.slice() }; });
+    var estado = {}, original = {};
+    q.pessoas.forEach(function (p) {
+      estado[p.id] = { abre: p.abre, consulta: p.somente_leitura, papeis: p.papeis.slice() };
+      original[p.id] = JSON.stringify(estado[p.id]);
+    });
     var filtro = lembrar('acessos.filtro', 'com');
+    var termo = '';
+    function mudou(id) { var e = estado[id]; return JSON.stringify({ abre: e.abre, consulta: e.consulta, papeis: e.papeis.slice().sort() }) !== JSON.stringify((function (o) { o.papeis = o.papeis.slice().sort(); return o; })(JSON.parse(original[id]))); }
+    function alteradas() { return q.pessoas.filter(function (p) { return mudou(p.id); }).length; }
     function linha(p) {
       var e = estado[p.id];
-      var abre = p.automatico ? '<span class="etiqueta azul" title="' + (p.todos_papeis ? 'Abre todas as ferramentas, com todos os papéis' : 'Abre todas as ferramentas do setor') + '">sempre · ' + esc(p.automatico) + (p.todos_papeis && q.papeis.length ? ' · todos os papéis' : '') + '</span>'
-        : '<label class="linha" style="gap:6px;font-weight:700;flex-wrap:nowrap"><input type="checkbox" data-abre="' + p.id + '"' + (e.abre ? ' checked' : '') + '> abre</label>';
-      var como = p.automatico ? '<span class="ajuda" style="margin:0">edita</span>'
-        : '<select class="campo" data-como="' + p.id + '" style="width:auto;padding:4px 8px"' + (e.abre ? '' : ' disabled') + '><option value="edita">edita</option><option value="consulta"' + (e.consulta ? ' selected' : '') + '>só consulta</option></select>';
-      var papeis = q.papeis.map(function (x) {
-        return '<td style="text-align:center"><input type="checkbox" aria-label="' + esc(x.nome) + '" data-papel="' + esc(x.id) + '" data-u="' + p.id + '"' + (e.papeis.indexOf(x.id) >= 0 ? ' checked' : '') + (e.abre && !p.todos_papeis ? '' : ' disabled') + (p.todos_papeis ? ' title="A administração tem todos os papéis em todas as ferramentas"' : '') + '></td>';
-      }).join('');
-      return '<tr data-p="' + p.id + '" data-busca="' + esc(normal([p.nome, p.email, (p.setores || []).join(' ')].join(' '))) + '"><td><b>' + esc(p.nome) + '</b><span class="sec">' + esc((p.setores || []).join(', ') || 'sem setor') + (p.do_setor || p.automatico ? '' : ' · outro setor') + '</span></td>' +
-        '<td>' + abre + '</td><td>' + como + '</td>' + papeis + '</tr>';
+      var abre = p.automatico
+        ? '<span class="chave" title="' + (p.todos_papeis ? 'Abre todas as ferramentas, com todos os papéis' : 'Abre todas as ferramentas do setor') + '"><input type="checkbox" checked disabled aria-label="Abre (automático)"><i></i></span>'
+        : '<span class="chave"><input type="checkbox" data-abre="' + p.id + '"' + (e.abre ? ' checked' : '') + ' aria-label="' + esc(p.nome) + ' abre"><i></i></span>';
+      var como = p.automatico ? '<span class="etiqueta cinza" title="Não precisa marcar">' + IC.cadeado + 'sempre · ' + esc(p.automatico) + '</span>'
+        : '<select class="campo" data-como="' + p.id + '" style="width:auto;padding:5px 8px" aria-label="Como ' + esc(p.nome) + ' abre"' + (e.abre ? '' : ' disabled') + '><option value="edita">Edita</option><option value="consulta"' + (e.consulta ? ' selected' : '') + '>Só consulta</option></select>';
+      var papeis = !q.papeis.length ? '<span class="ajuda" style="margin:0">—</span>' : p.todos_papeis ? '<span class="etiqueta azul">todos os papéis</span>' :
+        '<div class="papeis">' + q.papeis.map(function (x) {
+          return '<label class="papel-chip"' + (x.descricao ? ' title="' + esc(x.descricao) + '"' : '') + '><input type="checkbox" data-papel="' + esc(x.id) + '" data-u="' + p.id + '"' + (e.papeis.indexOf(x.id) >= 0 ? ' checked' : '') + (e.abre ? '' : ' disabled') + '>' + esc(x.nome) + '</label>';
+        }).join('') + '</div>';
+      return '<tr data-p="' + p.id + '" class="' + (p.automatico ? 'auto' : '') + (mudou(p.id) ? ' mudou' : '') + '" data-busca="' + esc(normal([p.nome, p.email, (p.setores || []).join(' ')].join(' '))) + '"><td style="min-width:150px"><b>' + esc(p.nome) + '</b><span class="sec">' + esc((p.setores || []).join(', ') || 'sem setor') + (p.do_setor || p.automatico ? '' : ' · outro setor') + '</span></td>' +
+        '<td style="text-align:center">' + abre + '</td><td>' + como + '</td><td>' + papeis + '</td></tr>';
     }
-    function visivel(p) { var e = estado[p.id]; return filtro === 'todas' || e.abre || (filtro === 'setor' && p.do_setor); }
+    // automáticos (administração, coordenação do setor) primeiro; depois quem abre, por nome
+    function ordem(a, b) { return (b.automatico ? 2 : 0) + (estado[b.id].abre ? 1 : 0) - (a.automatico ? 2 : 0) - (estado[a.id].abre ? 1 : 0) || a.nome.localeCompare(b.nome); }
+    function visivel(p) {
+      var e = estado[p.id];
+      if (termo && !termo.split(/\s+/).every(function (x) { return normal([p.nome, p.email, (p.setores || []).join(' ')].join(' ')).indexOf(x) >= 0; })) return false;
+      return filtro === 'todas' || e.abre || p.automatico || mudou(p.id) || (filtro === 'setor' && p.do_setor);
+    }
     function desenhar() {
-      var lista = q.pessoas.filter(visivel);
+      var lista = q.pessoas.filter(visivel).sort(ordem);
+      var n = alteradas();
       cont.innerHTML = (q.modelo ? '<div class="msg aviso" style="margin-bottom:10px"><span>Os papéis desta ferramenta são os da aba <b>Acessos</b> dela (' + esc(q.modelo) + '). O que você mudar aqui aparece lá, e o que mudarem lá aparece aqui.</span></div>' : '') +
-        (!q.papeis.length ? '<p class="ajuda" style="margin-top:0">Esta ferramenta não tem papéis definidos: quem abre usa tudo o que ela oferece.' + (q.pode_definir_papeis ? ' Defina os papéis abaixo, se o HTML separar o que cada um faz.' : '') + '</p>' :
-          '<p class="ajuda" style="margin-top:0">' + q.papeis.map(function (x) { return '<b>' + esc(x.nome) + '</b>' + (x.descricao ? ': ' + esc(x.descricao) : ''); }).join('<br>') + '</p>') +
-        '<div class="linha" style="margin:10px 0;flex-wrap:wrap;gap:8px">' +
-        [['com', 'Com acesso'], ['setor', 'Do setor'], ['todas', 'Todas as pessoas']].map(function (f) { return '<button type="button" class="btn sm ' + (filtro === f[0] ? 'primary' : 'ghost') + '" data-filtro="' + f[0] + '">' + f[1] + '</button>'; }).join('') +
-        '<input class="campo" type="search" id="buscaAcesso" placeholder="Buscar pessoa ou setor…" style="max-width:240px;margin-left:auto"></div>' +
-        '<div class="tabela-wrap"><table><thead><tr><th>Pessoa</th><th>Acesso</th><th>Como</th>' + q.papeis.map(function (x) { return '<th style="text-align:center">' + esc(x.nome) + '</th>'; }).join('') + '</tr></thead><tbody>' +
-        (lista.map(linha).join('') || '<tr><td colspan="' + (3 + q.papeis.length) + '" style="text-align:center;color:var(--muted);padding:20px">Ninguém aqui ainda. Use <b>Todas as pessoas</b> para liberar alguém, inclusive de outro setor.</td></tr>') +
-        '</tbody></table></div><div class="linha" style="margin-top:10px"><button class="btn primary sm" type="button" id="btSalvarAcessos">Salvar acessos</button></div>' +
-        (q.pode_definir_papeis && !q.modelo ? '<details style="margin-top:14px"><summary style="cursor:pointer;font-weight:700;color:var(--ink-2)">Papéis desta ferramenta (administração)</summary>' +
+        '<div class="linha" style="gap:8px;margin-bottom:12px"><span class="ajuda" style="margin:0;font-weight:800;text-transform:uppercase;letter-spacing:.4px;font-size:11px">Papéis desta ferramenta</span>' +
+        (q.papeis.length ? q.papeis.map(function (x) { return '<span class="etiqueta azul"' + (x.descricao ? ' title="' + esc(x.descricao) + '"' : '') + '>' + esc(x.nome) + '</span>'; }).join('') :
+          '<span class="ajuda" style="margin:0">nenhum: quem abre usa tudo o que ela oferece</span>') + '</div>' +
+        '<div class="linha" style="margin:0 0 10px;gap:10px"><div class="segmento" role="group" aria-label="Mostrar">' +
+        [['com', 'Quem abre'], ['setor', 'Do setor'], ['todas', 'Todas as pessoas']].map(function (f) { return '<button type="button" class="' + (filtro === f[0] ? 'on' : '') + '" data-filtro="' + f[0] + '">' + f[1] + '</button>'; }).join('') + '</div>' +
+        '<input class="campo" type="search" id="buscaAcesso" placeholder="Buscar pessoa ou setor…" value="' + esc(termo) + '" style="max-width:240px;margin-left:auto"></div>' +
+        '<div class="tabela-wrap"><table><thead><tr><th>Pessoa</th><th style="text-align:center">Abre</th><th>Como</th><th>Papel</th></tr></thead><tbody>' +
+        (lista.map(linha).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">Ninguém aqui. Use <b>Todas as pessoas</b> para liberar alguém, inclusive de outro setor.</td></tr>') +
+        '</tbody></table></div>' +
+        (filtro !== 'todas' ? '<div class="linha" style="margin-top:10px"><button class="btn ghost sm" type="button" id="btLiberarOutra">' + IC.mais + 'Liberar outra pessoa</button></div>' : '') +
+        (n ? '<div class="barra-salvar"><span>' + n + (n === 1 ? ' pessoa com alteração não salva' : ' pessoas com alterações não salvas') + '</span><span class="espaco"></span>' +
+          '<button class="btn ghost sm" type="button" id="btDescartarAcessos">Descartar</button><button class="btn primary sm" type="button" id="btSalvarAcessos">Salvar acessos</button></div>' : '') +
+        (q.pode_definir_papeis && !q.modelo ? '<details style="margin-top:14px"><summary style="cursor:pointer;font-weight:700;color:var(--ink-2)">Criar ou editar os papéis desta ferramenta (administração)</summary>' +
           '<p class="ajuda">Um papel por linha: <code>identificador | Nome | o que faz</code>. O HTML recebe os papéis de cada pessoa em <code>window.__MYBLUE__.usuario.papeis</code>.</p>' +
           '<textarea class="campo" id="txPapeis" rows="4" placeholder="gestao | Gestão | aprova os pedidos">' + esc(q.papeis.map(function (x) { return x.id + ' | ' + x.nome + (x.descricao ? ' | ' + x.descricao : ''); }).join('\n')) + '</textarea>' +
           '<div class="linha" style="margin-top:8px"><button class="btn ghost sm" type="button" id="btSalvarPapeis">Salvar papéis</button></div></details>' : '');
       var busca = $('#buscaAcesso', cont);
       busca.oninput = function () {
-        var termos = normal(busca.value).split(/\s+/).filter(Boolean);
-        $$('tr[data-p]', cont).forEach(function (tr) { var t = tr.getAttribute('data-busca'); tr.hidden = !termos.every(function (x) { return t.indexOf(x) >= 0; }); });
+        termo = normal(busca.value).trim();
+        var pos = busca.selectionStart;
+        desenhar();
+        var nb = $('#buscaAcesso', cont); nb.focus(); nb.setSelectionRange(pos, pos);
       };
       $$('[data-filtro]', cont).forEach(function (b) { b.onclick = function () { filtro = b.getAttribute('data-filtro'); guardar('acessos.filtro', filtro); desenhar(); }; });
+      if ($('#btLiberarOutra', cont)) $('#btLiberarOutra', cont).onclick = function () { filtro = 'todas'; desenhar(); $('#buscaAcesso', cont).focus(); };
       $$('[data-abre]', cont).forEach(function (c) {
         c.onchange = function () {
-          estado[Number(c.getAttribute('data-abre'))].abre = c.checked;
-          $$('select, [data-papel]', c.closest('tr')).forEach(function (x) { x.disabled = !c.checked; });
+          var e = estado[Number(c.getAttribute('data-abre'))];
+          e.abre = c.checked;
+          if (!c.checked) { e.consulta = false; e.papeis = []; }
+          desenhar();
         };
       });
-      $$('[data-como]', cont).forEach(function (c) { c.onchange = function () { estado[Number(c.getAttribute('data-como'))].consulta = c.value === 'consulta'; }; });
+      $$('[data-como]', cont).forEach(function (c) { c.onchange = function () { estado[Number(c.getAttribute('data-como'))].consulta = c.value === 'consulta'; desenhar(); }; });
       $$('[data-papel]', cont).forEach(function (c) {
         c.onchange = function () {
           var e = estado[Number(c.getAttribute('data-u'))], id = c.getAttribute('data-papel');
           e.papeis = e.papeis.filter(function (x) { return x !== id; });
           if (c.checked) e.papeis.push(id);
+          desenhar();
         };
       });
-      $('#btSalvarAcessos', cont).onclick = async function () {
+      if ($('#btDescartarAcessos', cont)) $('#btDescartarAcessos', cont).onclick = function () { editorAcessos(cont, slug); };
+      if ($('#btSalvarAcessos', cont)) $('#btSalvarAcessos', cont).onclick = async function () {
         var acessos = q.pessoas.filter(function (p) { return estado[p.id].abre && (!p.automatico || estado[p.id].papeis.length); }).map(function (p) {
           var e = estado[p.id];
           return { usuario_id: p.id, somente_leitura: !p.automatico && e.consulta, papeis: e.papeis };
         });
-        try { await api('PUT', '/api/admin/modulos/' + slug + '/acesso', { acessos: acessos }); toast('Acessos salvos.', 'ok'); editorAcessos(cont, slug); } catch (e) { toast(e.message, 'erro'); }
+        try { await api('PUT', '/api/admin/modulos/' + slug + '/acesso', { acessos: acessos }); toast('Acessos salvos.', 'ok'); editorAcessos(cont, slug); if (cont.aoSalvar) cont.aoSalvar(); } catch (e) { toast(e.message, 'erro'); }
       };
       if ($('#btSalvarPapeis', cont)) $('#btSalvarPapeis', cont).onclick = async function () {
         var papeis = $('#txPapeis', cont).value.split('\n').map(function (l) { return l.split('|').map(function (x) { return x.trim(); }); })
@@ -1171,24 +1271,20 @@
     desenhar();
   }
 
+
   async function paginaModulosCoord() {
     barraConfig('Ferramentas');
     $('#conteudo').innerHTML = carregandoHtml();
     var mods, jm;
     try { jm = await api('GET', '/api/admin/modulos'); mods = jm.modulos; } catch (e) { toast(e.message, 'erro'); return; }
     if (!naConfig('ferramentas')) return; // a pessoa já foi para outra tela
-    $('#conteudo').innerHTML = '<div class="pagina">' + abasConfig('ferramentas') + '<h1>Ferramentas</h1><p class="sub">As ferramentas dos seus setores: envie uma versão nova do HTML, volte para uma anterior ou cadastre uma ferramenta nova. Quem abre cada uma fica em <a href="#/config/acessos">Acessos</a>.</p>' +
-      '<div class="painel"><div class="cab-painel"><b style="font-family:var(--display)" id="qtdMods"></b><span class="espaco"></span>' +
-      '<button class="btn primary" id="btNovaFerr">' + IC.mais + 'Nova ferramenta</button>' +
-      '<input class="campo" id="buscaMod" type="search" placeholder="Pesquisar módulo, setor ou arquivo…" aria-label="Pesquisar módulo" style="max-width:320px"></div>' +
-      '<div class="tabela-wrap"><table><thead><tr><th>Módulo</th><th>Setor</th><th>Arquivo em uso</th></tr></thead><tbody id="tbMods">' +
-      (mods.map(function (x) {
-        return '<tr class="clicavel" data-slug="' + esc(x.slug) + '" data-busca="' + esc(textoBuscaModulo(x)) + '"><td><div class="linha" style="flex-wrap:nowrap"><div class="icone-mod" style="width:34px;height:34px">' + (IC[x.icone] || IC.app) + '</div><div><b>' + esc(x.nome) + '</b>' + (x.pendente ? ' <span class="etiqueta ambar">aguardando aprovação</span>' : '') + (x.ativo ? '' : ' <span class="etiqueta cinza">desativado</span>') + '</div></div></td>' +
-          '<td>' + esc(x.setor_nome || '—') + '</td>' +
-          '<td>' + (x.tem_arquivo ? quando(x.versao_em) + '<span class="sec">' + tamanho(x.tamanho) + (x.nome_original ? ' · ' + esc(x.nome_original) : '') + '</span>' : '<span class="etiqueta vermelha">sem arquivo</span>') + '</td></tr>';
-      }).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--muted);font-weight:700;padding:30px">Nenhuma ferramenta nos seus setores. Peça à administração para conferir o setor no seu cadastro.</td></tr>') +
-      LINHA_SEM_RESULTADO(3) + '</tbody></table></div></div></div>';
-    ligarBusca($('#buscaMod'), $('#tbMods'), $('#qtdMods'), mods.length, mods.length === 1 ? 'ferramenta' : 'ferramentas', 'busca.modulos.setor');
+    var atual = ferramentaEscolhida(mods);
+    $('#conteudo').innerHTML = '<div class="pagina pagina-config">' + abasConfig('ferramentas') +
+      cabConfig('Ferramentas', 'As ferramentas dos seus setores: envie uma versão nova do HTML, volte para uma anterior ou cadastre uma ferramenta nova. Quem abre cada uma fica em <a href="#/config/acessos">Acessos</a>.',
+        '<button class="btn primary" id="btNovaFerr">' + IC.mais + 'Nova ferramenta</button>') +
+      (atual ? '<div class="dividido">' + listaSelecao('buscaMod', 'ferramenta', gruposFerramentas(mods), function (x) { return '#/config/ferramentas/' + encodeURIComponent(x.id); }, atual.slug) +
+        '<div id="detFerr" style="min-width:0"></div></div>' : '<div class="vazio">Nenhuma ferramenta nos seus setores. Peça à administração para conferir o setor no seu cadastro.</div>') + '</div>';
+    if (atual) { ligarListaSelecao('buscaMod'); abrirFerramenta(atual); }
     $('#btNovaFerr').onclick = function () {
       var m = modal({
         titulo: 'Nova ferramenta',
@@ -1209,30 +1305,25 @@
           var r = await api('POST', '/api/admin/modulos', { nome: $('#nNome', m).value, slug: $('#nSlug', m).value, setor_id: Number($('#nSetor', m).value), icone: $('#nIcone', m).value, descricao: $('#nDesc', m).value });
           m.fechar(); toast('Ferramenta cadastrada. Envie o HTML; a administração foi avisada para aprovar.', 'ok');
           await paginaModulosCoord();
-          var tr = $('tr[data-slug="' + r.slug + '"]'); if (tr) tr.click();
+          location.hash = '#/config/ferramentas/' + encodeURIComponent(r.slug);
           recarregarModulosUsuario();
         } catch (e) { var x = $('#nMsg', m); x.textContent = e.message; x.hidden = false; }
       };
     };
-    $$('tr[data-slug]').forEach(function (tr) {
-      tr.onclick = function () {
-        var mod = mods.find(function (x) { return x.slug === tr.getAttribute('data-slug'); });
-        var m = modal({
-          titulo: mod.nome, largo: true,
+    function abrirFerramenta(mod) {
+        var m = painelOuModal($('#detFerr'), {
+          titulo: mod.nome, subtitulo: 'Setor dono: ' + esc(mod.setor_nome || 'sem setor'),
+          acoes: '<a class="btn ghost sm" href="#/m/' + esc(mod.slug) + '">' + IC.novaAba + 'Abrir a ferramenta</a>',
           corpo: '<style>.titulo-sec{font-family:var(--display);font-size:15px;margin:22px 0 10px;padding-top:18px;border-top:1px solid var(--border)}.titulo-sec:first-child{margin-top:0;padding-top:0;border-top:0}</style><div class="pilha">' + htmlArquivoModulo(mod) +
             (mod.pendente ? '<div class="msg aviso">Aguardando a aprovação da administração. Até lá, só a coordenação do setor abre esta ferramenta.</div>' : '') +
             (mod.slug === 'boletos' ? '<h4 class="titulo-sec">Cadastro pela Base de Clientes</h4><div id="edCarteira"></div>' : '') +
             '<h4 class="titulo-sec">Quem abre e com qual papel</h4><p class="ajuda" style="margin:0 0 8px">Fica em Configurações → Acessos, junto com as outras permissões.</p>' +
-            '<a class="btn ghost sm" data-ir-acessos href="#/config/acessos/ferramentas/' + encodeURIComponent(mod.slug) + '">' + IC.cadeado + 'Ver e alterar quem abre</a></div>',
-          pe: '<a class="btn ghost" href="#/m/' + esc(mod.slug) + '" id="btAbrirMod" style="margin-right:auto">' + IC.novaAba + 'Abrir</a><button class="btn ghost" data-fechar>Fechar</button>',
+            '<a class="btn ghost sm" style="align-self:flex-start" data-ir-acessos href="#/config/acessos/ferramentas/' + encodeURIComponent(mod.slug) + '">' + IC.cadeado + 'Ver e alterar quem abre</a></div>',
           aoFechar: function () { if (naConfig('ferramentas')) paginaModulosCoord(); },
         });
-        $('#btAbrirMod', m).onclick = function () { m.fechar(); };
         ligarArquivoEVersoes(m, mod);
         if ($('#edCarteira', m)) secaoCarteiraBoletos($('#edCarteira', m), mod.slug);
-        $('[data-ir-acessos]', m).onclick = function () { m.fechar(); };
-      };
-    });
+    }
   }
 
   async function paginaModulos() {
@@ -1248,27 +1339,15 @@
     var mods = j.modulos;
 
     if (!naConfig('ferramentas')) return; // a pessoa já foi para outra tela
-    $('#conteudo').innerHTML = '<div class="pagina">' + abasConfig('ferramentas') + '<h1>Ferramentas</h1><p class="sub">Cada ferramenta é um arquivo HTML. Envie versões novas, aprove as da coordenação e escolha onde os dados ficam. Quem abre cada uma fica em <a href="#/config/acessos">Acessos</a>.</p>' +
-      '<div class="painel"><div class="cab-painel"><b style="font-family:var(--display)" id="qtdMods"></b><span class="espaco"></span>' +
-      '<a class="btn ghost" href="#/config/ferramentas/tutoriais">' + IC.video + 'Tutoriais em vídeo</a>' +
-      '<button class="btn primary" id="btNovoMod">' + IC.mais + 'Novo módulo</button></div>' +
-      '<div class="faixa-busca"><input class="campo" id="buscaMod" type="search" placeholder="Pesquisar módulo, setor ou arquivo…" aria-label="Pesquisar módulo"></div>' +
-      '<div class="tabela-wrap"><table><thead><tr><th>Módulo</th><th>Setor</th><th>Arquivo</th><th>Onde ficam os dados</th><th>Situação</th></tr></thead><tbody id="tbMods">' +
-      mods.map(function (m) {
-        var dados = ROTULO_ARM[m.armazenamento][0];
-        if (m.adaptador === 'claude-db') dados = '<span class="etiqueta verde">' + IC.banco + ' banco do portal</span>';
-        else if (m.adaptador) dados = (m.fonte_dados === 'interno' ? '<span class="etiqueta verde">' + IC.banco + ' planilha no banco do portal</span>' : '<span class="etiqueta ambar">planilha Google</span>') + (m.armazenamento !== 'navegador' ? '<span class="sec">+ ' + esc(dados) + '</span>' : '');
-        else dados = '<span class="etiqueta ' + (m.armazenamento === 'navegador' ? 'cinza' : 'verde') + '">' + esc(dados) + '</span>';
-        return '<tr class="clicavel" data-slug="' + esc(m.slug) + '" data-busca="' + esc(textoBuscaModulo(m)) + '"><td><div class="linha" style="flex-wrap:nowrap"><div class="icone-mod" style="width:34px;height:34px">' + (IC[m.icone] || IC.app) + '</div><div><b>' + esc(m.nome) + '</b><span class="sec">/' + esc(m.slug) + '</span></div></div></td>' +
-          '<td>' + esc(m.setor_nome || '—') + '</td>' +
-          '<td>' + (m.tem_arquivo ? quando(m.versao_em) + '<span class="sec">' + tamanho(m.tamanho) + (m.nome_original ? ' · ' + esc(m.nome_original) : '') + '</span>' : '<span class="etiqueta vermelha">sem arquivo</span>') + '</td>' +
-          '<td>' + dados + '</td><td>' + (m.pendente ? '<span class="etiqueta ambar">aguardando aprovação</span>' : m.ativo ? '<span class="etiqueta verde">ativo</span>' : '<span class="etiqueta cinza">desativado</span>') +
-          (m.versao_pendente_id ? ' <span class="etiqueta ambar">versão nova aguardando</span>' : '') + (m.config && m.config.isolada ? '' : ' <span class="etiqueta cinza" title="O HTML roda com a sessão de quem abre. Isole em Isolamento, depois de testar.">não isolada</span>') + '</td></tr>';
-      }).join('') + LINHA_SEM_RESULTADO(5) + '</tbody></table></div></div></div>';
-
-    ligarBusca($('#buscaMod'), $('#tbMods'), $('#qtdMods'), mods.length, 'módulos', 'busca.modulos');
-    $$('tr[data-slug]').forEach(function (tr) { tr.onclick = function () { editarModulo(mods.find(function (m) { return m.slug === tr.getAttribute('data-slug'); })); }; });
+    var atual = ferramentaEscolhida(mods);
+    $('#conteudo').innerHTML = '<div class="pagina pagina-config">' + abasConfig('ferramentas') +
+      cabConfig('Ferramentas', 'Cada ferramenta é um arquivo HTML. Envie versões novas, aprove as da coordenação e escolha onde os dados ficam. Quem abre cada uma fica em <a href="#/config/acessos">Acessos</a>.',
+        '<div class="linha"><a class="btn ghost" href="#/config/ferramentas/tutoriais">' + IC.video + 'Tutoriais em vídeo</a><button class="btn primary" id="btNovoMod">' + IC.mais + 'Nova ferramenta</button></div>') +
+      (atual ? '<div class="dividido">' + listaSelecao('buscaMod', 'ferramenta', gruposFerramentas(mods), function (x) { return '#/config/ferramentas/' + encodeURIComponent(x.id); }, atual.slug) +
+        '<div id="detFerr" style="min-width:0"></div></div>' : '<div class="vazio">Nenhuma ferramenta ainda. Clique em Nova ferramenta.</div>') + '</div>';
+    if (atual) ligarListaSelecao('buscaMod');
     $('#btNovoMod').onclick = novoModulo;
+    if (atual) editarModulo(atual);
 
     function opcoesSetor(sel) {
       return '<option value="">— sem setor —</option>' + setores.map(function (s) { return '<option value="' + s.id + '"' + (s.id === sel ? ' selected' : '') + '>' + esc(s.nome) + '</option>'; }).join('');
@@ -1301,9 +1380,7 @@
           });
           m.fechar();
           toast('Módulo criado. Agora envie o HTML.', 'ok');
-          await paginaModulos();
-          var novo = cacheAdminModulos.modulos.find(function (x) { return x.slug === r.slug; });
-          if (novo) editarModulo(novo);
+          location.hash = '#/config/ferramentas/' + encodeURIComponent(r.slug);
           recarregarModulosUsuario();
         } catch (e) { var x = $('#nMsg', m); x.textContent = e.message; x.hidden = false; }
       };
@@ -1346,8 +1423,9 @@
           '<div id="resImport" class="pilha"></div></div>';
       }
 
-      var m = modal({
-        titulo: mod.nome, largo: true,
+      var m = painelOuModal($('#detFerr'), {
+        titulo: mod.nome, subtitulo: 'Setor dono: ' + esc(mod.setor_nome || 'sem setor') + ' · /' + esc(mod.slug),
+        acoes: '<a class="btn ghost sm" href="#/m/' + esc(mod.slug) + '">' + IC.novaAba + 'Abrir a ferramenta</a>',
         corpo: '<style>.titulo-sec{font-family:var(--display);font-size:15px;margin:22px 0 10px;padding-top:18px;border-top:1px solid var(--border)}.titulo-sec:first-child{margin-top:0;padding-top:0;border-top:0}</style>' +
           '<div class="pilha">' +
           (mod.pendente ? '<div class="msg aviso linha" style="justify-content:space-between;gap:10px"><span>Ferramenta nova cadastrada pela coordenação, <b>aguardando aprovação</b>. Confira o HTML (botão Abrir) e aprove para liberar às pessoas.</span><button class="btn primary sm" type="button" id="btAprovarMod">Aprovar</button></div>' : '') +
@@ -1382,15 +1460,14 @@
           (mod.slug === 'boletos' ? '<h4 class="titulo-sec">Cadastro pela Base de Clientes</h4><div id="edCarteira"></div>' : '') +
 
           '<h4 class="titulo-sec">Quem abre e com qual papel</h4><p class="ajuda" style="margin:0 0 8px">Fica em Configurações → Acessos, junto com as outras permissões.</p>' +
-          '<a class="btn ghost sm" data-ir-acessos href="#/config/acessos/ferramentas/' + encodeURIComponent(mod.slug) + '">' + IC.cadeado + 'Ver e alterar quem abre</a>' +
+          '<a class="btn ghost sm" style="align-self:flex-start" data-ir-acessos href="#/config/acessos/ferramentas/' + encodeURIComponent(mod.slug) + '">' + IC.cadeado + 'Ver e alterar quem abre</a>' +
 
           '<h4 class="titulo-sec">Cópia dos dados</h4>' +
           '<div class="linha"><a class="btn ghost sm" href="/api/admin/modulos/' + esc(mod.slug) + '/dados">' + IC.baixar + 'Exportar dados deste módulo (JSON)</a>' +
           '<button class="btn danger sm" id="btApagarMod" type="button">Remover módulo</button></div>' +
           '<div id="mMsg" class="msg erro" hidden></div></div>',
-        pe: '<a class="btn ghost" href="#/m/' + esc(mod.slug) + '" id="btAbrirMod" style="margin-right:auto">' + IC.novaAba + 'Abrir</a><button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="btSalvarMod">Salvar</button>',
+        pe: '<button class="btn primary" id="btSalvarMod">Salvar</button>',
       });
-      $('#btAbrirMod', m).onclick = function () { m.fechar(); };
 
       ligarArquivoEVersoes(m, mod);
       if ($('#edCarteira', m)) secaoCarteiraBoletos($('#edCarteira', m), mod.slug);
@@ -2741,37 +2818,29 @@
     restrito = !!j.restrito;
     var nomeU = {};
     j.usuarios.forEach(function (u) { nomeU[u.id] = u.nome; });
-    var em = j.email || {};
     if (!naConfig('setores')) return; // a pessoa já foi para outra tela
-    $('#conteudo').innerHTML = '<div class="pagina">' + abasConfig('setores') + '<div class="linha" style="align-items:flex-end;margin-bottom:6px"><h1 style="flex:1">Setores e equipes</h1>' +
-      (restrito ? '' : '<button class="btn ghost" id="btSetores">' + IC.lapis + 'Criar e renomear setores</button>') + '</div><p class="sub">Para cada setor, quem atende os tickets (e quem é líder, que distribui) e os tipos de demanda com o prazo de atendimento. Quem é de cada setor vem do cadastro da pessoa.</p>' +
-      (restrito ? '' : '<div class="atalho-tickets"><div class="icone-mod">' + IC.sino + '</div><div style="flex:1;min-width:220px"><b style="font-family:var(--display)">Avisos por e-mail</b>' +
-      '<span class="sec" style="display:block;color:var(--muted);font-weight:600;font-size:13px">' +
-      (em.ativo ? 'Enviando ' + (em.tipo === 'microsoft365' ? 'pelo Microsoft 365' : 'por SMTP') + ' como <b>' + esc(em.remetente || '') + '</b>.' : 'Não configurado: por enquanto os avisos aparecem só no portal (veja o README, seção Central de Tickets).') +
-      '</span></div>' + (em.ativo ? '<button class="btn ghost sm" id="btEmailTeste">Enviar e-mail de teste para mim</button>' : '<span class="etiqueta ambar">sem e-mail</span>') + '</div>') +
-      '<div class="cartoes">' + j.setores.map(function (s) {
-        var lideres = s.membros.filter(function (m) { return m.lider; }).map(function (m) { return nomeU[m.usuario_id]; });
-        var ativos = s.categorias.filter(function (c) { return c.ativo; });
-        return '<div class="cartao" data-setor="' + s.id + '" style="cursor:pointer"><div class="cab"><div class="icone-mod">' + IC.pessoas + '</div><div style="flex:1;min-width:0"><h3>' + esc(s.nome) + '</h3>' +
-          '<span class="sec">' + s.membros.length + ' pessoa' + (s.membros.length === 1 ? '' : 's') + ' · ' + ativos.length + ' tipo' + (ativos.length === 1 ? '' : 's') + ' de demanda</span></div>' +
-          (!s.membros.length ? '<span class="etiqueta ambar">sem equipe</span>' : !lideres.length ? '<span class="etiqueta ambar">sem líder</span>' : '') + '</div>' +
-          '<p>' + (lideres.length ? 'Líder: ' + esc(lideres.join(', ')) : 'Defina quem distribui os tickets deste setor.') + '</p>' +
-          '<div class="acoes"><span class="btn ghost sm">Configurar</span></div></div>';
-      }).join('') + '</div>' + '</div>';
+    // o setor escolhido vem do endereço (#/config/setores/3); sem escolha, abre o primeiro
+    var escolha = Number(location.hash.split('/')[3]) || 0;
+    var atual = j.setores.find(function (x) { return x.id === escolha; }) || j.setores[0];
+    $('#conteudo').innerHTML = '<div class="pagina pagina-config">' + abasConfig('setores') +
+      cabConfig('Setores e equipes', 'Para cada setor, quem atende os tickets (e quem é líder, que distribui) e os tipos de demanda com o prazo de atendimento. Quem é de cada setor vem do cadastro da pessoa, em <a href="#/config/pessoas">Pessoas</a>.',
+        restrito ? '' : '<button class="btn ghost" id="btSetores">' + IC.lapis + 'Criar e renomear setores</button>') +
+      (j.setores.length ? '<div class="dividido"><div class="painel lista-sel"><div class="grupo">Setores</div>' + j.setores.map(function (x) {
+        var temLider = x.membros.some(function (mb) { return mb.lider; });
+        var on = x.id === atual.id;
+        return '<a href="#/config/setores/' + x.id + '" class="' + (on ? 'on' : '') + '"' + (on ? ' aria-current="true"' : '') + '><span>' + esc(x.nome) + '</span>' +
+          (!x.membros.length ? '<span class="etiqueta ambar">sem equipe</span>' : !temLider ? '<span class="etiqueta ambar">sem líder</span>' : '<small>' + x.membros.length + '</small>') + '</a>';
+      }).join('') + '</div><div id="detSetor" style="min-width:0"></div></div>' : '<div class="vazio">Nenhum setor ainda.</div>') + '</div>';
     if ($('#btSetores')) $('#btSetores').onclick = function () { gerirSetores(paginaEquipes); };
-    if ($('#btEmailTeste')) $('#btEmailTeste').onclick = async function () {
-      var bt = this; bt.disabled = true;
-      try { var r = await api('POST', '/api/admin/equipes/email-teste'); toast('E-mail de teste enviado para ' + r.para + '. Confira a caixa de entrada (e o lixo eletrônico).', 'ok'); }
-      catch (e) { toast(e.message, 'erro'); }
-      bt.disabled = false;
-    };
-    $$('[data-setor]').forEach(function (c) { c.onclick = function () { editarEquipe(j.setores.find(function (s) { return s.id === Number(c.getAttribute('data-setor')); })); }; });
+    var on = $('.lista-sel a.on'); if (on) on.scrollIntoView({ block: 'nearest' });
+    if (atual) editarEquipe(atual);
 
     function editarEquipe(s) {
       var membros = {};
       s.membros.forEach(function (m) { membros[m.usuario_id] = m.lider; });
-      var m = modal({
-        titulo: s.nome, largo: true,
+      var lideres = s.membros.filter(function (mb) { return mb.lider; }).map(function (mb) { return nomeU[mb.usuario_id]; });
+      var m = painelOuModal($('#detSetor'), {
+        titulo: s.nome, subtitulo: s.membros.length + (s.membros.length === 1 ? ' pessoa' : ' pessoas') + ' · ' + (lideres.length ? 'líder: ' + esc(lideres.join(', ')) : 'sem líder: marque quem distribui os tickets'),
         corpo: '<div class="pilha"><div><label class="rot">Equipe que atende os tickets do setor</label>' +
           '<input class="campo" id="eBusca" placeholder="Filtrar pessoas…" style="margin-bottom:8px">' +
           '<div class="caixa-opcoes" id="eLista">' + j.usuarios.filter(function (u) { return restrito ? membros[u.id] !== undefined : (u.ativo || membros[u.id] !== undefined); }).map(function (u) {
@@ -2816,9 +2885,7 @@
         if (!nome) return;
         try {
           await api('POST', '/api/admin/equipes/' + s.id + '/categorias', { nome: nome, prazo_horas: $('#nPrazo', m).value, prioridade: $('#nPrio', m).value });
-          m.fechar(); await paginaEquipes();
-          var atual = (await api('GET', '/api/admin/equipes')).setores.find(function (x) { return x.id === s.id; });
-          if (atual) editarEquipe(atual);
+          m.fechar(); paginaEquipes();
         } catch (e) { toast(e.message, 'erro'); }
       };
       $$('[data-apagar-cat]', m).forEach(function (b) {
@@ -3130,6 +3197,7 @@
     ticket_status: 'Mudou situação de ticket', equipe_editada: 'Editou equipe do setor', categoria_criada: 'Criou tipo de demanda', categoria_editada: 'Editou tipo de demanda', categoria_removida: 'Removeu tipo de demanda',
     links_pagina: 'Editou a Central de Links', link_criado: 'Incluiu link', link_editado: 'Editou link', link_removido: 'Removeu link',
     campanha_criada: 'Criou campanha (Central de Links)', campanha_editada: 'Editou campanha (Central de Links)', campanha_removida: 'Removeu campanha (Central de Links)', campanha_fundo: 'Trocou fundo de campanha', links_importados: 'Colou lista de links',
+    modulo_acesso: 'Alterou quem abre a ferramenta', modulo_papeis: 'Alterou os papéis da ferramenta', modulo_aprovado: 'Aprovou ferramenta nova', regra_acesso: 'Alterou quem edita na Base de Clientes', versao_baixada: 'Baixou uma versão do HTML',
   };
 
   async function paginaAuditoria() {
@@ -3138,7 +3206,7 @@
     try { usuarios = (await api('GET', '/api/admin/usuarios')).usuarios; mods = (cacheAdminModulos || await carregarModulosAdmin()).modulos; } catch (e) { toast(e.message, 'erro'); return; }
     var nomeMod = {}; mods.forEach(function (m) { nomeMod[m.slug] = m.nome; });
     if (!naConfig('historico')) return; // a pessoa já foi para outra tela
-    $('#conteudo').innerHTML = '<div class="pagina">' + abasConfig('historico') + '<h1>Histórico</h1><p class="sub">Quem entrou, o que abriu e o que alterou, inclusive nos acessos. Registrado sozinho; ninguém edita.</p>' +
+    $('#conteudo').innerHTML = '<div class="pagina pagina-config">' + abasConfig('historico') + cabConfig('Histórico', 'Quem entrou, o que abriu e o que alterou, inclusive nos acessos. Registrado sozinho; ninguém edita.') +
       '<div class="painel"><div class="cab-painel">' +
       '<select class="campo" id="aUsu" style="max-width:220px"><option value="">Todas as pessoas</option>' + usuarios.map(function (u) { return '<option value="' + u.id + '">' + esc(u.nome) + '</option>'; }).join('') + '</select>' +
       '<select class="campo" id="aMod" style="max-width:260px"><option value="">Todos os módulos</option>' + mods.map(function (m) { return '<option value="' + esc(m.slug) + '">' + esc(m.nome) + '</option>'; }).join('') + '</select>' +
@@ -3269,8 +3337,7 @@
         j.sem_tutorial.map(function (m) { return esc(m.nome); }).join(', ') + '. Toda ferramenta nova precisa de um vídeo.</div>';
     }
     if (!naConfig('ferramentas/tutoriais')) return; // a pessoa já foi para outra tela
-    $('#conteudo').innerHTML = '<div class="pagina">' + abasConfig('ferramentas') + '<div class="linha" style="align-items:flex-end;margin-bottom:6px"><h1 style="flex:1">Tutoriais em vídeo</h1>' +
-      '<a class="btn ghost" href="#/config/ferramentas">Voltar para Ferramentas</a></div>' +
+    $('#conteudo').innerHTML = '<div class="pagina pagina-config">' + abasConfig('ferramentas') + '<div class="cab-config"><div><h1>Tutoriais em vídeo</h1></div><a class="btn ghost" href="#/config/ferramentas">Voltar para Ferramentas</a></div>' +
       '<p class="sub">Cada pessoa vê os vídeos do perfil, do setor e das ferramentas dela. ' + enviados + ' de ' + j.tutoriais.length + ' vídeos enviados.</p>' + pendencias +
       '<label class="zona-envio" id="zTut" style="margin-bottom:12px">' + IC.enviar + '<div>Arraste aqui os arquivos <b>.mp4</b> e <b>.vtt</b> dos tutoriais (pode ser todos de uma vez) ou clique para escolher.<br>' +
       '<span class="ajuda">Cada arquivo vai para o tutorial com o mesmo nome (ex.: ticket-atender.mp4 e ticket-atender.vtt).</span></div>' +
