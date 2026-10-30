@@ -37,6 +37,7 @@ const HISTORICO = [
   ['2.5', '26/10/2026', 'Implantação: toda implantação começa de um <b>contrato assinado</b> (no portal, ou fora dele com o retorno da análise, e aí o Jurídico registra as condições antes de seguir ao setor).'],
   ['2.6', '28/10/2026', 'Controle de Renegociações: renegociação salva como <b>Fechado</b> abre sozinha o ticket <i>Renegociação fechada</i> para a assistente de crédito do condomínio, com as condições e o PDF do relatório de garantia; mudanças depois viram comentário no mesmo ticket. Tipo de negociação e dias da antecipação passam a ficar no banco do portal.'],
   ['2.7', '30/10/2026', 'Ferramentas novas no manual do setor, com vídeo: <b>Cobrança</b> (Acompanhamento de Resultados, Curadoria da Base, Análise de Espólio, Biblioteca de HSM e Ajuste de Mailing), <b>Crédito</b> (Controle de Repasses, Central de Ferramentas – Gestão Crédito e Biblioteca de HSM – Crédito e Implantação) e <b>Marketing</b> (Controle de Brindes). Tutoriais das demais ferramentas regravados no layout novo.'],
+  ['2.8', '30/10/2026', '<b>Demandas Jurídicas</b> (menu Jurídico), no lugar da planilha de acompanhamento do Jurídico: qualquer pessoa pede ao Jurídico e acompanha em <i>Minhas demandas</i>; prazo de cada atividade em horas úteis na <b>Tabela de prazos</b>, atrasada automática, os contratos da Solicitação de Contrato na mesma lista e o % no SLA por atividade e mês.'],
 ];
 const VERSOES = (doc) => capVersoes({
   titulo: `Manutenção e controle de versão deste manual`,

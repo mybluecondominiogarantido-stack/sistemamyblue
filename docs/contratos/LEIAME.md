@@ -11,6 +11,7 @@ padrões da Análise de Crédito e da Implantação, no grupo **Jurídico** do m
 | **Solicitação de Contrato** | `#/contratos` | Minhas solicitações, Fila do Jurídico (assumir), Diretoria, Quem elabora |
 | **Acompanhamento de demandas Jurídicas** | `#/acompanhamento-contratos` | Assinaturas (quem elabora), Controle (todos os contratos, até os encerrados) |
 | **Dashboard Jurídico** | `#/dashboard-juridico` | — (quem elabora e a diretoria) |
+| **Demandas Jurídicas** | `#/demandas-juridicas` | Minhas demandas (todos), Todas as demandas, Indicadores (SLA), Tabela de prazos, Importar planilha — veja a seção [Demandas Jurídicas](#demandas-jurídicas) |
 
 Os endereços antigos (`#/contratos/assinaturas`, `#/contratos/controle`, `#/contratos/painel`) levam à tela nova.
 
@@ -151,3 +152,46 @@ Implantação). Os passos que cada vídeo não mostra são feitos pela API em `p
 
 O repositório é público: testes e exemplos só com dados fictícios. Os nomes reais (executivos, advogadas, condomínios)
 entram pelo portal e ficam no banco.
+
+## Demandas Jurídicas
+
+Tudo o que se pede ao Jurídico (aditivo, rescisão, análise de contrato de fornecedor, parecer…), no lugar da planilha
+"Acompanhamento — Atividades Jurídicas". Fica no menu **Jurídico → Demandas Jurídicas**, para todo mundo.
+
+| Parte | Arquivo |
+|---|---|
+| Rotas (perfil, lista, uma demanda, comentário, Tabela de prazos, indicadores, planilha, importação) e a rotina de prazos | `server/rotas/juridico.js` |
+| Leitura e conferência da planilha (títulos, Tabela de Prazos, datas, status, solicitante, o que já está no portal) e os dias úteis | `server/juridico/importacao.js` |
+| Tabelas `juridico_tipos`, `juridico_demandas`, `juridico_eventos`, `juridico_importacoes` | `server/db.js` |
+| Telas | `public/app.js` (bloco Demandas Jurídicas) |
+| Testes (dados fictícios) | `test/juridico.test.js` |
+| Tutoriais | `juridico-demandas-pedir` e `juridico-demandas-conduzir` (`server/tutoriais.js`, `docs/tutoriais/fonte/roteiros.js`) |
+
+**Prazo e SLA (as regras da planilha).** Cada tipo de atividade tem o prazo em horas úteis; cada 8h é um dia útil
+(arredondado para cima), contado a partir do dia seguinte à solicitação, sem fins de semana e sem os `FERIADOS` do
+expediente (como o `DIATRABALHO` do Excel). SLA: entregue até o prazo = dentro; depois = fora. Os indicadores contam pela
+data da entrega, só as entregues (o Resumo SLA da planilha). **Atrasada** não é um status: é a demanda sem entrega, não
+concluída nem perdida, com o prazo vencido. Ao passar para *Aguardando assinaturas* ou *Concluído* sem data de entrega,
+a entrega fica com a data de hoje. Mudar o prazo de um tipo na Tabela de prazos recalcula só as demandas ainda não
+entregues; as entregues guardam o SLA que tiveram.
+
+**Situações:** Pendente, Em andamento, Aguardando retorno, Aguardando assinaturas, Concluído, Contrato perdido.
+
+**Solicitação de Contrato na mesma lista.** Os contratos enviados pelo comercial aparecem na lista, nas planilhas e nos
+indicadores sem ser lançados de novo, no tipo marcado na Tabela de prazos (*Recebe a Solicitação de Contrato*), com o
+prazo deles (72h úteis), a primeira minuta enviada como entrega e a etapa traduzida para a situação (fila → Pendente,
+em elaboração → Em andamento, pendência/minuta com o comercial → Aguardando retorno, para assinar/em assinatura/
+conferência → Aguardando assinaturas, assinado → Concluído, cancelada → Contrato perdido). Clicar abre o contrato.
+
+**Avisos (sino e e-mail).** Demanda aberta por quem não é do Jurídico: a equipe do Jurídico. Mudança de situação: quem
+pediu (e-mail em *Aguardando retorno* e *Concluído*). Responsável escolhido: a pessoa. Comentário: o outro lado. A rotina
+(a cada 10 minutos, no expediente) avisa no dia do prazo e quando ele passa, uma vez cada, quem é responsável (ou a
+equipe do Jurídico, se ninguém foi escolhido).
+
+**Importar a planilha.** Aba *Importar planilha* (administração e coordenação/supervisão do Jurídico). O portal acha a
+linha de títulos, cria os tipos da Tabela de Prazos (os que já existem no portal ficam como estão), liga o solicitante à
+pessoa do portal pelo nome (sem cadastro, fica o nome), e mostra a prévia antes de gravar. Prazo, entrega e status vêm da
+planilha ("Atrasado" vira automático); os números (#) da planilha são mantidos quando estão livres. O que já venceu
+entra como histórico, sem avisos. Contratos de garantia que já estão na Solicitação de Contrato (mesmo cliente, até 15
+dias de diferença) ficam de fora, a menos que sejam marcados. *Desfazer* apaga o que o lote criou e ninguém mexeu depois.
+O arquivo e os dados ficam no portal, nunca no repositório.

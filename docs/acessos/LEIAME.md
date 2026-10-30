@@ -26,6 +26,7 @@ a supervisão, das pessoas que gerenciam.
 | **Análise de Crédito**: executivo, analista, diretoria | *Configurações → Acessos → Análise de Crédito* (marca, entre os usuários do portal, quem é executivo, analista — entra no setor **Análise de Crédito** — e diretoria) | administração |
 | **Implantação**: comercial, equipe, coordenação, gestor da Análise de Crédito | comercial = executivo da Análise de Crédito; equipe = setor **Implantação**; coordenação = líder, coordenação ou supervisão do setor Implantação; gestor = líder, coordenação ou supervisão do setor Análise de Crédito (*Configurações → Pessoas* e *Configurações → Setores e equipes*) | administração; coordenação/supervisão nos setores delas |
 | **Solicitação de Contrato**: comercial, quem elabora, diretoria | comercial = executivo da Análise de Crédito; quem elabora = pessoas marcadas em *Configurações → Acessos → Solicitação de Contrato* (permissão *Elaborar as minutas de contrato*); diretoria = a da Análise de Crédito | administração |
+| **Demandas Jurídicas**: quem pede, o Jurídico, diretoria | quem pede = qualquer pessoa do portal; Jurídico = setor **Jurídico** e quem elabora os contratos; diretoria = a da Análise de Crédito | administração (setor e quem elabora); a importação da planilha, também a coordenação/supervisão do Jurídico |
 | **Demonstrativos de premiação**: quem lê o de cada pessoa | a própria Gestão de Premiações, ao enviar | quem usa a Gestão de Premiações |
 
 > Atenção: mudar os setores de uma pessoa (em *Pessoas* ou em *Setores e equipes*) muda também a equipe de
@@ -190,6 +191,19 @@ Tela própria do portal (menu **Solicitação de Contrato**), não é uma ferram
 | **Administração** | perfil | tudo, inclusive escolher quem elabora |
 
 Detalhes em `docs/contratos/LEIAME.md`.
+
+## Demandas Jurídicas
+
+Tela própria do portal (menu **Jurídico → Demandas Jurídicas**), não é uma ferramenta em HTML. Quem faz o quê:
+
+| Quem | Como entra | Pode |
+|---|---|---|
+| **Quem pede** | qualquer pessoa do portal | abrir uma demanda em nome próprio (com a data de hoje), ver as suas em *Minhas demandas*, comentar e excluir enquanto está pendente |
+| **Jurídico** | setor **Jurídico** (*Configurações → Pessoas* ou *Setores e equipes*) ou a permissão *Elaborar as minutas de contrato* | ver todas, os indicadores e a Tabela de prazos; lançar pelos outros (com outra data); mudar situação, entrega, responsável e os dados; editar a Tabela de prazos; excluir |
+| **Diretoria** | permissão *Chancelar análises de crédito* | ver todas e os indicadores (só consulta) |
+| **Importar a planilha** | administração e coordenação/supervisão do setor Jurídico | importar e desfazer a importação |
+
+Detalhes em `docs/contratos/LEIAME.md` (seção Demandas Jurídicas).
 
 ## Contrato para o HTML das ferramentas
 

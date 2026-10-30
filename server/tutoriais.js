@@ -19,6 +19,7 @@
  *   implantacao_acompanhar  quem vê o Dashboard do Painel de implantação (setor Implantação e diretoria)
  *   contrato    quem usa a Solicitação de Contrato (executivos cadastrados, quem elabora e diretoria)
  *   contrato_juridico  quem elabora os contratos (Solicitação de Contrato → Quem elabora)
+ *   juridico    quem conduz as Demandas Jurídicas (setor Jurídico e quem elabora os contratos)
  *   jornada_executivo  executivos de negócios cadastrados (o caminho inteiro, pelo executivo)
  *   jornada_equipe     analistas e diretoria da Análise de Crédito, quem elabora os contratos e o setor Implantação
  *   { modulo }  quem abre aquela ferramenta
@@ -32,7 +33,7 @@ const ROTULO_PUBLICO = {
   supervisao: 'Para a supervisão de tickets', links: 'Para quem edita a Central de Links', admin: 'Para a administração',
   credito: 'Para executivos de negócios e a Análise de Crédito', credito_analise: 'Para analistas de crédito e a diretoria',
   implantacao: 'Para executivos de negócios e o setor Implantação', implantacao_setor: 'Para o setor Implantação', implantacao_acompanhar: 'Para o setor Implantação e a diretoria',
-  contrato: 'Para executivos de negócios e o Jurídico', contrato_juridico: 'Para quem elabora os contratos (Jurídico)',
+  contrato: 'Para executivos de negócios e o Jurídico', contrato_juridico: 'Para quem elabora os contratos (Jurídico)', juridico: 'Para o Jurídico',
   jornada_executivo: 'Para executivos de negócios', jornada_equipe: 'Para a Análise de Crédito, o Jurídico e a Implantação',
 };
 
@@ -113,6 +114,10 @@ const TUTORIAIS = [
     descricao: 'Pedir o contrato a partir da análise, preencher as condições e os pedidos do síndico, enviar ao Jurídico, pedir ajuste na minuta ou a assinatura, acompanhar os contratos e, assinado, solicitar a implantação.' },
   { slug: 'contrato-elaborar', grupo: 'Ferramentas', publico: 'contrato_juridico', titulo: 'Solicitação de Contrato — elaborar e registrar as condições fechadas',
     descricao: 'Assumir da fila, ver os pedidos com a resposta padrão, anexar e enviar a minuta, responder ao ajuste, marcar a assinatura e registrar as condições fechadas (o executivo solicita a implantação com elas).' },
+  { slug: 'juridico-demandas-pedir', grupo: 'Ferramentas', publico: 'todos', titulo: 'Demandas Jurídicas — pedir ao Jurídico e acompanhar',
+    descricao: 'Abrir uma demanda (aditivo, rescisão, análise de contrato, parecer…), ver o prazo de entrega, acompanhar em Minhas demandas e responder ao Jurídico pelo comentário.' },
+  { slug: 'juridico-demandas-conduzir', grupo: 'Ferramentas', publico: 'juridico', titulo: 'Demandas Jurídicas — conduzir, prazos e indicadores',
+    descricao: 'Todas as demandas com os contratos da Solicitação de Contrato, as atrasadas, responsável e situação (a entrega é registrada sozinha), lançar pelo solicitante, o % no SLA por atividade e mês e a Tabela de prazos.' },
   { slug: 'gestao-usuarios', grupo: 'Gestão do setor', publico: 'gestor', titulo: 'Usuários do setor',
     descricao: 'Criar o acesso de alguém do setor, liberar ferramentas e redefinir a senha.' },
   { slug: 'gestao-ferramentas', grupo: 'Gestão do setor', publico: 'gestor', titulo: 'Ferramentas do setor',
@@ -147,6 +152,7 @@ async function visibilidade(db, seg, u) {
   // Solicitação de Contrato: quem elabora (pessoas marcadas na regra "Elaborar as minutas de contrato")
   const elab = await db.um("SELECT regra->'pessoas' AS p FROM regras_acesso WHERE chave = 'contratos.elaborar'");
   const elaborador = !!(elab && Array.isArray(elab.p) && elab.p.includes(u.id));
+  const setorJuridico = !!(await db.um("SELECT 1 FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id WHERE sm.usuario_id = $1 AND s.nome = 'Jurídico'", [u.id]));
   const regra = {
     todos: true,
     equipe: membro.length > 0 || sup,
@@ -161,6 +167,7 @@ async function visibilidade(db, seg, u) {
     implantacao_acompanhar: setorImplantacao || diretoria,
     contrato: executivo || elaborador || diretoria,
     contrato_juridico: elaborador,
+    juridico: elaborador || setorJuridico,
     jornada_executivo: executivo,
     jornada_equipe: analista || diretoria || setorImplantacao || elaborador,
     admin: false,

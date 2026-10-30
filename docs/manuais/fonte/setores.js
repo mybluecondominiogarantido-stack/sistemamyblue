@@ -571,6 +571,7 @@ const SETORES = [
     ferramentas: [],
     tambem: [
       '<b>Solicitação de Contrato</b> (menu do portal): quem a administração marca em <i>Quem elabora</i> recebe os pedidos do comercial, assume da fila, redige a minuta em até 72h úteis, responde aos ajustes e, com o contrato assinado, registra as <b>condições fechadas</b> (em <i>Acompanhamento de Contratos → Assinaturas</i>); o executivo é avisado e solicita a implantação, que vem com elas. Contrato assinado fora do portal chega direto em Assinaturas, pela implantação: registradas as condições, ela segue sozinha para o setor Implantação. Os números ficam no <b>Dashboard Jurídico</b>. O que o manual reserva à diretoria passa por ela antes da minuta.',
+      '<b>Demandas Jurídicas</b> (menu do portal, <i>Jurídico → Demandas Jurídicas</i>): o acompanhamento de tudo o que se pede ao Jurídico, no lugar da planilha. Qualquer pessoa abre a demanda (atividade, cliente e objeto) e acompanha em <i>Minhas demandas</i>; o Jurídico vê todas (com os contratos da Solicitação de Contrato), escolhe o responsável, muda a situação e registra a entrega. O prazo de cada atividade fica na <b>Tabela de prazos</b>, em horas úteis (8h = 1 dia útil); atrasada é automática, e os <b>Indicadores (SLA)</b> mostram o % entregue no prazo por atividade e por mês.',
     ],
     recebe: [
       ['Análise / minuta de contrato', 27, 'media', 'Anexe o contrato ou a proposta e destaque os pontos de atenção.'],
