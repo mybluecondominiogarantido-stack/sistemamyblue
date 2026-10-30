@@ -225,6 +225,19 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, bo
     res.json({ pessoas: saida });
   });
 
+  /* datas da equipe (nascimento e admissão do cadastro de Pessoas) para aniversários e tempo de casa.
+     Só para as ferramentas que a administração liberou (Configurações → Ferramentas → "Receber as datas da equipe"). */
+  r.get('/api/db/:slug/equipe', seg.exigirLogin, async (req, res) => {
+    const m = await moduloComDocumentos(req, res);
+    if (!m) return;
+    if (!m.config.datas_equipe) return res.status(403).json({ code: 'not_granted', erro: 'Esta ferramenta não recebe as datas da equipe. A administração libera em Configurações → Ferramentas.' });
+    const { rows } = await db.q(`SELECT u.id, u.nome, to_char(u.data_nascimento, 'YYYY-MM-DD') AS data_nascimento, to_char(u.data_admissao, 'YYYY-MM-DD') AS data_admissao,
+        COALESCE(array_agg(s.nome ORDER BY s.nome) FILTER (WHERE s.id IS NOT NULL), '{}') AS setores
+      FROM usuarios u LEFT JOIN setor_membros sm ON sm.usuario_id = u.id LEFT JOIN setores s ON s.id = sm.setor_id
+      WHERE u.ativo GROUP BY u.id, u.nome, u.data_nascimento, u.data_admissao ORDER BY u.nome`);
+    res.json({ pessoas: rows.map((u) => ({ id: `mb-${u.id}`, nome: u.nome, setores: u.setores || [], data_nascimento: u.data_nascimento, data_admissao: u.data_admissao })) });
+  });
+
   /* ---------- endpoint compatível com o Apps Script (substitui a planilha Google) ---------- */
   function responder(res, cb, dados, status = 200) {
     res.set('Cache-Control', 'no-store');

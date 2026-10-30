@@ -225,6 +225,8 @@ function criarSeguranca(db, cfg) {
     const ler = req.method === 'GET' || req.method === 'HEAD';
     if (p === `/api/armazenamento/${s}` || p === `/api/gas/${s}`) return true;
     if (p === `/api/db/${s}` || p === `/api/db/${s}/trava` || p === `/api/db/${s}/pessoas`) return true;
+    // datas da equipe: a rota confere se a administração liberou esta ferramenta
+    if (ler && p === `/api/db/${s}/equipe`) return true;
     if (ler && (/^\/api\/carteira(\/\d+)?$/.test(p) || /^\/api\/usuarios\/\d+\/foto$/.test(p) || p.startsWith('/cdn/'))) return true;
     if (req.method === 'POST' && (p === '/api/tickets' || /^\/api\/tickets\/\d+\/anexos$/.test(p))) return true;
     // Controle de Repasses: as antecipações vindas da Implantação (a rota confere o papel Gestor)
