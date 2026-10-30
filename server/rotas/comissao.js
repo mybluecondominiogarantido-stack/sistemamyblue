@@ -10,13 +10,15 @@
  * Ninguém mais: nem a supervisão de tickets, nem coordenadores de outros setores, nem os colegas.
  * Reenviar cria uma nova versão; a anterior fica guardada e sai das listas.
  *
- * Planilhas do mês: a gestão pede a planilha de cada pessoa (Crédito, Implantação, metas dos setores…) a quem
+ * Planilhas do mês: a gestão pede a planilha de cada pessoa (Crédito, metas dos setores…) a quem
  * envia — normalmente o coordenador do setor, que recebe um aviso só com a lista da equipe. Ele envia um arquivo
  * por pessoa em "Minhas Premiações"; quem pediu recebe um aviso só, quando todas foram enviadas, e importa na
  * ferramenta. Quem envia nunca vê a ferramenta, as regras ou valores.
  */
 const express = require('express');
 const { MODULO_ACOMPANHAMENTO, competencias, resultadoCobranca } = require('../cobranca-resultados');
+const { carregarLinhas } = require('./implantacoes-acompanhamento');
+const MI = require('../implantacoes/metas');
 
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 const nomeComp = (c) => { const [a, m] = c.split('-'); return `${MESES[Number(m) - 1].replace(/^./, (x) => x.toUpperCase())}/${a}`; };
@@ -220,6 +222,35 @@ function rotasComissao({ db, seg, cfg, avisos, acessos }) {
     const r2 = resultadoCobranca(rows, comp);
     if (!r2.analistas.length) return erro(res, 404, `O Acompanhamento de Resultados não tem condomínios apurados em ${nomeComp(comp)}.`);
     res.json(r2);
+  });
+
+  /* ===================== Implantação pelo Painel de Implantação ===================== */
+  // as 3 metas da Implantação (implantados, documentação e onboarding) sem a planilha da assistente: a ferramenta escolhe
+  // a vigência de cada meta e aplica as regras dela; aqui vão as implantações enviadas, com as datas que o portal guarda
+  r.get('/api/comissao/implantacao', async (req, res) => {
+    if (!(await podeEnviar(req.usuario, req.query.modulo))) return erro(res, 403, 'Só quem usa a Gestão de Premiações puxa a Implantação.');
+    const linhas = await carregarLinhas(db);
+    // envio dos boletos: o dia em que a etapa "Envio dos boletos" foi marcada no portal (as importadas das planilhas não têm)
+    const envio = {};
+    for (const e of (await db.q(`SELECT implantacao_id, detalhe, criado_em FROM implantacao_eventos WHERE tipo = 'etapas' ORDER BY criado_em, id`)).rows) {
+      const d = e.detalhe || {};
+      const forma = d.etapas && d.etapas.envio && d.etapas.envio.forma;
+      if (Array.isArray(d.mudou) && d.mudou.includes('envio')) envio[e.implantacao_id] = forma ? (envio[e.implantacao_id] || MI.diaSP(e.criado_em)) : null;
+    }
+    // documentos: o primeiro recebimento de cada tipo (o mesmo que conta no Painel)
+    const docs = {};
+    for (const d of (await db.q(`SELECT implantacao_id, tipo, MIN(enviado_em) AS em FROM implantacao_documentos WHERE desfeito_em IS NULL GROUP BY implantacao_id, tipo`)).rows) {
+      (docs[d.implantacao_id] = docs[d.implantacao_id] || {})[d.tipo] = MI.diaSP(d.em);
+    }
+    res.set('Cache-Control', 'no-store');
+    res.json({ implantacoes: linhas.map(({ _bruto, ...l }) => ({
+      id: l.id, protocolo: l.protocolo, condominio: l.condominio, uf: l.uf, etapa: l.etapa, importada: l.importada,
+      responsavel: l.responsavel_nome, inicio: l.inicio, enviado: l.enviado,
+      primeiro_vencimento: l.primeiro_vencimento, vencimento_previsto: l.vencimento_previsto,
+      onboarding: { situacao: l.onboarding.situacao, data: l.onboarding.data },
+      documentacao: { limite: l.documentacao.limite, docs: docs[l.id] || {} },
+      boletos: l.feitas.boletos, envio: l.feitas.envio ? { em: envio[l.id] || null } : null,
+    })) });
   });
 
   /* ===================== planilhas do mês ===================== */

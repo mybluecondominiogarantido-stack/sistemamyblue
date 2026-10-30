@@ -342,3 +342,35 @@ test('Cobrança pelo Acompanhamento de Resultados: a gestão escolhe a vigência
 
   assert.equal((await gestor('GET', '/api/comissao/cobranca?modulo=premiacoes&competencia=2026-08')).status, 404);
 });
+
+test('Implantação pelo Painel de Implantação: implantações enviadas com o 1º vencimento, o onboarding, os documentos e o envio dos boletos', async () => {
+  const resp = ids['ana@teste.com'];
+  const nova = async (cond, etapas, enviado, extra = {}) => (await ctx.db.um(`INSERT INTO implantacoes (protocolo, etapa, origem, condominio, uf, responsavel_id, formulario, etapas, enviado_em)
+    VALUES ($1, $2, 'pdf', $3, 'CE', $4, $5::jsonb, $6::jsonb, $7) RETURNING id`, [`IMP-${cond}`, extra.etapa || 'em_implantacao', cond, resp,
+    JSON.stringify({ nome: cond, uf: 'CE', inicio_contrato: '2026-09-01', dia_vencimento: 10 }), JSON.stringify(etapas), enviado])).id;
+  const a = await nova('Jardim Azul', { documentacao: { feito: true }, onboarding: { situacao: 'realizado', data: '2026-10-20' }, boletos: { feito: true, primeiro_vencimento: '2026-10-10' }, envio: { forma: 'email' } }, '2026-09-02T12:00:00Z');
+  const b = await nova('Primavera', { onboarding: { situacao: 'sindico_myblue' } }, '2026-09-05T12:00:00Z');
+  await nova('Rascunho', {}, null, { etapa: 'rascunho' });
+  // o envio dos boletos foi marcado no portal em 05/10 (antes, marcado e desmarcado em 01/10)
+  const ev = (id, quando, mudou, etapas) => ctx.db.q(`INSERT INTO implantacao_eventos (implantacao_id, usuario_id, tipo, detalhe, criado_em) VALUES ($1, $2, 'etapas', $3::jsonb, $4)`,
+    [id, resp, JSON.stringify({ mudou, etapas }), quando]);
+  await ev(a, '2026-10-01T12:00:00Z', ['envio'], { envio: { forma: 'fisico' } });
+  await ev(a, '2026-10-01T13:00:00Z', ['envio'], { envio: { forma: '' } });
+  await ev(a, '2026-10-05T12:00:00Z', ['envio', 'boletos'], { envio: { forma: 'email' } });
+  await ctx.db.q(`INSERT INTO implantacao_documentos (implantacao_id, tipo, nome, enviado_em, sem_arquivo) VALUES ($1, 'convencao', 'c', '2026-09-03T12:00:00Z', TRUE), ($1, 'ata_eleicao', 'e', '2026-09-20T12:00:00Z', TRUE), ($1, 'convencao', 'c2', '2026-09-25T12:00:00Z', TRUE)`, [a]);
+
+  assert.equal((await ana('GET', '/api/comissao/implantacao?modulo=premiacoes')).status, 403);
+  const r = await gestor('GET', '/api/comissao/implantacao?modulo=premiacoes');
+  assert.equal(r.status, 200, r.texto);
+  const por = Object.fromEntries(r.json.implantacoes.map((x) => [x.condominio, x]));
+  assert.deepEqual(Object.keys(por).sort(), ['Jardim Azul', 'Primavera']);
+  const j = por['Jardim Azul'];
+  assert.equal(j.responsavel, 'Ana Analista');
+  assert.deepEqual([j.primeiro_vencimento, j.vencimento_previsto, j.boletos, j.envio], ['2026-10-10', false, true, { em: '2026-10-05' }]);
+  assert.deepEqual(j.onboarding, { situacao: 'realizado', data: '2026-10-20' });
+  assert.deepEqual(j.documentacao, { limite: '2026-11-01', docs: { convencao: '2026-09-03', ata_eleicao: '2026-09-20' } });
+  const p = por.Primavera;
+  // sem o 1º vencimento informado vale o previsto pelo dia de vencimento; sem envio marcado, sem data
+  assert.deepEqual([p.primeiro_vencimento, p.vencimento_previsto, p.envio, p.onboarding.situacao], ['2026-09-10', true, null, 'sindico_myblue']);
+  assert.ok(b);
+});
