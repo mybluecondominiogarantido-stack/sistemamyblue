@@ -301,6 +301,7 @@
   }
 
   /* ======================= roteamento ======================= */
+  var rotaAnterior = null;
   function rotear() {
     var h = location.hash || '#/';
     // endereços antigos (avisos e e-mails enviados antes de "Premiações"): levam para os novos
@@ -310,6 +311,9 @@
     $('#casca').classList.remove('menu-aberto');
     if (partes[0] === 'm' && partes[1]) return abrirModulo(decodeURIComponent(partes[1]));
     mostrarConteudo();
+    // página nova começa do alto (o #conteudo rola sozinho e guardava a posição da tela anterior)
+    if (h !== rotaAnterior) $('#conteudo').scrollTop = 0;
+    rotaAnterior = h;
     if (partes[0] === 'tickets') {
       if (partes[1] === 'painel') return paginaPainelTickets();
       if (partes[1] === 'fila') return paginaTickets(partes[2]);
