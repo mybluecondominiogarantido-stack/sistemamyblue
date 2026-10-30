@@ -33,7 +33,6 @@ const FERRAMENTAS = {
     abas: [
       ['Produtividade da equipe', 'Acompanha a produção de cada pessoa da equipe de cobrança.'],
       ['Geração de mailing', 'Monta listas de contato (mailing) a partir dos arquivos de cobrança.'],
-      ['Análise de espólio', 'Apoia a análise de casos de espólio.'],
     ],
   },
   renegociacoes: {
@@ -282,6 +281,135 @@ const FERRAMENTAS = {
       'Acompanhe quem abriu e quem clicou em <b>Estou ciente</b> no quadro de envio do Resumo.',
     ],
   },
+  repasses: {
+    video: true,
+    nome: 'Controle de Repasses',
+    descricao: 'Os valores repassados aos condomínios, dia a dia: lança o arquivo exportado do sistema com a conferência pronta (já lançado, conta nova ou diferente da cadastrada, apelido fora da carteira), corrige o dia, gera a planilha do Financeiro e mostra o ano, o mês, cada condomínio e o que está atrasado.',
+    dados: 'Os lançamentos, as contas bancárias, as regras de repasse e os vencimentos diferenciados ficam no banco do portal e são compartilhados pela equipe (atualiza a cada 20 s). Responsável, UF, situação, razão social e CNPJ vêm da <b>Base de Clientes</b> (carteira do portal).',
+    abas: [
+      ['Repasses do dia', 'A <b>próxima janela de repasse</b> (lançamentos, valor e atrasados) e os próximos 14 dias. Passo <b>1 · Lançar repasses</b>: arraste o arquivo do sistema (.xls, .xlsx, .csv ou texto colado) ou use <b>Adicionar lançamento</b>; cada linha vem conferida (já lançado vem desmarcado; conta nova ou diferente da cadastrada: <b>Usar a cadastrada</b> ou <b>Cadastrar esta conta</b>) e <b>Gravar no portal</b> grava, com <b>Desfazer</b> logo depois. Passo <b>2 · Conferir e corrigir o dia</b>: escolha o dia, clique na linha para corrigir valor, data, apelido, descrição ou conta, marque a <b>ocorrência</b> (estorno, conta errada, duplicado, pendente, suspenso, cancelado) e use <b>Sugerir contas vazias</b>. Passo <b>3 · Enviar ao Financeiro</b>: confere as pendências e baixa a planilha do dia (ou abre o e-mail). Passo 4 (opcional): confere com o extrato do banco.'],
+      ['Visão geral', 'Total do ano por tipo (normais, antecipações, não garantidos, compra do passivo), contas de terceiros e programado, os gráficos e a evolução mês a mês, e o valor por responsável.'],
+      ['Visão mensal', 'O mês escolhido no topo: realizado e a realizar, o calendário (dias com repasse, programados, sem repasse e feriados) e os quadros por tipo, responsável, UF e os 10 maiores condomínios.'],
+      ['Condomínios', '<b>Repasses por mês</b> de cada condomínio (busca e só contas de terceiros), <b>Contas bancárias</b>, <b>Regras de repasse</b> (antecipações e repasses mensais previstos no contrato) e o <b>Histórico</b> de cada condomínio.'],
+      ['Alertas', 'Condomínios ativos sem repasse no prazo (dia útil seguinte ao vencimento), os pendentes e suspensos <b>para cobrar</b> (com <b>Marcar como feito</b>), apelidos fora da carteira, pendências e possíveis duplicidades.'],
+      ['Base de dados', 'O que está guardado no banco do portal, a leitura da carteira (<b>Atualizar carteira</b>), a importação de planilhas e os avisos da base (sem responsável, fora da carteira).'],
+    ],
+    obs: 'O quadro <b>Hoje</b>, no topo, avisa antecipações a gerar, repasses mensais do dia e regras vencendo; <b>Semana para o Financeiro</b> baixa a semana inteira. Regras de repasse e cadastro de contas são só da coordenação/supervisão. <b>Exportar anual</b> e <b>Exportar mensal</b> baixam as visões em Excel.',
+  },
+  gestaoCredito: {
+    video: true,
+    nome: 'Central de Ferramentas — Gestão Crédito',
+    descricao: 'As ferramentas de repasses da coordenação de Crédito: a Conciliação de Repasses (planilha do dia × lançamentos do Protheus e × pagamentos do banco, com o registro de divergências) e o Divisor de Comprovantes. As duas usam a Carteira do portal e a mesma planilha de repasses do dia.',
+    dados: 'Os arquivos são lidos no navegador. As conciliações registradas e as divergências, com tratativas e ajustes, ficam no banco do portal, compartilhadas pela equipe; os comprovantes não saem da página.',
+    tituloAbas: 'Ferramentas da central',
+    abas: [
+      ['Conciliação de Repasses · Lançamentos (Protheus)', 'Planilha de repasses do dia (Excel ou PDF) × listagem de Pedidos de Compra do Protheus (MATA121, PDF ou Excel): o que foi previsto e não lançado, com valor diferente ou sem previsão.'],
+      ['Conciliação de Repasses · Pagamentos (Banco)', 'Planilha do dia × consulta de pagamentos do Itaú do mesmo dia (Excel ou PDF): o que <b>faltou pagar</b>, o que foi pago com <b>valor diferente</b>, tentativas não efetuadas e pagamentos sem previsão. Casa pelo valor exato e pelo nome (e CNPJ da Carteira). <b>Registrar conciliação</b> guarda o dia; <b>Baixar Excel do dia</b> leva o resultado.'],
+      ['Conciliação de Repasses · Divergências e Conciliações', 'O registro de divergências de todos os dias (pendentes, abertas, em análise, resolvidas), com a tratativa e o histórico de cada uma, <b>✓ Ajuste feito</b> (uma ou várias de uma vez), a divergência manual e a exportação em Excel; as conciliações registradas, dia a dia.'],
+      ['Divisor de Comprovantes', 'Planilha do dia (recomendado) + um ou mais PDFs de comprovantes: cada página é identificada pelo CNPJ, pelo valor e pelo nome, com o condomínio e a assistente de crédito da Carteira; a conferência mostra repasses sem comprovante e comprovantes fora da planilha. <b>Baixar ZIP</b> gera uma pasta por responsável (ou o ZIP de uma assistente).'],
+    ],
+    obs: 'Comprovantes com valor repetido no dia ou de contas de terceiros ficam pendentes para você confirmar; os não identificados vão para a pasta “Não identificados”.',
+  },
+  hsmCredito: {
+    video: true,
+    nome: 'Biblioteca de HSM — Crédito e Implantação',
+    descricao: 'As mensagens padrão do Crédito e da Implantação para síndicos, condôminos, administradoras e a equipe interna (grupo de WhatsApp, WhatsApp privado ou e-mail). A pessoa filtra, abre a mensagem, lê as instruções de envio e copia o texto. O que está <b>[entre colchetes]</b> muda a cada envio.',
+    dados: 'As mensagens, as sugestões e a contagem de cópias ficam no banco do portal e são compartilhadas pela equipe, ao vivo. Na primeira abertura, quem pode gravar carrega a base inicial de mensagens que vem no HTML (aos poucos; se for interrompida, continua na próxima abertura).',
+    abas: [
+      ['Crédito', 'As mensagens das assistentes de crédito por categoria (emissão dos boletos, comunicados, repasses e contas, dúvidas de condôminos, titularidade e espólios, acesso ao app, relacionamento, assinaturas e patrocínios, sobre a MyBlue), com filtros de <b>para quem</b> (síndico e administração, condômino, equipe interna) e de <b>canal</b>, a busca e o quadro <b>Mais usadas no mês</b> (da equipe, para a gestão; as suas, para os demais), com Copiar direto. Ao abrir a mensagem, o quadro amarelo <b>Antes de enviar</b> traz as instruções (para quem, cópia, assunto, anexos), que não entram no texto copiado.'],
+      ['Implantação', 'As mensagens da Implantação, na ordem das etapas do condomínio novo: 1. Boas-vindas, 2. Reunião de onboarding, 3. Documentação, 4. Comunicados, 5. Primeiro boleto, 6. Acesso ao app e site, 7. Casos especiais. Mesmos filtros, busca e Copiar.'],
+      ['Sugestões', 'Quem não é da gestão sugere ajustes (botão <b>Sugerir ajuste</b> na mensagem) ou mensagens novas (<b>+ Sugerir nova mensagem</b>), com o motivo, e acompanha a resposta. A gestão vê todas: <b>Revisar</b> compara o texto atual com o sugerido; <b>Aprovar e publicar</b> troca na hora; <b>Recusar</b> exige um comentário.'],
+      ['Nova mensagem (gestão)', 'Botão ao lado das abas: já vem com o setor (Crédito ou Implantação), a categoria e os filtros da tela. Tem título, categoria, canal, para quem, tags, texto com <b>prévia de como fica no WhatsApp</b> e <b>Instruções de envio</b>.'],
+      ['Configurações (gestão)', 'Editar, arquivar e restaurar mensagens; as cópias de cada uma por mês (ordenar por mais ou menos copiadas) e <b>Exportar Excel</b> ou <b>PDF</b> com as duas abas.'],
+    ],
+    obs: 'Quem cadastra, edita e aprova é quem tem o papel <b>Gestão</b> (identificador <code>gestao_credito</code>), dado no portal em <b>Quem abre e com qual papel</b> — a coordenação também precisa recebê-lo. Sem o papel, a pessoa busca, copia e envia sugestões; com acesso só de consulta, só busca e copia.',
+  },
+  resultados: {
+    video: true,
+    nome: 'Acompanhamento de Resultados',
+    descricao: 'Meta da Cobrança Administrativa por condomínio e por analista: receber, em até 30 dias do vencimento efetivo, 30% das unidades garantidas que estavam devendo no vencimento. O objetivo do setor é ter 90% dos condomínios na meta. A gestão importa a exportação do dia; cada analista acompanha a própria carteira e registra os envios, as cobranças e as observações.',
+    dados: 'Os condomínios e a analista de cada um vêm da <b>Carteira de condomínios</b> do portal (só os ativos). Os resultados, registros e notas ficam no banco do portal, compartilhados ao vivo. O arquivo exportado do Vouch não é guardado: o portal lê, calcula e descarta. O resultado de cada analista é puxado pela <b>Gestão de Premiações</b> (Cobrança).',
+    abas: [
+      ['Visão geral', 'Carteira, condomínios na meta e o <b>% na meta</b> (objetivo 90%), o quadro de cada analista (clique para filtrar), os <b>não batidos</b> do mês, o <b>quadro por vencimento</b> e as <b>últimas atualizações</b> desde a importação anterior (quem pagou, acordos novos, quem entrou ou saiu da meta).'],
+      ['Analítico', 'Mês a mês por competência e os condomínios em atenção: reincidentes, pela 1ª vez e recuperados.'],
+      ['Carteiras', 'Os condomínios agrupados por vencimento: inicial, % de inadimplência, meta, atual, recebidos, resultado, envios no grupo, última cobrança e pendências. Filtros por analista, vencimento e situação; marque vários para registrar envios, cobrança ou criticidade de uma vez. Clique no condomínio para o <b>detalhe</b>: números, histórico de 6 meses, acordos, unidades em aberto e pagas, notas e o <b>registro da analista</b>.'],
+      ['Envios em massa', 'Envios da gestão pelo WhatsApp: escolha analistas, vencimentos e situação; cada condomínio marcado ganha uma cobrança “pela gestão”.'],
+      ['Importar', 'Exportação <b>Boletos</b> do Vouch do dia (período, filtros e colunas indicados na tela; CSV ou Excel). A prévia mostra a data de corte, as competências atualizadas e o que muda; <b>Confirmar importação</b> grava. Em <b>Fechamento dos meses</b>, <b>Fechar</b> congela o mês (não é mais recalculado).'],
+      ['Ajustes de cadastro', 'Unidades retiradas do inicial, nomes do Vouch sem cadastro, condomínios ativos sem boletos e os feriados usados no vencimento efetivo.'],
+      ['Ver como', 'A gestão vê a tela de cada analista: <b>Meu progresso</b>, <b>O que fazer hoje</b> (1º e 2º envio da inadimplência no grupo, atrasados e observações obrigatórias) e <b>Minha carteira</b>.'],
+    ],
+    obs: 'A analista é reconhecida pelo nome: o nome dela no portal tem de ser igual ao da coluna <b>Analista de cobrança</b> da Carteira. Quem abre e não é analista entra como gestão. O 1º envio da inadimplência no grupo é previsto no vencimento e o 2º, 5 dias depois (no próximo dia útil, se cair em fim de semana ou feriado); condomínio fora da meta com o prazo encerrado (ou com 7 dias ou menos) exige observação.',
+  },
+  mailing: {
+    video: true,
+    nome: 'Ajuste de Mailing',
+    descricao: 'Arruma os telefones do mailing da Cobrança: lê o arquivo (.xlsx) com as colunas <b>Condomínio</b>, <b>Unidade</b>, <b>Prop. Nome</b> (ou <b>Resp. Nome</b>) e <b>Contatos</b> e gera as planilhas prontas para a ferramenta de disparo e para salvar os contatos.',
+    dados: 'Não guarda nada: o arquivo é lido no navegador e as planilhas são montadas na hora e baixadas.',
+    abas: [
+      ['Carregar o mailing', 'Solte o .xlsx na área do topo (ou clique para escolher). Vale só a primeira aba do arquivo. Aparecem o nome do arquivo e quantas linhas, condomínios e números foram lidos.'],
+      ['Ajuste de mailing', 'Um número por linha, no padrão <b>+55 DDD número</b>: tira parênteses, espaços e traços, separa os números que estavam juntos na mesma célula (vírgula, ponto e vírgula, barra ou quebra de linha) e põe o 9 no celular de 8 dígitos. <b>Com variável</b> gera as colunas <b>prop1</b> (nome do condomínio, como está no mailing) e <b>Contatos</b>; <b>Sem variável</b>, só <b>Contatos</b>. <b>Gerar planilha</b> baixa o Excel.'],
+      ['Contatos para salvar', 'Planilha com <b>telefone</b> (55 + DDD + número, sem o +), <b>nome</b> e <b>grupo</b> (vazio). O nome junta a unidade, os dois primeiros nomes do proprietário (ou do responsável, se não houver) e o condomínio sem “Condomínio”, “Edifício”, “Residencial” e afins. <b>Gerar “Novos contatos”</b> baixa um arquivo por condomínio; com mais de um, todos num .zip.'],
+    ],
+    obs: 'Linhas sem condomínio ou sem contato ficam de fora. Telefone fixo também entra na lista (a ferramenta não separa fixo de celular). Se faltar a coluna Condomínio ou Contatos, aparece o aviso “Não achei as colunas Condomínio/Contatos”.',
+  },
+  espolio: {
+    video: true,
+    nome: 'Análise de Espólio',
+    descricao: 'Decide, pela Política de Análise de Espólio, quais unidades com titular falecido saem da garantia (<b>Excluir</b>) e quais seguem <b>Em acompanhamento</b>, da solicitação da Implantação ou da Cobrança até a ficha da análise e as reanálises a cada 90 dias.',
+    dados: 'Solicitações, análises, fichas, evidências e a base do Power BI ficam no banco do portal, compartilhados pela equipe e com o histórico de quem fez cada ação. A carteira de condomínios vem do portal. Os relatórios (PDF e Excel) são lidos no navegador.',
+    abas: [
+      ['Dashboard', 'Espólios sinalizados, análises do mês, pendências (solicitações sem análise concluída e reanálises vencidas), exclusões e implantação atrasada; o resultado por mês, as próximas reanálises, os condomínios com mais exclusões e o <b>Resumo mensal</b>.'],
+      ['Solicitações', 'Caixa de entrada da gestão. Abra a solicitação para conferir condomínio, solicitante e unidades; <b>Iniciar análise</b> abre a análise já preenchida, <b>Devolver</b> pede correção com o motivo. <b>Registrar solicitação</b> lança um pedido que chegou por e-mail ou telefone.'],
+      ['Análise', '1) <b>Documentos</b>: relatório consolidado de inadimplência do <b>Vouch</b> (PDF, conferido com o total do relatório), a <b>inadimplência anterior</b> (PDF da administradora anterior, planilha padrão ou o resultado da skill leitura-inadimplencia-myblue) e o <b>Power BI</b> (vem da base do dia); cada um pode ser marcado como inexistente. 2) Condomínio e contrato. 3) Cada unidade recebe <b>Excluir</b> ou <b>Em acompanhamento</b> pela regra da política; clicando na unidade, as evidências e o ajuste manual (com motivo). <b>Concluir análise</b> gera a ficha e oferece o ticket para quem guarda a ficha na pasta.'],
+      ['Solicitar análise e Minhas solicitações', 'Para quem pede (Implantação ou solicitante avulso): nova solicitação com as unidades de titular falecido (ou importando a extração de unidades do Vouch), o quadro de condomínios em implantação a verificar (<b>Sem espólio</b> ou <b>Solicitar análise</b>) e o andamento de cada pedido, com a ficha quando concluída.'],
+      ['Fila de acompanhamento', 'Um condomínio por linha com as unidades em acompanhamento e o prazo da reanálise (90 dias). <b>Selecionar vencidos</b> e <b>Reanalisar</b>: anexe os PDFs do Vouch (o condomínio é reconhecido pelo cabeçalho); na reanálise só o Vouch conta (3 ou mais taxas → Excluir). Clicando no nome, o histórico e a evolução das unidades. Exporta a fila em CSV.'],
+      ['Acessos', 'Os papéis na ferramenta (Gestão, Implantação, Solicitante avulso): é a mesma lista da janela da ferramenta no portal, <b>Quem abre e com qual papel</b>.'],
+      ['Configurações', 'A carteira e os tickets, a <b>base do Power BI</b> do dia (Excel ou CSV com Condomínio, Idade e Resultado), a carga inicial da planilha antiga e o texto das regras da política.'],
+    ],
+    obs: 'Regras da 1ª análise (implantação e avulso), na ordem: Vouch + débito anterior → Excluir; sem Vouch → Em acompanhamento; só Vouch → decide o BI e a vigência. Faltando um insumo, a unidade fica com <b>pendência 5.5</b> e a análise não conclui até anexar o documento ou ajustar com motivo.',
+  },
+  hsm: {
+    video: true,
+    nome: 'Biblioteca de HSM',
+    descricao: 'As mensagens padrão da Cobrança, num lugar só: a pessoa busca, abre a mensagem como ela fica no WhatsApp e copia para colar na conversa. O que está <b>[entre colchetes]</b> muda a cada envio e deve ser trocado antes de enviar.',
+    dados: 'As mensagens, as sugestões e a contagem de cópias ficam no banco do portal e são compartilhadas pela equipe, ao vivo. Na primeira abertura a ferramenta carrega a base inicial de mensagens que vem no próprio HTML.',
+    abas: [
+      ['Buscar mensagens', 'As mensagens da biblioteca por categoria (com a etapa da cobrança: Preventiva, Educativa ou Assertiva) e a busca por título, texto ou tag. Clicar na mensagem mostra o texto inteiro como no WhatsApp; <b>Copiar</b> leva o texto para a área de transferência. Analistas veem também <b>Sugerir ajuste</b>; a gestão vê <b>Editar</b>.'],
+      ['Templates do sistema', 'Os modelos cadastrados na ferramenta de disparo do WhatsApp, só para consulta (as variáveis {{1}}, {{2}} são preenchidas por ela). Mudar o texto aqui não altera o template lá: a mudança precisa ser feita também na ferramenta de disparo.'],
+      ['Sugestões', 'Analistas: <b>Minhas sugestões</b> e <b>+ Sugerir nova mensagem</b>, com o motivo; acompanham se foi aprovada ou recusada (com o comentário da gestão) e podem retirar uma pendente. Gestão: as sugestões de todos; <b>Revisar</b> mostra o texto atual ao lado do sugerido, <b>Aprovar e publicar</b> troca na hora e <b>Recusar</b> exige um comentário.'],
+      ['Configurações (gestão)', '<b>+ Nova mensagem</b> (Biblioteca ou Templates do sistema, categoria, etapa, tags e texto), <b>Editar</b>, <b>Arquivar</b> e restaurar; as cópias de cada mensagem no mês (ordenar por mais ou menos copiadas) e <b>Exportar Excel</b> ou <b>PDF</b> da biblioteca inteira.'],
+    ],
+    obs: 'Quem edita e aprova é quem tem o papel <b>Gestão</b> (identificador <code>gestao_administrativa</code>), dado no portal em <b>Quem abre e com qual papel</b> — a coordenação também precisa recebê-lo. Sem o papel, a pessoa busca, copia e envia sugestões; com acesso só de consulta, só busca e copia.',
+  },
+  curadoria: {
+    video: true,
+    nome: 'Curadoria da Base — Painel de Campanhas',
+    descricao: 'Gestão das campanhas de recuperação dos condomínios com Resultado negativo, pela escada da Política de Curadoria da Base: quem vai para campanha, com qual desconto (50% na 1ª, 70% na 2ª, 100% a partir da 3ª), e o resultado de cada campanha.',
+    dados: 'Os arquivos do Power BI (Analítico e rating) são lidos no navegador e valem só durante a sessão. O painel guarda no banco do portal, compartilhado pela equipe, só as campanhas, as marcações e o histórico dos condomínios que passaram por campanha.',
+    abas: [
+      ['Visão geral', 'Condomínios atendidos, efetividade das campanhas (quantos melhoraram e quantos positivaram), resultado recuperado e negativos sem projeção de melhoria; a evolução por mês de início e a <b>efetividade por campanha</b>, comparada com os negativos que ficaram de fora.'],
+      ['Campanhas', 'Top 3 do ano, campanhas ativas e o histórico. No <b>detalhe</b>: o resultado de cada condomínio, os relatórios para a Cobrança e para a Diretoria, <b>Editar campanha</b> e o <b>Analítico de fim</b>, que encerra a campanha (positivado, em recuperação ou em agravamento). <b>Cadastrar campanha manualmente</b> registra campanhas feitas fora do painel.'],
+      ['Condomínios', 'Os condomínios que passaram por campanha, com resultado, tendência de 6 meses e classificação. A <b>ficha</b> mostra o Resultado mês a mês (faixas marcam as campanhas), as campanhas, as leituras guardadas e as <b>marcações e destino</b> para a Reunião de Resultado.'],
+      ['Avaliação', '1 · envie o <b>Analítico</b> do Power BI (Condomínio, Idade, VOP, Inadimplência, Resultado) e, se quiser, o <b>rating</b> (resultado acumulado mês a mês). 2 · cada condomínio é classificado pela escada: campanha, monitoramento, curadoria plena ou positivo; filtre, ordene e ajuste o desconto. 3 · marque os condomínios, confira início, fim e nome e clique em <b>Registrar campanha</b>.'],
+      ['Configurações', 'Os limites da tendência de 6 meses (variação estável e melhora mínima) e o nome do responsável que sai nos relatórios.'],
+    ],
+    obs: 'Indicados para campanha: inadimplência a partir de 1,5 vez o VOP mensal, “positivou e negativou” (dentro da janela de 13 meses) ou de 13 a 18 meses em piora. Acima de 18 meses e ainda negativo vai para a <b>curadoria plena</b> (Reunião de Resultado). Sem a coluna de idade no Analítico, as regras de 13 e 18 meses não são aplicadas.',
+  },
+  brindes: {
+    video: true,
+    nome: 'Controle de Brindes',
+    descricao: 'Estoque de brindes do Marketing (sacolas, canetas, cadernetas, bonés, panfletos e kits), com retiradas por pedido: quem pede escolhe os itens, a aprovadora aprova e reserva, o almoxarifado confirma a entrega, e a reposição é sugerida pelo consumo.',
+    dados: 'Itens, movimentações, pedidos, compras, kits e demandas ficam no banco do portal, compartilhados ao vivo. O saldo é sempre calculado pelo livro de movimentações: o pedido pendente não mexe no estoque, a aprovação reserva e só a entrega confirmada dá a saída.',
+    abas: [
+      ['Painel', 'Itens para repor, pedidos aguardando aprovação e entrega, saídas do mês; o saldo de cada item (físico, reservado, <b>disponível</b> = físico − reservado, <b>projetado</b> com as demandas futuras, ponto de pedido e sugestão de compra), a curva de consumo e as pendências.'],
+      ['Solicitar', 'Novo pedido: setor, data desejada, evento, finalidade e os itens ou <b>kits</b>; o disponível já desconta o que está reservado. <b>Enviar para aprovação</b>.'],
+      ['Pedidos', 'Filtros <b>Aguardando você</b>, pendentes, aprovados, entregues e rejeitados/cancelados. No pedido, a aprovadora <b>aprova e reserva</b> (pode aprovar menos, com justificativa) ou <b>rejeita</b> com o motivo; o almoxarifado <b>confirma a entrega</b>, que baixa o estoque. Ninguém aprova o próprio pedido; cada pedido guarda o histórico.'],
+      ['Estoque', 'Itens com consumo por dia, ruptura prevista e situação (OK, Reposição, Crítico); <b>Entrada</b>, <b>Ajuste</b> (com motivo), <b>Inventário</b>, <b>Compra</b> e novo item. No item, a sugestão de compra e <b>Registrar compra</b>; em <b>Compras em aberto</b>, <b>Receber</b> lança a entrada. Também <b>Kits</b>, <b>Demandas futuras</b> e importar o saldo inicial.'],
+      ['Relatórios', 'Consumo por item, setor e evento, histórico de aprovações, compras pendentes, inventário, divergências, livro de movimentações e curva de consumo, por período, em CSV ou Excel.'],
+      ['Configurações', 'Quem aprova, quem entrega (almoxarifado), quem recebe os alertas de reposição e quem administra; o intervalo dos lembretes, a cobertura da sugestão de compra e a lista de setores.'],
+    ],
+    obs: 'O alerta de reposição dispara quando o projetado chega ao ponto de pedido (o maior entre o mínimo do item e consumo × prazo de reposição + segurança) e é verificado quando alguém da gestão abre a ferramenta.',
+  },
 
 };
 
@@ -345,7 +473,7 @@ const SETORES = [
   {
     nome: 'Cobrança', arquivo: 'cobranca',
     papel: 'Recupera os valores em atraso dos condomínios: boletos, acordos, negativações e acompanhamento da inadimplência.',
-    ferramentas: ['cobranca'], carteira: 'analista de cobrança',
+    ferramentas: ['cobranca', 'resultados', 'curadoria', 'espolio', 'hsm', 'mailing'], carteira: 'analista de cobrança',
     recebe: [
       ['2ª via de boleto', 4, 'alta', 'Condomínio, unidade, mês de referência e para quem enviar.'],
       ['Proposta de acordo', 18, 'media', 'Unidade, meses em atraso e a proposta do condômino.'],
@@ -383,7 +511,7 @@ const SETORES = [
   {
     nome: 'Crédito', arquivo: 'credito',
     papel: 'Prepara prestações de contas, balancetes, recibos e controles de consumo dos condomínios.',
-    ferramentas: ['credito', 'boletos'], carteira: 'assistente de crédito',
+    ferramentas: ['credito', 'boletos', 'repasses', 'gestaoCredito', 'hsmCredito'], carteira: 'assistente de crédito',
     recebe: [
       ['Prestação de contas', 27, 'media', 'Condomínio e mês de referência.'],
       ['Balancete', 27, 'media', 'Condomínio e período.'],
@@ -473,7 +601,7 @@ const SETORES = [
   {
     nome: 'Marketing', arquivo: 'marketing',
     papel: 'Comunicação da MyBlue: artes, campanhas, redes sociais, comunicados e materiais comerciais.',
-    ferramentas: [],
+    ferramentas: ['brindes'],
     recebe: [
       ['Arte / peça gráfica', 27, 'media', 'Formato, tamanho, texto e prazo de uso.'],
       ['Comunicado a condôminos', 18, 'media', 'Condomínio(s), texto-base e canal (e-mail, mural, WhatsApp).'],
