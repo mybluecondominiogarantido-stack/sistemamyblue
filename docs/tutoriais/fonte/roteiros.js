@@ -1213,9 +1213,10 @@ module.exports = [
       await t.mostrar('#pendDash', 3000);
       await t.clicar('[data-pend="doc"]', { depois: 1400 });
       await t.legenda('<b>Documentação</b>: convenção, ata de eleição, ata da taxa ordinária e procuração em até 60 dias do envio do formulário.', { etapa: C, ms: 600 });
-      await t.legenda('<b>Cobrar</b> manda ao executivo, no portal e por e-mail, o que falta. Faltando 3 dias, o portal lembra sozinho.', { etapa: C, ms: 400 });
-      await t.clicar('[data-cobrar]', { depois: 1200 });
-      await t.clicar('#mOk', { depois: 2200 });
+      await t.legenda('Faltando algo do executivo, <b>Cobrar</b> manda a ele, no portal e por e-mail, o que falta; faltando 3 dias, o portal lembra sozinho. A <b>procuração</b> fica com a Implantação.', { etapa: C, ms: 400 });
+      await t.mostrar('[data-doc-acomp]', 2600);
+      await t.legenda('Clique num documento que falta para anexar ou marcar recebido. <b>Marcar à mão</b> registra a meta com o motivo.', { etapa: C, ms: 300 });
+      await t.mostrar('[data-marcar]', 2600);
 
       const D = '4 · Depois da conclusão e parâmetros';
       await t.ir('#/implantacao/depois/antecipacoes', 1600);
