@@ -33,7 +33,7 @@ const { porSlug, rotuloPublico } = require('../../../server/tutoriais');
       // versão da ferramenta só para a gravação (ex.: troca listas com nomes reais por fictícios); o arquivo original não muda
       if (r.adaptarHtml) await cen.admin('PUT', `/api/admin/modulos/${r.ferramenta}/arquivo`, r.adaptarHtml(fs.readFileSync(ferramentas[r.ferramenta], 'utf8')));
       if (r.preparar) await r.preparar(cen, portal.base, br);
-      t = await new Tutorial(br, portal.base, path.join(saida, r.nome + '.mp4')).abrir();
+      t = await new Tutorial(br, portal.base, path.join(saida, r.nome + '.mp4'), { largura: r.largura }).abrir();
       if (r.entrar) await t.entrar(r.entrar, r.entrar.startsWith('admin@') ? 'Admin1234' : SENHA);
       if (r.inicio) await t.ir(r.inicio);
       if (r.ajustar) await r.ajustar(t); // antes de gravar (ex.: troca nomes reais que vêm no HTML da ferramenta)

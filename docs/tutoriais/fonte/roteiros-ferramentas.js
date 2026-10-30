@@ -196,12 +196,20 @@ module.exports = [
   {
     nome: 'ferramenta-boletos',
     ferramenta: 'boletos',
+    largura: 1600, // a tabela do Controle é larga: numa tela menor ela vira cartões empilhados
     entrar: 'bruna@myblue.com.br',
     inicio: '#/m/boletos',
     async preparar(cen) {
-      await cen.admin('POST', '/api/admin/modulos/boletos/documentos', { modulo: 'boletos', origem: 'exemplo', documentos: D.boletos() });
+      const docs = D.boletos();
+      await cen.admin('POST', '/api/admin/modulos/boletos/documentos', { modulo: 'boletos', origem: 'exemplo', documentos: docs });
+      // a Base de Clientes com os mesmos condomínios do controle (a ferramenta sincroniza o cadastro por ela)
+      for (const idc of Object.values(cen.cond)) await cen.admin('DELETE', `/api/carteira/${idc}`);
+      for (const c of Object.values(docs['config/cadastro'].conds)) {
+        await cen.admin('POST', '/api/carteira', { codigo: c.cod, nome: c.nome, comarca: c.uf, situacao: c.sit === 'Distrato' ? 'DISTRATADO' : 'ATIVO', vencimento: 'Dia ' + c.dia,
+          inicio_contrato: '2025-01-01', executivo: 'Vera Campos', assistente_credito: c.resp === 'DAVI' ? 'DAVI ROCHA - 4711' : 'BRUNA REIS - 4710', razao_social: c.nome.toUpperCase() });
+      }
     },
-    abertura: ['Supervisão de Crédito: meta de emitir 10 dias antes do vencimento.', ['O painel da competência', 'Marcar a emissão', 'Registrar um erro', 'Cadastro, distratados e fechamento']],
+    abertura: ['Supervisão de Crédito: meta de emitir 10 dias antes do vencimento.', ['O painel da competência', 'Marcar a emissão', 'Registrar um erro', 'Distratados, feriados e fechamento']],
     async gravar(t) {
       const f = quadro(t, 'boletos');
       const P = '1 · Painel';
@@ -213,7 +221,7 @@ module.exports = [
       const C = '2 · Controle';
       await t.legenda('Em <b>Controle</b>, a lista da competência por vencimento. Filtre pelo seu nome.', { etapa: C, ms: 300 });
       await t.clicar(f.locator('button:has-text("Controle")').first(), { depois: 1400 });
-      await t.escolher(f.locator('#fr'), 'Bruna Reis', { depois: 1600 });
+      await t.escolher(f.locator('#fr'), 'BRUNA', { depois: 1600 });
       await t.legenda('Para corrigir uma emissão, altere a data ou desmarque no <b>✕</b>. <b>Emitir pendentes</b> marca o grupo todo.', { etapa: C, ms: 300 });
       await t.mostrar(f.locator('button:visible:has-text("pendentes")').first(), 2600);
       const linha = f.locator('tr:has-text("Cond. Jardim Azul")');
@@ -223,10 +231,8 @@ module.exports = [
       await t.escolher(f.locator('select:has(option:has-text("Tipo do erro"))').first(), { index: 1 });
       await t.digitar(f.locator('input.err-in').first(), 'Valor do condomínio desatualizado, reemitido no mesmo dia.', { atraso: 22, depois: 1200 });
 
-      const O = '3 · Cadastro, distratados e feriados';
-      await t.legenda('Em <b>Cadastro</b>, os condomínios acompanhados: responsável, UF, regra e dia do vencimento. Eles vêm da <b>Carteira de condomínios</b> do portal.', { etapa: O, ms: 300 });
-      await t.clicar(f.locator('button:has-text("Cadastro")').first(), { depois: 2600 });
-      await t.legenda('Condomínio novo ou distratado na <b>Carteira</b> chega sozinho na próxima competência. Os meses em andamento não mudam.', { etapa: O, ms: 3200 });
+      const O = '3 · Distratados e feriados';
+      await t.legenda('Os condomínios, o responsável, a UF e o vencimento vêm da <b>Base de Clientes</b> do portal. Condomínio novo ou distratado lá chega sozinho aqui.', { etapa: O, ms: 3400 });
       await t.legenda('Em <b>Distratados</b>, os condomínios encerrados, com a data em que saíram e a última emissão registrada. Os sem data ficam em destaque.', { etapa: O, ms: 300 });
       await t.clicar(f.locator('button[data-tab="distratados"]'), { depois: 2800 });
       await t.legenda('Em <b>Feriados</b>, os feriados que não contam como dia útil na meta. Inclua os estaduais e municipais.', { etapa: O, ms: 300 });
@@ -235,14 +241,14 @@ module.exports = [
       await t.clicar(f.locator('button:has-text("Histórico")').first(), { depois: 2600 });
 
       const F = '4 · Fechar o mês';
-      await t.legenda('No fim do mês, <b>Fechar competência</b> bloqueia os registros e gera o Excel. Faça também <b>Salvar backup</b>.', { etapa: F, ms: 300 });
+      await t.legenda('No fim do mês, <b>Fechar competência</b> bloqueia os registros e gera o Excel. Faça também o <b>Backup</b>.', { etapa: F, ms: 300 });
       await t.clicar(f.locator('button:has-text("Painel")').first(), { depois: 1200 });
       await t.mostrar(f.locator('button:has-text("Fechar competência")'), 2200);
       await t.mostrar(f.locator('#backup'), 2000);
       await t.legenda('<b>Criar</b> abre a próxima competência. O <b>Comparativo</b> compara os meses fechados.', { etapa: F, ms: 300 });
       await t.mostrar(f.locator('#novoMes'), 2600);
     },
-    resumo: ['<b>Painel</b>: a meta da competência', '<b>Emitir</b> grava a data de hoje · <b>Erro na emissão</b> com gravidade e justificativa', 'Condomínios vêm da <b>Carteira</b> · encerrados em <b>Distratados</b>', '<b>Fechar competência</b> + <b>Salvar backup</b> todo mês'],
+    resumo: ['<b>Painel</b>: a meta da competência', '<b>Emitir</b> grava a data de hoje · <b>Erro na emissão</b> com gravidade e justificativa', 'Condomínios vêm da <b>Base de Clientes</b> · encerrados em <b>Distratados</b>', '<b>Fechar competência</b> + <b>Backup</b> todo mês'],
   },
 
   {
@@ -252,6 +258,7 @@ module.exports = [
     inicio: '#/m/parceiros',
     // parceiros, carteira e lançamentos fictícios de janeiro até o mês anterior; dois condomínios
     // da Nordeste Condomínios (regra de excedente por boleto) ficam sem lançamento no último mês, para o vídeo lançar
+    largura: 1600, // a tabela de lançamento é larga: numa tela menor ela vira cartões empilhados
     preparar: (cen) => basePrestacao(cen, { pular: [8, 9] }),
     abertura: ['A comissão dos parceiros: a competência do mês, paga no mês seguinte.', ['Lançar o mês de um parceiro', 'O relatório da prestação de contas', 'Marcar envio e pagamento', 'Cadastrar condomínios e parceiros']],
     async gravar(t) {
@@ -410,6 +417,8 @@ module.exports = [
     inicio: '#/m/partnerchip-resultados',
     async preparar(cen, base, br) {
       await basePrestacao(cen); await pessoaComercial(cen, base);
+      // como no portal: o painel roda com a sessão de quem abre (lê a Prestação de Contas), não isolado
+      await cen.admin('PATCH', '/api/admin/modulos/partnerchip-resultados', { isolada: false });
       // o painel recebe os números quando alguém com acesso à Prestação de Contas abre a página
       const ctx = await br.newContext({ viewport: { width: 1280, height: 800 }, locale: 'pt-BR' });
       const p = await ctx.newPage();
@@ -634,7 +643,7 @@ module.exports = [
     ferramenta: 'credito',
     entrar: 'bruna@myblue.com.br',
     inicio: '#/m/credito',
-    abertura: ['As automações do setor de Crédito, num lugar só — tudo roda no navegador.', ['As ferramentas da central', 'Exemplo: Planilha de Moradores', 'Voltar e abrir em nova aba']],
+    abertura: ['As automações do setor de Crédito, num lugar só — tudo roda no navegador.', ['As ferramentas, na ordem do mês', 'Favoritas e busca', 'Exemplo: Planilha de Moradores', 'Voltar e abrir em nova aba']],
     async gravar(t) {
       const f = quadro(t, 'credito');
       const xlsx = require(path.join(process.env.BIBLIOTECAS || '', 'node_modules', 'xlsx'));
@@ -643,13 +652,17 @@ module.exports = [
       const planilha = arquivoTemp('Cadastro_Cond_Jardim_Azul.xlsx', xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' }));
 
       const H = '1 · As ferramentas';
-      await t.legenda('Cada cartão é uma ferramenta: prestação de contas, recibos de entrega, balancetes, moradores, consumos e o divisor de recibos.', { etapa: H, ms: 600 });
-      for (const v of ['montador', 'nobre', 'balancetes', 'consumos']) await t.mostrar(f.locator(`[data-view=${v}]`), 1500);
-      await t.legenda('Os arquivos são processados no seu navegador: nada é enviado para fora.', { etapa: H, ms: 2600 });
+      await t.legenda('Cada cartão é uma ferramenta, organizada pela ordem do mês: arquivos para a Vouch, repasse, entrega de boletos e fechamento.', { etapa: H, ms: 600 });
+      for (const v of ['balancetes', 'simulacao', 'moradores']) await t.mostrar(f.locator(`.card[data-view=${v}]`), 1500);
+      await t.legenda('As abas do topo levam direto a cada grupo. Os arquivos são processados no seu navegador: nada é enviado para fora.', { etapa: H, ms: 300 });
+      await t.mostrar(f.locator('button.pill[data-view=simulacao]'), 2400);
+      await t.legenda('Clique na <b>estrela</b> de um cartão para fixar nas <b>Favoritas</b>. A busca acha a ferramenta pelo nome.', { etapa: H, ms: 300 });
+      await t.clicar(f.locator('.star[data-fav=moradores]'), { depois: 1600 });
+      await t.digitar(f.locator('#busca'), 'moradores', { atraso: 60, depois: 1400 });
 
       const M = '2 · Planilha de Moradores';
       await t.legenda('Exemplo: a <b>Planilha de Moradores</b> transforma o cadastro recebido no modelo de importação da Vouch.', { etapa: M, ms: 300 });
-      await t.clicar(f.locator('[data-view=moradores]'), { depois: 2000 });
+      await t.clicar(f.locator('.card[data-view=moradores]:visible').first(), { depois: 2000 });
       const m = f.frameLocator('#frame-moradores');
       await t.legenda('Solte a planilha (ou o PDF de contatos) na área indicada.', { etapa: M, ms: 300 });
       await t.enviarArquivo(m.locator('#drop'), m.locator('#file'), planilha, { depois: 2200 });
@@ -664,14 +677,16 @@ module.exports = [
       await t.mostrar(m.locator('#btnPdf'), 1800);
 
       const V = '3 · Navegar';
-      await t.legenda('<b>Abrir em nova aba</b> usa a ferramenta em tela cheia. <b>Ferramentas</b> volta para a lista.', { etapa: V, ms: 300 });
+      await t.legenda('O botão ao lado das abas abre a ferramenta em <b>nova aba</b>, em tela cheia. <b>Início</b> volta para a lista, agora com a sua favorita no topo.', { etapa: V, ms: 300 });
       await t.mostrar(f.locator('#openNewTab'), 1800);
-      await t.clicar(f.locator('#btnHome'), { depois: 1600 });
+      await t.clicar(f.locator('button.pill[data-view=home]'), { depois: 1600 });
+      await f.locator('#busca').fill(''); await f.locator('#busca').dispatchEvent('input'); await t.pausa(800);
+      await t.mostrar(f.locator('.star[data-fav=moradores]').first(), 1800);
       await t.legenda('As outras funcionam do mesmo jeito: abra o cartão, envie o arquivo recebido e baixe o resultado.', { etapa: V, ms: 300 });
-      await t.clicar(f.locator('[data-view=balancetes]'), { depois: 2600 });
-      await t.clicar(f.locator('#btnHome'), { depois: 1400 });
+      await t.clicar(f.locator('.card[data-view=balancetes]:visible').first(), { depois: 2600 });
+      await t.clicar(f.locator('button.pill[data-view=home]'), { depois: 1400 });
     },
-    resumo: ['Escolha a ferramenta pelo <b>cartão</b>', 'Envie o arquivo recebido, confira e <b>baixe o resultado</b>', '<b>Ferramentas</b> volta para a lista · tudo roda no navegador'],
+    resumo: ['Escolha a ferramenta pelo <b>cartão</b> ou pela <b>busca</b> · fixe as que mais usa com a <b>estrela</b>', 'Envie o arquivo recebido, confira e <b>baixe o resultado</b>', '<b>Início</b> volta para a lista · tudo roda no navegador'],
   },
   {
     nome: 'ferramenta-viagens',

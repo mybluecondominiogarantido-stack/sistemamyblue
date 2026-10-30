@@ -23,7 +23,8 @@ function boletos(agora = new Date()) {
   const itens = {};
   CONDS.forEach((nome, i) => {
     const dia = DIAS[i % DIAS.length];
-    conds[id(i)] = { nome: 'Cond. ' + nome, uf: UFS[i % UFS.length], dia, regra: 'Dia fixo', sit: 'Ativo', resp: i % 2 ? 'Davi Rocha' : 'Bruna Reis' };
+    // como no portal: o código e o responsável (primeiro nome, em maiúsculas) vêm da Base de Clientes
+    conds[id(i)] = { cod: String(1001 + i), nome: 'Cond. ' + nome, uf: UFS[i % UFS.length], dia, regra: 'Dia fixo', sit: 'Ativo', resp: i % 2 ? 'DAVI' : 'BRUNA' };
     const venc = `${comp}-${String(dia).padStart(2, '0')}`;
     const meta = somaDias(venc, -10);
     // a maior parte já emitida (algumas fora da meta); os de vencimento mais distante ainda pendentes
@@ -34,13 +35,13 @@ function boletos(agora = new Date()) {
   });
   // condomínios encerrados (aba Distratados): o distrato é de meses anteriores, então já não entram na competência
   const inicio = `${comp}-01`;
-  conds.d01 = { nome: 'Cond. Brisa do Mar', uf: 'CE', dia: 10, regra: 'Dia fixo', sit: 'Distrato', distrato: somaDias(inicio, -18), resp: 'Bruna Reis', obs: 'Distrato a pedido do síndico' };
-  conds.d02 = { nome: 'Cond. Pedra Branca', uf: 'RN', dia: 5, regra: 'Dia útil', sit: 'Distrato', distrato: somaDias(inicio, -47), resp: 'Davi Rocha', obs: 'Troca de administradora' };
-  conds.d03 = { nome: 'Cond. Rio Claro', uf: 'PB', dia: 15, regra: 'Dia fixo', sit: 'Distrato', resp: 'Bruna Reis', obs: '' };
+  conds.d01 = { cod: '1101', nome: 'Cond. Brisa do Mar', uf: 'CE', dia: 10, regra: 'Dia fixo', sit: 'Distrato', distrato: somaDias(inicio, -18), resp: 'BRUNA', obs: 'Distrato a pedido do síndico' };
+  conds.d02 = { cod: '1102', nome: 'Cond. Pedra Branca', uf: 'RN', dia: 5, regra: 'Dia útil', sit: 'Distrato', distrato: somaDias(inicio, -47), resp: 'DAVI', obs: 'Troca de administradora' };
+  conds.d03 = { cod: '1103', nome: 'Cond. Rio Claro', uf: 'PB', dia: 15, regra: 'Dia fixo', sit: 'Distrato', resp: 'BRUNA', obs: '' };
   // um erro de emissão já corrigido
   Object.assign(itens[id(1)], {
     err: true, errTipo: 'Vencimento', errGrav: 'Não grave', errSt: 'Reemitido', errMsg: 'Boleto saiu com o vencimento do mês anterior. Reemitido.',
-    errPor: 'Davi Rocha', errEm: iso(agora) + 'T10:05:00.000Z', errCorr: iso(agora) + 'T11:20:00.000Z',
+    errPor: 'DAVI', errEm: iso(agora) + 'T10:05:00.000Z', errCorr: iso(agora) + 'T11:20:00.000Z',
   });
   const ano = agora.getUTCFullYear();
   const feriados = { dias: {

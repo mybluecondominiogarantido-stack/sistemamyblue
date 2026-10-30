@@ -88,11 +88,12 @@ function sobreposicoes(logo) {
   if (window.top !== window) return;
   const css = `
   #__cur{position:fixed;left:0;top:0;width:26px;height:26px;z-index:2147483647;pointer-events:none;transition:transform var(--d,0ms) cubic-bezier(.45,.05,.25,1);will-change:transform}
-  #__cur svg{filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))}
-  .__clique{position:fixed;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;border:3px solid #199cb1;background:rgba(25,156,177,.18);z-index:2147483646;pointer-events:none;animation:__cl .55s ease-out forwards}
+  #__cur svg{filter:drop-shadow(0 2px 3px rgba(0,0,0,.35));zoom:var(--tz,1)}
+  .__clique{position:fixed;width:calc(46px*var(--tz,1));height:calc(46px*var(--tz,1));margin:calc(-23px*var(--tz,1)) 0 0 calc(-23px*var(--tz,1));border-radius:50%;border:3px solid #199cb1;background:rgba(25,156,177,.18);z-index:2147483646;pointer-events:none;animation:__cl .55s ease-out forwards}
   @keyframes __cl{from{transform:scale(.3);opacity:1}to{transform:scale(1.25);opacity:0}}
   #__cartao{position:fixed;inset:0;z-index:2147483644;display:flex;align-items:center;justify-content:center;background:linear-gradient(150deg,#0c77be 0%,#199cb1 70%,#4fc1cf 100%);color:#fff;opacity:0;transition:opacity .45s;pointer-events:none;font-family:"Quicksand","Nunito Sans",Arial,sans-serif}
   #__cartao.vis{opacity:1}
+  #__cartao .cx,#__cartao .lg,#__cartao .ft{zoom:var(--tz,1)}
   #__cartao .cx{max-width:980px;padding:0 60px}
   #__cartao .ch{font:800 15px/1 "Nunito Sans",Arial,sans-serif;letter-spacing:2px;text-transform:uppercase;opacity:.85}
   #__cartao h1{font-size:54px;line-height:1.08;margin:16px 0 18px;font-weight:700}
@@ -104,6 +105,8 @@ function sobreposicoes(logo) {
   function montar() {
     if (document.getElementById('__cur')) return;
     const st = document.createElement('style'); st.textContent = css; document.documentElement.appendChild(st);
+    // cursor e cartões do mesmo tamanho no vídeo, qualquer que seja a largura da tela
+    document.documentElement.style.setProperty('--tz', String(innerWidth / 1280));
     const c = document.createElement('div'); c.id = '__cur';
     c.innerHTML = '<svg width="26" height="26" viewBox="0 0 24 24"><path d="M4 2.5l15 8.6-6.6 1.6 3.9 7.2-2.6 1.4-3.9-7.2L4.6 19z" fill="#fff" stroke="#13323a" stroke-width="1.5" stroke-linejoin="round"/></svg>';
     const p = window.__posCursor || [640, 400];
@@ -128,10 +131,13 @@ function sobreposicoes(logo) {
 
 /* ---------- gravação ---------- */
 class Tutorial {
-  constructor(navegador, base, arquivo) { this.br = navegador; this.base = base; this.arquivo = arquivo; this.pos = [640, 400]; }
+  /* largura: a largura da tela do navegador (padrão 1280). Maior mostra mais da ferramenta, com letra menor
+     no vídeo; serve para as ferramentas que empilham as tabelas largas quando a tela é estreita. */
+  constructor(navegador, base, arquivo, { largura = 1280 } = {}) { this.br = navegador; this.base = base; this.arquivo = arquivo; this.largura = largura; this.pos = [640, 400]; }
 
   async abrir() {
-    this.ctx = await this.br.newContext({ viewport: { width: 1280, height: 640 }, deviceScaleFactor: 1.5, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
+    this.ctx = await this.br.newContext({ viewport: { width: this.largura, height: Math.round(this.largura * ALTURA_TELA / LARGURA) }, deviceScaleFactor: LARGURA / this.largura,
+      locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
     await this.ctx.addInitScript(sobreposicoes, LOGO);
     await servirBibliotecas(this.ctx);
     this.p = await this.ctx.newPage();
@@ -314,7 +320,7 @@ class Tutorial {
 /* Bibliotecas que as ferramentas carregam do cdnjs (PDF, Excel, ZIP). Sem acesso à internet na gravação,
    BIBLIOTECAS aponta para uma pasta com os mesmos pacotes instalados pelo npm (node_modules). */
 const PACOTES = { 'pdf.js': ['pdfjs-dist', 'build'], xlsx: ['xlsx', 'dist'], jspdf: ['jspdf', 'dist'], 'jspdf-autotable': ['jspdf-autotable', 'dist'],
-  'pdf-lib': ['pdf-lib', 'dist'], jszip: ['jszip', 'dist'], pdfobject: ['pdfobject', ''] };
+  'pdf-lib': ['pdf-lib', 'dist'], jszip: ['jszip', 'dist'], pdfobject: ['pdfobject', ''], 'html2pdf.js': ['html2pdf.js', 'dist'], exceljs: ['exceljs', 'dist'] };
 async function servirBibliotecas(ctx) {
   const pasta = process.env.BIBLIOTECAS;
   if (!pasta) return;
