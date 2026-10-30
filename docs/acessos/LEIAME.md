@@ -245,6 +245,12 @@ própria (sandbox), sem o cookie do portal. Ela continua lendo e gravando **os p
 alcança só o que precisa: a carteira (consulta), abrir ticket com anexo, fotos, bibliotecas e, se for de premiação, as
 rotas da comissão. Nada de administração, de outras ferramentas ou dos tickets dos outros.
 
+**Datas da equipe**: uma ferramenta do Claude (banco de documentos) pode ler o nome, os setores, a data de nascimento e a
+data de admissão de quem está ativo no portal (cadastro em *Configurações → Pessoas*), pela rota `/api/db/<ferramenta>/equipe`,
+para mostrar aniversários e tempo de casa (ex.: Calendário de Marketing). Só funciona quando a administração marca
+**Receber as datas da equipe** na janela da ferramenta (*Configurações → Ferramentas*); sem a marcação, a rota recusa.
+Quem abre a ferramenta passa a ver essas datas, então ligue só onde for preciso.
+
 - **Ferramenta nova já nasce isolada.** Ferramenta aguardando aprovação e prévia de versão nova abrem sempre isoladas.
 - As que já estavam em uso continuam como estavam até a administração ligar. **Antes de ligar, abra e teste**:
   - o que a ferramenta guarda *só no navegador* (localStorage, sessionStorage) passa a valer só enquanto a página está
