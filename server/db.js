@@ -277,7 +277,7 @@ CREATE TABLE IF NOT EXISTS cdn_cache (
 );
 
 -- vídeos tutoriais (o catálogo, com título e para quem é, fica em server/tutoriais.js)
--- quem edita o quê na Carteira (regras definidas em Ferramentas do setor e Módulos e dados, sem linha = padrão do portal)
+-- quem edita o quê na Carteira (regras definidas em Configurações → Acessos → Base de Clientes, sem linha = padrão do portal)
 CREATE TABLE IF NOT EXISTS regras_acesso (
   chave TEXT PRIMARY KEY,
   regra JSONB NOT NULL,

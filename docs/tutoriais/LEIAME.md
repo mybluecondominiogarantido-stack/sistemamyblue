@@ -6,7 +6,7 @@ Tudo é gravado num portal de teste, com **dados fictícios** (pessoas, condomí
 No portal, os vídeos ficam em **Tutoriais** (menu). Cada pessoa vê só os vídeos do perfil, do setor e
 das ferramentas dela. O catálogo (título, descrição e para quem é cada vídeo) está em
 `server/tutoriais.js`. Os arquivos de vídeo **não** ficam no repositório: a administração envia em
-**Administração → Tutoriais em vídeo** (arraste todos os `.mp4` e `.vtt` de uma vez; cada arquivo vai
+**Configurações → Ferramentas → Tutoriais em vídeo** (arraste todos os `.mp4` e `.vtt` de uma vez; cada arquivo vai
 para o tutorial com o mesmo nome).
 
 ## Gravar

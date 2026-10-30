@@ -54,7 +54,7 @@ npm run criar-admin -- seu.email@myblue.com.br "Seu Nome"
 
 **Os HTMLs não ficam no Git.** Este repositório é público e os arquivos das ferramentas contêm dados de negócio (condomínios, taxas, comissões) e os links das planilhas Google. Eles são enviados direto para o servidor, por um destes caminhos:
 
-1. **Pelo portal (recomendado):** Administração → *Módulos e dados* → **Enviar vários HTMLs**. Selecione os 5 arquivos de uma vez: o portal reconhece cada um pelo título da página e publica no módulo certo.
+1. **Pelo portal (recomendado):** *Configurações → Sistema* → **Enviar vários HTMLs**. Selecione os 5 arquivos de uma vez: o portal reconhece cada um pelo título da página e publica no módulo certo.
 2. **Pela linha de comando:** coloque os arquivos na pasta `modulos-originais/` (ela é ignorada pelo Git) e rode:
    ```bash
    npm run importar-html -- ./modulos-originais
@@ -68,19 +68,20 @@ Para publicar uma ferramenta nova, use **Novo módulo** (na tela da coordenaçã
 
 **A referência completa de acessos é [`docs/acessos/LEIAME.md`](docs/acessos/LEIAME.md)**: onde cada acesso é definido,
 os termos (perfil × papel, Supervisor × Supervisão da Central de Tickets, líder…), ferramentas, Carteira e isolamento.
-Para ver tudo o que uma pessoa acessa: *Usuários e acessos* → a pessoa → **Tudo o que acessa**.
+Para ver tudo o que uma pessoa acessa: *Configurações → Acessos → Por pessoa* → a pessoa (mostra **Tudo o que acessa**).
 
 Resumo por perfil:
 
 | | Usuário | Coordenador e Supervisor (mesmos poderes, nos setores do cadastro) | Administrador |
 |---|---|---|---|
 | Ferramentas | as liberadas | todas dos setores dele + as liberadas | todas, com todos os papéis |
-| Usuários | — | usuários comuns dos setores dele | todos, todos os perfis |
-| Ferramentas do setor (HTML, versões, quem abre e papel) | — | setores dele (HTML novo em ferramenta não isolada aguarda aprovação) | todas, mais *Módulos e dados* completo |
-| Equipe e tipos de demanda | — | líderes e tipos dos setores dele | todos os setores |
+| Pessoas (cadastro) | — | usuários comuns dos setores dele | todos, todos os perfis |
+| Acessos (quem abre cada ferramenta, papéis, Base de Clientes) | — | ferramentas e permissões dos setores dele | tudo, mais Análise de Crédito, Solicitação de Contrato e marcações |
+| Ferramentas (HTML e versões) | — | setores dele (HTML novo em ferramenta não isolada aguarda aprovação) | todas, com onde ficam os dados, aprovação e tutoriais |
+| Setores e equipes (líderes e tipos de demanda) | — | líderes e tipos dos setores dele | todos os setores, e cria e renomeia setores |
 | Tickets | os do setor dele e os que abriu | todos os setores (a Supervisão da Central de Tickets vem com o perfil) | todos |
-| Carteira | consulta + o que estiver liberado em *Base de Clientes: quem edita* | idem, e libera pessoas nas permissões do setor dele | tudo |
-| Histórico, backup, setores, Central de Links | — | — | sim |
+| Carteira | consulta + o que estiver liberado em *Configurações → Acessos → Base de Clientes* | idem, e libera pessoas nas permissões do setor dele | tudo |
+| Histórico, Sistema (backup, baixar e enviar HTMLs), Central de Links | — | — | sim |
 
 - Marcações à parte, no cadastro (só a administração): **Supervisão da Central de Tickets** (vê e direciona os tickets
   de **todos** os setores; já vem com os perfis Coordenador e Supervisor, então se marca só para usuário comum, ex.:
@@ -106,7 +107,7 @@ Isso funciona para qualquer ferramenta que use `localStorage`, inclusive as que 
 
 ### Trocar a planilha Google pela planilha interna (backup + migração)
 
-Renegociações, Parceiros e Controle de Pedidos gravam hoje numa planilha Google via Apps Script. O portal tem uma planilha interna (no Supabase) que fala o mesmo "idioma" do Apps Script. Para cada um dos três módulos, em *Módulos e dados*:
+Renegociações, Parceiros e Controle de Pedidos gravam hoje numa planilha Google via Apps Script. O portal tem uma planilha interna (no Supabase) que fala o mesmo "idioma" do Apps Script. Para cada um dos três módulos, em *Configurações → Ferramentas*:
 
 1. **Backup da planilha Google.** No Google Sheets: *Arquivo → Fazer uma cópia* (e, se quiser, *Arquivo → Fazer download → Excel*). A planilha original nunca é alterada pelo portal.
 2. **Importar.** Clique no módulo → *Planilha da ferramenta* → confira o link do Apps Script (o portal já detecta o que vem no HTML) → **Importar da planilha**. A importação é feita pelo seu navegador e substitui o que houver no banco do portal para aquele módulo.
@@ -128,7 +129,7 @@ O **Controle de Emissão de Boletos** (Crédito) foi criado como artefato public
 
 - **Tempo real:** cada tela aberta busca o que mudou a cada 3 segundos (30 s com a aba em segundo plano). O que uma pessoa grava aparece para as outras sem recarregar.
 - **Quem fez:** o portal identifica cada pessoa como `mb-<id do usuário>`. Registros antigos, feitos ainda no Claude, guardam o id do Claude (`u_…`). Para mostrar o nome dessas pessoas, coloque no `config` do módulo `"pessoas_legadas": {"u_…": "Nome"}`.
-- **Dados:** em *Módulos e dados* aparecem as coleções com a contagem de documentos, o CSV de cada uma e o JSON completo.
+- **Dados:** em *Configurações → Ferramentas* (na janela de cada uma) aparecem as coleções com a contagem de documentos, o CSV de cada uma e o JSON completo.
 
 ## Base de Clientes
 
@@ -142,9 +143,9 @@ Menu **Clientes → Base de Clientes** (antes *Carteira de condomínios*). Reún
 
 - **Condomínios:** indicadores (ativos, comarcas, pessoas por função, ativos sem responsável), busca por nome, razão social, CNPJ, ID ou síndico (nome, telefone ou e-mail), filtros por situação, UF, administradora, responsável e **vigência** (mês/ano em que o condomínio entrou, com quantos entraram em cada uma, ou *Sem vigência*), coluna **Síndico** (nome, telefone e e-mail) e ordenação por coluna. Clique no condomínio para ver a ficha completa e o histórico de alterações.
 - **Síndico:** nome, telefone e e-mail ficam na ficha do condomínio (vêm da implantação; os 340 contatos do antigo *Controle de Síndicos* foram passados para cá em 10/2026, e a ferramenta foi desativada). A lista mostra a coluna **Síndico** e a busca acha pelo nome, telefone ou e-mail dele.
-- **Lista do Marketing** (botão na aba Condomínios): baixa em .xlsx o condomínio, UF, síndico, telefone e e-mail dos ativos que têm síndico. Permissão própria em *Base de Clientes: quem edita* (padrão: coordenação e supervisão do Marketing); cada download fica na auditoria.
+- **Lista do Marketing** (botão na aba Condomínios): baixa em .xlsx o condomínio, UF, síndico, telefone e e-mail dos ativos que têm síndico. Permissão própria em *Configurações → Acessos → Base de Clientes* (padrão: coordenação e supervisão do Marketing); cada download fica na auditoria.
 - **Equipes:** quantos condomínios ativos cada pessoa tem, por UF. Quem pode transferir aquela função usa **Transferir** para passar a carteira de uma pessoa (toda ou só alguns condomínios) para outra.
-- **Quem pode o quê:** todos que entram no portal consultam (o único download é a *Lista do Marketing*). Cadastrar, editar os dados, cada responsável, adicionar novos, transferir e baixar a Lista do Marketing são permissões configuráveis em *Base de Clientes: quem edita* (padrões e regras em [Acessos](docs/acessos/LEIAME.md#carteira-de-condomínios)). Toda alteração fica no histórico do condomínio (o que mudou, quem e quando).
+- **Quem pode o quê:** todos que entram no portal consultam (o único download é a *Lista do Marketing*). Cadastrar, editar os dados, cada responsável, adicionar novos, transferir e baixar a Lista do Marketing são permissões configuráveis em *Configurações → Acessos → Base de Clientes* (padrões e regras em [Acessos](docs/acessos/LEIAME.md#carteira-de-condomínios)). Toda alteração fica no histórico do condomínio (o que mudou, quem e quando).
 - **Adicionar novos** (aba da Base de Clientes, para administrador, coordenador e supervisor): envie a planilha *Controle de Implantações* do jeito que ela é (.xlsx ou .csv), escolha a **vigência** (mês/ano tirado da coluna **DATA CONTRATO**) e confira a lista. O portal mostra só os condomínios que ainda não estão na carteira (os parecidos com um existente vêm desmarcados), ignora os marcados para desconsiderar, os repetidos e os sem data de contrato. Para cada um: digitar o **ID Vouch** (obrigatório) e conferir o apelido sugerido. Os responsáveis (analista de cobrança, analista extrajudicial, assistente de crédito) podem ser escolhidos ali: o administrador escolhe todos e cada coordenador/supervisor só o do setor dele; o que ficar em branco é preenchido depois na ficha. Entram como Ativo, com UF, vencimento, administradora, forma de envio, **executivo de negócios** (coluna EXECUTIVO), **CNPJ** (coluna CNPJ; o portal confere os dígitos e avisa quando o Excel cortou o número em notação científica, com um campo para digitar na hora) e o nº do formulário e quem implantou nas observações.
 - Condomínios novos entram pela aba **Adicionar novos** (o antigo *Importar CSV* e o *Exportar CSV* saíram da tela).
 - Os dados da carteira **não vão para o Git** (o repositório é público): entram só pelo portal. Arquivos `.csv` ficam fora do Git.
@@ -171,7 +172,7 @@ Demandas internas entre os setores: quem precisa de algo de outro setor abre um 
 Quando o CS salva uma renegociação que passou a ser **Fechado**, o portal abre sozinho um ticket para o **Crédito**, tipo *Renegociação fechada*, em nome de quem fechou, com as condições na descrição (tipo de negociação, taxa e tarifa antes → depois, VOP, boletos, fidelização, vigência, antecipação e os dias de antecipação e vencimento, observações) e o **PDF do relatório de garantia** anexado, quando o CS anexou na ferramenta. O condomínio é procurado na Base de Clientes pelo **nome e pela UF** (sem acento, sem "Cond."/"Residencial", romano = número, "1" final opcional); achando um só, o ticket vai direto para a **assistente de crédito** dele, como qualquer ticket de condomínio. Sem condomínio identificado, vai para a fila do Crédito e quem fechou recebe um aviso para conferir o nome.
 
 - Salvar de novo com outras condições (ou fechar de novo depois de reabrir a negociação) **não abre outro ticket**: o que mudou vira um comentário no mesmo ticket (antes → depois), com aviso por e-mail. Se o ticket já estava resolvido ou cancelado, ele volta para *Novo*, com prazo novo.
-- O tipo *Renegociação fechada* é criado sozinho no 1º ticket (9 h úteis, prioridade alta) e pode ser ajustado em *Equipes e tipos de demanda* (não renomeie: com outro nome, o portal cria o tipo de novo).
+- O tipo *Renegociação fechada* é criado sozinho no 1º ticket (9 h úteis, prioridade alta) e pode ser ajustado em *Configurações → Setores e equipes* (não renomeie: com outro nome, o portal cria o tipo de novo).
 - Não abrem ticket: *Importar base 2026*, a correção da planilha e as renegociações que já estavam fechadas antes desta automação. O vínculo renegociação → ticket fica em `renegociacao_tickets` e o PDF do relatório em `renegociacao_relatorios` (código em `server/renegociacoes.js`).
 - A ferramenta (versão 7 do HTML) grava na planilha interna, além das colunas de antes, o **tipo de negociação**, o tipo "outro" e os **dias de antecipação e de vencimento**, que antes ficavam só na cópia de trabalho dela. Ao salvar, envia o PDF do relatório (`action: relatorio`, até 8 MB).
 
@@ -190,11 +191,11 @@ O ticket fica **atrasado** quando passa do prazo para resposta sem nenhum retorn
 |---|---|
 | Qualquer pessoa | Abrir tickets, acompanhar os que abriu, comentar, anexar, cancelar ou reabrir os seus |
 | Equipe do setor | Ver a fila do setor, tratar os tickets, definir o prazo para conclusão dos que estão com ela, mudar a situação, transferir, notas internas |
-| Líder do setor (marcado em *Equipes e tipos de demanda*; a coordenação/supervisão do setor já é líder) | Tudo da equipe, mais escolher e trocar o responsável, a prioridade e o prazo para resposta |
+| Líder do setor (marcado em *Configurações → Setores e equipes*; a coordenação/supervisão do setor já é líder) | Tudo da equipe, mais escolher e trocar o responsável, a prioridade e o prazo para resposta |
 | **Supervisão da Central de Tickets** (vem com os perfis Coordenador e Supervisor; para usuário comum, é uma marcação) | Ver e direcionar os tickets de **todos** os setores, com painel geral. Não dá acesso à administração do portal |
 | Administrador | Tudo, mais montar equipes e tipos de demanda |
 
-A **Supervisão da Central de Tickets** vem com os perfis Coordenador e Supervisor; para usuário comum, a administração marca no cadastro da pessoa, em *Usuários e acessos*. As equipes, os líderes e os **tipos de demanda** de cada setor (com prazo em horas e prioridade sugerida) ficam em *Administração → Equipes e tipos de demanda*. Os prazos contam só o **expediente: segunda a sexta, das 8h às 17h (horário de Brasília)**, ou seja, 9 h = 1 dia útil. Um ticket urgente aberto na sexta às 16h30 vence na segunda às 11h30. Sem tipo cadastrado, o prazo segue a prioridade: urgente 4 h, alta 1 dia útil, média 3 dias úteis e baixa 5 dias úteis. Feriados entram na variável `FERIADOS`.
+A **Supervisão da Central de Tickets** vem com os perfis Coordenador e Supervisor; para usuário comum, a administração marca em *Configurações → Acessos → Marcações*. As equipes, os líderes e os **tipos de demanda** de cada setor (com prazo em horas e prioridade sugerida) ficam em *Configurações → Setores e equipes*. Os prazos contam só o **expediente: segunda a sexta, das 8h às 17h (horário de Brasília)**, ou seja, 9 h = 1 dia útil. Um ticket urgente aberto na sexta às 16h30 vence na segunda às 11h30. Sem tipo cadastrado, o prazo segue a prioridade: urgente 4 h, alta 1 dia útil, média 3 dias úteis e baixa 5 dias úteis. Feriados entram na variável `FERIADOS`.
 
 **Avisos**
 
@@ -218,7 +219,7 @@ O portal envia pela API Microsoft Graph, com um aplicativo registrado na conta M
    ```
    A permissão pode levar de 30 minutos a 2 horas para começar a valer.
 5. **Variáveis no Railway:** `M365_TENANT_ID`, `M365_CLIENT_ID`, `M365_CLIENT_SECRET`, `EMAIL_REMETENTE` (ex.: `Portal MyBlue <naoresponda@myblue.com.br>`) e `PORTAL_URL`.
-6. **Testar.** Em *Administração → Equipes e tipos de demanda*, clique em **Enviar e-mail de teste para mim**. Se der erro, a mensagem da Microsoft aparece na tela: *Invalid client secret* (segredo errado ou vencido), *Access is denied* (a permissão do passo 4 ainda não valeu ou o filtro não pega a caixa remetente), *MailboxNotEnabledForRESTAPI* (a caixa remetente não existe no Exchange Online).
+6. **Testar.** Em *Configurações → Setores e equipes*, clique em **Enviar e-mail de teste para mim**. Se der erro, a mensagem da Microsoft aparece na tela: *Invalid client secret* (segredo errado ou vencido), *Access is denied* (a permissão do passo 4 ainda não valeu ou o filtro não pega a caixa remetente), *MailboxNotEnabledForRESTAPI* (a caixa remetente não existe no Exchange Online).
 
 Fora do Microsoft 365, dá para usar SMTP comum com as variáveis `SMTP_*`.
 
@@ -232,7 +233,7 @@ Fora do Microsoft 365, dá para usar SMTP comum com as variáveis `SMTP_*`.
 
 Página do portal com os links úteis da equipe (a antiga *Central de Links Grupo Apoio Cobrança* do pages.myblue.com.br), no menu **Central de Links**, logo abaixo de *Início*. Todos que entram no portal veem; os links abrem em nova aba.
 
-**Quem edita:** administradores e quem tiver marcado **Marketing — Central de Links** no cadastro (*Usuários e acessos*). Essa marcação não dá acesso à administração do portal. Na página aparece o botão **Editar links e fundo**, com três abas:
+**Quem edita:** administradores e quem tiver marcado **Marketing — Central de Links** em *Configurações → Acessos → Marcações*. Essa marcação não dá acesso à administração do portal. Na página aparece o botão **Editar links e fundo**, com três abas:
 
 - **Fundo da campanha:** cada campanha tem nome, data em que entra no ar, a imagem de fundo para computador (sugestão 1920 × 1080) e, se quiser, uma versão para celular (1080 × 1920). A campanha vale a partir da data de início (meia-noite de Brasília) até começar a próxima, então o marketing pode deixar o fundo do mês seguinte agendado com antecedência. O controle *Escurecer o fundo* garante a leitura dos botões. Imagens JPG, PNG ou WEBP de até 8 MB (`LIMITE_FUNDO_MB`), guardadas no banco. O botão **Ver** mostra como a página fica com aquela campanha antes de ela entrar no ar. Sem campanha, a página usa o fundo padrão MyBlue.
 - **Links:** incluir, mudar o nome do botão, o endereço (link), o grupo, o ícone e a descrição; mudar a ordem com as setas; ocultar sem apagar ou excluir. Links com o mesmo grupo aparecem juntos sob o nome do grupo.
@@ -245,7 +246,7 @@ Toda alteração fica no *Histórico de atividades* e entra no backup.
 No menu **Tutoriais**, vídeos curtos com o portal sendo usado de verdade (dados fictícios), com legenda e o passo a passo ao lado: clicar num passo leva ao trecho do vídeo. Cada pessoa vê só os vídeos do perfil dela (todos, equipe, líder, coordenador/supervisor, supervisão de tickets, administração) e das ferramentas que abre.
 
 - O catálogo (título, descrição e para quem é cada vídeo) está em `server/tutoriais.js`.
-- Os vídeos ficam no banco, não no repositório. A administração envia em **Administração → Tutoriais em vídeo**: arraste os `.mp4` e `.vtt` de uma vez, e cada arquivo vai para o tutorial com o mesmo nome. Até 150 MB por vídeo (`LIMITE_VIDEO_MB`).
+- Os vídeos ficam no banco, não no repositório. A administração envia em **Configurações → Ferramentas → Tutoriais em vídeo**: arraste os `.mp4` e `.vtt` de uma vez, e cada arquivo vai para o tutorial com o mesmo nome. Até 150 MB por vídeo (`LIMITE_VIDEO_MB`).
 - O player busca o vídeo aos pedaços, então dá para avançar e voltar sem baixar o arquivo inteiro.
 - Os vídeos são gravados por `docs/tutoriais/fonte/gravar-tutoriais.js` (veja [`docs/tutoriais`](docs/tutoriais)).
 - **Toda ferramenta nova ganha um tutorial, e toda atualização de ferramenta revê o dela.** A página da administração avisa quando a ferramenta recebeu um HTML novo depois do vídeo ("regravar") e lista as ferramentas que ainda não têm tutorial.
@@ -267,7 +268,7 @@ O repositório já vem pronto para o Railway (`railway.json` + `Dockerfile`). O 
    Não defina `PORT`, `DATA_DIR`, `TRUST_PROXY` nem `COOKIE_SECURE`: o portal cuida disso no Railway.
 4. **Aplicar.** O Railway guarda mudanças como rascunho: clique em *Deploy* no aviso roxo para valer.
 5. **Endereço.** *Settings* → *Networking* → *Generate Domain* (porta **8080**) ou um domínio próprio.
-6. **Primeiro acesso.** Entre com o administrador e envie os HTMLs em *Módulos e dados* → *Enviar vários HTMLs*.
+6. **Primeiro acesso.** Entre com o administrador e envie os HTMLs em *Configurações → Sistema* → *Enviar vários HTMLs*.
 
 As tabelas são criadas sozinhas na primeira vez, já com RLS ligado: a API pública do Supabase (chave anon) não enxerga nada, só o portal, que conecta como dono do banco. As variáveis `ADMIN_*` só valem quando o banco ainda não tem usuários; depois, troque e-mail e senha pelo próprio portal.
 
@@ -316,7 +317,7 @@ Rode `npm ci --omit=dev` e `npm start` com um gerenciador de processos (pm2, sys
 > automático**: até migrar de plano, o único backup é o baixado pelo portal. O Postgres do Railway também não guarda cópias
 > sozinho (os backups do volume precisam ser ligados no painel).
 
-- **Backup do banco** (Administração → *Módulos e dados*): baixa `myblue-backup-AAAA-MM-DD.jsonl.gz` com **todas as tabelas**
+- **Backup do banco** (*Configurações → Sistema*): baixa `myblue-backup-AAAA-MM-DD.jsonl.gz` com **todas as tabelas**
   (a lista vem do próprio banco, então tabela nova entra sozinha), inclusive HTMLs e versões, anexos dos tickets, fotos,
   fundos da Central de Links, vídeos tutoriais, regras de acesso e demonstrativos. Ficam fora só as sessões abertas e a cópia
   das bibliotecas das CDNs. O arquivo é uma fotografia do banco num instante e sai aos pedaços, sem pesar no servidor.
@@ -327,7 +328,7 @@ Rode `npm ci --omit=dev` e `npm start` com um gerenciador de processos (pm2, sys
   ```
   O banco indicado é **apagado** antes (se já tiver usuários, o script pede `--apagar-o-que-existe`). Depois de restaurar,
   as senhas de todos ficam bloqueadas e o script mostra uma senha temporária para cada administrador ativo, que entra e
-  redefine a senha das demais pessoas em *Usuários e acessos*. Backups antigos (`.json`, versão 4) também são lidos.
+  redefine a senha das demais pessoas em *Configurações → Pessoas*. Backups antigos (`.json`, versão 4) também são lidos.
 - **Teste a restauração** de vez em quando: restaure o último backup num Postgres vazio (outro projeto do Supabase ou um
   Postgres local), suba o portal apontando para ele e confira. Backup que nunca foi restaurado não é garantia.
 - As funções e os gatilhos do banco (Análise de Espólio) estão no código (`server/db.js`) e são recriados ao subir o portal.

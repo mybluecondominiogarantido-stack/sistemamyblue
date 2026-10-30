@@ -35,7 +35,7 @@ test('pendências no texto viram lista numerada', () => {
 
 test('o e-mail tem logo, etiqueta, quadro, botão com link e motivo; o texto do aviso é escapado', () => {
   const m = montarHtml({
-    tipo: 'versao_aguardando', titulo: 'HTML novo aguardando aprovação', texto: 'Pessoa <b>Fictícia</b> enviou.', link: '#/admin/modulos',
+    tipo: 'versao_aguardando', titulo: 'HTML novo aguardando aprovação', texto: 'Pessoa <b>Fictícia</b> enviou.', link: '#/config/ferramentas',
     detalhes: { assunto: 'Aprovação pendente: “Ferramenta Fictícia”', linhas: [['Ferramenta', 'Ferramenta Fictícia'], ['Vazio', null]] },
   }, { portalUrl: 'https://portal.teste/', destinatario: { nome: 'Executiva Fictícia' } });
   assert.equal(m.subject, 'Aprovação pendente: “Ferramenta Fictícia”');
@@ -43,7 +43,7 @@ test('o e-mail tem logo, etiqueta, quadro, botão com link e motivo; o texto do 
   assert.equal(m.inline[0].cid, 'logo-myblue');
   assert.ok(require('fs').existsSync(m.inline[0].arquivo));
   assert.match(m.html, /Aguardando sua aprovação/);
-  assert.match(m.html, /href="https:\/\/portal\.teste\/#\/admin\/modulos"/);
+  assert.match(m.html, /href="https:\/\/portal\.teste\/#\/config\/ferramentas"/);
   assert.match(m.html, /Ver prévia e aprovar/);
   assert.match(m.html, /Ferramenta Fictícia/);
   assert.doesNotMatch(m.html, />Vazio</);
@@ -51,7 +51,7 @@ test('o e-mail tem logo, etiqueta, quadro, botão com link e motivo; o texto do 
   assert.match(m.html, /&lt;b&gt;Fictícia&lt;\/b&gt;/);
   assert.match(m.html, /Você recebeu este e-mail porque você aprova ferramentas/);
   assert.match(m.html, /v:roundrect/);
-  assert.match(m.text, /Ver prévia e aprovar: https:\/\/portal\.teste\/#\/admin\/modulos/);
+  assert.match(m.text, /Ver prévia e aprovar: https:\/\/portal\.teste\/#\/config\/ferramentas/);
 });
 
 test('o título "A · B · C" vira título e linha de referência; destaque, anexo e assinatura aparecem', () => {

@@ -2,8 +2,8 @@
 /*
  * Quem pode o quê no portal (fora das ferramentas, que têm a janela "Quem abre e com qual papel"):
  * cada permissão tem uma regra { niveis, setores, pessoas } definida pela administração em
- * Módulos e dados → Base de Clientes: quem edita (a coordenação/supervisão libera pessoas nas permissões do setor dela, em
- * Ferramentas do setor → Base de Clientes: quem edita). A administração pode tudo, sempre.
+ * Configurações → Acessos → Base de Clientes (a administração muda tudo; a coordenação/supervisão libera pessoas nas permissões
+ * do setor dela). A administração pode tudo, sempre.
  *
  *  - niveis: perfis que recebem a permissão ('coordenador', 'supervisor', 'usuario');
  *  - setores: se tiver algum, o perfil só vale para quem é desses setores (vazio = qualquer setor);

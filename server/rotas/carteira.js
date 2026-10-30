@@ -30,7 +30,7 @@ function rotasCarteira({ db, seg, regras, boletosCarteira, documentos }) {
     next();
   });
   // quem edita o quê vem das regras de acesso (Ferramentas do setor → Carteira); consultar é de todos
-  const QUEM_LIBERA = ' Quem libera: a administração (Módulos e dados → Base de Clientes: quem edita) ou, nas permissões do setor dela, a coordenação/supervisão (Ferramentas do setor → Base de Clientes: quem edita).';
+  const QUEM_LIBERA = ' Quem libera: a administração ou, nas permissões do setor dela, a coordenação/supervisão, em Configurações → Acessos → Base de Clientes.';
   const exigir = (chave, msg) => async (req, res, next) => {
     try { if (await regras.pode(req.usuario, chave)) return next(); return res.status(403).json({ erro: msg + QUEM_LIBERA }); } catch (e) { return next(e); }
   };
