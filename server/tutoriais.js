@@ -20,6 +20,8 @@
  *   contrato    quem usa a Solicitação de Contrato (executivos cadastrados, quem elabora e diretoria)
  *   contrato_juridico  quem elabora os contratos (Solicitação de Contrato → Quem elabora)
  *   juridico    quem conduz as Demandas Jurídicas (setor Jurídico e quem elabora os contratos)
+ *   parceria    quem usa a Solicitação de Contrato Parceria (executivos, Comercial, CS, quem elabora, diretoria e o setor Parceiros)
+ *   parceria_cadastro  o setor Parceiros (cadastra o parceiro na base de comissão)
  *   jornada_executivo  executivos de negócios cadastrados (o caminho inteiro, pelo executivo)
  *   jornada_equipe     analistas e diretoria da Análise de Crédito, quem elabora os contratos e o setor Implantação
  *   { modulo }  quem abre aquela ferramenta
@@ -34,6 +36,7 @@ const ROTULO_PUBLICO = {
   credito: 'Para executivos de negócios e a Análise de Crédito', credito_analise: 'Para analistas de crédito e a diretoria',
   implantacao: 'Para executivos de negócios e o setor Implantação', implantacao_setor: 'Para o setor Implantação', implantacao_acompanhar: 'Para o setor Implantação e a diretoria',
   contrato: 'Para executivos de negócios e o Jurídico', contrato_juridico: 'Para quem elabora os contratos (Jurídico)', juridico: 'Para o Jurídico',
+  parceria: 'Para o comercial, o CS, o Jurídico e o setor Parceiros', parceria_cadastro: 'Para o setor Parceiros',
   jornada_executivo: 'Para executivos de negócios', jornada_equipe: 'Para a Análise de Crédito, o Jurídico e a Implantação',
 };
 
@@ -114,6 +117,12 @@ const TUTORIAIS = [
     descricao: 'Pedir o contrato a partir da análise, preencher as condições e os pedidos do síndico, enviar ao Jurídico, pedir ajuste na minuta ou a assinatura, acompanhar os contratos e, assinado, solicitar a implantação.' },
   { slug: 'contrato-elaborar', grupo: 'Ferramentas', publico: 'contrato_juridico', titulo: 'Solicitação de Contrato — elaborar e registrar as condições fechadas',
     descricao: 'Assumir da fila, ver os pedidos com a resposta padrão, anexar e enviar a minuta, responder ao ajuste, marcar a assinatura e registrar as condições fechadas (o executivo solicita a implantação com elas).' },
+  { slug: 'parceria-solicitar', grupo: 'Ferramentas', publico: 'parceria', titulo: 'Solicitação de Contrato Parceria — pedir e acompanhar',
+    descricao: 'Pedir o contrato com a empresa parceira (os dados da empresa, do representante e do financeiro e as comissões), enviar ao Jurídico, levar a minuta ao parceiro, pedir ajuste ou a assinatura e acompanhar até o parceiro entrar na base.' },
+  { slug: 'parceria-elaborar', grupo: 'Ferramentas', publico: 'contrato_juridico', titulo: 'Solicitação de Contrato Parceria — elaborar e registrar as condições',
+    descricao: 'Assumir da fila, enviar a minuta em até 72h úteis, responder ao ajuste, marcar a assinatura, anexar a via assinada e registrar as comissões e a vigência. O percentual fora do padrão espera a diretoria.' },
+  { slug: 'parceria-cadastrar', grupo: 'Ferramentas', publico: 'parceria_cadastro', titulo: 'Solicitação de Contrato Parceria — cadastrar o parceiro',
+    descricao: 'Conferir os dados do contrato assinado e clicar em Cadastrar parceiro: ele entra na Prestação de Contas — Comissão de Parceiros sem digitar de novo (CNPJ já na base: o contrato é ligado ao cadastro existente).' },
   { slug: 'juridico-demandas-pedir', grupo: 'Ferramentas', publico: 'todos', titulo: 'Demandas Jurídicas — pedir ao Jurídico e acompanhar',
     descricao: 'Abrir uma demanda (aditivo, rescisão, análise de contrato, parecer…), ver o prazo de entrega, acompanhar em Minhas demandas e responder ao Jurídico pelo comentário.' },
   { slug: 'juridico-demandas-conduzir', grupo: 'Ferramentas', publico: 'juridico', titulo: 'Demandas Jurídicas — conduzir, prazos e indicadores',
@@ -153,6 +162,9 @@ async function visibilidade(db, seg, u) {
   const elab = await db.um("SELECT regra->'pessoas' AS p FROM regras_acesso WHERE chave = 'contratos.elaborar'");
   const elaborador = !!(elab && Array.isArray(elab.p) && elab.p.includes(u.id));
   const setorJuridico = !!(await db.um("SELECT 1 FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id WHERE sm.usuario_id = $1 AND s.nome = 'Jurídico'", [u.id]));
+  // Solicitação de Contrato Parceria: pedem o Comercial e o CS (além dos executivos); o setor Parceiros cadastra o parceiro
+  const nomesSetores = (await db.q('SELECT s.nome FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id WHERE sm.usuario_id = $1', [u.id])).rows.map((x) => x.nome);
+  const setorParceiros = nomesSetores.includes('Parceiros');
   const regra = {
     todos: true,
     equipe: membro.length > 0 || sup,
@@ -168,6 +180,8 @@ async function visibilidade(db, seg, u) {
     contrato: executivo || elaborador || diretoria,
     contrato_juridico: elaborador,
     juridico: elaborador || setorJuridico,
+    parceria: executivo || elaborador || diretoria || setorParceiros || nomesSetores.some((n) => ['Comercial', 'CS'].includes(n)),
+    parceria_cadastro: setorParceiros,
     jornada_executivo: executivo,
     jornada_equipe: analista || diretoria || setorImplantacao || elaborador,
     admin: false,

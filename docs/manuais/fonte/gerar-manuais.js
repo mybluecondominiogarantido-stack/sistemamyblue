@@ -563,7 +563,7 @@ function manualSetor(s) {
     ${ferr.map((f) => `<li><b>${f.nome}</b>${f.area ? ` (${esc(f.area)})` : ''}: ${f.descricao}</li>`).join('')}
     <li><b>Central de Tickets</b>: recebe as demandas que os outros setores pedem para ${art.o} ${esc(s.nome)}, e é por ela que ${art.o} ${esc(s.nome)} pede o que precisa dos outros setores.</li>
     <li><b>Carteira de condomínios</b>: todos consultam os condomínios atendidos (ID Vouch, apelido, vigência do contrato, executivo de negócios, CNPJ e responsáveis).${s.carteira ? ` ${art.O} ${esc(s.nome)} é o responsável pela coluna <b>${s.carteira}</b>; os tickets de condomínio para ${art.o} ${esc(s.nome)} vão direto para essa pessoa.` : ''}</li>
-    ${(s.tambem || []).map((t) => `<li>${t}</li>`).join('')}
+    ${(s.tambem || []).concat(...subs.map((a) => (a.tambem || []).map((t) => `${t} <i>(subárea ${esc(a.nome)})</i>`))).map((t) => `<li>${t}</li>`).join('')}
     <li><b>Gestão do setor</b>: o coordenador e o supervisor ${art.do} ${esc(s.nome)} cuidam dos usuários, das ferramentas, da equipe e dos tipos de demanda do setor.</li>
     ${s.supervisao ? '<li><b>Supervisão da Central de Tickets</b>: visão e direcionamento dos tickets de <b>todos</b> os setores (veja o capítulo próprio).</li>' : ''}
   </ul>
