@@ -416,7 +416,7 @@ function manualGeral() {
   <ul>
     <li>Clique na ferramenta para abrir. Ela continua aberta em segundo plano quando você vai para outra tela (um ponto azul aparece no menu).</li>
     <li>Na barra de cima: <b>⟳ Recarregar</b>, <b>Abrir em nova aba</b> e <b>✕ Fechar</b> (libera memória).</li>
-    <li>Quando a ferramenta salva dados no servidor, aparece <span class="etq verde">✓ salvo no servidor</span>. Se aparecer <span class="etq vermelha">⚠ falha ao salvar</span>, o portal tenta de novo sozinho: não feche a aba até sumir.</li>
+    <li>O portal salva sozinho o que você lança nas ferramentas, sem aviso na tela. Se aparecer <span class="etq vermelha">⚠ falha ao salvar</span>, o portal tenta de novo sozinho: não feche a aba até sumir.</li>
     <li>Ferramentas compartilhadas (como o Controle de Emissão de Boletos) mostram o que os colegas fazem em poucos segundos, sem recarregar.</li>
   </ul>`) +
 
@@ -604,7 +604,7 @@ function manualSetor(s) {
   ${f.obs ? dica(f.obs) : ''}`).join('') + `
   <h3>Cuidados</h3>
   <ul>
-    <li>Quando aparecer <span class="etq verde">✓ salvo no servidor</span>, o que você lançou já está guardado.</li>
+    <li>O que você lança é salvo sozinho; a barra de cima só mostra aviso quando algo dá errado.</li>
     <li>Se aparecer <span class="etq vermelha">⚠ falha ao salvar</span>, não feche a aba: o portal tenta de novo sozinho.</li>
     <li>Se a ferramenta travar, use <b>⟳ Recarregar</b> na barra de cima.</li>
   </ul>`) : '') +

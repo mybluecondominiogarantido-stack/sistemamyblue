@@ -370,7 +370,7 @@ module.exports = [
       await t.mostrar('#btRecarregar', 1300);
       await t.mostrar('a[title="Abrir em nova aba"]', 1300);
       await t.mostrar('#btFecharMod', 1300);
-      await t.legenda('Quando aparecer <b>✓ salvo no servidor</b>, o que você lançou já está guardado para a equipe.', { etapa: F, ms: 3400 });
+      await t.legenda('O que você lança é salvo sozinho. Se a gravação falhar, aparece um aviso em <b>vermelho</b> nesta barra.', { etapa: F, ms: 3400 });
       await t.clicar('#btFecharMod', { depois: 1200 });
 
       const A = '5 · Avisos';
