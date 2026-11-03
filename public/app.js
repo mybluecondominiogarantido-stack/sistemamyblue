@@ -291,10 +291,10 @@
   function desenharStatus() {
     var s = atual ? statusSync[atual] : null;
     var el = $('#statusSync');
-    if (!s) { el.innerHTML = ''; return; }
-    var txt = { salvando: 'salvando…', salvo: '✓ salvo no servidor', erro: '⚠ falha ao salvar — tentando de novo', conflito: '⚠ não salvo: outra pessoa alterou — veja o aviso na ferramenta' }[s] || '';
+    // salvando e salvo são o normal: o selo só aparece quando a gravação falha
+    var txt = { erro: '⚠ falha ao salvar — tentando de novo', conflito: '⚠ não salvo: outra pessoa alterou — veja o aviso na ferramenta' }[s];
+    if (!txt) { el.innerHTML = ''; return; }
     el.innerHTML = '<span class="status-sync ' + esc(s) + '">' + txt + '</span>';
-    if (s === 'salvo') setTimeout(function () { if (statusSync[atual] === 'salvo') { el.innerHTML = ''; } }, 2500);
   }
 
   /* ======================= roteamento ======================= */
