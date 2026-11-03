@@ -15,6 +15,9 @@ padrões da Análise de Crédito e da Implantação, no grupo **Jurídico** do m
 
 Os endereços antigos (`#/contratos/assinaturas`, `#/contratos/controle`, `#/contratos/painel`) levam à tela nova.
 
+O contrato com **empresas parceiras** tem tela própria, ao lado: **Solicitação de Contrato Parceria** (`#/parcerias`),
+com a mesma permissão de quem elabora. Veja `docs/parcerias/LEIAME.md`.
+
 ## Onde está cada parte
 
 | Parte | Arquivo |

@@ -31,7 +31,8 @@ const ENTREGA_AO_MUDAR = ['aguardando_assinaturas', 'concluido']; // mudou para 
 const AVISA_EMAIL = ['aguardando_retorno', 'concluido']; // situações que pedem algo de quem pediu (ou fecham o pedido)
 const SETOR_JURIDICO = 'Jurídico';
 const PERMISSAO = 'contratos.elaborar';
-const HORAS_CONTRATO = 72; // Solicitação de Contrato: minuta em 72h úteis
+const HORAS_CONTRATO = 72; // Solicitação de Contrato (e de Contrato Parceria): minuta em 72h úteis
+const TIPO_PARCERIA = 'Contrato de Parceria';
 // situação da solicitação de contrato, nos termos da planilha
 const ETAPA_STATUS = { fila: 'pendente', em_elaboracao: 'em_andamento', pendencia: 'aguardando_retorno', minuta_enviada: 'aguardando_retorno',
   para_assinar: 'aguardando_assinaturas', em_assinatura: 'aguardando_assinaturas', conferencia: 'aguardando_assinaturas', assinado: 'concluido', cancelada: 'contrato_perdido' };
@@ -136,7 +137,20 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
         cliente: c.condominio || '', objeto: `Solicitação de Contrato ${c.protocolo}`, observacoes: '', responsavel_id: c.responsavel_id, responsavel_nome: c.responsavel_nome,
         solicitada_em: diaBrasilia(c.enviado_em), horas: HORAS_CONTRATO, prazo: c.prazo ? diaBrasilia(c.prazo) : null,
         entregue_em: c.primeira_minuta_em ? diaBrasilia(c.primeira_minuta_em) : null, atualizado_em: c.atualizado_em }));
-    return marcar([...manuais, ...contratos], hoje)
+    // Solicitação de Contrato Parceria: entra igual, com o mesmo prazo (72h úteis) e a primeira minuta como entrega
+    const onde3 = vis === 'minhas' ? 'AND c.solicitante_id = $1' : '';
+    const parcerias = (await db.q(`SELECT c.id, c.protocolo, c.etapa, c.empresa, c.enviado_em, c.prazo, c.solicitante_id, us.nome AS solicitante_nome,
+        c.responsavel_id, ur.nome AS responsavel_nome, c.atualizado_em,
+        (SELECT MIN(ev.criado_em) FROM parceria_eventos ev WHERE ev.parceria_id = c.id AND ev.tipo = 'minuta_enviada') AS primeira_minuta_em,
+        (SELECT s.nome FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id WHERE sm.usuario_id = c.solicitante_id ORDER BY sm.lider DESC, s.ordem LIMIT 1) AS setor
+      FROM parcerias c LEFT JOIN usuarios us ON us.id = c.solicitante_id LEFT JOIN usuarios ur ON ur.id = c.responsavel_id
+      WHERE c.etapa <> 'rascunho' AND c.enviado_em IS NOT NULL ${onde3}`, args2)).rows
+      .map((c) => ({ id: `cp-${c.id}`, parceria_id: c.id, origem: 'parceria', ref: c.protocolo, numero: null, status: ETAPA_STATUS[c.etapa] || 'pendente', etapa: c.etapa,
+        tipo_id: null, tipo: TIPO_PARCERIA, solicitante_id: c.solicitante_id, solicitante_nome: c.solicitante_nome || '', setor: c.setor || '', uf: '',
+        cliente: c.empresa || '', objeto: `Solicitação de Contrato Parceria ${c.protocolo}`, observacoes: '', responsavel_id: c.responsavel_id, responsavel_nome: c.responsavel_nome,
+        solicitada_em: diaBrasilia(c.enviado_em), horas: HORAS_CONTRATO, prazo: c.prazo ? diaBrasilia(c.prazo) : null,
+        entregue_em: c.primeira_minuta_em ? diaBrasilia(c.primeira_minuta_em) : null, atualizado_em: c.atualizado_em }));
+    return marcar([...manuais, ...contratos, ...parcerias], hoje)
       .sort((a, b) => (b.solicitada_em || '').localeCompare(a.solicitada_em || '') || String(b.ref).localeCompare(String(a.ref), 'pt-BR', { numeric: true }));
   }
   /* atrasada (sem entrega e o prazo passou), vence hoje e o SLA de quem já foi entregue */
@@ -228,7 +242,7 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
       'Status', 'Observações', 'SLA', 'Responsável', 'Origem'];
     const linhas = lista.map((d) => [d.origem === 'demanda' ? d.numero : d.ref, d.tipo, d.solicitante_nome, d.cliente, d.setor, d.uf, d.objeto, dataBr(d.solicitada_em),
       dataBr(d.prazo), dataBr(d.entregue_em), STATUS[d.status] + (d.atrasada ? ' (atrasada)' : ''), d.observacoes,
-      d.sla === 'dentro' ? 'Dentro do SLA' : d.sla === 'fora' ? 'Fora do SLA' : '', d.responsavel_nome || '', d.origem === 'contrato' ? 'Solicitação de Contrato' : 'Demandas Jurídicas']);
+      d.sla === 'dentro' ? 'Dentro do SLA' : d.sla === 'fora' ? 'Fora do SLA' : '', d.responsavel_nome || '', d.origem === 'contrato' ? 'Solicitação de Contrato' : d.origem === 'parceria' ? 'Solicitação de Contrato Parceria' : 'Demandas Jurídicas']);
     res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.set('Content-Disposition', `attachment; filename="Demandas Juridicas ${diaBrasilia()}.xlsx"`);
     res.send(criarXlsx([{ titulo: 'Demandas Jurídicas', cab, linhas }]));

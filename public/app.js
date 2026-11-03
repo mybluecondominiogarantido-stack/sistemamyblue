@@ -245,7 +245,10 @@
         // Jurídico: as telas dos contratos (quem tem acesso) e as Demandas Jurídicas (todo mundo pede ao Jurídico)
         '<div class="grupo">Jurídico</div>' +
         (resumoCt && resumoCt.acesso ? '<a href="#/contratos" class="' + (rota.indexOf('#/contratos') === 0 ? 'on' : '') + '">' + IC.documento +
-          '<span>Solicitação de Contrato</span><i data-contador="contratos" class="contador" hidden></i></a>' +
+          '<span>Solicitação de Contrato</span><i data-contador="contratos" class="contador" hidden></i></a>' : '') +
+        (resumoCp && resumoCp.acesso ? '<a href="#/parcerias" class="' + (rota.indexOf('#/parcerias') === 0 ? 'on' : '') + '">' + IC.aperto +
+          '<span>Solicitação de Contrato Parceria</span><i data-contador="parcerias" class="contador" hidden></i></a>' : '') +
+        (resumoCt && resumoCt.acesso ? '' +
           '<a href="#/acompanhamento-contratos" class="' + (rota.indexOf('#/acompanhamento-contratos') === 0 ? 'on' : '') + '">' + IC.historico +
           '<span>Acompanhamento de demandas Jurídicas</span><i data-contador="contratos-acomp" class="contador" hidden></i></a>' +
           (resumoCt.painel ? '<a href="#/dashboard-juridico" class="' + (rota.indexOf('#/dashboard-juridico') === 0 ? 'on' : '') + '">' + IC.grafico + '<span>Dashboard Jurídico</span></a>' : '') : '') +
@@ -278,6 +281,7 @@
     desenharContadorCredito();
     desenharContadorImp();
     desenharContadorCt();
+    desenharContadorCp();
     desenharContadorDj();
     if (resumoTickets) { var bc = $('#nav [data-contador=fila]'); if (bc) { bc.textContent = resumoTickets.minha_fila; bc.hidden = !resumoTickets.minha_fila; if (resumoTickets.minha_fila_atrasados) bc.classList.add('alerta'); } }
     $$('#nav a, #navConfig a').forEach(function (a) { a.addEventListener('click', function () { $('#casca').classList.remove('menu-aberto'); }); });
@@ -333,6 +337,7 @@
       if (partes[1] === 'equipe' && podeConfigurar()) { location.replace('#/config/acessos/contratos'); return; } // Quem elabora mudou para Acessos
       return paginaContratos('solicitacao', partes[1]);
     }
+    if (partes[0] === 'parcerias') return /^\d+$/.test(partes[1] || '') ? paginaParceriaDetalhe(Number(partes[1])) : paginaParcerias(partes[1]);
     if (partes[0] === 'acompanhamento-contratos') return paginaContratos('acompanhamento', partes[1]);
     if (partes[0] === 'dashboard-juridico') return paginaContratos('painel');
     if (partes[0] === 'demandas-juridicas') return /^\d+$/.test(partes[1] || '') ? paginaDemandasJ('', Number(partes[1])) : paginaDemandasJ(partes[1]);
@@ -7687,7 +7692,7 @@
       '<select class="campo" id="fStDj" style="width:auto" aria-label="Situação">' + opcoes([['', 'Todas as situações'], ['abertas', 'Em aberto'], ['atrasada', 'Atrasadas']].concat(Object.keys(STATUS_DJ).map(function (k) { return [k, STATUS_DJ[k][0]]; })), f.status) + '</select>' +
       '<select class="campo" id="fTpDj" style="width:auto" aria-label="Atividade">' + opcoes([['', 'Todas as atividades']].concat(m.tipos.map(function (t) { return [t.id, t.nome]; })), f.tipo) + '</select>' +
       (todas ? '<select class="campo" id="fSeDj" style="width:auto" aria-label="Setor"></select><select class="campo" id="fOrDj" style="width:auto" aria-label="Origem">' +
-        opcoes([['', 'Lançadas aqui e contratos'], ['demanda', 'Só as lançadas aqui'], ['contrato', 'Só a Solicitação de Contrato']], f.origem) + '</select>' : '') +
+        opcoes([['', 'Lançadas aqui e contratos'], ['demanda', 'Só as lançadas aqui'], ['contrato', 'Só a Solicitação de Contrato'], ['parceria', 'Só a Solicitação de Contrato Parceria']], f.origem) + '</select>' : '') +
       '<select class="campo" id="fAnoDj" style="width:auto" aria-label="Ano da solicitação"></select></div>' +
       '<div class="tabela-wrap"><table style="min-width:1080px"><thead><tr><th>Nº</th><th>Atividade</th><th>Solicitante</th><th>Cliente / objeto</th><th>Solicitada</th><th>Prazo</th><th>Entrega</th><th>Situação</th><th>SLA</th></tr></thead>' +
       '<tbody id="tbDj"></tbody></table></div><div class="ajuda" id="rodapeDj" style="padding:10px 16px"></div></div>';
@@ -7709,8 +7714,8 @@
       if ($('#fSeDj')) $('#fSeDj').innerHTML = opcoes([['', 'Todos os setores']].concat(r.setores.map(function (s) { return [s, s]; })), f.setor);
       $('#fAnoDj').innerHTML = opcoes([['', 'Todos os anos']].concat(r.anos.map(function (a) { return [a, a]; })), f.ano);
       $('#tbDj').innerHTML = r.demandas.map(function (d) {
-        return '<tr class="clicavel" data-id="' + esc(d.id) + '"><td style="white-space:nowrap"><b>' + (d.origem === 'contrato' ? esc(d.ref) : '#' + esc(d.ref)) + '</b>' +
-          (d.origem === 'contrato' ? '<span class="sec">Solicitação de Contrato</span>' : '') + '</td><td>' + esc(d.tipo) + '</td>' +
+        return '<tr class="clicavel" data-id="' + esc(d.id) + '"><td style="white-space:nowrap"><b>' + (d.origem === 'contrato' || d.origem === 'parceria' ? esc(d.ref) : '#' + esc(d.ref)) + '</b>' +
+          (d.origem === 'contrato' ? '<span class="sec">Solicitação de Contrato</span>' : d.origem === 'parceria' ? '<span class="sec">Solicitação de Contrato Parceria</span>' : '') + '</td><td>' + esc(d.tipo) + '</td>' +
           '<td>' + esc(d.solicitante_nome || '—') + '<span class="sec">' + esc([d.setor, d.uf].filter(Boolean).join(' · ')) + '</span></td>' +
           '<td style="max-width:320px"><b>' + esc(d.cliente || '—') + '</b>' + (d.objeto ? '<span class="sec corta" title="' + esc(d.objeto) + '">' + esc(d.objeto) + '</span>' : '') + '</td>' +
           '<td style="white-space:nowrap">' + dataBr(d.solicitada_em) + '</td><td style="white-space:nowrap">' + dataBr(d.prazo) + '</td>' +
@@ -7722,6 +7727,7 @@
         tr.onclick = function () {
           var id = tr.getAttribute('data-id');
           if (id.indexOf('ct-') === 0) { location.hash = '#/contratos/' + id.slice(3); return; }
+          if (id.indexOf('cp-') === 0) { location.hash = '#/parcerias/' + id.slice(3); return; }
           detalheDj(Number(id), m, recarregar);
         };
       });
@@ -8027,6 +8033,478 @@
     };
   }
 
+  /* ======================= Solicitação de Contrato Parceria ======================= */
+  var metaCp = null;
+  var resumoCp = null;
+  var ETAPA_CP = {
+    rascunho: ['Rascunho', 'cinza'], fila: ['Na fila do Jurídico', 'azul'], em_elaboracao: ['Em elaboração', 'azul'], pendencia: ['Pendência com o comercial', 'ambar'],
+    minuta_enviada: ['Minuta com o comercial', 'azul'], para_assinar: ['Pronto para assinatura', 'ambar'], em_assinatura: ['Em assinatura', 'azul'],
+    conferencia: ['Assinado · registrar condições', 'ambar'], assinado: ['Assinado', 'verde'], cancelada: ['Cancelada', 'cinza'],
+  };
+  var ABAS_CP = [['minhas', 'Minhas solicitações'], ['fila', 'Fila do Jurídico'], ['assinaturas', 'Assinaturas'], ['diretoria', 'Diretoria'], ['parceiros', 'Cadastro do parceiro'], ['todas', 'Controle']];
+  var EVENTO_CP = {
+    criada: 'criou a solicitação', formulario: 'alterou o formulário', documento: 'anexou um documento', documento_removido: 'removeu um documento',
+    enviada: 'enviou ao Jurídico', reenviada: 'reenviou depois da pendência', assumida: 'assumiu a solicitação', passada: 'passou a solicitação',
+    pendencia: 'devolveu com pendência', minuta_enviada: 'enviou a minuta', ajuste: 'pediu ajuste na minuta', assinatura_pedida: 'informou que o parceiro aprovou e pediu a assinatura',
+    em_assinatura: 'mandou para assinatura', assinado: 'marcou o contrato como assinado', fechado: 'registrou as condições do contrato', fechado_corrigido: 'corrigiu as condições',
+    parceiro_cadastrado: 'cadastrou o parceiro na Prestação de Contas', cancelada: 'cancelou', diretoria_aprovou: 'aprovou o percentual (diretoria)', diretoria_recusou: 'não aprovou o percentual (diretoria)',
+  };
+
+  async function carregarMetaCp(forcar) {
+    if (!metaCp || forcar) metaCp = await api('GET', '/api/parcerias/meta');
+    return metaCp;
+  }
+  async function atualizarCp() {
+    try { resumoCp = await api('GET', '/api/parcerias/resumo'); } catch (e) { return; }
+    desenharContadorCp();
+  }
+  function desenharContadorCp() {
+    var b = $('#nav [data-contador=parcerias]');
+    if (!b || !resumoCp) return;
+    var r = resumoCp;
+    var n = (r.fila || 0) + (r.minhas || 0) + (r.assinaturas || 0) + (r.diretoria || 0) + (r.parceiros || 0) + (r.retorno || 0);
+    b.textContent = n;
+    b.hidden = !n;
+    b.title = [r.fila ? r.fila + ' na fila' : '', r.minhas ? r.minhas + ' com você' : '', r.assinaturas ? r.assinaturas + ' em assinatura ou para registrar' : '',
+      r.diretoria ? r.diretoria + ' para a diretoria decidir' : '', r.parceiros ? r.parceiros + ' parceiro(s) para cadastrar' : '', r.retorno ? r.retorno + ' com você (minuta ou pendência)' : ''].filter(Boolean).join(' · ');
+  }
+  function pctCp(v) { return v == null ? '—' : fmtNumCr(v) + '%'; }
+  function prazoCp(c) {
+    if (['fila', 'em_elaboracao'].indexOf(c.etapa) < 0 || !c.prazo) return '<span class="sec">—</span>';
+    var vencido = new Date(c.prazo) < new Date();
+    return '<span class="' + (vencido ? 'atraso-ct' : '') + '">' + (vencido ? 'venceu ' : 'até ') + dataHoraCr(c.prazo) + '</span>';
+  }
+  function comQuemCp(c) {
+    if (['rascunho', 'pendencia', 'minuta_enviada'].indexOf(c.etapa) >= 0) return 'Comercial';
+    if (c.etapa === 'em_assinatura') return 'Parceiro (assinatura)';
+    if (c.etapa === 'fila') return '<span class="sec">ninguém assumiu</span>';
+    if (c.etapa === 'assinado') return c.aguarda_cadastro ? 'Setor Parceiros' : '<span class="sec">—</span>';
+    if (c.etapa === 'cancelada') return '<span class="sec">—</span>';
+    return esc(c.responsavel_nome || 'Jurídico');
+  }
+  function linhaCp(c) {
+    return '<tr class="clicavel" data-id="' + c.id + '"><td style="white-space:nowrap"><b>' + esc(c.protocolo || 'Rascunho') + '</b><span class="sec">' + dataHoraCr(c.enviado_em || c.criado_em) + '</span></td>' +
+      '<td><b>' + esc(c.empresa || 'Sem nome') + '</b><span class="sec">' + esc(c.cnpj || '') + '</span></td><td>' + esc(c.solicitante_nome || '—') + '</td>' +
+      '<td>' + etqCr(ETAPA_CP, c.etapa) + (c.diretoria === 'aguardando' ? ' ' + etq(['diretoria', 'ambar']) : '') + (c.aguarda_cadastro ? ' ' + etq(['cadastrar parceiro', 'ambar']) : '') +
+      (c.ajustes ? '<span class="sec">' + c.ajustes + ' ajuste(s)</span>' : '') + '</td><td>' + comQuemCp(c) + '</td><td style="white-space:nowrap">' + prazoCp(c) + '</td></tr>';
+  }
+
+  /* ---------- lista e abas ---------- */
+  async function paginaParcerias(aba) {
+    var m;
+    try { m = await carregarMetaCp(true); } catch (e) { $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">' + esc(e.message) + '</div></div>'; return; }
+    var p = m.perfil;
+    var pode = { minhas: p.solicita, fila: p.elaborador, assinaturas: p.elaborador, diretoria: p.diretoria, parceiros: p.parceiros, todas: p.elaborador || p.diretoria };
+    var abas = ABAS_CP.filter(function (a) { return pode[a[0]]; });
+    var titulo = 'Solicitação de Contrato Parceria';
+    if (!abas.length) {
+      $('#conteudo').innerHTML = '<div class="pagina"><h1>' + titulo + '</h1><div class="vazio">Pedem o contrato de parceria: executivos de negócios, o Comercial, o CS e a diretoria. Quem elabora os contratos é marcado em Configurações → Acessos → Solicitação de Contrato.</div></div>';
+      return;
+    }
+    if (!abas.some(function (a) { return a[0] === aba; })) {
+      aba = p.elaborador ? 'fila' : p.solicita ? 'minhas' : p.parceiros ? 'parceiros' : abas[0][0];
+      if (!abas.some(function (a) { return a[0] === aba; })) aba = abas[0][0];
+    }
+    definirBarra('<span class="setor">Jurídico</span><span class="sep">/</span><span class="nome">' + titulo + (abas.length > 1 ? ' · ' + esc(abas.find(function (a) { return a[0] === aba; })[1]) : '') + '</span>');
+    var novo = p.solicita && aba === 'minhas';
+    $('#conteudo').innerHTML = '<div class="pagina"><div class="linha" style="align-items:flex-end;margin-bottom:6px"><div style="flex:1 1 420px"><h1>' + titulo + '</h1>' +
+      '<p class="sub" style="margin:0">O comercial pede o contrato com a empresa parceira, o Jurídico redige a minuta em até 72h úteis e, assinado, o setor Parceiros cadastra o parceiro na Prestação de Contas.</p></div>' +
+      (novo ? '<button class="btn primary" id="btNovoCp">' + IC.mais + 'Nova solicitação</button>' : '') + '</div>' +
+      (abas.length > 1 ? '<nav class="abas" style="margin-top:16px">' + abas.map(function (a) { return '<a href="#/parcerias/' + a[0] + '" class="' + (a[0] === aba ? 'on' : '') + '">' + esc(a[1]) + '</a>'; }).join('') + '</nav>' : '') +
+      '<div id="corpoCp"' + (abas.length > 1 ? '' : ' style="margin-top:16px"') + '></div></div>';
+    if ($('#btNovoCp')) $('#btNovoCp').onclick = async function () {
+      try { var r = await api('POST', '/api/parcerias', {}); location.hash = '#/parcerias/' + r.id; } catch (e) { toast(e.message, 'erro'); }
+    };
+    atualizarCp();
+    $('#corpoCp').innerHTML = '<div class="painel"><div class="cab-painel"><input class="campo" id="qCp" type="search" placeholder="Buscar por empresa, CNPJ ou protocolo" style="max-width:360px"></div>' +
+      '<div class="tabela-wrap"><table style="min-width:900px"><thead><tr><th>Protocolo</th><th>Empresa parceira</th><th>Pedida por</th><th>Situação</th><th>Com quem</th><th>Prazo da minuta</th></tr></thead><tbody id="tbCp"></tbody></table></div></div>';
+    var seq = 0;
+    async function carregar() {
+      var meu = ++seq;
+      var q = $('#qCp').value.trim();
+      var r;
+      try { r = await api('GET', '/api/parcerias?vis=' + aba + (q ? '&q=' + encodeURIComponent(q) : '')); } catch (e) { toast(e.message, 'erro'); return; }
+      if (meu !== seq) return;
+      var lista = aba === 'parceiros' ? r.parcerias.filter(function (c) { return c.aguarda_cadastro; }).concat(r.parcerias.filter(function (c) { return !c.aguarda_cadastro; })) : r.parcerias;
+      $('#tbCp').innerHTML = lista.map(linhaCp).join('') || '<tr><td colspan="6"><div class="vazio" style="border:0;padding:34px">' + (aba === 'minhas' ? 'Você ainda não pediu contratos de parceria.' : 'Nada por aqui.') + '</div></td></tr>';
+      $$('#tbCp tr[data-id]').forEach(function (tr) { tr.onclick = function () { location.hash = '#/parcerias/' + tr.getAttribute('data-id'); }; });
+    }
+    var espera;
+    $('#qCp').oninput = function () { clearTimeout(espera); espera = setTimeout(carregar, 300); };
+    carregar();
+  }
+
+  /* ---------- formulário (os 12 campos do Forms) ---------- */
+  function htmlFormCp(c) {
+    var f = c.formulario || {};
+    return '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">1</span>Empresa parceira</h2><span class="ajuda" style="margin:0">solicitante: ' + esc(c.solicitante_nome || eu.nome) + '</span></div><div class="corpo grade-3">' +
+      campoCt('empresa', 'Nome da empresa *', f.empresa, { span: 2 }) +
+      campoCt('cnpj', 'CNPJ da empresa *', f.cnpj, { ph: '00.000.000/0000-00' }) +
+      '<div style="grid-column:1/-1" id="dupCp" hidden></div>' +
+      campoCt('representante_nome', 'Nome do representante legal *', f.representante_nome) +
+      campoCt('representante_cpf', 'CPF do representante legal *', f.representante_cpf, { ph: '000.000.000-00' }) +
+      campoCt('representante_email', 'E-mail do representante legal *', f.representante_email, { tipo: 'email', ajuda: 'É para onde vão a minuta e a assinatura.' }) +
+      campoCt('financeiro_nome', 'Nome do responsável financeiro *', f.financeiro_nome) +
+      campoCt('financeiro_telefone', 'Telefone do responsável financeiro *', f.financeiro_telefone, { ph: '(00) 00000-0000' }) +
+      campoCt('email_prestacao', 'E-mail para envio da prestação de contas *', f.email_prestacao, { tipo: 'email', ajuda: 'Segue para o setor Parceiros.' }) + '</div></section>' +
+
+      '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">2</span>Comissões</h2><span class="ajuda" style="margin:0">padrão: recorrência de 10% ou 5%; venda de 50% da 1ª taxa administrativa</span></div><div class="corpo grade-3">' +
+      radiosCt('recorrencia', 'Comissão de recorrência? *', f.recorrencia, [['sim', 'Sim'], ['nao', 'Não']]) +
+      radiosCt('recorrencia_pct', 'Percentual da recorrência *', f.recorrencia_pct, [['10', '10%'], ['5', '5%'], ['outro', 'Outro percentual']],
+        { se: 'recorrencia:sim', extra: '<input class="campo" id="c_recorrencia_outro" data-se="recorrencia_pct:outro" style="width:110px" placeholder="%" value="' + esc(fmtNumCr(f.recorrencia_outro)) + '" aria-label="Percentual de recorrência pedido">',
+          ajuda: 'Outro percentual vai para a diretoria decidir antes da minuta.' }) +
+      radiosCt('venda', 'Comissão de venda? *', f.venda, [['sim', 'Sim'], ['nao', 'Não']]) +
+      radiosCt('venda_pct', 'Percentual da venda (sobre a 1ª taxa administrativa) *', f.venda_pct, [['50', '50% da 1ª taxa administrativa'], ['outro', 'Outro percentual']],
+        { se: 'venda:sim', extra: '<input class="campo" id="c_venda_outro" data-se="venda_pct:outro" style="width:110px" placeholder="%" value="' + esc(fmtNumCr(f.venda_outro)) + '" aria-label="Percentual de venda pedido">',
+          ajuda: 'Outro percentual vai para a diretoria decidir antes da minuta.' }) +
+      '<div style="grid-column:1/-1" id="avisosCp"></div></div></section>' +
+
+      '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">3</span>Outras solicitações</h2><span class="ajuda" style="margin:0">opcional</span></div><div class="corpo">' +
+      '<textarea class="campo" id="c_outras" rows="4" aria-label="Outras solicitações" placeholder="Qualquer outra solicitação que não está no formulário.">' + esc(f.outras || '') + '</textarea></div></section>';
+  }
+  function lerFormCp(raiz) {
+    var v = function (k) { return valCt(k, raiz); };
+    return {
+      empresa: v('empresa'), cnpj: v('cnpj'), representante_nome: v('representante_nome'), representante_cpf: v('representante_cpf'), representante_email: v('representante_email'),
+      financeiro_nome: v('financeiro_nome'), financeiro_telefone: v('financeiro_telefone'), email_prestacao: v('email_prestacao'),
+      recorrencia: v('recorrencia'), recorrencia_pct: v('recorrencia_pct'), recorrencia_outro: numCr($('#c_recorrencia_outro', raiz).value),
+      venda: v('venda'), venda_pct: v('venda_pct'), venda_outro: numCr($('#c_venda_outro', raiz).value), outras: $('#c_outras', raiz).value.trim(),
+    };
+  }
+  function ligarSeCp(raiz) {
+    function aplicar() {
+      $$('[data-se]', raiz).forEach(function (el) {
+        var p = el.getAttribute('data-se').split(':');
+        el.hidden = p[1].split(',').indexOf(String(valCt(p[0], raiz))) < 0;
+      });
+    }
+    raiz.addEventListener('change', aplicar);
+    aplicar();
+  }
+  function marcarFaltasCp(lista) {
+    var raiz = $('#formCp');
+    $$('.invalido', raiz).forEach(function (el) { el.classList.remove('invalido'); });
+    $$('.ajuda-falta', raiz).forEach(function (el) { el.remove(); });
+    (lista || []).forEach(function (x) {
+      var el = $('#c_' + x.campo, raiz);
+      if (!el) { var rd = $('input[name=c_' + x.campo + ']', raiz); el = rd && rd.closest('fieldset'); }
+      if (!el || el.closest('[hidden]')) return;
+      el.classList.add('invalido');
+      var aj = document.createElement('div');
+      aj.className = 'ajuda invalido ajuda-falta';
+      aj.textContent = x.msg;
+      if (el.tagName === 'FIELDSET') el.appendChild(aj); else el.parentNode.appendChild(aj);
+    });
+    var caixa = $('#faltasCp');
+    if (caixa) {
+      caixa.hidden = !(lista || []).length;
+      $('ul', caixa).innerHTML = (lista || []).map(function (x) { return '<li>' + esc(x.msg) + '</li>'; }).join('');
+    }
+  }
+  function desenharConfCp(r) {
+    var dup = $('#dupCp');
+    if (dup) {
+      var d = r.duplicidade;
+      var msgs = [];
+      if (d && d.aberta) msgs.push('<div class="msg erro">Este CNPJ já tem solicitação de contrato de parceria: <a href="#/parcerias/' + d.aberta.id + '">' + esc(d.aberta.protocolo) + '</a>. Não dá para enviar outra.</div>');
+      if (d && d.na_base) msgs.push('<div class="msg aviso">Este CNPJ já está na base de parceiros como <b>' + esc(d.na_base) + '</b>. Confira se é mesmo um contrato novo.</div>');
+      dup.innerHTML = msgs.join('');
+      dup.hidden = !msgs.length;
+    }
+    var av = $('#avisosCp');
+    if (av) av.innerHTML = (r.avisos || []).map(function (a) { return '<div class="msg aviso" style="margin-top:6px">' + esc(a) + '</div>'; }).join('');
+    marcarFaltasCp(r.faltas_campos);
+  }
+
+  /* ---------- documentos: minuta, contrato assinado e outros ---------- */
+  async function enviarDocCp(id, tipo, arquivo) {
+    var r = await fetch('/api/parcerias/' + id + '/documentos', {
+      method: 'POST', credentials: 'same-origin', body: arquivo,
+      headers: { 'Content-Type': arquivo.type || 'application/octet-stream', 'X-Nome-Arquivo': encodeURIComponent(arquivo.name), 'X-Tipo': tipo },
+    });
+    if (r.status === 413) throw new Error('"' + arquivo.name + '" passa do tamanho máximo permitido.');
+    if (!r.ok) { var j = {}; try { j = await r.json(); } catch (e) { /* sem JSON */ } throw new Error(j.erro || 'Falha ao enviar ' + arquivo.name); }
+  }
+  function htmlDocsCp(d) {
+    var c = d.parceria, pd = d.pode;
+    var vig = d.documentos.filter(function (x) { return !x.substituido_em; });
+    var nomes = { minuta: 'Minuta do contrato', contrato_assinado: 'Contrato assinado', outro: 'Outro documento' };
+    function lnk(x, tirar) {
+      return '<a class="anexo" href="/api/parcerias/' + c.id + '/documentos/' + x.id + (x.mime === 'application/pdf' ? '?ver=1' : '') + '" target="_blank" rel="noopener">' + IC.documento + '<span>' + esc(x.nome) + '</span><span class="sec">' + tamanho(x.tamanho) + '</span></a>' +
+        (tirar ? '<button type="button" class="btn icon ghost" data-tirar-doc-cp="' + x.id + '" aria-label="Remover ' + esc(x.nome) + '">' + IC.fechar + '</button>' : '');
+    }
+    function linha(tipo, podeAnexar, podeTirar) {
+      var atual = vig.filter(function (x) { return x.tipo === tipo; });
+      return '<div class="doc-linha"><b style="flex:1 1 260px">' + esc(nomes[tipo]) + '</b>' + (atual.length ? etq(['anexado', 'verde']) : etq([tipo === 'outro' ? 'opcional' : 'a anexar', 'cinza'])) +
+        atual.map(function (x) { return lnk(x, podeTirar); }).join('') +
+        (podeAnexar ? '<label class="btn ghost sm">' + IC.enviar + (atual.length ? (tipo === 'outro' ? 'Anexar outro' : 'Trocar') : 'Anexar') + '<input type="file" data-doc-cp="' + tipo + '" hidden></label>' : '') + '</div>';
+    }
+    var depois = ['minuta_enviada', 'para_assinar', 'em_assinatura', 'conferencia', 'assinado'].indexOf(c.etapa) >= 0;
+    var html = '<section class="painel"><div class="cab-painel"><h2>Documentos</h2><span class="ajuda" style="margin:0">não são pedidos documentos do parceiro</span></div>';
+    if (depois || pd.minuta || vig.some(function (x) { return x.tipo === 'minuta'; })) html += linha('minuta', pd.minuta, pd.minuta);
+    if (['para_assinar', 'em_assinatura', 'conferencia', 'assinado'].indexOf(c.etapa) >= 0) html += linha('contrato_assinado', pd.assinar || pd.registrar, pd.assinar || pd.registrar);
+    var antigas = d.documentos.filter(function (x) { return x.tipo === 'minuta' && x.substituido_em; });
+    if (antigas.length) html += '<div class="doc-linha"><span class="ajuda" style="margin:0;flex:1 1 200px">Versões anteriores da minuta</span>' + antigas.map(function (x) {
+      return '<a class="anexo" href="/api/parcerias/' + c.id + '/documentos/' + x.id + '" target="_blank" rel="noopener">' + IC.historico + '<span>' + esc(x.nome) + '</span><span class="sec">' + dataHoraCr(x.enviado_em) + '</span></a>';
+    }).join('') + '</div>';
+    html += linha('outro', pd.documentos, pd.documentos) + '</section>';
+    return html;
+  }
+
+  /* ---------- condições do contrato assinado (advogada) ---------- */
+  var corrigindoCp = null;
+  function htmlFechadoCp(d) {
+    var c = d.parceria, x = c.fechado || {}, corrigindo = d.pode.corrigir && corrigindoCp === c.id, edita = d.pode.registrar || corrigindo;
+    var correcao = d.eventos.filter(function (e) { return e.tipo === 'fechado_corrigido'; }).pop();
+    var topo = c.fechado_em ? '<span class="etiqueta verde">registradas por ' + esc(c.fechado_por_nome || '') + ' em ' + dataHoraCr(c.fechado_em) + '</span>' +
+        (correcao ? '<span class="etiqueta ambar">corrigidas por ' + esc(correcao.usuario_nome || '') + ' em ' + dataHoraCr(correcao.criado_em) + '</span>' : '') +
+        (d.pode.corrigir && !corrigindo ? '<span class="espaco"></span><button class="btn ghost sm" id="btCorrigirCp">' + IC.lapis + 'Corrigir condições</button>' : '')
+      : '<span class="ajuda" style="margin:0">vêm do pedido e da decisão da diretoria: corrija o que mudou</span>';
+    var corpo = '<div class="corpo grade-3">' +
+      '<div><label class="linha" style="font-weight:700;margin-bottom:6px"><input type="checkbox" id="c_f_recorrencia"' + (x.recorrencia ? ' checked' : '') + '> Comissão de recorrência</label>' +
+      '<input class="campo" id="c_f_recorrencia_pct" data-se="f_recorrencia:true" value="' + esc(fmtNumCr(x.recorrencia_pct)) + '" placeholder="%" aria-label="Percentual de recorrência"></div>' +
+      '<div><label class="linha" style="font-weight:700;margin-bottom:6px"><input type="checkbox" id="c_f_venda"' + (x.venda ? ' checked' : '') + '> Comissão de venda (sobre a 1ª taxa administrativa)</label>' +
+      '<input class="campo" id="c_f_venda_pct" data-se="f_venda:true" value="' + esc(fmtNumCr(x.venda_pct)) + '" placeholder="%" aria-label="Percentual de venda"></div>' +
+      campoCt('f_inicio', 'Início da vigência', x.inicio, { tipo: 'date' }) +
+      campoCt('f_prazo_meses', 'Prazo do contrato (meses)', x.prazo_meses, { ph: 'vazio = indeterminado' }) +
+      campoCt('f_representante_nome', 'Representante legal', x.representante_nome) + campoCt('f_representante_email', 'E-mail do representante', x.representante_email, { tipo: 'email' }) +
+      campoCt('f_financeiro_nome', 'Responsável financeiro', x.financeiro_nome) + campoCt('f_financeiro_telefone', 'Telefone do financeiro', x.financeiro_telefone) +
+      campoCt('f_email_prestacao', 'E-mail da prestação de contas', x.email_prestacao, { tipo: 'email' }) + '</div>' +
+      '<div class="corpo">' + campoCt('f_observacoes', 'Observações para o setor Parceiros', x.observacoes, { area: true }) + '</div>';
+    return '<section class="painel" id="fechadoCp"><div class="cab-painel"><h2>Condições do contrato assinado</h2>' + topo + '</div>' +
+      (d.diferencas_fechado.length ? '<div class="corpo" style="padding-bottom:0"><div class="msg aviso"><b>Mudou na negociação:</b> ' + d.diferencas_fechado.map(function (v) { return esc(v.rotulo) + ' ' + esc(v.fechado) + ' (pedido: ' + esc(v.pedido) + ')'; }).join('; ') + '.</div></div>' : '') +
+      corpo + (corrigindo ? '<div class="corpo" style="border-top:1px solid var(--border)">' + campoCt('f_motivo', 'Motivo da correção (obrigatório)', '', { area: true, linhas: 2 }) +
+          '<div class="linha" style="justify-content:flex-end;margin-top:10px"><button class="btn ghost sm" id="btCorrCancelarCp">Cancelar</button><button class="btn primary sm" id="btCorrSalvarCp">Salvar correção</button></div></div>'
+        : edita ? '<div class="doc-linha" style="justify-content:flex-end">' + (d.faltas_fechado.length ? '<span class="ajuda" style="flex:1 1 300px;margin:0">Para concluir, falta: ' + esc(d.faltas_fechado.join(' ')) + '</span>' : '') +
+        '<button class="btn ghost sm" id="btFechSalvarCp">Salvar</button><button class="btn primary sm" id="btFechConcluirCp">Concluir contrato</button></div>' : '') + '</section>';
+  }
+  function lerFechadoCp(raiz) {
+    var v = function (k) { return valCt(k, raiz); };
+    return {
+      recorrencia: $('#c_f_recorrencia', raiz).checked, recorrencia_pct: numCr(v('f_recorrencia_pct')), venda: $('#c_f_venda', raiz).checked, venda_pct: numCr(v('f_venda_pct')),
+      inicio: v('f_inicio'), prazo_meses: numCr(v('f_prazo_meses')), representante_nome: v('f_representante_nome'), representante_email: v('f_representante_email'),
+      financeiro_nome: v('f_financeiro_nome'), financeiro_telefone: v('f_financeiro_telefone'), email_prestacao: v('f_email_prestacao'), observacoes: $('#c_f_observacoes', raiz).value.trim(),
+    };
+  }
+
+  /* ---------- cadastro do parceiro na base de comissão (setor Parceiros) ---------- */
+  function htmlParceiroCp(d) {
+    var c = d.parceria, x = d.parceiro;
+    if (!x) return '';
+    if (c.parceiro_cadastrado_em) {
+      return '<section class="painel"><div class="cab-painel"><h2>Parceiro na Prestação de Contas</h2><span class="etiqueta verde">cadastrado por ' + esc(c.parceiro_cadastrado_por_nome || '') + ' em ' + dataHoraCr(c.parceiro_cadastrado_em) + '</span></div>' +
+        '<div class="corpo"><span class="ajuda" style="margin:0">Já aparece na seção Parceria do formulário de implantação.</span></div></section>';
+    }
+    var g = x.registro;
+    var linha = function (rot, val) { return '<dt>' + esc(rot) + '</dt><dd>' + esc(val == null || val === '' ? '—' : val) + '</dd>'; };
+    return '<section class="painel"><div class="cab-painel"><h2>Cadastro do parceiro</h2><span class="etiqueta ambar">aguardando o setor Parceiros</span></div><div class="corpo">' +
+      (!x.modulo ? '<div class="msg erro" style="margin-bottom:12px">A ferramenta Prestação de Contas — Comissão de Parceiros não está no portal.</div>'
+        : !x.interno ? '<div class="msg aviso" style="margin-bottom:12px">A Prestação de Contas ainda usa a planilha Google: o cadastro entra no banco do portal e aparece na ferramenta quando ela passar para o banco do portal.</div>' : '') +
+      (x.na_base ? '<div class="msg aviso" style="margin-bottom:12px">Este CNPJ já está na base como <b>' + esc(x.na_base) + '</b>: o contrato é ligado a esse cadastro, sem criar outro.</div>' : '') +
+      '<dl class="info-ticket">' + linha('Parceiro', g.nome) + linha('CNPJ', g.cnpj) + linha('Representante legal', g.representante) + linha('E-mail', g.email) +
+      linha('Responsável financeiro', g.responsavelFinanceiro) + linha('Telefone', g.telefoneFinanceiro) + linha('E-mail da prestação de contas', g.emailPrestacao) +
+      linha('Recorrência', g.comissaoRecorrencia ? pctCp(g.comissaoRecorrencia) : 'sem') + linha('Venda (1ª taxa)', g.comissaoVenda ? pctCp(g.comissaoVenda) : 'sem') + linha('Vigência', g.vigencia ? dataBr(g.vigencia) : '') + '</dl>' +
+      (d.pode.cadastrar_parceiro ? '<div class="linha" style="justify-content:flex-end;margin-top:12px"><span class="ajuda" style="flex:1 1 300px;margin:0">Confira os dados. Sem cadastro em 2 dias úteis, o setor Parceiros é lembrado de novo.</span>' +
+        '<button class="btn primary" id="btCadParcCp"' + (x.modulo ? '' : ' disabled') + '>' + (x.na_base ? 'Ligar ao cadastro existente' : 'Cadastrar parceiro') + '</button></div>'
+        : '<div class="ajuda" style="margin-top:10px">O setor Parceiros confere e cadastra. Você é avisado quando estiver pronto.</div>') + '</div></section>';
+  }
+
+  /* ---------- tela de uma solicitação ---------- */
+  async function paginaParceriaDetalhe(id) {
+    definirBarra('<span class="setor">Jurídico</span><span class="sep">/</span><span class="nome">…</span>');
+    $('#conteudo').innerHTML = carregandoHtml();
+    var d, m;
+    try { d = await api('GET', '/api/parcerias/' + id); m = await carregarMetaCp(); } catch (e) {
+      $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">' + esc(e.message) + '<br><a class="btn ghost" style="margin-top:14px" href="#/parcerias">Voltar</a></div></div>';
+      return;
+    }
+    var c = d.parceria, pd = d.pode;
+    var recarregar = function () { paginaParceriaDetalhe(id); atualizarCp(); };
+    var acoes = '<a class="btn ghost sm" href="#/parcerias">Voltar</a>';
+    if (pd.cancelar) acoes += '<button class="btn danger sm" id="btCancCp">Cancelar</button>';
+    if (pd.assumir) acoes += '<button class="btn primary sm" id="btAssumirCp">Assumir</button>';
+    if (pd.passar) acoes += '<button class="btn ghost sm" id="btPassarCp">' + (c.responsavel_id ? 'Passar para outra pessoa' : 'Passar para alguém') + '</button>';
+    if (pd.pendencia) acoes += '<button class="btn ghost sm" id="btPendCp">Devolver com pendência</button>';
+    if (pd.minuta) acoes += '<button class="btn primary sm" id="btMinutaCp"' + (pd.enviar_minuta ? '' : ' disabled title="A diretoria ainda não decidiu o percentual pedido."') + '>Enviar minuta ao comercial</button>';
+    if (pd.ajuste) acoes += '<button class="btn ghost sm" id="btAjusteCp">Pedir ajuste</button>';
+    if (pd.pedir_assinatura) acoes += '<button class="btn primary sm" id="btPedirAssCp">Parceiro aprovou: pedir assinatura</button>';
+    if (pd.enviar_assinatura) acoes += '<button class="btn primary sm" id="btEmAssCp">Enviado para assinatura</button>';
+    if (pd.assinar) acoes += '<button class="btn ' + (pd.enviar_assinatura ? 'ghost' : 'primary') + ' sm" id="btAssinadoCp">Assinado</button>';
+    definirBarra('<span class="setor">Jurídico</span><span class="sep">/</span><span class="nome">' + esc(c.protocolo || 'Rascunho') + '</span>', acoes);
+
+    var html = '<div class="pagina"><div class="linha" style="align-items:flex-start;margin-bottom:16px"><div style="flex:1 1 420px">' +
+      '<div class="linha" style="margin-bottom:6px">' + etqCr(ETAPA_CP, c.etapa) + '<span class="etiqueta cinza">Contrato de parceria</span></div>' +
+      '<h1>' + esc(c.empresa || 'Nova solicitação de contrato de parceria') + '</h1><p class="sub" style="margin:0">' + esc([c.cnpj, c.responsavel_nome ? 'Com: ' + c.responsavel_nome : ''].filter(Boolean).join(' · ')) + '</p></div>' +
+      '<dl class="info-ticket" style="min-width:260px">' + (c.protocolo ? '<dt>Protocolo</dt><dd>' + esc(c.protocolo) + '</dd>' : '') +
+      (c.enviado_em ? '<dt>Enviada ao Jurídico</dt><dd>' + dataHoraCr(c.enviado_em) + '</dd>' : '') + '<dt>Pedida por</dt><dd>' + esc(c.solicitante_nome || '—') + '</dd>' +
+      (['fila', 'em_elaboracao'].indexOf(c.etapa) >= 0 && c.prazo ? '<dt>Minuta até (72h úteis)</dt><dd>' + prazoCp(c) + '</dd>' : '') +
+      (c.ajustes ? '<dt>Ajustes pedidos</dt><dd>' + c.ajustes + '</dd>' : '') +
+      (c.minuta_enviada_em ? '<dt>Última minuta</dt><dd>' + dataHoraCr(c.minuta_enviada_em) + '</dd>' : '') +
+      (c.assinado_em ? '<dt>Assinado (anexado)</dt><dd>' + dataHoraCr(c.assinado_em) + '</dd>' : '') + '</dl></div>';
+
+    var dir = c.diretoria || {};
+    var itensDir = d.itens_diretoria || [];
+    if (itensDir.length) {
+      var corpoDir = '<ul style="margin:0 0 10px;padding-left:18px;font-size:13.5px;font-weight:600;color:var(--ink-2)">' + itensDir.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>';
+      if (dir.decidido_em) corpoDir += '<div class="msg ' + (dir.aprovado ? 'ok' : 'erro') + '">' + esc(dir.por) + ' ' + (dir.aprovado ? 'aprovou' : 'não aprovou') + ' em ' + dataHoraCr(dir.decidido_em) + (dir.observacao ? ': ' + esc(dir.observacao) : '.') + (dir.aprovado ? '' : ' O contrato segue o padrão.') + '</div>';
+      else if (pd.decidir_diretoria) corpoDir += campoCr('dObsCp', 'Observação (obrigatória para não aprovar)', '') + '<div class="linha" style="justify-content:flex-end;margin-top:10px"><button class="btn danger sm" id="btDirNaoCp">Não aprovar</button><button class="btn primary sm" id="btDirSimCp">Aprovar</button></div>';
+      else if (pd.editar) corpoDir += '<div class="ajuda" style="margin:0">Ao enviar, a diretoria é avisada; a minuta só sai depois da decisão. Não aprovado, vale o padrão.</div>';
+      else corpoDir += '<div class="msg aviso">Aguardando a decisão da diretoria; a minuta só sai depois.</div>';
+      html += '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Decisão da diretoria</h2></div><div class="corpo">' + corpoDir + '</div></section>';
+    }
+    if (pd.editar) html += '<div class="msg erro" id="faltasCp" style="margin-bottom:16px" hidden><b>Para enviar, falta (os campos estão em vermelho):</b><ul></ul></div>';
+    var ultimaPend = d.eventos.filter(function (e) { return e.tipo === 'pendencia'; }).pop();
+    if (c.etapa === 'pendencia' && ultimaPend) html += '<div class="msg aviso" style="margin-bottom:16px;white-space:pre-wrap">' + esc(ultimaPend.detalhe.mensagem || '') + '</div>';
+    var ultimoAjuste = d.eventos.filter(function (e) { return e.tipo === 'ajuste'; }).pop();
+    if (c.etapa === 'em_elaboracao' && ultimoAjuste) html += '<div class="msg aviso" style="margin-bottom:16px;white-space:pre-wrap"><b>Ajuste pedido em ' + dataHoraCr(ultimoAjuste.criado_em) + ':</b> ' + esc(ultimoAjuste.detalhe.texto || '') + '</div>';
+    if (c.etapa === 'minuta_enviada' && pd.ajuste) html += '<div class="msg info" style="margin-bottom:16px">Leve a minuta ao parceiro. Pediu mudanças? <b>Pedir ajuste</b>. Aprovou? <b>Parceiro aprovou: pedir assinatura</b>.</div>';
+    if (c.etapa === 'para_assinar') html += '<div class="msg aviso" style="margin-bottom:16px">' + (pd.enviar_assinatura ? 'O comercial informou que o parceiro aprovou a minuta em ' + dataHoraCr(c.assinatura_pedida_em) + '. Mande para assinatura e clique em <b>Enviado para assinatura</b>.' : 'Pedido de assinatura enviado ao Jurídico em ' + dataHoraCr(c.assinatura_pedida_em) + '.') + '</div>';
+    if (c.etapa === 'em_assinatura') html += '<div class="msg info" style="margin-bottom:16px">Em assinatura desde ' + dataHoraCr(c.em_assinatura_em) + '.' + (pd.assinar ? ' Voltou assinado? Clique em <b>Assinado</b> e anexe a via assinada.' : ' O Jurídico avisa quando voltar assinado.') + '</div>';
+
+    var formHtml = '<div id="formCp" class="pilha" style="gap:18px">' + htmlFormCp(c) + '</div>';
+    if (!pd.editar) formHtml = '<details class="painel"' + (pd.interno && ['fila', 'em_elaboracao'].indexOf(c.etapa) >= 0 ? ' open' : '') + '><summary class="cab-painel" style="cursor:pointer"><h2 style="display:inline">Solicitação do comercial</h2></summary><div class="corpo">' + formHtml + '</div></details>';
+    html += '<div class="pilha" style="gap:18px">' + htmlParceiroCp(d) + (['conferencia', 'assinado'].indexOf(c.etapa) >= 0 ? htmlFechadoCp(d) : '') + formHtml + htmlDocsCp(d) +
+      (pd.editar ? '<div class="linha" style="justify-content:flex-end"><span class="ajuda" style="flex:1 1 320px;margin:0">Ao enviar, o portal confere o que falta, gera o protocolo CP e avisa o Jurídico (72h úteis para a minuta). Percentual fora do padrão vai para a diretoria no mesmo momento.</span>' +
+        '<button class="btn ghost" id="btSalvarCp">Salvar rascunho</button><button class="btn primary" id="btEnviarCp">' + (c.etapa === 'pendencia' ? 'Reenviar ao Jurídico' : 'Enviar ao Jurídico') + '</button></div>' : '') + '</div>';
+    html += '<section class="painel" style="margin-top:16px"><div class="cab-painel"><h2>Histórico</h2></div><div class="corpo pilha" style="gap:8px;font-size:13px;font-weight:600;color:var(--ink-2)">' +
+      d.eventos.map(function (e) {
+        var x = e.detalhe || {};
+        var extra = e.tipo === 'documento' || e.tipo === 'documento_removido' ? ': ' + esc(x.nome) : e.tipo === 'enviada' ? ' (' + esc(x.protocolo) + ')'
+          : e.tipo === 'passada' ? ' para ' + esc(x.para) : e.tipo === 'pendencia' ? ': ' + esc((x.itens || []).join('; ')) : e.tipo === 'ajuste' ? ': ' + esc(x.texto)
+            : e.tipo === 'minuta_enviada' ? ' (' + esc(x.nome) + (x.no_prazo === false ? ', fora do prazo' : '') + ')' : e.tipo === 'fechado' && (x.diferencas || []).length ? ' (mudou: ' + esc(x.diferencas.join(', ')) + ')'
+              : e.tipo === 'parceiro_cadastrado' ? ': ' + esc(x.nome) + (x.ja_existia ? ' (cadastro que já existia)' : '')
+                : e.tipo === 'fechado_corrigido' ? ': ' + esc(x.motivo) + '<ul style="margin:4px 0 0;padding-left:18px">' + (x.mudancas || []).map(function (mu) { return '<li>' + esc(mu.rotulo) + ': ' + esc(mu.antes) + ' → <b>' + esc(mu.depois) + '</b></li>'; }).join('') + '</ul>' : '';
+        return '<div><b style="color:var(--ink)">' + dataHoraCr(e.criado_em) + '</b> · ' + esc(e.usuario_nome || 'Sistema') + ' ' + (EVENTO_CP[e.tipo] || esc(e.tipo)) + extra + '</div>';
+      }).join('') + '</div></section></div>';
+    $('#conteudo').innerHTML = html;
+
+    var raiz = $('#formCp');
+    ligarSeCp(raiz);
+    $$('input[data-doc-cp]').forEach(function (inp) {
+      inp.onchange = async function () {
+        if (!inp.files[0]) return;
+        try { await enviarDocCp(c.id, inp.getAttribute('data-doc-cp'), inp.files[0]); toast('Documento anexado.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+      };
+    });
+    $$('[data-tirar-doc-cp]').forEach(function (b) {
+      b.onclick = async function () {
+        if (!(await confirmar('Remover documento', 'O arquivo sai desta solicitação.', 'Remover', true))) return;
+        try { await api('DELETE', '/api/parcerias/' + c.id + '/documentos/' + b.getAttribute('data-tirar-doc-cp')); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+      };
+    });
+    var post = async function (rota, corpo, msg) { try { await api('POST', '/api/parcerias/' + c.id + '/' + rota, corpo || {}); toast(msg, 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
+    var pedirTexto = function (titulo, rotulo, ph, botao, rota, chave, msg, ajuda, lista) {
+      var mo = modal({ titulo: titulo, corpo: '<label class="rot" for="mTxtCp">' + esc(rotulo) + '</label><textarea class="campo" id="mTxtCp" rows="5" placeholder="' + esc(ph) + '"></textarea>' + (ajuda ? '<div class="ajuda">' + ajuda + '</div>' : ''),
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mTxtCpOk">' + esc(botao) + '</button>' });
+      $('#mTxtCpOk', mo).onclick = async function () {
+        var t = $('#mTxtCp', mo).value;
+        var corpo = {};
+        corpo[chave] = lista ? t.split(/\n/) : t;
+        try { await api('POST', '/api/parcerias/' + c.id + '/' + rota, corpo); mo.fechar(); toast(msg, 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+      };
+    };
+    if ($('#btCancCp')) $('#btCancCp').onclick = function () { pedirTexto('Cancelar a solicitação', 'Motivo', 'Ex.: o parceiro desistiu.', 'Cancelar a solicitação', 'cancelar', 'motivo', 'Solicitação cancelada.', 'Fica no histórico como cancelada.'); };
+    if ($('#btAssumirCp')) $('#btAssumirCp').onclick = function () { post('assumir', {}, 'Solicitação assumida.'); };
+    if ($('#btPassarCp')) $('#btPassarCp').onclick = function () {
+      var lista = m.elaboradores.filter(function (x) { return x.id !== c.responsavel_id; });
+      if (!lista.length) { toast('Ninguém mais elabora contratos: a administração marca em Configurações → Acessos → Solicitação de Contrato.', 'erro'); return; }
+      var mo = modal({ titulo: 'Passar a solicitação', corpo: selCr('mPassCp', 'Para quem', lista[0].id, lista.map(function (x) { return [x.id, x.nome]; })) + '<div class="ajuda">A pessoa é avisada no sino e por e-mail. O prazo continua o mesmo.</div>',
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mPassCpOk">Passar</button>' });
+      $('#mPassCpOk', mo).onclick = async function () {
+        try { await api('POST', '/api/parcerias/' + c.id + '/passar', { usuario_id: Number($('#mPassCp', mo).value) }); mo.fechar(); toast('Passada.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+      };
+    };
+    if ($('#btPendCp')) $('#btPendCp').onclick = function () { pedirTexto('Devolver ao comercial com pendência', 'O que falta — um item por linha', '', 'Devolver', 'pendencia', 'itens', 'Devolvida ao comercial.', 'Quem pediu recebe a lista no portal e por e-mail. Quando reenviar, volta para você com novo prazo.', true); };
+    if ($('#btMinutaCp')) $('#btMinutaCp').onclick = function () { pedirTexto('Enviar a minuta ao comercial', 'Mensagem (opcional)', '', 'Enviar minuta', 'minuta', 'mensagem', 'Minuta enviada ao comercial.', 'Vai a minuta anexada em Documentos.'); };
+    if ($('#btAjusteCp')) $('#btAjusteCp').onclick = function () { pedirTexto('Pedir ajuste na minuta', 'O que o parceiro pediu para mudar', '', 'Pedir ajuste', 'ajuste', 'texto', 'Ajuste pedido ao Jurídico.', 'Volta para quem redigiu, com mais 72h úteis.'); };
+    if ($('#btPedirAssCp')) $('#btPedirAssCp').onclick = function () { pedirTexto('Parceiro aprovou: pedir assinatura', 'Observação para o Jurídico (opcional)', '', 'Pedir assinatura', 'pedir-assinatura', 'observacao', 'Pedido de assinatura enviado ao Jurídico.', 'O Jurídico manda para assinatura e anexa a via assinada. Você é avisado em cada passo.'); };
+    if ($('#btEmAssCp')) $('#btEmAssCp').onclick = function () { pedirTexto('Enviado para assinatura', 'Observação (opcional)', 'Ex.: enviado ao representante legal pela plataforma de assinatura.', 'Marcar em assinatura', 'em-assinatura', 'observacao', 'Em assinatura.', 'Quem pediu é avisado no sino.'); };
+    if ($('#btAssinadoCp')) $('#btAssinadoCp').onclick = function () {
+      var tem = d.documentos.some(function (x) { return x.tipo === 'contrato_assinado' && !x.substituido_em; });
+      var mo = modal({ titulo: 'Contrato assinado · ' + (c.empresa || ''), corpo: '<label class="rot" for="mArqAssCp">Contrato assinado</label>' + (tem ? '<div class="msg ok" style="margin-bottom:6px">Já anexado. Escolha outro arquivo só para trocar.</div>' : '') +
+        '<input class="campo" type="file" id="mArqAssCp"><div class="ajuda">Em seguida, registre as condições do contrato. Ao concluir, o setor Parceiros é avisado para cadastrar o parceiro.</div>',
+        pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="mAssCpOk">Marcar como assinado</button>' });
+      $('#mAssCpOk', mo).onclick = async function () {
+        var b = this;
+        b.disabled = true;
+        try {
+          var a1 = $('#mArqAssCp', mo).files[0];
+          if (a1) await enviarDocCp(c.id, 'contrato_assinado', a1);
+          await api('POST', '/api/parcerias/' + c.id + '/assinado', {});
+          mo.fechar(); toast('Contrato assinado: registre as condições.', 'ok'); recarregar();
+        } catch (e) { b.disabled = false; toast(e.message, 'erro'); }
+      };
+    };
+    var decidir = function (aprovar) { post('diretoria', { aprovar: aprovar, observacao: $('#dObsCp').value }, aprovar ? 'Aprovado; o Jurídico e quem pediu foram avisados.' : 'Não aprovado; o Jurídico e quem pediu foram avisados.'); };
+    if ($('#btDirSimCp')) $('#btDirSimCp').onclick = function () { decidir(true); };
+    if ($('#btDirNaoCp')) $('#btDirNaoCp').onclick = function () { decidir(false); };
+    if ($('#btCadParcCp')) $('#btCadParcCp').onclick = async function () {
+      if (!(await confirmar('Cadastrar o parceiro', 'O parceiro entra na Prestação de Contas — Comissão de Parceiros com os dados do contrato, e quem pediu é avisado.', 'Cadastrar'))) return;
+      post('cadastrar-parceiro', {}, 'Parceiro cadastrado na Prestação de Contas.');
+    };
+    var fech = $('#fechadoCp');
+    if (fech) {
+      ligarSeCp(fech);
+      fech.addEventListener('change', function () {
+        $('#c_f_recorrencia_pct', fech).hidden = !$('#c_f_recorrencia', fech).checked;
+        $('#c_f_venda_pct', fech).hidden = !$('#c_f_venda', fech).checked;
+      });
+      $('#c_f_recorrencia_pct', fech).hidden = !$('#c_f_recorrencia', fech).checked;
+      $('#c_f_venda_pct', fech).hidden = !$('#c_f_venda', fech).checked;
+      var corrigindo = pd.corrigir && corrigindoCp === c.id;
+      if (!pd.registrar && !corrigindo) $$('input, select, textarea', fech).forEach(function (el) { el.disabled = true; });
+      if ($('#btCorrigirCp')) $('#btCorrigirCp').onclick = function () { corrigindoCp = c.id; paginaParceriaDetalhe(id); };
+      if ($('#btCorrCancelarCp')) $('#btCorrCancelarCp').onclick = function () { corrigindoCp = null; paginaParceriaDetalhe(id); };
+      if ($('#btCorrSalvarCp')) $('#btCorrSalvarCp').onclick = async function () {
+        try {
+          var r = await api('POST', '/api/parcerias/' + c.id + '/corrigir', { condicoes: lerFechadoCp(fech), motivo: $('#c_f_motivo', fech).value.trim() });
+          corrigindoCp = null; toast('Correção salva (' + r.mudancas.length + ' mudança(s)).', 'ok'); recarregar();
+        } catch (e) { toast(e.message, 'erro'); }
+      };
+      var salvarFech = async function (concluir) {
+        try {
+          var r = await api('PUT', '/api/parcerias/' + c.id + '/fechado', { condicoes: lerFechadoCp(fech), concluir: concluir });
+          toast(concluir ? 'Contrato concluído. O setor Parceiros foi avisado para cadastrar o parceiro.' : r.faltas.length ? 'Salvo. Para concluir, falta: ' + r.faltas.length + '.' : 'Salvo: pronto para concluir.', 'ok');
+          recarregar();
+        } catch (e) { toast(e.message, 'erro'); }
+      };
+      if ($('#btFechSalvarCp')) $('#btFechSalvarCp').onclick = function () { salvarFech(false); };
+      if ($('#btFechConcluirCp')) $('#btFechConcluirCp').onclick = async function () {
+        if (!(await confirmar('Concluir o contrato', 'O contrato fica como assinado e o setor Parceiros é avisado para cadastrar o parceiro na Prestação de Contas.', 'Concluir'))) return;
+        salvarFech(true);
+      };
+    }
+    if (!pd.editar) { $$('input, select, textarea', raiz).forEach(function (el) { el.disabled = true; }); return; }
+    // confere enquanto preenche: o que falta fica em vermelho e o CNPJ repetido aparece na hora
+    desenharConfCp({ faltas_campos: d.faltas_campos, duplicidade: d.duplicidade, avisos: d.avisos });
+    var esperaConf, seqConf = 0;
+    var conferir = function () {
+      clearTimeout(esperaConf);
+      esperaConf = setTimeout(async function () {
+        var meu = ++seqConf;
+        try { var r = await api('POST', '/api/parcerias/' + c.id + '/conferir', { formulario: lerFormCp(raiz) }); if (meu === seqConf) desenharConfCp(r); } catch (e) { /* confere na próxima */ }
+      }, 450);
+    };
+    raiz.addEventListener('input', conferir);
+    raiz.addEventListener('change', conferir);
+    var salvar = function () { return api('PATCH', '/api/parcerias/' + c.id, { formulario: lerFormCp(raiz) }); };
+    $('#btSalvarCp').onclick = async function () { try { await salvar(); toast('Rascunho salvo.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
+    $('#btEnviarCp').onclick = async function () {
+      var b = this;
+      b.disabled = true;
+      try {
+        await salvar();
+        var r = await api('POST', '/api/parcerias/' + c.id + '/enviar', {});
+        toast('Enviada ao Jurídico: ' + r.protocolo + (r.diretoria.length ? '. A diretoria foi avisada do percentual pedido.' : '.'), 'ok');
+        recarregar();
+      } catch (e) {
+        b.disabled = false;
+        toast(e.message, 'erro');
+        try { desenharConfCp(await api('POST', '/api/parcerias/' + c.id + '/conferir', { formulario: lerFormCp(raiz) })); } catch (e2) { /* fica a mensagem */ }
+      }
+    };
+  }
+
   async function iniciar() {
     try {
       var r = await fetch('/api/auth/eu', { credentials: 'same-origin' });
@@ -8044,6 +8522,7 @@
     try { resumoCredito = await api('GET', '/api/credito/resumo'); } catch (e) { /* aparece no próximo ciclo */ }
     try { resumoImp = await api('GET', '/api/implantacoes/resumo'); } catch (e) { /* aparece no próximo ciclo */ }
     try { resumoCt = await api('GET', '/api/contratos/resumo'); } catch (e) { /* aparece no próximo ciclo */ }
+    try { resumoCp = await api('GET', '/api/parcerias/resumo'); } catch (e) { /* aparece no próximo ciclo */ }
     try { resumoDj = await api('GET', '/api/juridico/resumo'); } catch (e) { /* aparece no próximo ciclo */ }
     montarCasca();
     carregarTutoriais();
@@ -8051,7 +8530,7 @@
     atualizarComissao();
     buscarAvisos();
     $('#btSino').onclick = abrirAvisos;
-    setInterval(function () { atualizarResumo(); atualizarComissao(); atualizarCredito(); atualizarImp(); atualizarCt(); atualizarDj(); buscarAvisos(); verificarVersao(); }, 30 * 1000);
+    setInterval(function () { atualizarResumo(); atualizarComissao(); atualizarCredito(); atualizarImp(); atualizarCt(); atualizarCp(); atualizarDj(); buscarAvisos(); verificarVersao(); }, 30 * 1000);
     window.addEventListener('hashchange', rotear);
     rotear();
   }
