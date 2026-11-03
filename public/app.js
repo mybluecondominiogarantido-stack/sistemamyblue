@@ -230,36 +230,36 @@
     var termo = normal($('#busca').value);
     var lista = modulos.filter(function (m) { return !termo || normal(m.nome + ' ' + m.setor + ' ' + m.descricao).indexOf(termo) >= 0; });
     var rota = location.hash || '#/';
-    var html = termo ? '' : '<a href="#/" class="' + (rota === '#/' ? 'on' : '') + '">' + IC.inicio + 'Início</a>' +
-      '<a href="#/links" class="' + (rota.indexOf('#/links') === 0 ? 'on' : '') + '">' + IC.link + 'Central de Links</a>' +
-      ((tutoriais && tutoriais.tutoriais.length) || eu.papel === 'admin' ? '<a href="#/tutoriais" class="' + (rota.indexOf('#/tutoriais') === 0 ? 'on' : '') + '">' + IC.video + 'Tutoriais</a>' : '');
+    var html = termo ? '' : '<a href="#/" class="' + (rota === '#/' ? 'on' : '') + '">' + IC.inicio + esc(rot('inicio', 'Início')) + '</a>' +
+      '<a href="#/links" class="' + (rota.indexOf('#/links') === 0 ? 'on' : '') + '">' + IC.link + esc(rot('links', 'Central de Links')) + '</a>' +
+      ((tutoriais && tutoriais.tutoriais.length) || eu.papel === 'admin' ? '<a href="#/tutoriais" class="' + (rota.indexOf('#/tutoriais') === 0 ? 'on' : '') + '">' + IC.video + esc(rot('tutoriais', 'Tutoriais')) + '</a>' : '');
     if (!termo) {
-      html += '<div class="grupo">Central de Tickets</div>' +
-        '<a href="#/tickets" class="' + (rota.indexOf('#/tickets') === 0 && rota.indexOf('#/tickets/painel') !== 0 ? 'on' : '') + '">' + IC.ticket + '<span>Tickets</span>' +
+      html += '<div class="grupo">' + esc(rot('grupo_tickets', 'Central de Tickets')) + '</div>' +
+        '<a href="#/tickets" class="' + (rota.indexOf('#/tickets') === 0 && rota.indexOf('#/tickets/painel') !== 0 ? 'on' : '') + '">' + IC.ticket + '<span>' + esc(rot('tickets', 'Tickets')) + '</span>' +
         '<i data-contador="fila" class="contador" hidden></i></a>' +
-        (souEquipe() ? '<a href="#/tickets/painel" class="' + (rota.indexOf('#/tickets/painel') === 0 ? 'on' : '') + '">' + IC.grafico + 'Painel de tickets</a>' : '') +
-        '<div class="grupo">Clientes</div>' +
-        '<a href="#/carteira" class="' + (rota.indexOf('#/carteira') === 0 ? 'on' : '') + '">' + IC.casa + 'Base de Clientes</a>' +
-        (resumoCredito && resumoCredito.acesso ? '<div class="grupo">Análise de Crédito</div><a href="#/credito" class="' + (rota.indexOf('#/credito') === 0 ? 'on' : '') + '">' + IC.escudo +
-          '<span>Análise de Crédito</span><i data-contador="credito" class="contador" hidden></i></a>' : '') +
+        (souEquipe() ? '<a href="#/tickets/painel" class="' + (rota.indexOf('#/tickets/painel') === 0 ? 'on' : '') + '">' + IC.grafico + esc(rot('painel_tickets', 'Painel de tickets')) + '</a>' : '') +
+        '<div class="grupo">' + esc(rot('grupo_clientes', 'Clientes')) + '</div>' +
+        '<a href="#/carteira" class="' + (rota.indexOf('#/carteira') === 0 ? 'on' : '') + '">' + IC.casa + esc(rot('carteira', 'Base de Clientes')) + '</a>' +
+        (resumoCredito && resumoCredito.acesso ? '<div class="grupo">' + esc(rot('grupo_credito', 'Análise de Crédito')) + '</div><a href="#/credito" class="' + (rota.indexOf('#/credito') === 0 ? 'on' : '') + '">' + IC.escudo +
+          '<span>' + esc(rot('credito', 'Análise de Crédito')) + '</span><i data-contador="credito" class="contador" hidden></i></a>' : '') +
         // Jurídico: as telas dos contratos (quem tem acesso) e as Demandas Jurídicas (todo mundo pede ao Jurídico)
-        '<div class="grupo">Jurídico</div>' +
+        '<div class="grupo">' + esc(rot('grupo_juridico', 'Jurídico')) + '</div>' +
         (resumoCt && resumoCt.acesso ? '<a href="#/contratos" class="' + (rota.indexOf('#/contratos') === 0 ? 'on' : '') + '">' + IC.documento +
-          '<span>Solicitação de Contrato</span><i data-contador="contratos" class="contador" hidden></i></a>' +
+          '<span>' + esc(rot('contratos', 'Solicitação de Contrato')) + '</span><i data-contador="contratos" class="contador" hidden></i></a>' +
           '<a href="#/acompanhamento-contratos" class="' + (rota.indexOf('#/acompanhamento-contratos') === 0 ? 'on' : '') + '">' + IC.historico +
-          '<span>Acompanhamento de demandas Jurídicas</span><i data-contador="contratos-acomp" class="contador" hidden></i></a>' +
-          (resumoCt.painel ? '<a href="#/dashboard-juridico" class="' + (rota.indexOf('#/dashboard-juridico') === 0 ? 'on' : '') + '">' + IC.grafico + '<span>Dashboard Jurídico</span></a>' : '') : '') +
+          '<span>' + esc(rot('acompanhamento_contratos', 'Acompanhamento de demandas Jurídicas')) + '</span><i data-contador="contratos-acomp" class="contador" hidden></i></a>' +
+          (resumoCt.painel ? '<a href="#/dashboard-juridico" class="' + (rota.indexOf('#/dashboard-juridico') === 0 ? 'on' : '') + '">' + IC.grafico + '<span>' + esc(rot('dashboard_juridico', 'Dashboard Jurídico')) + '</span></a>' : '') : '') +
         '<a href="#/demandas-juridicas" class="' + (rota.indexOf('#/demandas-juridicas') === 0 ? 'on' : '') + '">' + IC.pasta +
-          '<span>Demandas Jurídicas</span><i data-contador="juridico" class="contador" hidden></i></a>' +
-        (resumoImp && resumoImp.acesso ? '<div class="grupo">Implantação</div><a href="#/implantacao" class="' + (rota.indexOf('#/implantacao') === 0 ? 'on' : '') + '">' + IC.casa +
-          '<span>Painel de implantação</span><i data-contador="implantacao" class="contador" hidden></i></a>' : '');
+          '<span>' + esc(rot('demandas_juridicas', 'Demandas Jurídicas')) + '</span><i data-contador="juridico" class="contador" hidden></i></a>' +
+        (resumoImp && resumoImp.acesso ? '<div class="grupo">' + esc(rot('grupo_implantacao', 'Implantação')) + '</div><a href="#/implantacao" class="' + (rota.indexOf('#/implantacao') === 0 ? 'on' : '') + '">' + IC.casa +
+          '<span>' + esc(rot('implantacao', 'Painel de implantação')) + '</span><i data-contador="implantacao" class="contador" hidden></i></a>' : '');
       // Comissões: a ferramenta (só para quem tem acesso) e os demonstrativos de cada pessoa
       var modCom = modulos.find(function (m) { return m.slug === MOD_COMISSAO; });
       var pendC = resumoComissao ? resumoComissao.pendentes + (resumoComissao.planilhas || 0) : 0;
-      html += '<div class="grupo">Premiações</div>' +
+      html += '<div class="grupo">' + esc(rot('grupo_premiacoes', 'Premiações')) + '</div>' +
         (modCom ? '<a href="#/m/' + MOD_COMISSAO + '" data-slug="' + MOD_COMISSAO + '" class="' + (atual === MOD_COMISSAO && rota.indexOf('#/m/') === 0 ? 'on ' : '') + (modCom.ativo ? '' : 'inativo') + '">' +
           IC.grafico + '<span>' + esc(modCom.nome) + '</span>' + (quadros[MOD_COMISSAO] ? '<i class="aberto" title="Aberta"></i>' : '') + '</a>' : '') +
-        '<a href="#/premiacoes" class="' + (rota.indexOf('#/premiacoes') === 0 ? 'on' : '') + '">' + IC.documento + '<span>Minhas Premiações</span>' +
+        '<a href="#/premiacoes" class="' + (rota.indexOf('#/premiacoes') === 0 ? 'on' : '') + '">' + IC.documento + '<span>' + esc(rot('minhas_premiacoes', 'Minhas Premiações')) + '</span>' +
           '<i class="contador"' + (pendC ? '' : ' hidden') + ' title="Demonstrativos esperando o seu “Estou ciente” e planilhas para enviar">' + pendC + '</i></a>';
     }
     porSetor(termo ? lista : lista.filter(function (m) { return m.slug !== MOD_COMISSAO; })).forEach(function (g) {
@@ -274,7 +274,7 @@
     // Configurações: um item só, para quem administra (a coordenação vê o mesmo, filtrado pelos setores dela)
     var navCfg = $('#navConfig');
     navCfg.hidden = !podeConfigurar();
-    navCfg.innerHTML = navCfg.hidden ? '' : '<a href="#/config" class="' + (rota.indexOf('#/config') === 0 ? 'on' : '') + '">' + IC.config + 'Configurações</a>';
+    navCfg.innerHTML = navCfg.hidden ? '' : '<a href="#/config" class="' + (rota.indexOf('#/config') === 0 ? 'on' : '') + '">' + IC.config + esc(rot('configuracoes', 'Configurações')) + '</a>';
     desenharContadorCredito();
     desenharContadorImp();
     desenharContadorCt();
@@ -286,6 +286,35 @@
   function definirBarra(trilha, acoes) {
     $('#trilha').innerHTML = trilha;
     $('#acoesBarra').innerHTML = acoes || '';
+    trocarNomesFixos($('#trilha .setor'), CHAVE_DO_GRUPO);
+    trocarNomesFixos($('#trilha .nome'), CHAVE_DO_ITEM);
+  }
+
+  /* ======================= nomes do menu (Configurações → Nomes e abas) ======================= */
+  // o menu na ordem em que aparece: [chave, nome padrão]; a chave guarda o nome trocado (tabela rotulos_menu)
+  var MENU_FIXO = [
+    { itens: [['inicio', 'Início'], ['links', 'Central de Links'], ['tutoriais', 'Tutoriais']] },
+    { grupo: ['grupo_tickets', 'Central de Tickets'], itens: [['tickets', 'Tickets'], ['painel_tickets', 'Painel de tickets']] },
+    { grupo: ['grupo_clientes', 'Clientes'], itens: [['carteira', 'Base de Clientes']] },
+    { grupo: ['grupo_credito', 'Análise de Crédito'], itens: [['credito', 'Análise de Crédito']] },
+    { grupo: ['grupo_juridico', 'Jurídico'], itens: [['contratos', 'Solicitação de Contrato'], ['acompanhamento_contratos', 'Acompanhamento de demandas Jurídicas'],
+      ['dashboard_juridico', 'Dashboard Jurídico'], ['demandas_juridicas', 'Demandas Jurídicas']] },
+    { grupo: ['grupo_implantacao', 'Implantação'], itens: [['implantacao', 'Painel de implantação']] },
+    { grupo: ['grupo_premiacoes', 'Premiações'], itens: [['minhas_premiacoes', 'Minhas Premiações']], ferramenta: 'premiacoes' },
+    { itens: [['configuracoes', 'Configurações']] },
+  ];
+  var ROTULOS = {};
+  var CHAVE_DO_ITEM = {}, CHAVE_DO_GRUPO = {};
+  MENU_FIXO.forEach(function (g) {
+    if (g.grupo) CHAVE_DO_GRUPO[g.grupo[1]] = g.grupo[0];
+    g.itens.forEach(function (i) { CHAVE_DO_ITEM[i[1]] = i[0]; });
+  });
+  function rot(chave, padrao) { return ROTULOS[chave] || padrao; }
+  // título e trilha das telas fixas acompanham o nome trocado no menu (só quando o texto é exatamente o padrão)
+  function trocarNomesFixos(el, mapa) {
+    if (!el || el.children.length) return;
+    var k = mapa[el.textContent.trim()];
+    if (k && ROTULOS[k]) el.textContent = ROTULOS[k];
   }
 
   function desenharStatus() {
@@ -699,7 +728,7 @@
      veem as mesmas telas, com os mesmos nomes, filtradas pelos setores delas (o servidor confere em cada rota). */
   // [chave, nome, ícone, só administração, o que tem]
   var SECOES_CONFIG = [['pessoas', 'Pessoas', 'usuarios', false, 'Cadastro, perfil e setor'], ['setores', 'Setores e equipes', 'pessoas', false, 'Líderes e tipos de demanda'],
-    ['acessos', 'Acessos', 'cadeado', false, 'Quem pode fazer o quê'], ['ferramentas', 'Ferramentas', 'camadas', false, 'HTML, versões e tutoriais'],
+    ['acessos', 'Acessos', 'cadeado', false, 'Quem pode fazer o quê'], ['ferramentas', 'Ferramentas', 'camadas', false, 'HTML, versões e tutoriais'], ['nomes', 'Nomes e abas', 'lapis', false, 'Menu e abas das ferramentas'],
     ['sistema', 'Sistema', 'banco', true, 'Backup, envios e e-mail'], ['historico', 'Histórico', 'historico', true, 'Quem mudou o quê']];
   function secoesConfig() { return SECOES_CONFIG.filter(function (s) { return !s[3] || eu.papel === 'admin'; }); }
   // menu das seções, na coluna da esquerda da página (no celular vira uma faixa no topo)
@@ -735,6 +764,7 @@
     if (secao === 'setores') return paginaEquipes();
     if (secao === 'acessos') return paginaAcessos(sub, id);
     if (secao === 'ferramentas') return sub === 'tutoriais' && eu.papel === 'admin' ? paginaAdminTutoriais() : paginaModulos();
+    if (secao === 'nomes') return paginaNomes(sub, id);
     if (secao === 'sistema') return paginaSistema();
     if (secao === 'historico') return paginaAuditoria();
   }
@@ -768,6 +798,126 @@
       catch (e) { toast(e.message, 'erro'); }
       bt.disabled = false;
     };
+  }
+
+  /* Nomes e abas: o nome de cada item do menu (telas fixas, grupos, setores e ferramentas) e das abas de dentro das
+     ferramentas. A administração muda tudo; a coordenação, as abas das ferramentas dos setores dela. */
+  async function paginaNomes(aba, id) {
+    var admin = eu.papel === 'admin';
+    var abas = (admin ? [['menu', 'Menu lateral']] : []).concat([['abas', 'Abas das ferramentas']]);
+    if (!abas.some(function (a) { return a[0] === aba; })) aba = abas[0][0];
+    barraConfig('Nomes e abas');
+    $('#conteudo').innerHTML = '<div class="pagina pagina-config">' + abasConfig('nomes') +
+      cabConfig('Nomes e abas', 'Troque o nome dos itens do menu e das abas de dentro das ferramentas. Vale para todos: o menu muda na hora, e a ferramenta na próxima vez que for aberta.') +
+      '<nav class="sub-abas" aria-label="O que renomear">' + abas.map(function (a) {
+        return '<a href="#/config/nomes/' + a[0] + '" class="' + (a[0] === aba ? 'on' : '') + '"' + (a[0] === aba ? ' aria-current="page"' : '') + '>' + a[1] + '</a>';
+      }).join('') + '</nav><div id="corpoNomes"><div class="ajuda">Carregando…</div></div></div>';
+    if (aba === 'menu') return nomesMenu($('#corpoNomes'));
+    return nomesAbas($('#corpoNomes'), id && decodeURIComponent(id));
+  }
+
+  async function nomesMenu(cont) {
+    var mods, setores;
+    try { mods = (await carregarModulosAdmin()).modulos; setores = (await api('GET', '/api/admin/setores')).setores; }
+    catch (e) { cont.innerHTML = '<div class="msg erro">' + esc(e.message) + '</div>'; return; }
+    function campo(tipo, id, valor, padrao) {
+      return '<input class="campo" data-tipo="' + tipo + '" data-id="' + esc(id) + '" data-antes="' + esc(valor) + '" value="' + esc(valor) + '"' +
+        (padrao ? ' placeholder="' + esc(padrao) + '"' : '') + ' maxlength="60" aria-label="Novo nome de ' + esc(padrao || valor) + '">';
+    }
+    function linha(rotulo, input, grupo) {
+      return '<tr' + (grupo ? ' class="auto"' : '') + '><td style="min-width:180px">' + (grupo ? '<span class="etiqueta cinza">grupo</span> ' : '') + '<b>' + esc(rotulo) + '</b></td><td style="width:55%">' + input + '</td></tr>';
+    }
+    var html = '<div class="painel"><div class="cab-painel"><div style="flex:1;min-width:0"><h2>Telas do portal</h2><p class="ajuda" style="margin:2px 0 0">Em branco, fica o nome padrão. O título da tela acompanha o nome do menu.</p></div></div>' +
+      '<div class="tabela-wrap"><table><thead><tr><th>Nome padrão</th><th>Nome no menu</th></tr></thead><tbody>' +
+      MENU_FIXO.map(function (g) {
+        var mod = g.ferramenta && mods.find(function (x) { return x.slug === g.ferramenta; });
+        return (g.grupo ? linha(g.grupo[1], campo('rotulo', g.grupo[0], ROTULOS[g.grupo[0]] || '', g.grupo[1]), true) : '') +
+          (mod ? linha(mod.nome + ' (ferramenta)', campo('ferramenta', mod.slug, mod.nome)) : '') +
+          g.itens.map(function (i) { return linha(i[1], campo('rotulo', i[0], ROTULOS[i[0]] || '', i[1])); }).join('');
+      }).join('') + '</tbody></table></div></div>' +
+      '<div class="painel" style="margin-top:16px"><div class="cab-painel"><div style="flex:1;min-width:0"><h2>Setores e ferramentas</h2><p class="ajuda" style="margin:2px 0 0">O nome do setor é o grupo no menu; o da ferramenta, o item. Mudar aqui é o mesmo que mudar em Setores e equipes e em Ferramentas.</p></div></div>' +
+      '<div class="tabela-wrap"><table><thead><tr><th>Hoje</th><th>Novo nome</th></tr></thead><tbody>' +
+      setores.map(function (st) {
+        var dele = mods.filter(function (x) { return x.setor_id === st.id && x.slug !== MOD_COMISSAO; });
+        if (!dele.length) return '';
+        return linha(st.nome, campo('setor', st.id, st.nome), true) + dele.map(function (x) { return linha(x.nome, campo('ferramenta', x.slug, x.nome)); }).join('');
+      }).join('') + mods.filter(function (x) { return !x.setor_id && x.slug !== MOD_COMISSAO; }).map(function (x) { return linha(x.nome + ' (sem setor)', campo('ferramenta', x.slug, x.nome)); }).join('') +
+      '</tbody></table></div></div><div id="barraNomes"></div>';
+    cont.innerHTML = html;
+    function alterados() { return $$('input[data-tipo]', cont).filter(function (i) { return i.value.trim() !== i.getAttribute('data-antes'); }); }
+    function barra() {
+      var n = alterados().length;
+      $('#barraNomes', cont).innerHTML = n ? '<div class="barra-salvar"><span>' + n + (n === 1 ? ' nome alterado' : ' nomes alterados') + '</span><span class="espaco"></span>' +
+        '<button class="btn ghost sm" type="button" id="btDescartarNomes">Descartar</button><button class="btn primary sm" type="button" id="btSalvarNomes">Salvar nomes</button></div>' : '';
+      if (!n) return;
+      $('#btDescartarNomes', cont).onclick = function () { nomesMenu(cont); };
+      $('#btSalvarNomes', cont).onclick = async function () {
+        var bt = this; bt.disabled = true;
+        var rotulos = {};
+        try {
+          for (var i = 0, l = alterados(); i < l.length; i++) {
+            var x = l[i], tipo = x.getAttribute('data-tipo'), id = x.getAttribute('data-id'), nome = x.value.trim();
+            if (tipo === 'rotulo') { rotulos[id] = nome; continue; }
+            if (!nome) throw new Error('Setor e ferramenta precisam de um nome (era "' + x.getAttribute('data-antes') + '").');
+            if (tipo === 'setor') { var st = setores.find(function (y) { return y.id === Number(id); }); await api('PATCH', '/api/admin/setores/' + id, { nome: nome, ordem: st.ordem }); }
+            if (tipo === 'ferramenta') await api('PATCH', '/api/admin/modulos/' + encodeURIComponent(id), { nome: nome });
+          }
+          if (Object.keys(rotulos).length) ROTULOS = (await api('PUT', '/api/admin/rotulos', { rotulos: rotulos })).rotulos;
+          toast('Nomes salvos. O menu já mostra os novos.', 'ok');
+          await recarregarModulosUsuario();
+          nomesMenu(cont);
+        } catch (e) { toast(e.message, 'erro'); bt.disabled = false; }
+      };
+    }
+    $$('input[data-tipo]', cont).forEach(function (i) { i.oninput = barra; });
+  }
+
+  async function nomesAbas(cont, slug) {
+    var mods;
+    try { mods = (await api('GET', '/api/admin/modulos')).modulos; } catch (e) { cont.innerHTML = '<div class="msg erro">' + esc(e.message) + '</div>'; return; }
+    if (!mods.length) { cont.innerHTML = '<div class="vazio">Nenhuma ferramenta nos seus setores.</div>'; return; }
+    var mod = mods.find(function (x) { return x.slug === slug; }) || mods[0];
+    cont.innerHTML = '<div class="dividido">' + listaSelecao('buscaFerrNm', 'ferramenta', gruposFerramentas(mods), function (x) { return '#/config/nomes/abas/' + encodeURIComponent(x.id); }, mod.slug) +
+      '<div class="painel" style="min-width:0"><div class="cab-painel"><div style="min-width:0;flex:1"><h2>' + esc(mod.nome) + '</h2><p class="ajuda" style="margin:2px 0 0">Abas, botões e títulos de dentro da ferramenta.</p></div>' +
+      '<a class="btn ghost sm" href="#/m/' + esc(mod.slug) + '">' + IC.novaAba + 'Abrir a ferramenta</a></div><div class="corpo" id="edTextos"><div class="ajuda" style="margin:0">Carregando…</div></div></div></div>';
+    ligarListaSelecao('buscaFerrNm');
+    var ed = $('#edTextos'), q;
+    try { q = await api('GET', '/api/admin/modulos/' + encodeURIComponent(mod.slug) + '/textos'); } catch (e) { ed.innerHTML = '<div class="msg erro">' + esc(e.message) + '</div>'; return; }
+    var linhas = Object.keys(q.textos).map(function (k) { return [k, q.textos[k]]; });
+    var antes = JSON.stringify(linhas);
+    function desenhar() {
+      var mudou = JSON.stringify(linhas) !== antes;
+      ed.innerHTML = '<p class="ajuda" style="margin:0 0 12px">Escreva o texto exatamente como aparece na ferramenta e o nome novo. O portal troca esse texto onde ele aparece sozinho ' +
+        '(numa aba, num botão, num título); um texto mais longo que só contenha essas palavras continua igual.</p>' +
+        '<datalist id="sugTextos">' + q.sugestoes.map(function (t) { return '<option value="' + esc(t) + '">'; }).join('') + '</datalist>' +
+        '<div class="tabela-wrap"><table><thead><tr><th>Texto que aparece hoje</th><th>Novo nome</th><th></th></tr></thead><tbody>' +
+        (linhas.map(function (l, i) {
+          return '<tr><td><input class="campo" list="sugTextos" data-i="' + i + '" data-c="0" value="' + esc(l[0]) + '" placeholder="Ex.: Novo recibo" maxlength="80" aria-label="Texto que aparece hoje"></td>' +
+            '<td><input class="campo" data-i="' + i + '" data-c="1" value="' + esc(l[1]) + '" placeholder="Nome novo" maxlength="80" aria-label="Novo nome"></td>' +
+            '<td style="width:44px"><button class="btn icon ghost" type="button" data-tirar="' + i + '" title="Voltar ao nome original" aria-label="Voltar ao nome original">' + IC.fechar + '</button></td></tr>';
+        }).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:18px">Nenhum nome trocado nesta ferramenta.</td></tr>') + '</tbody></table></div>' +
+        '<div class="linha" style="margin-top:10px"><button class="btn ghost sm" type="button" id="btAddTexto">' + IC.mais + 'Trocar outro nome</button>' +
+        (q.sugestoes.length ? '<span class="ajuda" style="margin:0">Ao digitar, aparecem as abas e os botões encontrados no HTML.</span>' : '') + '</div>' +
+        (mudou ? '<div class="barra-salvar"><span>Nomes desta ferramenta alterados</span><span class="espaco"></span><button class="btn ghost sm" type="button" id="btDescTextos">Descartar</button>' +
+          '<button class="btn primary sm" type="button" id="btSalvarTextos">Salvar nomes</button></div>' : '');
+      $$('input[data-i]', ed).forEach(function (inp) {
+        inp.onchange = function () { linhas[Number(inp.getAttribute('data-i'))][Number(inp.getAttribute('data-c'))] = inp.value; desenhar(); };
+      });
+      $$('[data-tirar]', ed).forEach(function (b) { b.onclick = function () { linhas.splice(Number(b.getAttribute('data-tirar')), 1); desenhar(); }; });
+      $('#btAddTexto', ed).onclick = function () { linhas.push(['', '']); desenhar(); var u = $$('input[data-c="0"]', ed).pop(); if (u) u.focus(); };
+      if ($('#btDescTextos', ed)) $('#btDescTextos', ed).onclick = function () { nomesAbas(cont, mod.slug); };
+      if ($('#btSalvarTextos', ed)) $('#btSalvarTextos', ed).onclick = async function () {
+        var textos = {};
+        linhas.forEach(function (l) { if (l[0].trim() && l[1].trim()) textos[l[0].trim()] = l[1].trim(); });
+        try {
+          await api('PUT', '/api/admin/modulos/' + encodeURIComponent(mod.slug) + '/textos', { textos: textos });
+          toast('Nomes salvos. Valem na próxima vez que a ferramenta for aberta.', 'ok');
+          if (quadros[mod.slug]) recarregarQuadro(mod.slug);
+          nomesAbas(cont, mod.slug);
+        } catch (e) { toast(e.message, 'erro'); }
+      };
+    }
+    desenhar();
   }
 
   /* Acessos: quem pode fazer o quê. É o único lugar onde se libera e se tira acesso. */
@@ -1620,7 +1770,7 @@
   }
 
   async function recarregarModulosUsuario() {
-    try { var j = await api('GET', '/api/modulos'); modulos = j.modulos; desenharMenu(); } catch (e) { /* ignora */ }
+    try { var j = await api('GET', '/api/modulos'); modulos = j.modulos; ROTULOS = j.rotulos || {}; desenharMenu(); } catch (e) { /* ignora */ }
   }
 
   /* ======================= Central de Tickets ======================= */
@@ -3211,6 +3361,7 @@
     links_pagina: 'Editou a Central de Links', link_criado: 'Incluiu link', link_editado: 'Editou link', link_removido: 'Removeu link',
     campanha_criada: 'Criou campanha (Central de Links)', campanha_editada: 'Editou campanha (Central de Links)', campanha_removida: 'Removeu campanha (Central de Links)', campanha_fundo: 'Trocou fundo de campanha', links_importados: 'Colou lista de links',
     modulo_acesso: 'Alterou quem abre a ferramenta', modulo_papeis: 'Alterou os papéis da ferramenta', modulo_aprovado: 'Aprovou ferramenta nova', regra_acesso: 'Alterou quem edita na Base de Clientes', versao_baixada: 'Baixou uma versão do HTML',
+    modulo_textos: 'Trocou nomes de abas da ferramenta', rotulos_menu: 'Trocou nomes do menu',
   };
 
   async function paginaAuditoria() {
@@ -8036,6 +8187,7 @@
       var j = await api('GET', '/api/modulos');
       modulos = j.modulos;
       recentes = j.recentes || [];
+      ROTULOS = j.rotulos || {};
     } catch (e) {
       document.body.innerHTML = '<div class="pagina-aviso"><div class="aviso-card"><h1>Não foi possível carregar o portal</h1><p>' + esc(e.message) + '</p><a class="btn primary" href="/">Tentar de novo</a></div></div>';
       return;
@@ -8053,6 +8205,8 @@
     $('#btSino').onclick = abrirAvisos;
     setInterval(function () { atualizarResumo(); atualizarComissao(); atualizarCredito(); atualizarImp(); atualizarCt(); atualizarDj(); buscarAvisos(); verificarVersao(); }, 30 * 1000);
     window.addEventListener('hashchange', rotear);
+    // o título das telas fixas acompanha o nome trocado no menu
+    new MutationObserver(function () { $$('#conteudo .pagina h1').forEach(function (h) { trocarNomesFixos(h, CHAVE_DO_ITEM); }); }).observe($('#conteudo'), { childList: true });
     rotear();
   }
   iniciar();

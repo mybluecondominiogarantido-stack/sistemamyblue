@@ -25,7 +25,9 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, bo
         icone: m.icone, ativo: m.ativo, tem_arquivo: m.tem_arquivo, versao_em: m.versao_em, isolada: !!m.config.isolada || m.pendente }));
     const { rows: recentes } = await db.q(`SELECT modulo_slug, MAX(quando) AS quando FROM auditoria
       WHERE usuario_id = $1 AND acao = 'modulo_aberto' GROUP BY modulo_slug ORDER BY quando DESC LIMIT 6`, [req.usuario.id]);
-    res.json({ modulos: lista, recentes: recentes.map((x) => x.modulo_slug) });
+    // nomes do menu trocados em Configurações → Nomes e abas
+    const { rows: rotulos } = await db.q('SELECT chave, nome FROM rotulos_menu');
+    res.json({ modulos: lista, recentes: recentes.map((x) => x.modulo_slug), rotulos: Object.fromEntries(rotulos.map((x) => [x.chave, x.nome])) });
   });
 
   /* ---------- entrega da ferramenta (HTML) ---------- */

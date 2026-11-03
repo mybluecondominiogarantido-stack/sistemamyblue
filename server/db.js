@@ -285,6 +285,14 @@ CREATE TABLE IF NOT EXISTS regras_acesso (
   atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
 );
 
+-- nomes do menu trocados em Configurações → Nomes e abas (sem linha = o nome padrão do portal)
+CREATE TABLE IF NOT EXISTS rotulos_menu (
+  chave TEXT PRIMARY KEY,
+  nome TEXT NOT NULL,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
+);
+
 CREATE TABLE IF NOT EXISTS tutoriais (
   slug TEXT PRIMARY KEY,
   video BYTEA,
