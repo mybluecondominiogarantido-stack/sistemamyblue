@@ -181,7 +181,7 @@ const roteiro = {
   },
   async ajustar(t) {
     await servirBibliotecas(t);
-    await quadro(t).locator('#sync.on').waitFor({ timeout: 20000 });
+    await quadro(t).locator('#sync.on').waitFor({ state: 'attached', timeout: 20000 });
     await quadro(t).locator('#dashTiles .tile').first().waitFor({ timeout: 15000 });
     await t.pausa(800);
   },

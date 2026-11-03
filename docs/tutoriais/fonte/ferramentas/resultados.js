@@ -87,7 +87,7 @@ async function importarSemGravar(base, navegador, arquivo, registros) {
     await Promise.all([p.waitForURL((u) => !String(u).includes('/login')), p.click('#btEntrar')]);
     await p.goto(base + '/#/m/' + SLUG);
     const f = p.frameLocator(`iframe[data-slug="${SLUG}"]`);
-    await f.locator('#sync:has-text("ao vivo")').waitFor({ timeout: 30000 });
+    await f.locator('#sync:has-text("ao vivo")').waitFor({ state: 'attached', timeout: 30000 });
     await f.locator('#tab-importar').click();
     await f.locator('#arquivo').setInputFiles(arquivo);
     await f.locator('#btn-confirmar').click({ timeout: 15000 });
@@ -149,7 +149,7 @@ module.exports = {
   async gravar(t) {
     const f = quadro(t);
     const arquivo = arquivoTemp(`boletos-${hojeIso()}.csv`, exportacao({ comAnterior: false, comHoje: true }));
-    await f.locator('#sync:has-text("ao vivo")').waitFor({ timeout: 30000 });
+    await f.locator('#sync:has-text("ao vivo")').waitFor({ state: 'attached', timeout: 30000 });
 
     const V = '1 · Visão geral';
     await t.legenda('A meta de cada condomínio: receber <b>30%</b> das unidades garantidas que estavam devendo no vencimento, em até 30 dias.', { etapa: V, ms: 600 });

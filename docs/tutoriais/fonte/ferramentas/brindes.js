@@ -101,7 +101,7 @@ const roteiro = {
   },
   async ajustar(t) {
     const f = quadro(t);
-    await f.locator('#syncTxt', { hasText: 'ao vivo' }).waitFor({ timeout: 20000 });
+    await f.locator('#syncTxt', { hasText: 'ao vivo' }).waitFor({ state: 'attached', timeout: 20000 });
     await f.locator('#v-painel .kpi').first().waitFor({ timeout: 15000 });
     // o portal ainda não oferece claude.use('avisos'): a faixa vermelha "Avisos indisponíveis" fica fora do vídeo (ver relatório)
     const el = await t.p.locator(`iframe[data-slug="${SLUG}"]`).elementHandle();
