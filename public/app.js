@@ -4694,7 +4694,8 @@
     var prazo = function (i) {
       var c = i.l && i.l.concluir;
       if (i.etapa === 'fila') return etq(['designar', 'cinza']) + '<span class="sec">na fila desde ' + dataBr(String(i.enviado_em || '').slice(0, 10)).slice(0, 5) + '</span>';
-      if (!i.iniciado_em) return etq([i.prazo_inicio ? prazoCr(i.prazo_inicio, i.etapa).replace('Até ', 'iniciar até ').replace('Venceu ', 'prazo para iniciar venceu ') : 'a iniciar', 'azul']);
+      if (!i.iniciado_em) return etq(!i.prazo_inicio ? ['a iniciar', 'azul'] : new Date(i.prazo_inicio) < new Date()
+        ? ['prazo para iniciar venceu ' + dataHoraCr(i.prazo_inicio), 'vermelha'] : ['iniciar até ' + dataHoraCr(i.prazo_inicio), 'azul']);
       var s = c ? prazoConcluirImp(c) : null;
       return (s ? etq(s) : '') + '<span class="sec">iniciada ' + dataBr(String(i.iniciado_em).slice(0, 10)).slice(0, 5) + '</span>';
     };
