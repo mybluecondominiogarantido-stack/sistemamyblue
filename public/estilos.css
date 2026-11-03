@@ -647,10 +647,6 @@ tr.sel-ct td{background:var(--surface-2)}
 .cab-acomp{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:16px}
 .tit-acomp{border-left:3px solid var(--border-2);padding-left:16px}
 .tit-acomp h1{margin:0 0 4px}
-.status-acomp{display:inline-flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:5px 6px 5px 16px;box-shadow:var(--shadow-sm);font-size:13px;font-weight:700;color:var(--ink-2)}
-.status-acomp i{width:8px;height:8px;border-radius:999px;background:var(--green)}
-.status-acomp b{color:var(--green);padding-right:10px;border-right:1px solid var(--border)}
-.status-acomp .btn.icon{width:30px;height:30px}
 .aviso-acomp{margin-bottom:16px;font-weight:600;line-height:1.5}
 .filtros-acomp{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:12px}
 .filtros-acomp .rot-ano{font-size:12px;font-weight:800;color:var(--muted);letter-spacing:.5px;text-transform:uppercase}

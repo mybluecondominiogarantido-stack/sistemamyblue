@@ -4448,14 +4448,13 @@
     if (!f.ano) f.ano = String(j.ano);
     j.perfil = p;
     var cont = contadoresAcomp(j);
-    var agora = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
     var mesesSel = [['', 'Todos os meses']].concat(MESES_LONGO.map(function (x, k) { return [k + 1, x]; }));
     var nDepois = cont.fichas + cont.antecipacoes + (gestao ? j.linhas.filter(function (l) { return l.etapa === 'concluida'; }).length : 0);
     var contAba = { atividades: cont.pos, depois: nDepois };
     var minha = p.equipe && !gestao && String(f.analista) === String(eu.id);
     $('#conteudo').innerHTML = '<div class="pagina" style="max-width:1400px">' +
       '<div class="cab-acomp"><div class="tit-acomp"><h1>Painel de implantação</h1><p class="sub" style="margin:0">Do contrato assinado à Base de Clientes: números do ano, atividades do setor e o que vem depois da conclusão.' + (p.diretoria && !p.coordenacao && !p.admin && !p.equipe ? ' <b>Diretoria: só consulta.</b>' : '') + '</p></div><span class="espaco"></span>' +
-      '<div class="status-acomp"><i></i><b>Dados do portal</b><span>' + esc(agora) + '</span><button class="btn icon ghost" id="acRecarregar" aria-label="Atualizar">' + IC.recarregar + '</button></div>' +
+      '<button class="btn icon ghost" id="acRecarregar" aria-label="Atualizar" title="Atualizar">' + IC.recarregar + '</button>' +
       '<button class="btn ghost" id="acExcel">' + IC.baixar + 'Excel</button>' + (podeParam || (interno && aba === 'parametros') ? '<a class="btn ghost' + (aba === 'parametros' ? ' on' : '') + '" href="#/implantacao/parametros">' + IC.lapis + 'Parâmetros</a>' : '') +
       (comercial ? '<button class="btn primary" id="btNovaImp">' + IC.mais + 'Nova implantação</button>' : '') + '</div>' +
       '<nav class="abas abas-acomp">' + abas.map(function (a) {
