@@ -183,7 +183,7 @@ Os endereços antigos (`#/acompanhamento/...`, `#/implantacao/fila`, `todas`, `c
 
 - **% concluído:** etapas feitas ÷ 5 (concluída ou na Carteira = 100%). Faixas: concluída, só falta o onboarding, 60–99%,
   40–59% e abaixo de 40%.
-- **Visual:** cabeçalho com **Dados do portal** e **Excel** (baixa a tela aberta, com os filtros, em .xlsx); ano em
+- **Visual:** cabeçalho com **Atualizar** (⟳) e **Excel** (baixa a tela aberta, com os filtros, em .xlsx); ano em
   pílulas, mês, assistente, executivo e busca, **lembrados por pessoa** (com *Limpar filtros*); abas e visões com
   contadores do que pede atenção.
 - **Controle:** as colunas da planilha *Controle Implantações*, com o **protocolo do portal** no lugar do Nº, cabeçalho e
