@@ -200,7 +200,7 @@ solicitações; a **diretoria** vê as telas da gestão só para consulta. Quem 
 | **Coordenação** | líder do setor Implantação, ou perfil Coordenador/Supervisor no setor | o da equipe em qualquer implantação, mais designar quem conduz, autorizar, recusar e revogar quem edita, cobrar prazos (concluir, ficha, onboarding e pós-implantação), os Parâmetros, liberar versão extra da ficha, cancelar e confirmar a entrada na Carteira |
 | **Assistente de crédito** | estar no setor **Crédito** e receber a ficha (da Carteira ou escolhida pela supervisão) | ver a ficha de transição que recebeu, confirmar o recebimento ou devolver com pergunta |
 | **Supervisão de Crédito** | líder do setor Crédito, ou perfil Coordenador/Supervisor no setor | escolher a assistente de crédito quando a Carteira ainda não tem (o portal grava na Carteira) |
-| **Gestor do Controle de Repasses** | papel **Gestor** na ferramenta *repasses* (*Configurações → Acessos → Ferramentas*) | cadastrar (com ajuste) ou devolver as antecipações vindas da Implantação |
+| **Gestor do Controle de Repasses** | papel **Gestor** na ferramenta *repasses* (*Configurações → Acessos → Ferramentas*) | cadastrar (com ajuste) ou devolver as antecipações vindas da Implantação; enviar o .zip dos comprovantes de repasse de cada assistente de crédito e ver os de todas |
 | **Quem elabora contratos** | permissão *Elaborar as minutas de contrato* | registrar as condições do contrato assinado fora do portal (a implantação espera com o Jurídico e depois segue ao setor) |
 | **Diretoria** | permissão *Chancelar análises de crédito* | ver todas (a taxa e o boleto do condomínio de entrega são aprovados na Solicitação de Contrato) |
 | **Administração** | perfil | tudo |
@@ -316,6 +316,13 @@ Quem abre a ferramenta passa a ver essas datas, então ligue só onde for precis
 - **Controle de Repasses** (slug `repasses`) alcança também as antecipações vindas da Implantação:
   `GET /api/repasses/antecipacoes`, `POST /api/repasses/antecipacoes/:id/cadastrar` e `.../devolver`. Ler pede só abrir
   a ferramenta; cadastrar e devolver, o papel **Gestor** (`gestor` ou `gestao`), sem *só consulta*.
+- O **Controle de Repasses** também envia os comprovantes do dia, um .zip por assistente de crédito
+  (`server/rotas/repasses-comprovantes.js`):
+  `POST /api/repasses/comprovantes?dia=AAAA-MM-DD&assistente=<nome da Base de Clientes>&qtd=<n>&nome=<arquivo.zip>`
+  (corpo: o .zip, `Content-Type: application/zip`; só o papel **Gestor**, sem *só consulta*),
+  `GET /api/repasses/comprovantes?dia=AAAA-MM-DD` e `GET /api/repasses/comprovantes/:id/arquivo`. A assistente é achada
+  pelo nome na equipe do setor **Crédito**, recebe o aviso (sino e e-mail) e baixa na página *Comprovantes de repasse*
+  (`#/comprovantes`). Novo envio do mesmo dia e assistente troca o anterior e avisa de novo.
 
 ## HTML novo da coordenação
 

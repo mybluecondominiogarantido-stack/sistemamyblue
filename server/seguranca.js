@@ -248,6 +248,9 @@ function criarSeguranca(db, cfg) {
     // Controle de Repasses: avisos às assistentes no sino (a rota confere o papel Gestor)
     if (s === 'repasses' && req.method === 'POST' && p === '/api/repasses/avisos') return true;
     if (s === 'repasses' && (p === '/api/repasses/antecipacoes' || /^\/api\/repasses\/antecipacoes\/\d+\/(cadastrar|devolver)$/.test(p))) return true;
+    // Controle de Repasses: envia o .zip dos comprovantes de cada assistente, lista e baixa (a rota confere o papel Gestor)
+    if (s === 'repasses' && p === '/api/repasses/comprovantes' && (ler || req.method === 'POST')) return true;
+    if (s === 'repasses' && ler && /^\/api\/repasses\/comprovantes\/\d+\/arquivo$/.test(p)) return true;
     if (p.startsWith('/api/comissao/')) {
       const m = await db.um('SELECT config FROM modulos WHERE slug = $1', [s]);
       return !!(m && m.config && m.config.relatorios_comissao);

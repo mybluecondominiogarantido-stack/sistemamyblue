@@ -95,7 +95,8 @@ test('com a chave, a ferramenta lê e grava só os dados dela', async () => {
 test('a chave não abre o resto do portal, mesmo sendo de um administrador', async () => {
   const chave = chaveDa((await admin('GET', '/m/agenda/')).texto);
   for (const [metodo, url] of [['GET', '/api/admin/usuarios'], ['GET', '/api/admin/backup'], ['POST', '/api/admin/usuarios'], ['GET', '/api/armazenamento/outra'],
-    ['POST', '/api/armazenamento/outra'], ['GET', '/api/tickets'], ['GET', '/api/auth/eu'], ['GET', '/m/agenda/'], ['GET', '/api/comissao/relatorios']]) {
+    ['POST', '/api/armazenamento/outra'], ['GET', '/api/tickets'], ['GET', '/api/auth/eu'], ['GET', '/m/agenda/'], ['GET', '/api/comissao/relatorios'],
+    ['GET', '/api/repasses/comprovantes'], ['POST', '/api/repasses/comprovantes'], ['GET', '/api/repasses/comprovantes/1/arquivo']]) {
     const r = await daFerramenta(metodo, `/t/${chave}${url}`, metodo === 'POST' ? {} : undefined);
     assert.equal(r.status, 403, `${metodo} ${url}`);
   }
