@@ -981,11 +981,15 @@
     var m = modal({
       titulo: 'Enviar vários HTMLs',
       corpo: '<p style="margin:0 0 14px;font-weight:600;color:var(--ink-2)">Selecione os arquivos das centrais. O portal reconhece cada um pelo título da página e publica no módulo certo.</p>' +
+        '<label class="rot" for="descLote">O que mudou nestas versões (vale para todos os arquivos)</label>' +
+        '<textarea class="campo" id="descLote" rows="3" maxlength="1500" placeholder="Ex.: Ajuste do layout ao padrão do portal em todas as centrais." style="margin-bottom:12px"></textarea>' +
         '<label class="zona-envio" id="zLote">' + IC.enviar + '<div>Clique para escolher ou arraste os arquivos .html aqui</div><input type="file" accept=".html,.htm,text/html" multiple hidden id="inLote"></label>' +
         '<div id="resLote" class="pilha" style="margin-top:14px"></div>',
     });
     async function processar(arquivos) {
       var res = $('#resLote', m);
+      var desc = $('#descLote', m).value.trim();
+      if (desc.length < 10) { toast('Escreva o que mudou nestas versões antes de escolher os arquivos.', 'erro'); $('#descLote', m).focus(); return; }
       for (var i = 0; i < arquivos.length; i++) {
         var f = arquivos[i];
         var linha = document.createElement('div');
@@ -996,7 +1000,7 @@
           var buf = await f.arrayBuffer();
           var rec = await api('POST', '/api/admin/modulos/reconhecer', buf, { bruto: true });
           if (!rec.slug) { linha.className = 'msg erro'; linha.textContent = f.name + ': não reconheci a qual módulo pertence. Envie pelo módulo, clicando nele na lista.'; continue; }
-          var r = await api('PUT', '/api/admin/modulos/' + rec.slug + '/arquivo', buf, { bruto: true, headers: { 'X-Nome-Arquivo': encodeURIComponent(f.name) } });
+          var r = await api('PUT', '/api/admin/modulos/' + rec.slug + '/arquivo', buf, { bruto: true, headers: { 'X-Nome-Arquivo': encodeURIComponent(f.name), 'X-Descricao': encodeURIComponent(desc) } });
           var mod = mods.find(function (x) { return x.slug === rec.slug; });
           linha.className = 'msg ok';
           linha.textContent = f.name + ' → publicado em "' + (mod ? mod.nome : rec.slug) + '"' + (r.aviso_banco ? ' (' + r.aviso_banco + ')' : '');
@@ -1024,14 +1028,15 @@
     return '<div class="msg aviso" id="avisoPendente" style="display:grid;gap:8px"><span><b>Versão nova aguardando aprovação</b>, enviada' +
       (mod.pendente_por ? ' por ' + esc(mod.pendente_por) : '') + ' em ' + quando(mod.pendente_em) + (mod.pendente_nome ? ' (' + esc(mod.pendente_nome) + ')' : '') + '. ' +
       (admin ? 'Abra a prévia (isolada, com os dados reais), confira e aprove para pôr em uso.' : 'A versão atual continua em uso até a administração aprovar.') + '</span>' +
+      (mod.pendente_descricao ? '<div style="background:var(--surface);border-radius:8px;padding:8px 12px;white-space:pre-wrap;font-weight:600;color:var(--ink)"><b>O que mudou:</b> ' + esc(mod.pendente_descricao) + '</div>' : '') +
       '<div class="linha"><a class="btn ghost sm" target="_blank" rel="noopener" href="/m/' + esc(mod.slug) + '/?versao=' + mod.versao_pendente_id + '">' + IC.novaAba + 'Ver prévia</a>' +
       (admin ? '<button class="btn primary sm" type="button" id="btAprovarVersao">Aprovar e usar</button><button class="btn danger sm" type="button" id="btRecusarVersao">Recusar</button>' : '') + '</div></div>';
   }
   function htmlArquivoModulo(mod) {
-    var aprovacao = eu.papel !== 'admin' && !mod.pendente && !mod.isolada && !(mod.config && mod.config.isolada);
+    var aprovacao = eu.papel !== 'admin' && !mod.pendente;
     return '<h4 class="titulo-sec">Arquivo HTML</h4>' + avisoVersaoPendente(mod) +
       '<p class="ajuda" style="margin-top:-4px">' + (mod.tem_arquivo ? 'Versão em uso enviada em ' + quando(mod.versao_em) + ' (' + tamanho(mod.tamanho) + ').' : '<b style="color:var(--red)">Nenhum arquivo enviado ainda.</b>') + ' Ao enviar um arquivo novo, a versão anterior fica guardada e pode ser restaurada.' +
-      (aprovacao ? ' <b>Esta ferramenta não é isolada: o arquivo novo só entra em uso depois que a administração aprovar.</b>' : '') + '</p>' +
+      (aprovacao ? ' <b>A versão nova só entra em uso depois que a administração aprovar. Antes de enviar, você escreve o que mudou.</b>' : '') + '</p>' +
       '<label class="zona-envio" id="zArq">' + IC.enviar + '<div>Clique para escolher ou arraste o arquivo .html desta ferramenta</div><input type="file" accept=".html,.htm,text/html" hidden id="inArq"></label>' +
       '<div id="resArq"></div><details style="margin-top:4px"><summary style="cursor:pointer;font-weight:700;color:var(--ink-2)">Versões anteriores</summary><div id="listaVersoes" class="ajuda">Carregando…</div></details>';
   }
@@ -1043,7 +1048,8 @@
       if (!r.versoes.length) { el.textContent = 'Nenhuma versão enviada.'; return; }
       el.innerHTML = '<div class="caixa-opcoes" style="margin-top:8px">' + r.versoes.map(function (v) {
         var emUso = v.id === mod.versao_id;
-        return '<div class="linha" style="padding:8px 12px;border-bottom:1px solid var(--border)"><span style="flex:1;color:var(--ink-2)"><b>' + quando(v.enviado_em) + '</b> · ' + tamanho(v.tamanho) + (v.nome_original ? ' · ' + esc(v.nome_original) : '') + (v.enviado_por ? ' · por ' + esc(v.enviado_por) : '') + '</span>' +
+        return '<div class="linha" style="padding:8px 12px;border-bottom:1px solid var(--border)"><span style="flex:1;color:var(--ink-2)">' +
+          (v.descricao ? '<span style="display:block;white-space:pre-wrap;color:var(--ink);font-weight:600;margin-bottom:2px">' + esc(v.descricao) + '</span>' : '') + '<b>' + quando(v.enviado_em) + '</b> · ' + tamanho(v.tamanho) + (v.nome_original ? ' · ' + esc(v.nome_original) : '') + (v.enviado_por ? ' · por ' + esc(v.enviado_por) : '') + '</span>' +
           '<a class="btn ghost sm" href="/api/admin/modulos/' + esc(mod.slug) + '/versoes/' + v.id + '/arquivo" title="Baixar este HTML">' + IC.baixar + 'Baixar</a>' +
           (emUso ? '<span class="etiqueta verde">em uso</span>' : !v.aprovada ? '<span class="etiqueta ambar">aguardando aprovação</span>' : '<button class="btn ghost sm" data-versao="' + v.id + '">Usar esta</button>') + '</div>';
       }).join('') + '</div>';
@@ -1070,12 +1076,29 @@
     if ($('#btRecusarVersao', m)) $('#btRecusarVersao', m).onclick = decidir('recusar');
 
     // envio do arquivo
-    ligarZona($('#zArq', m), $('#inArq', m), async function (arquivos) {
+    ligarZona($('#zArq', m), $('#inArq', m), function (arquivos) {
       var f = arquivos[0];
+      var res = $('#resArq', m);
+      // o que mudou nesta versão: obrigatório para todos (menos na primeira versão); a da coordenação vai para aprovação
+      var obrigatoria = !!mod.tem_arquivo;
+      var aprovacao = eu.papel !== 'admin' && !mod.pendente;
+      res.innerHTML = '<div class="msg aviso" style="margin-top:8px;display:grid;gap:8px"><span><b>' + esc(f.name) + '</b>: escreva o que mudou nesta versão' + (obrigatoria ? '' : ' (recomendado)') + '.</span>' +
+        '<textarea class="campo" id="descVersao" rows="4" maxlength="1500" placeholder="Ex.: Nova aba Resultados com o total do mês por condomínio. O botão Exportar agora gera Excel. Corrigido o filtro por data."></textarea>' +
+        '<span class="ajuda" style="margin:0">Simples e direto: o que mudou e para quem. O Claude escreve para você: na conversa em que a ferramenta foi alterada, diga <i>“vou colocar no portal”</i> e cole aqui o texto que ele entregar.</span>' +
+        '<div class="linha"><button class="btn primary sm" type="button" id="btEnviarVersao">' + (aprovacao ? 'Enviar para aprovação' : 'Publicar versão') + '</button><button class="btn ghost sm" type="button" id="btCancelarVersao">Cancelar</button></div></div>';
+      $('#descVersao', m).focus();
+      $('#btCancelarVersao', m).onclick = function () { res.innerHTML = ''; };
+      $('#btEnviarVersao', m).onclick = function () {
+        var desc = $('#descVersao', m).value.trim();
+        if (obrigatoria && desc.length < 10) { toast('Escreva o que mudou nesta versão antes de enviar.', 'erro'); $('#descVersao', m).focus(); return; }
+        enviarVersao(f, desc);
+      };
+    });
+    async function enviarVersao(f, desc) {
       var res = $('#resArq', m);
       res.innerHTML = '<div class="msg aviso" style="margin-top:8px">Enviando ' + esc(f.name) + '…</div>';
       try {
-        var r = await api('PUT', '/api/admin/modulos/' + mod.slug + '/arquivo', await f.arrayBuffer(), { bruto: true, headers: { 'X-Nome-Arquivo': encodeURIComponent(f.name) } });
+        var r = await api('PUT', '/api/admin/modulos/' + mod.slug + '/arquivo', await f.arrayBuffer(), { bruto: true, headers: { 'X-Nome-Arquivo': encodeURIComponent(f.name), 'X-Descricao': encodeURIComponent(desc) } });
         if (r.aguardando_aprovacao) {
           carregarVersoes();
           res.innerHTML = '<div class="msg aviso" style="margin-top:8px">Arquivo enviado. Ele <b>entra em uso depois que a administração aprovar</b> (ela recebeu o aviso). Até lá, a versão atual continua valendo. ' +
@@ -1097,7 +1120,7 @@
         recarregarQuadro(mod.slug);
         recarregarModulosUsuario();
       } catch (e) { res.innerHTML = '<div class="msg erro" style="margin-top:8px">' + esc(e.message) + '</div>'; }
-    });
+    }
   }
 
   /* Coordenador e supervisor: as ferramentas dos setores dele (HTML, versões e quem pode abrir) */

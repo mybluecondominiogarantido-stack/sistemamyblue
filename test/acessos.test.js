@@ -13,6 +13,8 @@ function cliente() {
   return async function req(metodo, url, corpo) {
     const headers = {};
     if (cookie) headers.cookie = cookie;
+    // versão nova de ferramenta pede o que mudou: os testes que não tratam disso mandam uma descrição de teste
+    if (metodo === 'PUT' && /\/arquivo$/.test(url)) headers['x-descricao'] = encodeURIComponent('Versão de teste.');
     let body;
     if (typeof corpo === 'string') { body = corpo; headers['content-type'] = 'text/html'; }
     else if (corpo !== undefined) { body = JSON.stringify(corpo); headers['content-type'] = 'application/json'; }

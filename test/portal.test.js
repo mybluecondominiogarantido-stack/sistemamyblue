@@ -27,6 +27,8 @@ function cliente() {
   return async function req(metodo, url, corpo, opts = {}) {
     const headers = { ...(opts.headers || {}) };
     if (cookie) headers.cookie = cookie;
+    // versão nova de ferramenta pede o que mudou: os testes que não tratam disso mandam uma descrição de teste
+    if (metodo === 'PUT' && /\/arquivo$/.test(url) && !headers['x-descricao']) headers['x-descricao'] = encodeURIComponent('Versão de teste.');
     let body;
     if (corpo !== undefined) {
       if (typeof corpo === 'string' || Buffer.isBuffer(corpo)) { body = corpo; headers['content-type'] ||= 'text/plain'; }

@@ -32,7 +32,7 @@
 - Ferramenta nova nasce **isolada** (sandbox, sem a sessão de quem abre). O HTML precisa funcionar isolado: guardar dados
   pelo portal (localStorage com "Banco do portal" ou `claude.use('db')`), chamar o portal só por `fetch`/XHR em `/api/...`,
   sem IndexedDB, sem Web Worker carregado de endereço e sem `window.parent` (detalhes em `docs/acessos/LEIAME.md`,
-  seção Ferramentas isoladas). HTML da coordenação em ferramenta não isolada aguarda aprovação da administração.
+  seção Ferramentas isoladas). Toda versão nova da coordenação aguarda a aprovação da administração, com a descrição do que mudou.
 
 ## Backup
 

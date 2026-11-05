@@ -1007,6 +1007,8 @@ ALTER TABLE modulos ADD COLUMN IF NOT EXISTS pendente BOOLEAN NOT NULL DEFAULT F
 ALTER TABLE modulos ADD COLUMN IF NOT EXISTS criado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL;
 -- HTML novo enviado pela coordenação numa ferramenta não isolada: fica guardado, aguardando a aprovação da administração
 ALTER TABLE modulo_versoes ADD COLUMN IF NOT EXISTS aprovada BOOLEAN NOT NULL DEFAULT TRUE;
+-- o que mudou na versão, escrito por quem enviou (aparece na aprovação e em Versões anteriores)
+ALTER TABLE modulo_versoes ADD COLUMN IF NOT EXISTS descricao TEXT;
 ALTER TABLE modulos ADD COLUMN IF NOT EXISTS versao_pendente_id INTEGER;
 -- implantação aberta de uma análise que já tem contrato: os dados e o contrato assinado vêm de lá
 ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS contrato_id INTEGER REFERENCES contratos(id) ON DELETE SET NULL;
