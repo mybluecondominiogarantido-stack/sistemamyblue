@@ -8150,13 +8150,9 @@
 
       '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">2</span>Comissões</h2><span class="ajuda" style="margin:0">padrão: recorrência de 10% ou 5%; venda de 50% da 1ª taxa administrativa</span></div><div class="corpo grade-3">' +
       radiosCt('recorrencia', 'Comissão de recorrência? *', f.recorrencia, [['sim', 'Sim'], ['nao', 'Não']]) +
-      radiosCt('recorrencia_pct', 'Percentual da recorrência *', f.recorrencia_pct, [['10', '10%'], ['5', '5%'], ['outro', 'Outro percentual']],
-        { se: 'recorrencia:sim', extra: '<input class="campo" id="c_recorrencia_outro" data-se="recorrencia_pct:outro" style="width:110px" placeholder="%" value="' + esc(fmtNumCr(f.recorrencia_outro)) + '" aria-label="Percentual de recorrência pedido">',
-          ajuda: 'Outro percentual vai para a diretoria decidir antes da minuta.' }) +
+      radiosCt('recorrencia_pct', 'Percentual da recorrência *', f.recorrencia_pct, [['10', '10%'], ['5', '5%']], { se: 'recorrencia:sim' }) +
       radiosCt('venda', 'Comissão de venda? *', f.venda, [['sim', 'Sim'], ['nao', 'Não']]) +
-      radiosCt('venda_pct', 'Percentual da venda (sobre a 1ª taxa administrativa) *', f.venda_pct, [['50', '50% da 1ª taxa administrativa'], ['outro', 'Outro percentual']],
-        { se: 'venda:sim', extra: '<input class="campo" id="c_venda_outro" data-se="venda_pct:outro" style="width:110px" placeholder="%" value="' + esc(fmtNumCr(f.venda_outro)) + '" aria-label="Percentual de venda pedido">',
-          ajuda: 'Outro percentual vai para a diretoria decidir antes da minuta.' }) +
+      radiosCt('venda_pct', 'Percentual da venda (sobre a 1ª taxa administrativa) *', f.venda_pct, [['50', '50% da 1ª taxa administrativa']], { se: 'venda:sim' }) +
       '<div style="grid-column:1/-1" id="avisosCp"></div></div></section>' +
 
       '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">3</span>Outras solicitações</h2><span class="ajuda" style="margin:0">opcional</span></div><div class="corpo">' +
@@ -8167,8 +8163,8 @@
     return {
       empresa: v('empresa'), cnpj: v('cnpj'), representante_nome: v('representante_nome'), representante_cpf: v('representante_cpf'), representante_email: v('representante_email'),
       financeiro_nome: v('financeiro_nome'), financeiro_telefone: v('financeiro_telefone'), email_prestacao: v('email_prestacao'),
-      recorrencia: v('recorrencia'), recorrencia_pct: v('recorrencia_pct'), recorrencia_outro: numCr($('#c_recorrencia_outro', raiz).value),
-      venda: v('venda'), venda_pct: v('venda_pct'), venda_outro: numCr($('#c_venda_outro', raiz).value), outras: $('#c_outras', raiz).value.trim(),
+      recorrencia: v('recorrencia'), recorrencia_pct: v('recorrencia_pct'),
+      venda: v('venda'), venda_pct: v('venda_pct'), outras: $('#c_outras', raiz).value.trim(),
     };
   }
   function ligarSeCp(raiz) {
