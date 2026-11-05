@@ -243,3 +243,10 @@ test('papéis conferidos no servidor: Análise de Espólio (banco de documentos)
   assert.deepEqual(doc.papeis, ['implantacao']);
   assert.equal(doc.nomeCarteira, 'OLGA NOVA');
 });
+
+test('ferramenta nova sem Apps Script nasce como banco do portal, não como planilha Google', async () => {
+  assert.equal((await admin('POST', '/api/admin/modulos', { nome: 'Sem Planilha', slug: 'sem-planilha', setor_id: S('Comercial') })).status, 201);
+  assert.equal((await ctx.db.um("SELECT fonte_dados FROM modulos WHERE slug = 'sem-planilha'")).fonte_dados, 'interno');
+  // as ferramentas do catálogo que vieram do Apps Script continuam começando na planilha Google
+  assert.equal((await ctx.db.um("SELECT fonte_dados FROM modulos WHERE slug = 'suprimentos'")).fonte_dados, 'google');
+});

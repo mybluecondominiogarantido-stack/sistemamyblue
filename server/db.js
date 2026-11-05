@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS modulos (
   versao_id INTEGER,
   armazenamento TEXT NOT NULL DEFAULT 'navegador' CHECK (armazenamento IN ('navegador','usuario','compartilhado')),
   adaptador TEXT,
-  fonte_dados TEXT NOT NULL DEFAULT 'google' CHECK (fonte_dados IN ('google','interno')),
+  fonte_dados TEXT NOT NULL DEFAULT 'interno' CHECK (fonte_dados IN ('google','interno')),
   config JSONB NOT NULL DEFAULT '{}'::jsonb,
   criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
   atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -991,6 +991,10 @@ ALTER TABLE modulos ADD COLUMN IF NOT EXISTS criado_por INTEGER REFERENCES usuar
 -- HTML novo enviado pela coordenação numa ferramenta não isolada: fica guardado, aguardando a aprovação da administração
 ALTER TABLE modulo_versoes ADD COLUMN IF NOT EXISTS aprovada BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE modulos ADD COLUMN IF NOT EXISTS versao_pendente_id INTEGER;
+-- planilha Google só existe nas ferramentas que vieram do Apps Script (adaptador gas-*). As demais sempre gravaram
+-- no banco do portal e apareciam como "Planilha Google" só pelo valor padrão antigo da coluna
+ALTER TABLE modulos ALTER COLUMN fonte_dados SET DEFAULT 'interno';
+UPDATE modulos SET fonte_dados = 'interno' WHERE adaptador IS NULL AND fonte_dados = 'google';
 -- implantação aberta de uma análise que já tem contrato: os dados e o contrato assinado vêm de lá
 ALTER TABLE implantacoes ADD COLUMN IF NOT EXISTS contrato_id INTEGER REFERENCES contratos(id) ON DELETE SET NULL;
 -- meta de documentação marcada à mão pela coordenação ({resultado: bateu|faltou, motivo, por, em}) e cobranças ao executivo
@@ -1161,7 +1165,7 @@ async function semear(t) {
     await t.q(`INSERT INTO modulos (slug, nome, descricao, setor_id, icone, ordem, armazenamento, adaptador, fonte_dados, config)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb) ON CONFLICT (slug) DO NOTHING`, [
       m.slug, m.nome, m.descricao || '', setor ? setor.id : null, m.icone || 'app', m.ordem || 0,
-      m.armazenamento || 'navegador', m.adaptador || null, m.fonte_dados || 'google', JSON.stringify(m.config || {}),
+      m.armazenamento || 'navegador', m.adaptador || null, m.fonte_dados || (m.adaptador && m.adaptador !== 'claude-db' ? 'google' : 'interno'), JSON.stringify(m.config || {}),
     ]);
   }
   await t.q("INSERT INTO auditoria (acao, detalhe) VALUES ('catalogo_semeado', $1::jsonb)", [JSON.stringify({ modulos: MODULOS.map((m) => m.slug) })]);
@@ -1179,7 +1183,7 @@ async function semearNovosModulos(t) {
     await t.q(`INSERT INTO modulos (slug, nome, descricao, setor_id, icone, ordem, armazenamento, adaptador, fonte_dados, config)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb) ON CONFLICT (slug) DO NOTHING`, [
       m.slug, m.nome, m.descricao || '', setor ? setor.id : null, m.icone || 'app', m.ordem || 0,
-      m.armazenamento || 'navegador', m.adaptador || null, m.fonte_dados || 'google', JSON.stringify(m.config || {}),
+      m.armazenamento || 'navegador', m.adaptador || null, m.fonte_dados || (m.adaptador && m.adaptador !== 'claude-db' ? 'google' : 'interno'), JSON.stringify(m.config || {}),
     ]);
     await t.q("INSERT INTO auditoria (acao, modulo_slug) VALUES ('modulo_semeado', $1)", [m.slug]);
   }

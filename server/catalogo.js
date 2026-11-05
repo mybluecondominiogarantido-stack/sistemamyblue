@@ -17,7 +17,8 @@
  *      'gas-posicional' → leitura em linhas; alterações apontam a linha pela posição na planilha
  *      'claude-db'   → ferramenta feita como artefato do Claude (window.claude.use('db')); o portal
  *                      oferece o mesmo banco de documentos, guardado no banco do portal
- *  - fonte_dados: 'google' (continua na planilha Google) ou 'interno' (banco do portal)
+ *  - fonte_dados: 'google' (continua na planilha Google) ou 'interno' (banco do portal). Só as ferramentas de Apps
+ *    Script (adaptador gas-*) começam em 'google'; sem adaptador é sempre 'interno'
  *  - config.titulo: trecho do <title> usado para reconhecer o arquivo no import automático
  */
 
