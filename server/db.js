@@ -285,6 +285,14 @@ CREATE TABLE IF NOT EXISTS regras_acesso (
   atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
 );
 
+-- nomes do menu trocados em Configurações → Nomes e abas (sem linha = o nome padrão do portal)
+CREATE TABLE IF NOT EXISTS rotulos_menu (
+  chave TEXT PRIMARY KEY,
+  nome TEXT NOT NULL,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
+);
+
 CREATE TABLE IF NOT EXISTS tutoriais (
   slug TEXT PRIMARY KEY,
   video BYTEA,
@@ -941,7 +949,7 @@ CREATE TABLE IF NOT EXISTS renegociacao_relatorios (
    políticas, ninguém lê nem grava por lá; o portal conecta como dono das tabelas e não é afetado. */
 const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 'permissoes', 'armazenamento', 'colecoes', 'registros', 'documentos', 'auditoria',
   'setor_membros', 'ticket_categorias', 'tickets', 'ticket_eventos', 'ticket_anexos', 'notificacoes', 'condominios',
-  'links_pagina', 'links', 'links_campanhas', 'tutoriais', 'comissao_relatorios', 'comissao_leitores', 'comissao_planilhas', 'cdn_cache', 'regras_acesso',
+  'links_pagina', 'links', 'links_campanhas', 'tutoriais', 'comissao_relatorios', 'comissao_leitores', 'comissao_planilhas', 'cdn_cache', 'regras_acesso', 'rotulos_menu',
   'parametros_politica', 'faixas_precificacao', 'executivos', 'analise_protocolos', 'analises', 'analise_documentos', 'analise_unidades',
   'analise_lancamentos', 'analise_exclusoes', 'analise_alertas', 'analise_eventos',
   'implantacao_protocolos', 'implantacoes', 'implantacao_documentos', 'implantacao_eventos', 'implantacao_liberacoes', 'implantacao_parametros',
