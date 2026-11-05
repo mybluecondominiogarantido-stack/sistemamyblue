@@ -12,8 +12,8 @@
  *  - Avisos (sino e e-mail): demanda nova para o Jurídico; mudança de situação e comentário para quem pediu; no dia do prazo
  *    e quando passa do prazo, para quem é responsável (ou para o Jurídico, se ninguém foi escolhido); e, uma vez por semana,
  *    a cada pessoa, o que está esperando por ela há 15 dias ou mais (retorno, minuta ou assinatura).
- *  - Como chegou (canal): portal, e-mail, WhatsApp, telefone ou reunião. O Jurídico lança o que chega fora do portal: escolhe
- *    o tipo e quem pediu, e acompanha até a entrega.
+ *  - O pedido é sempre de quem está no portal (nome, setor e a data de hoje); o prazo sai da Tabela de prazos. O canal
+ *    (canal) fica no banco: portal, ou planilha para as importadas.
  *  - Na tela: "Pedir ao Jurídico" (Meus pedidos, de todo mundo) e "Painel do Jurídico" (Fila, Comigo, Todos…), em public/app.js.
  *
  * Quem faz o quê (definido no portal, nunca no código):
@@ -276,7 +276,8 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
     const equipe = p.juridico ? await equipeJuridica(db, regras) : [];
     res.json({
       perfil: p, status: STATUS, canais: CANAIS, hoje: diaBrasilia(), horas_contrato: HORAS_CONTRATO,
-      tipos: (await tipos()).map((t) => ({ ...t, dias: I.diasDoPrazo(t.horas) })),
+      // prazo de um pedido feito hoje; contrato de garantia e de parceria têm pedido próprio (Novo pedido → Contrato…)
+      tipos: (await tipos()).map((t) => ({ ...t, dias: I.diasDoPrazo(t.horas), prazo_hoje: prazoDe(diaBrasilia(), t.horas), pedido_proprio: t.contratos || /parceri/i.test(t.nome) })),
       eu: { id: u.id, nome: u.nome, setor: await setorDe(u.id), uf: await ufDe(u.id) },
       // o Jurídico lança pelos outros: escolhe a pessoa (o setor e a UF vêm dela) e quem fica responsável
       pessoas: p.juridico ? (await db.q(`SELECT u.id, u.nome, (SELECT s.nome FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id WHERE sm.usuario_id = u.id
@@ -315,11 +316,10 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
     const vis = req.query.vis === 'todas' && p.ve_tudo ? 'todas' : 'minhas';
     const lista = filtrar(await demandas(p, req.usuario, vis), req.query);
     const cab = ['#', 'Atividade', 'Solicitante', 'Cliente', 'Setor', 'Estado', 'Objeto da demanda', 'Data da Solicitação', 'Prazo de Entrega', 'Data da Entrega',
-      'Status', 'Observações', 'SLA', 'Responsável', 'Origem', 'Como chegou'];
+      'Status', 'Observações', 'SLA', 'Responsável', 'Origem'];
     const linhas = lista.map((d) => [d.origem === 'demanda' ? d.numero : d.ref, d.tipo, d.solicitante_nome, d.cliente, d.setor, d.uf, d.objeto, dataBr(d.solicitada_em),
       dataBr(d.prazo), dataBr(d.entregue_em), STATUS[d.status] + (d.atrasada ? ' (atrasada)' : ''), d.observacoes,
-      d.sla === 'dentro' ? 'Dentro do SLA' : d.sla === 'fora' ? 'Fora do SLA' : '', d.responsavel_nome || '', d.origem === 'contrato' ? 'Solicitação de Contrato' : d.origem === 'parceria' ? 'Solicitação de Contrato Parceria' : 'Demandas Jurídicas',
-      CANAIS[d.canal] || '']);
+      d.sla === 'dentro' ? 'Dentro do SLA' : d.sla === 'fora' ? 'Fora do SLA' : '', d.responsavel_nome || '', d.origem === 'contrato' ? 'Solicitação de Contrato' : d.origem === 'parceria' ? 'Solicitação de Contrato Parceria' : 'Demandas Jurídicas']);
     res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.set('Content-Disposition', `attachment; filename="Demandas Juridicas ${diaBrasilia()}.xlsx"`);
     res.send(criarXlsx([{ titulo: 'Demandas Jurídicas', cab, linhas }]));
@@ -377,8 +377,8 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
     const hoje = diaBrasilia();
     let solicitanteId = u.id, solicitanteNome = u.nome, solicitada = hoje, responsavel = null, status = 'pendente', entregue = null, canal = 'portal';
     if (p.juridico) {
-      // o Jurídico lança o que chegou por fora (e-mail, WhatsApp…); quem pede pelo portal é "portal"
-      canal = CANAIS[b.canal] && b.canal !== 'planilha' ? b.canal : 'email';
+      // o Jurídico ainda pode informar outro canal pela API; na tela, todo pedido é feito pelo portal
+      if (CANAIS[b.canal] && b.canal !== 'planilha') canal = b.canal;
       if (b.solicitante_id) {
         const s = await db.um('SELECT id, nome FROM usuarios WHERE id = $1 AND ativo', [Number(b.solicitante_id) || 0]);
         if (!s) return erro(res, 400, 'Solicitante não encontrado.');

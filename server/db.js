@@ -974,6 +974,12 @@ ALTER TABLE condominios ADD COLUMN IF NOT EXISTS sindico_nome TEXT NOT NULL DEFA
 -- Demandas Jurídicas: como o pedido chegou (portal, e-mail, WhatsApp…) e desde quando está na situação atual (aviso semanal)
 ALTER TABLE juridico_demandas ADD COLUMN IF NOT EXISTS canal TEXT NOT NULL DEFAULT '';
 ALTER TABLE juridico_demandas ADD COLUMN IF NOT EXISTS status_em DATE;
+-- a lista de atividades do Jurídico (a Tabela de Prazos da planilha), só quando a tabela ainda está vazia: depois, quem manda é o portal
+INSERT INTO juridico_tipos (nome, horas, ordem, contratos)
+  SELECT v.nome, v.horas, v.ordem, v.contratos FROM (VALUES ('Contrato (garantia)', 8, 0, TRUE), ('Aditivo', 16, 1, FALSE), ('Rescisão', 24, 2, FALSE),
+    ('Análise de contrato de fornecedor', 24, 3, FALSE), ('Contrato (parcerias)', 16, 4, FALSE), ('Resposta Rescisão', 24, 5, FALSE), ('Rescisão Terceiros', 24, 6, FALSE),
+    ('Solicitações diversas', 24, 7, FALSE), ('Parecer p. operação', 24, 8, FALSE)) AS v(nome, horas, ordem, contratos)
+  WHERE NOT EXISTS (SELECT 1 FROM juridico_tipos);
 UPDATE juridico_demandas SET canal = CASE WHEN importacao_id IS NOT NULL THEN 'planilha' WHEN criado_por = solicitante_id THEN 'portal' ELSE 'email' END WHERE canal = '';
 ALTER TABLE condominios ADD COLUMN IF NOT EXISTS sindico_telefone TEXT NOT NULL DEFAULT '';
 ALTER TABLE condominios ADD COLUMN IF NOT EXISTS sindico_email TEXT NOT NULL DEFAULT '';

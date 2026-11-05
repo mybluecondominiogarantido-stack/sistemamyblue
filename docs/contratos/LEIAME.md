@@ -165,8 +165,11 @@ entram pelo portal e ficam no banco.
 
 Tudo o que se pede ao Jurídico (aditivo, rescisão, análise de contrato de fornecedor, parecer…), no lugar da planilha
 "Acompanhamento — Atividades Jurídicas". Quem pede usa **Pedir ao Jurídico → Novo pedido → Outra atividade jurídica**;
-o Jurídico registra o que chega por e-mail, WhatsApp ou telefone em **Painel do Jurídico → Registrar demanda**: escolhe
-a atividade e quem pediu (o setor e o estado vêm do cadastro), e fica como responsável.
+o pedido sai sempre no nome de quem está no portal, com o setor e a data de hoje: a pessoa só escolhe a atividade (o
+prazo aparece na hora, já com a data), o cliente e o que precisa. A lista de atividades é a Tabela de Prazos da planilha
+(`AJUSTES` em `server/db.js` a cria quando a tabela está vazia); contrato de garantia e de parceria não aparecem nela,
+porque têm pedido próprio (`pedido_proprio`). Data da solicitação, situação, data de conclusão (entrega) e responsável só
+o Jurídico muda, depois, na demanda.
 
 | Parte | Arquivo |
 |---|---|
@@ -187,8 +190,8 @@ entregues; as entregues guardam o SLA que tiveram.
 
 **Situações:** Pendente, Em andamento, Aguardando retorno, Aguardando assinaturas, Concluído, Contrato perdido.
 
-**Como chegou** (`canal`): Portal (quem pede pelo portal), E-mail (o padrão quando o Jurídico registra), WhatsApp,
-Telefone, Reunião e Planilha (importada). Aparece na lista ("por e-mail"), no filtro de **Todos** e na planilha baixada.
+**Canal** (`canal`, só no banco): `portal` para o que é pedido no portal e `planilha` para o que foi importado (a API
+ainda aceita e-mail, WhatsApp, telefone e reunião, mas a tela não pergunta).
 
 **Fila e Comigo.** *Fila*: contratos e parcerias na fila e demandas em aberto sem responsável (pendentes ou sem entrega);
 na demanda, **Pegar** passa para quem clicou, em andamento. *Comigo*: tudo o que está em aberto com a pessoa. Nas duas,

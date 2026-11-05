@@ -1580,7 +1580,7 @@ module.exports = [
       await t.legenda('<b>Contrato de garantia</b> abre o pedido a partir da análise; <b>Contrato de parceria</b>, o formulário da empresa parceira; o resto é <b>Outra atividade jurídica</b>.', { etapa: B, ms: 3000 });
       await t.clicar('input[name=tipoPedJ][value=demanda]', { depois: 600 });
       await t.clicar('#pedJOk', { depois: 900 });
-      await t.legenda('Escolha a <b>atividade</b>: cada uma tem o seu prazo em horas úteis (8h = 1 dia útil), contado a partir do dia seguinte.', { etapa: B, ms: 300 });
+      await t.legenda('O pedido sai no seu nome, com o seu setor e a data de hoje. Escolha a <b>atividade</b>: o portal mostra na hora a <b>data do prazo</b>, pela Tabela de prazos do Jurídico.', { etapa: B, ms: 300 });
       await t.escolher('#djTipo', 'Aditivo (16h úteis)', { depois: 600 });
       await t.mostrar('#djPrazo', 2400);
       await t.legenda('Informe o <b>cliente</b> (a lista sugere os condomínios da Base de Clientes) e o que precisa ser feito.', { etapa: B, ms: 300 });
@@ -1610,7 +1610,7 @@ module.exports = [
       cen.ctFila = await contratoTut(base, 'Residencial Vila das Palmeiras');
       cen.ctMinuta = await contratoTut(base, 'Edifício Mirante do Sol', { ate: 'minuta' });
     },
-    abertura: ['Tudo o que chega ao Jurídico, num painel só.', ['Fila e Comigo', 'Registrar o que chegou por e-mail', 'Situação, entrega e SLA', 'Todos, Indicadores e Configurar']],
+    abertura: ['Tudo o que chega ao Jurídico, num painel só.', ['Fila e Pegar', 'Comigo: situação e conclusão (SLA)', 'Todos e Indicadores', 'Tabela de prazos']],
     async gravar(t, cen) {
       const A = '1 · Fila';
       await t.legenda('O <b>Painel do Jurídico</b> abre na <b>Fila</b>: contratos, parcerias e demandas que chegaram e ninguém pegou, com o prazo de cada um.', { etapa: A, ms: 600 });
@@ -1618,47 +1618,35 @@ module.exports = [
       await t.legenda('Contrato abre a tela dele, com <b>Assumir</b>. Demanda: clique em <b>Pegar</b> e ela passa para você.', { etapa: A, ms: 300 });
       await t.clicar(`[data-pegar="${cen.dj.semDono}"]`, { depois: 1800 });
 
-      const B = '2 · Pedido por e-mail';
-      await t.legenda('Chegou por e-mail, WhatsApp ou telefone? <b>Registrar demanda</b>: escolha a atividade e quem pediu. O setor e o estado vêm do cadastro.', { etapa: B, ms: 300 });
-      await t.clicar('#btRegJ', { depois: 900 });
-      await t.escolher('#djTipo', 'Parecer (24h úteis)', { depois: 500 });
-      await t.digitar('#djCliente', 'Condomínio Solar do Bosque');
-      await t.digitar('#djObjeto', 'Parecer sobre a cobrança de multa de mudança', { atraso: 30 });
-      await t.escolher('#djSolic', 'Bruna Reis', { depois: 900 });
-      await t.legenda('<b>Como chegou</b> já vem como e-mail, e você fica como responsável. A <b>data da solicitação</b> pode ser de outro dia: o prazo é contado a partir dela.', { etapa: B, ms: 300 });
-      await t.mostrar('#djCanal', 1600);
-      await t.mostrar('#djData', 1600);
-      await t.clicar('#djOk', { depois: 2400 });
-
-      const C = '3 · Comigo';
+      const C = '2 · Comigo';
       await t.legenda('Em <b>Comigo</b>, o que está com você: primeiro as atrasadas e as que vencem hoje.', { etapa: C, ms: 300 });
       await t.clicar('nav.abas a[href="#/juridico/painel/comigo"]', { depois: 1800 });
       await t.clicar(`#tbDj tr[data-id="${cen.dj.atrasada}"]`, { depois: 1600 });
-      await t.legenda('Mude a <b>situação</b>: quem pediu recebe o aviso. Em <b>Aguardando assinaturas</b> ou <b>Concluído</b>, a data da entrega vem com hoje (dá para corrigir). É ela que conta no SLA.', { etapa: C, ms: 300 });
+      await t.legenda('Mude a <b>situação</b>: quem pediu recebe o aviso. Em <b>Aguardando assinaturas</b> ou <b>Concluído</b>, a <b>data de conclusão</b> vem com hoje (dá para corrigir). É ela que conta no SLA.', { etapa: C, ms: 300 });
       await t.escolher('#djStatus', 'Aguardando assinaturas', { depois: 900 });
       await t.mostrar('#djEntrega', 1800);
       await t.clicar('#djSalvar', { depois: 2000 });
 
-      const D = '4 · Todos';
-      await t.legenda('Em <b>Todos</b>, os números de agora e a lista completa, com filtros por situação, atividade, setor, origem e <b>como chegou</b>.', { etapa: D, ms: 300 });
+      const D = '3 · Todos';
+      await t.legenda('Em <b>Todos</b>, os números de agora e a lista completa, com filtros por situação, atividade, setor e origem.', { etapa: D, ms: 300 });
       await t.clicar('nav.abas a[href="#/juridico/painel/todos"]', { depois: 1800 });
       await t.mostrar('#tilesDj', 2600);
-      await t.escolher('#fCaDj', 'E-mail', { depois: 1600 });
-      await t.escolher('#fCaDj', 'Chegou por qualquer canal', { depois: 800 });
+      await t.escolher('#fOrDj', 'Solicitação de Contrato', { depois: 1600 });
+      await t.escolher('#fOrDj', 'Todas as origens', { depois: 800 });
       await t.legenda('<b>Baixar planilha</b> leva a lista, com os filtros, para o Excel.', { etapa: D, ms: 2400 });
 
-      const E = '5 · Indicadores';
+      const E = '4 · Indicadores';
       await t.legenda('Em <b>Indicadores</b>, o % entregue no prazo por atividade e por mês (como o Resumo SLA da planilha) e, ao lado, os números dos contratos.', { etapa: E, ms: 300 });
       await t.clicar('nav.abas a[href="#/juridico/painel/indicadores"]', { depois: 1800 });
       await t.mostrar('#corpoDj section.painel table', 3400);
 
-      const F = '6 · Configurar';
+      const F = '5 · Configurar';
       await t.legenda('Em <b>Configurar</b>, a <b>Tabela de prazos</b>: as horas de cada atividade. As não entregues são recalculadas; as entregues guardam o SLA que tiveram.', { etapa: F, ms: 300 });
       await t.clicar('nav.abas a[href="#/juridico/painel/configurar"]', { depois: 1800 });
       await t.mostrar('#corpoDj table', 2800);
       await t.legenda('Avisos: no dia do prazo e quando ele passa, para quem é responsável; e, uma vez por semana, a quem pediu, o que está esperando por ele há 15 dias ou mais.', { etapa: F, ms: 3800 });
     },
-    resumo: ['<b>Fila</b> · Pegar · <b>Comigo</b>', '<b>Registrar demanda</b> do que chega por e-mail', 'Situação e entrega · <b>Todos</b> · <b>Indicadores</b> · <b>Configurar</b>'],
+    resumo: ['<b>Fila</b> · Pegar · <b>Comigo</b>', 'Situação e data de conclusão (SLA)', '<b>Todos</b> · <b>Indicadores</b> · <b>Configurar</b>'],
   },
 
   /* ======================= Gestão do setor ======================= */
