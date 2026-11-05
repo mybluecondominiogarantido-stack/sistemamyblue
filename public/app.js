@@ -242,10 +242,10 @@
         '<a href="#/carteira" class="' + (rota.indexOf('#/carteira') === 0 ? 'on' : '') + '">' + IC.casa + 'Base de Clientes</a>' +
         (resumoCredito && resumoCredito.acesso ? '<div class="grupo">Análise de Crédito</div><a href="#/credito" class="' + (rota.indexOf('#/credito') === 0 ? 'on' : '') + '">' + IC.escudo +
           '<span>Análise de Crédito</span><i data-contador="credito" class="contador" hidden></i></a>' : '') +
-        // Jurídico: Pedir ao Jurídico (todo mundo) e o Painel do Jurídico (Jurídico, diretoria e o setor Parceiros)
+        // Jurídico: Solicitações ao Jurídico (todo mundo) e o Painel do Jurídico (Jurídico, diretoria e o setor Parceiros)
         '<div class="grupo">Jurídico</div>' +
         '<a href="#/juridico/pedidos" class="' + (rota.indexOf('#/juridico/pedidos') === 0 ? 'on' : '') + '">' + IC.documento +
-          '<span>Pedir ao Jurídico</span><i data-contador="jur-pedidos" class="contador" hidden></i></a>' +
+          '<span>Solicitações ao Jurídico</span><i data-contador="jur-pedidos" class="contador" hidden></i></a>' +
         (temPainelJ() ? '<a href="#/juridico/painel" class="' + (rota.indexOf('#/juridico/painel') === 0 ? 'on' : '') + '">' + IC.pasta +
           '<span>Painel do Jurídico</span><i data-contador="jur-painel" class="contador" hidden></i></a>' : '') +
         (resumoImp && resumoImp.acesso ? '<div class="grupo">Implantação</div><a href="#/implantacao" class="' + (rota.indexOf('#/implantacao') === 0 ? 'on' : '') + '">' + IC.casa +
@@ -332,7 +332,7 @@
     // o Acompanhamento virou parte do Painel de implantação
     if (partes[0] === 'acompanhamento') { location.replace('#/implantacao/' + (ANTIGAS_ACOMP[partes[1]] || 'dashboard')); return; }
     if (partes[0] === 'implantacao') return /^\d+$/.test(partes[1] || '') ? (partes[2] === 'ficha' ? paginaFichaImp(Number(partes[1])) : paginaImplantacaoDetalhe(Number(partes[1]))) : paginaImplantacao(partes[1], partes[2]);
-    // Jurídico: Pedir ao Jurídico (#/juridico/pedidos), Painel do Jurídico (#/juridico/painel/<aba>/<sub>) e uma demanda (#/juridico/demanda/<id>)
+    // Jurídico: Solicitações ao Jurídico (#/juridico/pedidos), Painel do Jurídico (#/juridico/painel/<aba>/<sub>) e uma demanda (#/juridico/demanda/<id>)
     if (partes[0] === 'juridico') return partes[1] === 'demanda' && /^\d+$/.test(partes[2] || '') ? paginaJuridico('', '', '', Number(partes[2])) : paginaJuridico(partes[1], partes[2], partes[3]);
     if (partes[0] === 'contratos' && /^\d+$/.test(partes[1] || '')) return paginaContratoDetalhe(Number(partes[1]));
     if (partes[0] === 'parcerias' && /^\d+$/.test(partes[1] || '')) return paginaParceriaDetalhe(Number(partes[1]));
@@ -4797,7 +4797,7 @@
         '<label class="opcao-radio"><input type="radio" name="origImp" value="portal" checked><div><b>No portal</b><span>Escolha na lista dos seus contratos concluídos pelo Jurídico: as condições fechadas, o contrato assinado e a convenção vêm junto.</span></div></label>' +
         '<label class="opcao-radio"><input type="radio" name="origImp" value="fora"><div><b>Fora do portal</b><span>Anexe o contrato assinado e o retorno da análise. Você preenche o formulário; a advogada registra as condições do contrato depois que você enviar.</span></div></label></div>' +
         '<div data-orig="portal"><span class="rot">Seus contratos concluídos, ainda sem implantação</span>' +
-        '<div class="painel" style="box-shadow:none;overflow:hidden">' + (j.contratos.map(linhaCt).join('') || '<div class="vazio" style="border:0;padding:24px">Nenhum contrato concluído sem implantação. O contrato é pedido em <a href="#/juridico/pedidos">Pedir ao Jurídico</a>; quando o Jurídico concluir, ele aparece aqui.</div>') + '</div></div>' +
+        '<div class="painel" style="box-shadow:none;overflow:hidden">' + (j.contratos.map(linhaCt).join('') || '<div class="vazio" style="border:0;padding:24px">Nenhum contrato concluído sem implantação. O contrato é pedido em <a href="#/juridico/pedidos">Solicitações ao Jurídico</a>; quando o Jurídico concluir, ele aparece aqui.</div>') + '</div></div>' +
         '<div data-orig="fora" hidden><div class="pilha" style="gap:12px">' +
         '<div><span class="rot">Contrato assinado (PDF)</span><label class="btn ghost" style="align-self:flex-start">' + IC.enviar + 'Escolher o contrato assinado<input type="file" id="arqCtFora" accept="application/pdf" hidden></label><div id="nomeCtFora" class="ajuda"></div></div>' +
         '<div><span class="rot">Retorno da análise de crédito (PDF)</span><label class="btn ghost" style="align-self:flex-start">' + IC.enviar + 'Escolher o PDF do retorno<input type="file" id="arqPdfImp" accept="application/pdf" hidden></label><div id="lidoPdfImp" style="margin-top:12px"></div></div>' +
@@ -5162,7 +5162,7 @@
     }
     if (!ct) {
       return '<div class="msg aviso" style="margin-bottom:16px">Sem contrato assinado no portal para este condomínio. As condições do contrato ficam como o comercial preencher aqui' +
-        (d.pode.editar ? '; se o contrato ainda vai ser pedido, use <a href="#/juridico/pedidos">Pedir ao Jurídico</a>.' : '.') + '</div>';
+        (d.pode.editar ? '; se o contrato ainda vai ser pedido, use <a href="#/juridico/pedidos">Solicitações ao Jurídico</a>.' : '.') + '</div>';
     }
     var link = '<a href="#/contratos/' + ct.id + '">' + esc(ct.protocolo || 'solicitação em rascunho') + '</a>';
     if (!ct.fechado) return '<div class="msg info" style="margin-bottom:16px">Contrato ' + link + ': ' + esc((ETAPA_CT[ct.etapa] || [ct.etapa])[0].toLowerCase()) + '. As condições fechadas aparecem aqui quando a advogada concluir.</div>';
@@ -7546,7 +7546,7 @@
     try { resumoDj = await api('GET', '/api/juridico/resumo'); } catch (e) { return; }
     desenharContadorDj();
   }
-  /* contadores do menu Jurídico: em "Pedir ao Jurídico", o que espera pela pessoa (resposta, minuta, pendência);
+  /* contadores do menu Jurídico: em "Solicitações ao Jurídico", o que espera pela pessoa (resposta, minuta, pendência);
      no "Painel do Jurídico", o que é do Jurídico fazer (fila, com você, assinaturas, diretoria, cadastro de parceiros, atrasadas) */
   function desenharContadorDj() {
     var dj = resumoDj || {}, ct = resumoCt || {}, cp = resumoCp || {};
@@ -7576,10 +7576,10 @@
   }
   function prazoTipoDj(t) { return t.horas + 'h úteis · ' + t.dias + (t.dias === 1 ? ' dia útil' : ' dias úteis'); }
 
-  /* ======================= Jurídico: Pedir ao Jurídico e Painel do Jurídico ======================= */
+  /* ======================= Jurídico: Solicitações ao Jurídico e Painel do Jurídico ======================= */
   // Tudo o que se pede ao Jurídico num lugar só: contrato de garantia (Solicitação de Contrato), contrato de parceria
   // (Solicitação de Contrato Parceria) e as demais atividades (Demandas Jurídicas, inclusive o que chega por e-mail).
-  // Quem pede usa "Pedir ao Jurídico"; o Jurídico, a diretoria e o setor Parceiros, o "Painel do Jurídico".
+  // Quem pede usa "Solicitações ao Jurídico"; o Jurídico, a diretoria e o setor Parceiros, o "Painel do Jurídico".
   var ABAS_PJ = [['fila', 'Fila'], ['comigo', 'Comigo'], ['assinaturas', 'Assinaturas'], ['todos', 'Todos'], ['diretoria', 'Diretoria'],
     ['parceiros', 'Cadastro de parceiros'], ['indicadores', 'Indicadores'], ['configurar', 'Configurar']];
   async function metasJuridico() {
@@ -7610,7 +7610,7 @@
     if (secao === 'painel' && !abas.length) secao = 'pedidos';
     var painel = secao === 'painel';
     if (painel && !abas.some(function (a) { return a[0] === aba; })) aba = abas[0][0];
-    var titulo = painel ? 'Painel do Jurídico' : 'Pedir ao Jurídico';
+    var titulo = painel ? 'Painel do Jurídico' : 'Solicitações ao Jurídico';
     var nomeAba = painel ? abas.find(function (a) { return a[0] === aba; })[1] : 'Meus pedidos';
     definirBarra('<span class="setor">Jurídico</span><span class="sep">/</span><span class="nome">' + titulo + ' · ' + esc(nomeAba) + '</span>');
     var lista = !painel || ['fila', 'comigo', 'todos'].indexOf(aba) >= 0;
@@ -7874,7 +7874,7 @@
 
   function novaDemandaDj(m, depois) {
     var mo = modal({ titulo: 'Novo pedido ao Jurídico', largo: true,
-      corpo: '<div class="msg info" style="margin-bottom:14px">O Jurídico recebe o aviso na hora. Você acompanha em <b>Pedir ao Jurídico</b> e é avisado quando a situação mudar.</div>' + formDj(m, null, true),
+      corpo: '<div class="msg info" style="margin-bottom:14px">O Jurídico recebe o aviso na hora. Você acompanha em <b>Solicitações ao Jurídico</b> e é avisado quando a situação mudar.</div>' + formDj(m, null, true),
       pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="djOk">' + IC.enviar + 'Enviar ao Jurídico</button>' });
     ligarFormDj(mo, m);
     $('#djOk', mo).onclick = async function () {

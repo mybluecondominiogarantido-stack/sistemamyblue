@@ -767,7 +767,7 @@ module.exports = [
       await t.mostrar('a.btn.primary[target=_blank]', 2800);
 
       const C = '2 · Contrato';
-      await t.legenda('Com o retorno liberado, vá em <b>Jurídico → Pedir ao Jurídico</b>, clique em <b>Novo pedido</b> e escolha <b>Contrato de garantia</b>.', { etapa: C, ms: 300 });
+      await t.legenda('Com o retorno liberado, vá em <b>Jurídico → Solicitações ao Jurídico</b>, clique em <b>Novo pedido</b> e escolha <b>Contrato de garantia</b>.', { etapa: C, ms: 300 });
       await t.ir('#/juridico/pedidos', 1600);
       await t.mostrar(menu('#/juridico/pedidos'), 1600, { dx: 0.3 });
       await t.clicar('#btNovoJ', { depois: 900 });
@@ -1321,7 +1321,7 @@ module.exports = [
     abertura: ['Da negociação fechada com o síndico ao contrato assinado.', ['Pedir a partir da análise', 'Condições, vigência e primeiro vencimento', 'Objeções e solicitações', 'Enviar, ajuste e assinatura']],
     async gravar(t, cen) {
       const A = '1 · Nova solicitação';
-      await t.legenda('No menu <b>Jurídico → Pedir ao Jurídico</b>, o contrato de garantia substitui o formulário do Forms e o e-mail com o PDF.', { etapa: A, ms: 600 });
+      await t.legenda('No menu <b>Jurídico → Solicitações ao Jurídico</b>, o contrato de garantia substitui o formulário do Forms e o e-mail com o PDF.', { etapa: A, ms: 600 });
       await t.mostrar(menu('#/juridico/pedidos'), 1800, { dx: 0.3 });
       await t.legenda('Clique em <b>Novo pedido</b>, escolha <b>Contrato de garantia</b> e depois a análise: os dados vêm preenchidos.', { etapa: A, ms: 400 });
       await t.clicar('#btNovoJ', { depois: 900 });
@@ -1364,7 +1364,7 @@ module.exports = [
       await t.mostrar('#btAjusteCt', 2600);
       await t.legenda('Aprovou? <b>Síndico aprovou: pedir assinatura</b>. O Jurídico manda assinar, anexa a via assinada e registra as condições fechadas. Você é avisado em cada passo e, no fim, clica em <b>Solicitar implantação</b>.', { etapa: D, ms: 400 });
       await t.mostrar('#btPedirAssCt', 3600);
-      await t.legenda('Todos os seus pedidos ao Jurídico, até os assinados, ficam em <b>Pedir ao Jurídico</b>. O que espera por você aparece marcado <b>com você</b>.', { etapa: D, ms: 300 });
+      await t.legenda('Todos os seus pedidos ao Jurídico, até os assinados, ficam em <b>Solicitações ao Jurídico</b>. O que espera por você aparece marcado <b>com você</b>.', { etapa: D, ms: 300 });
       await t.ir('#/juridico/pedidos', 1800);
       await t.mostrar('#tbDj', 2400);
     },
@@ -1442,7 +1442,7 @@ module.exports = [
     abertura: ['Do pedido do contrato com a empresa parceira ao parceiro na base de comissão.', ['Novo pedido: contrato de parceria', 'Empresa, representante e financeiro', 'Comissões de recorrência e de venda', 'Minuta, ajuste e assinatura']],
     async gravar(t, cen) {
       const A = '1 · Novo pedido';
-      await t.legenda('No menu <b>Jurídico → Pedir ao Jurídico</b>, o contrato de parceria substitui o formulário do Forms e o e-mail com o PDF.', { etapa: A, ms: 600 });
+      await t.legenda('No menu <b>Jurídico → Solicitações ao Jurídico</b>, o contrato de parceria substitui o formulário do Forms e o e-mail com o PDF.', { etapa: A, ms: 600 });
       await t.mostrar(menu('#/juridico/pedidos'), 1600, { dx: 0.3 });
       await t.legenda('Clique em <b>Novo pedido</b> e escolha <b>Contrato de parceria</b>.', { etapa: A, ms: 300 });
       await t.clicar('#btNovoJ', { depois: 900 });
@@ -1478,7 +1478,7 @@ module.exports = [
       await t.mostrar('#btAjusteCp', 2400);
       await t.legenda('Aprovou? <b>Parceiro aprovou: pedir assinatura</b>. Assinado, o Jurídico registra as comissões e o setor Parceiros cadastra o parceiro; você é avisado quando ele puder indicar condomínios.', { etapa: D, ms: 300 });
       await t.mostrar('#btPedirAssCp', 3400);
-      await t.legenda('Seus pedidos ficam em <b>Pedir ao Jurídico → Meus pedidos</b>, com o que espera por você marcado.', { etapa: D, ms: 300 });
+      await t.legenda('Seus pedidos ficam em <b>Solicitações ao Jurídico → Meus pedidos</b>, com o que espera por você marcado.', { etapa: D, ms: 300 });
       await t.ir('#/juridico/pedidos', 1800);
       await t.mostrar('#tbDj', 2600);
     },
@@ -1568,7 +1568,7 @@ module.exports = [
     abertura: ['Tudo o que você pede ao Jurídico, num lugar só.', ['Meus pedidos e o que espera por você', 'Novo pedido: contrato ou outra atividade', 'O prazo de entrega', 'Responder ao Jurídico']],
     async gravar(t, cen) {
       const A = '1 · Meus pedidos';
-      await t.legenda('Contrato de garantia, contrato de parceria, aditivo, rescisão, parecer: tudo o que você pede ao Jurídico fica em <b>Jurídico → Pedir ao Jurídico</b>.', { etapa: A, ms: 300 });
+      await t.legenda('Contrato de garantia, contrato de parceria, aditivo, rescisão, parecer: tudo o que você pede ao Jurídico fica em <b>Jurídico → Solicitações ao Jurídico</b>.', { etapa: A, ms: 300 });
       await t.clicar(menu('#/juridico/pedidos'), { depois: 1800, dx: 0.3 });
       await t.legenda('Em <b>Meus pedidos</b>, cada um com a situação, o prazo, a entrega e se saiu dentro do prazo. O que espera por você vem marcado <b>com você</b>.', { etapa: A, ms: 600 });
       await t.mostrar('#esperaDj', 2400);
@@ -1599,7 +1599,7 @@ module.exports = [
       await t.clicar(fecharModal, { depois: 800 });
       await t.legenda('Pedido parado com você há <b>15 dias ou mais</b>? Uma vez por semana o portal manda a lista no sino e por e-mail, até ele andar.', { etapa: C, ms: 3600 });
     },
-    resumo: ['<b>Jurídico → Pedir ao Jurídico</b> · <b>Novo pedido</b>', 'Contrato de garantia, de parceria ou outra atividade', 'Acompanhe em <b>Meus pedidos</b> e responda pelo comentário'],
+    resumo: ['<b>Jurídico → Solicitações ao Jurídico</b> · <b>Novo pedido</b>', 'Contrato de garantia, de parceria ou outra atividade', 'Acompanhe em <b>Meus pedidos</b> e responda pelo comentário'],
   },
   {
     nome: 'juridico-demandas-conduzir',

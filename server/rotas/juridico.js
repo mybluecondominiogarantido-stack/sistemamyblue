@@ -14,7 +14,7 @@
  *    a cada pessoa, o que está esperando por ela há 15 dias ou mais (retorno, minuta ou assinatura).
  *  - O pedido é sempre de quem está no portal (nome, setor e a data de hoje); o prazo sai da Tabela de prazos. O canal
  *    (canal) fica no banco: portal, ou planilha para as importadas.
- *  - Na tela: "Pedir ao Jurídico" (Meus pedidos, de todo mundo) e "Painel do Jurídico" (Fila, Comigo, Todos…), em public/app.js.
+ *  - Na tela: "Solicitações ao Jurídico" (Meus pedidos, de todo mundo) e "Painel do Jurídico" (Fila, Comigo, Todos…), em public/app.js.
  *
  * Quem faz o quê (definido no portal, nunca no código):
  *  - Jurídico: quem é do setor Jurídico ou tem a permissão "Elaborar as minutas de contrato" (Configurações → Acessos →

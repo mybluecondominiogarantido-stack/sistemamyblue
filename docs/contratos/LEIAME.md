@@ -11,7 +11,7 @@ Demandas Jurídicas:
 
 | Menu | Endereço | Quem vê | Abas |
 |---|---|---|---|
-| **Pedir ao Jurídico** | `#/juridico/pedidos` | todo mundo | **Meus pedidos** (contratos, parcerias e demandas, com o que espera por você) e o botão **Novo pedido** (contrato de garantia, contrato de parceria ou outra atividade) |
+| **Solicitações ao Jurídico** | `#/juridico/pedidos` | todo mundo | **Meus pedidos** (contratos, parcerias e demandas, com o que espera por você) e o botão **Novo pedido** (contrato de garantia, contrato de parceria ou outra atividade) |
 | **Painel do Jurídico** | `#/juridico/painel/<aba>` | Jurídico, diretoria e setor Parceiros | **Fila**, **Comigo**, **Assinaturas** (contratos · parcerias), **Todos**, **Diretoria** (contratos · parcerias), **Cadastro de parceiros**, **Indicadores** (prazos e SLA · contratos), **Configurar** (Tabela de prazos · Importar planilha) |
 
 O contrato e a parceria continuam abrindo na tela deles (`#/contratos/<id>`, `#/parcerias/<id>`); a demanda abre em
@@ -164,7 +164,7 @@ entram pelo portal e ficam no banco.
 ## Demandas Jurídicas
 
 Tudo o que se pede ao Jurídico (aditivo, rescisão, análise de contrato de fornecedor, parecer…), no lugar da planilha
-"Acompanhamento — Atividades Jurídicas". Quem pede usa **Pedir ao Jurídico → Novo pedido → Outra atividade jurídica**;
+"Acompanhamento — Atividades Jurídicas". Quem pede usa **Solicitações ao Jurídico → Novo pedido → Outra atividade jurídica**;
 o pedido sai sempre no nome de quem está no portal, com o setor e a data de hoje: a pessoa só escolhe a atividade (o
 prazo aparece na hora, já com a data), o cliente e o que precisa. A lista de atividades é a Tabela de Prazos da planilha
 (`AJUSTES` em `server/db.js` a cria quando a tabela está vazia); contrato de garantia e de parceria não aparecem nela,
@@ -176,7 +176,7 @@ o Jurídico muda, depois, na demanda.
 | Rotas (perfil, lista, uma demanda, comentário, Tabela de prazos, indicadores, planilha, importação) e a rotina de prazos | `server/rotas/juridico.js` |
 | Leitura e conferência da planilha (títulos, Tabela de Prazos, datas, status, solicitante, o que já está no portal) e os dias úteis | `server/juridico/importacao.js` |
 | Tabelas `juridico_tipos`, `juridico_demandas` (com `canal` e `status_em`), `juridico_eventos`, `juridico_importacoes`, `juridico_lembretes` | `server/db.js` |
-| Telas | `public/app.js` (blocos Demandas Jurídicas e "Jurídico: Pedir ao Jurídico e Painel do Jurídico") |
+| Telas | `public/app.js` (blocos Demandas Jurídicas e "Jurídico: Solicitações ao Jurídico e Painel do Jurídico") |
 | Testes (dados fictícios) | `test/juridico.test.js` |
 | Tutoriais | `juridico-demandas-pedir` e `juridico-demandas-conduzir` (`server/tutoriais.js`, `docs/tutoriais/fonte/roteiros.js`) |
 
