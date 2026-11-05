@@ -7335,7 +7335,7 @@
     var grupo = function (etapa, titulo, ajuda, desde, botao) {
       var lista = r.contratos.filter(function (c) { return c.etapa === etapa; });
       return '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>' + titulo + '</h2><span class="etiqueta ' + ETAPA_CT[etapa][1] + '">' + lista.length + '</span><span class="ajuda" style="margin:0">' + ajuda + '</span></div>' +
-        (lista.length ? '<div class="tabela-wrap"><table style="min-width:820px"><thead><tr><th>Protocolo</th><th>Condomínio</th><th>Executivo</th><th>Desde</th><th></th></tr></thead><tbody>' +
+        (lista.length ? '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Protocolo</th><th>Condomínio</th><th>Executivo</th><th>Desde</th><th></th></tr></thead><tbody>' +
           lista.map(function (c) {
             return '<tr class="clicavel" data-id="' + c.id + '"><td style="white-space:nowrap"><b>' + esc(c.protocolo) + '</b></td><td><b>' + esc(c.condominio) + '</b>' + (c.sem_convencao ? ' ' + etq(['sem convenção: peça antes de assinar', 'vermelha']) : '') +
               '<span class="sec">' + esc(c.uf || '') + (c.ajustes ? ' · ' + c.ajustes + ' ajuste(s)' : '') + '</span></td>' +
@@ -7442,7 +7442,7 @@
       '<section class="panel-ct"><div class="h-row-ct"><div><h2>Comparativo mês a mês — ' + f.ano + '</h2><div class="h-sub">Solicitados, aguardando assinatura, em assinatura e assinados em cada mês. Clique num mês para ver os números dele.</div></div>' +
         '<div class="legenda-ct">' + SERIES.map(function (x) { return '<span><i style="background:' + x[3] + '"></i>' + x[1] + '</span>'; }).join('') + '</div></div>' +
         '<div class="chart-ct"><svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Comparativo mês a mês em ' + f.ano + ': solicitados, aguardando assinatura, em assinatura e assinados">' + svg + '</svg></div>' +
-        '<details class="tab-ct"><summary>Ver em tabela</summary><div class="tabela-wrap"><table><thead><tr><th>Mês</th>' + SERIES.map(function (x) { return '<th style="text-align:right">' + x[1] + '</th>'; }).join('') + '</tr></thead><tbody>' +
+        '<details class="tab-ct"><summary>Ver em tabela</summary><div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Mês</th>' + SERIES.map(function (x) { return '<th style="text-align:right">' + x[1] + '</th>'; }).join('') + '</tr></thead><tbody>' +
         (mesesTab.map(function (m) {
           return '<tr' + (f.mes === m.mes ? ' class="sel-ct"' : '') + '><td>' + MESES_LONGO_CT[m.mes - 1] + '</td>' +
             SERIES.map(function (x) { return '<td style="text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap"><b>' + m[x[0]] + '</b>' + variacao(m, x[0]) + '</td>'; }).join('') + '</tr>';
@@ -7829,7 +7829,7 @@
   /* listas da Solicitação de Contrato e da Parceria por visão (no Painel: Diretoria, Assinaturas das parcerias, Cadastro de parceiros) */
   function listaCt(vis) {
     $('#corpoCt').innerHTML = '<div class="painel"><div class="cab-painel"><input class="campo" id="qCt" type="search" placeholder="Buscar por condomínio, CNPJ ou protocolo" style="max-width:360px"></div>' +
-      '<div class="tabela-wrap"><table style="min-width:960px"><thead><tr><th>Protocolo</th><th>Condomínio</th><th>Origem</th><th>Executivo</th><th>Situação</th><th>Com quem</th><th>Prazo da minuta</th></tr></thead><tbody id="tbCt"></tbody></table></div></div>';
+      '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Protocolo</th><th>Condomínio</th><th>Origem</th><th>Executivo</th><th>Situação</th><th>Com quem</th><th>Prazo da minuta</th></tr></thead><tbody id="tbCt"></tbody></table></div></div>';
     var seq = 0;
     async function carregar() {
       var meu = ++seq;
@@ -7846,7 +7846,7 @@
   }
   function listaCp(vis) {
     $('#corpoCp').innerHTML = '<div class="painel"><div class="cab-painel"><input class="campo" id="qCp" type="search" placeholder="Buscar por empresa, CNPJ ou protocolo" style="max-width:360px"></div>' +
-      '<div class="tabela-wrap"><table style="min-width:900px"><thead><tr><th>Protocolo</th><th>Empresa parceira</th><th>Pedida por</th><th>Situação</th><th>Com quem</th><th>Prazo da minuta</th></tr></thead><tbody id="tbCp"></tbody></table></div></div>';
+      '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Protocolo</th><th>Empresa parceira</th><th>Pedida por</th><th>Situação</th><th>Com quem</th><th>Prazo da minuta</th></tr></thead><tbody id="tbCp"></tbody></table></div></div>';
     var seq = 0;
     async function carregar() {
       var meu = ++seq;
@@ -7887,7 +7887,7 @@
         opcoes([['', 'Todas as origens'], ['demanda', 'Demandas'], ['contrato', 'Solicitação de Contrato'], ['parceria', 'Solicitação de Contrato Parceria']], f.origem) + '</select>' +
         '' : '') +
       (todas || minhas ? '<select class="campo" id="fAnoDj" style="width:auto" aria-label="Ano da solicitação"></select>' : '') + '</div>' +
-      '<div class="tabela-wrap"><table style="min-width:1080px"><thead><tr><th>Nº</th><th>Atividade</th><th>' + (minhas ? 'Com quem' : 'Solicitante') + '</th><th>Cliente / objeto</th><th>Solicitada</th><th>Prazo</th><th>Entrega</th><th>Situação</th><th>' + (vis === 'fila' ? '' : 'SLA') + '</th></tr></thead>' +
+      '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Nº</th><th>Atividade</th><th>' + (minhas ? 'Com quem' : 'Solicitante') + '</th><th>Cliente / objeto</th><th>Solicitada</th><th>Prazo</th><th>Entrega</th><th>Situação</th><th>' + (vis === 'fila' ? '' : 'SLA') + '</th></tr></thead>' +
       '<tbody id="tbDj"></tbody></table></div><div class="ajuda" id="rodapeDj" style="padding:10px 16px"></div></div>';
     // em Meus pedidos, com quem está o pedido agora
     var comQuem = function (d) {
@@ -8122,12 +8122,12 @@
         tile('Em aberto agora', R.abertas) + tile('Passaram do prazo', R.atrasadas, 'sem entrega, prazo vencido', true) + tile('Contratos perdidos', R.perdidos, 'solicitados em ' + r.ano) + '</div>' +
       '<section class="painel"><div class="cab-painel"><h2>% dentro do SLA por atividade — ' + r.ano + '</h2></div>' +
       '<div class="corpo" style="padding-top:0"><p class="ajuda" style="margin:0 0 8px">Pela data da entrega; só as demandas entregues. Embaixo de cada % , quantas foram no prazo do total entregue.</p></div>' +
-      '<div class="tabela-wrap"><table style="min-width:980px"><thead><tr><th>Atividade</th>' + MES.map(function (x) { return '<th style="text-align:center">' + x + '</th>'; }).join('') + '<th style="text-align:center">Ano</th></tr></thead><tbody>' +
+      '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Atividade</th>' + MES.map(function (x) { return '<th style="text-align:center">' + x + '</th>'; }).join('') + '<th style="text-align:center">Ano</th></tr></thead><tbody>' +
       (r.tipos.map(function (t) { return '<tr><td><b>' + esc(t.nome) + '</b></td>' + t.meses.map(function (c) { return celula(c); }).join('') + celula(t.total, true) + '</tr>'; }).join('') ||
         '<tr><td colspan="14"><div class="vazio" style="border:0;padding:24px">Nenhuma entrega em ' + r.ano + '.</div></td></tr>') +
       (r.tipos.length ? '<tr class="sel-ct"><td><b>Total</b></td>' + r.total.meses.map(function (c) { return celula(c); }).join('') + celula(r.total.total, true) + '</tr>' : '') +
       '</tbody></table></div></section>' +
-      '<section class="painel" style="margin-top:16px"><div class="cab-painel"><h2>Por setor — ' + r.ano + '</h2></div><div class="tabela-wrap"><table><thead><tr><th>Setor</th><th style="text-align:right">Solicitadas</th>' +
+      '<section class="painel" style="margin-top:16px"><div class="cab-painel"><h2>Por setor — ' + r.ano + '</h2></div><div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Setor</th><th style="text-align:right">Solicitadas</th>' +
       '<th style="text-align:right">Entregues</th><th style="text-align:center">No SLA</th><th style="text-align:right">Em aberto agora</th></tr></thead><tbody>' +
       (r.setores.map(function (s) {
         return '<tr><td><b>' + esc(s.nome) + '</b></td><td style="text-align:right">' + s.solicitadas + '</td><td style="text-align:right">' + s.sla.total + '</td>' + celula(s.sla) + '<td style="text-align:right">' + s.abertas + '</td></tr>';
@@ -8143,7 +8143,7 @@
       $('#corpoDj').innerHTML = '<div class="painel"><div class="cab-painel"><h2>Tabela de prazos</h2></div><div class="corpo" style="padding-top:0"><p class="ajuda" style="margin:0">' +
         'O prazo de cada atividade, em horas úteis: cada 8h é um dia útil (arredondado para cima), contado a partir do dia seguinte à solicitação, sem fins de semana e feriados. ' +
         'Mudou o prazo? As demandas ainda não entregues desse tipo são recalculadas; as entregues guardam o SLA que tiveram. Tipo que não se usa mais: desmarque <b>Em uso</b>.</p></div>' +
-        '<div class="tabela-wrap"><table><thead><tr><th>Tipo de atividade</th><th style="width:130px">Prazo (h úteis)</th><th>Dias úteis</th><th style="text-align:center">Em uso</th>' +
+        '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Tipo de atividade</th><th style="width:130px">Prazo (h úteis)</th><th>Dias úteis</th><th style="text-align:center">Em uso</th>' +
         '<th style="text-align:center" title="Os pedidos da Solicitação de Contrato aparecem na lista e nos indicadores como esta atividade">Recebe a Solicitação de Contrato</th></tr></thead><tbody>' +
         linhas.map(function (t, k) {
           var dias = Math.max(1, Math.ceil((Number(t.horas) || 0) / 8));
@@ -8188,7 +8188,7 @@
       (ativo ? '<div class="msg aviso">Já existe uma importação ativa (' + dataHoraCr(ativo.criado_em) + ', ' + ativo.ativas + ' demanda(s)). Para importar de novo, desfaça a anterior abaixo.</div>' :
         '<div class="arquivo-envio"><input class="campo" id="djArq" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="flex:1;min-width:220px">' +
         '<button class="btn primary" id="djLer">' + IC.enviar + 'Ler planilha</button></div>') + '<div id="djPrevia"></div></div></div>' +
-      (lotes.length ? '<section class="painel" style="margin-top:16px"><div class="cab-painel"><h2>Importações</h2></div><div class="tabela-wrap"><table><thead><tr><th>Quando</th><th>Quem</th><th style="text-align:right">Importadas</th><th style="text-align:right">No portal hoje</th><th></th></tr></thead><tbody>' +
+      (lotes.length ? '<section class="painel" style="margin-top:16px"><div class="cab-painel"><h2>Importações</h2></div><div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Quando</th><th>Quem</th><th style="text-align:right">Importadas</th><th style="text-align:right">No portal hoje</th><th></th></tr></thead><tbody>' +
         lotes.map(function (l) {
           return '<tr><td>' + dataHoraCr(l.criado_em) + '</td><td>' + esc(l.criado_por_nome || '—') + '</td><td style="text-align:right">' + (l.resumo.importadas || 0) + '</td><td style="text-align:right">' + l.ativas + '</td>' +
             '<td style="text-align:right">' + (l.desfeita_em ? '<span class="sec">desfeita em ' + dataHoraCr(l.desfeita_em) + '</span>' : '<button class="btn ghost sm" data-desfazer="' + l.id + '">Desfazer</button>') + '</td></tr>';
@@ -8220,7 +8220,7 @@
       var tabela = function (titulo, itens, marcar) {
         if (!itens.length) return '';
         return '<details class="painel"' + (marcar ? ' open' : '') + '><summary class="cab-painel" style="cursor:pointer"><h2 style="display:inline;font-size:14px">' + titulo + ' (' + itens.length + ')</h2></summary>' +
-          '<div class="tabela-wrap"><table><thead><tr><th>' + (marcar ? 'Importar?' : '') + '</th><th>Linha</th><th>#</th><th>Atividade</th><th>Solicitante</th><th>Cliente</th><th>Solicitada</th><th>Observação</th></tr></thead><tbody>' +
+          '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>' + (marcar ? 'Importar?' : '') + '</th><th>Linha</th><th>#</th><th>Atividade</th><th>Solicitante</th><th>Cliente</th><th>Solicitada</th><th>Observação</th></tr></thead><tbody>' +
           itens.map(function (x) { return linhaIt(x, marcar ? '<input type="checkbox" data-incluir="' + x.linha + '" aria-label="Importar a linha ' + x.linha + ' mesmo assim">' : ''); }).join('') + '</tbody></table></div></details>';
       };
       // avisos agrupados (ex.: "solicitante sem cadastro no portal" em muitas linhas)
@@ -8705,6 +8705,21 @@
     window.addEventListener('hashchange', rotear);
     // o título das telas fixas acompanha o nome trocado no menu
     new MutationObserver(function () { $$('#conteudo .pagina h1').forEach(function (h) { trocarNomesFixos(h, CHAVE_DO_ITEM); }); }).observe($('#conteudo'), { childList: true });
+    // tabelas responsivas (.tabela-resp): cada célula leva o nome da coluna, que aparece quando a tabela vira cartões na tela estreita
+    var rotularTabelas = function () {
+      $$('#conteudo table.tabela-resp').forEach(function (t) {
+        var cab = $$('thead th', t).map(function (th) { return th.textContent.trim(); });
+        $$('tbody > tr', t).forEach(function (tr) {
+          var i = 0;
+          Array.prototype.forEach.call(tr.children, function (td) {
+            var rot = td.colSpan > 1 ? '' : (cab[i] || '');
+            if (td.getAttribute('data-rotulo') !== rot) td.setAttribute('data-rotulo', rot);
+            i += td.colSpan || 1;
+          });
+        });
+      });
+    };
+    new MutationObserver(rotularTabelas).observe($('#conteudo'), { childList: true, subtree: true });
     rotear();
   }
   iniciar();
