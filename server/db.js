@@ -917,6 +917,13 @@ CREATE TABLE IF NOT EXISTS juridico_eventos (
 );
 CREATE INDEX IF NOT EXISTS idx_juridico_eventos ON juridico_eventos(demanda_id, criado_em);
 
+-- aviso semanal do que espera por quem pediu há 15 dias ou mais: quando cada pessoa recebeu o último
+CREATE TABLE IF NOT EXISTS juridico_lembretes (
+  usuario_id INTEGER PRIMARY KEY REFERENCES usuarios(id) ON DELETE CASCADE,
+  enviado_em DATE NOT NULL,
+  itens INTEGER NOT NULL DEFAULT 0
+);
+
 -- renegociação do Controle de Renegociações que virou ticket para o Crédito (uma por renegociação)
 -- e as condições que o ticket já tem (as mudanças seguintes viram comentário no mesmo ticket)
 CREATE TABLE IF NOT EXISTS renegociacao_tickets (
@@ -948,7 +955,7 @@ const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 
   'implantacao_protocolos', 'implantacoes', 'implantacao_documentos', 'implantacao_eventos', 'implantacao_liberacoes', 'implantacao_parametros',
   'implantacao_autorizacoes', 'implantacao_pausas', 'implantacao_fichas', 'implantacao_ficha_versoes', 'implantacao_antecipacoes', 'implantacao_importacoes',
   'contrato_protocolos', 'contratos', 'contrato_documentos', 'contrato_eventos', 'parceria_protocolos', 'parcerias', 'parceria_documentos', 'parceria_eventos', 'renegociacao_tickets', 'renegociacao_relatorios',
-  'juridico_tipos', 'juridico_importacoes', 'juridico_demandas', 'juridico_eventos'];
+  'juridico_tipos', 'juridico_importacoes', 'juridico_demandas', 'juridico_eventos', 'juridico_lembretes'];
 const RLS = TABELAS.map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`).join(';\n');
 
 /* Ajustes em bancos já existentes (rodam a cada início e não fazem nada se já estiverem aplicados). */
@@ -972,6 +979,16 @@ ALTER TABLE condominios ADD COLUMN IF NOT EXISTS criado_em TIMESTAMPTZ NOT NULL 
 ALTER TABLE condominios ADD COLUMN IF NOT EXISTS atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL;
 -- síndico do condomínio (nome, telefone e e-mail): vem do formulário da implantação na entrada na Carteira
 ALTER TABLE condominios ADD COLUMN IF NOT EXISTS sindico_nome TEXT NOT NULL DEFAULT '';
+-- Demandas Jurídicas: como o pedido chegou (portal, e-mail, WhatsApp…) e desde quando está na situação atual (aviso semanal)
+ALTER TABLE juridico_demandas ADD COLUMN IF NOT EXISTS canal TEXT NOT NULL DEFAULT '';
+ALTER TABLE juridico_demandas ADD COLUMN IF NOT EXISTS status_em DATE;
+-- a lista de atividades do Jurídico (a Tabela de Prazos da planilha), só quando a tabela ainda está vazia: depois, quem manda é o portal
+INSERT INTO juridico_tipos (nome, horas, ordem, contratos)
+  SELECT v.nome, v.horas, v.ordem, v.contratos FROM (VALUES ('Contrato (garantia)', 8, 0, TRUE), ('Aditivo', 16, 1, FALSE), ('Rescisão', 24, 2, FALSE),
+    ('Análise de contrato de fornecedor', 24, 3, FALSE), ('Contrato (parcerias)', 16, 4, FALSE), ('Resposta Rescisão', 24, 5, FALSE), ('Rescisão Terceiros', 24, 6, FALSE),
+    ('Solicitações diversas', 24, 7, FALSE), ('Parecer p. operação', 24, 8, FALSE)) AS v(nome, horas, ordem, contratos)
+  WHERE NOT EXISTS (SELECT 1 FROM juridico_tipos);
+UPDATE juridico_demandas SET canal = CASE WHEN importacao_id IS NOT NULL THEN 'planilha' WHEN criado_por = solicitante_id THEN 'portal' ELSE 'email' END WHERE canal = '';
 ALTER TABLE condominios ADD COLUMN IF NOT EXISTS sindico_telefone TEXT NOT NULL DEFAULT '';
 ALTER TABLE condominios ADD COLUMN IF NOT EXISTS sindico_email TEXT NOT NULL DEFAULT '';
 ALTER TABLE modulos DROP CONSTRAINT IF EXISTS modulos_adaptador_check;

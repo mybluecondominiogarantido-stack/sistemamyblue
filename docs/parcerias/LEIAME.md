@@ -7,9 +7,11 @@ a advogada registra as condições (comissões, vigência e contatos) e o **seto
 **Prestação de Contas — Comissão de Parceiros** com um clique. Tela própria do portal, no grupo **Jurídico** do menu, ao
 lado da Solicitação de Contrato, com os mesmos padrões dela.
 
-| Menu | Endereço | Abas |
-|---|---|---|
-| **Solicitação de Contrato Parceria** | `#/parcerias` | Minhas solicitações, Fila do Jurídico, Assinaturas, Diretoria, Cadastro do parceiro, Controle |
+| Onde | O que |
+|---|---|
+| **Solicitações ao Jurídico** (`#/juridico/pedidos`) | **Novo pedido → Contrato de parceria** abre o formulário; a parceria aparece em **Meus pedidos** |
+| **Painel do Jurídico** (`#/juridico/painel/<aba>`) | **Fila** e **Comigo** (com as demais demandas), **Assinaturas → Contratos de parceria**, **Diretoria → Contratos de parceria**, **Cadastro de parceiros** (setor Parceiros), **Todos** |
+| A solicitação | `#/parcerias/<id>` (os endereços antigos `#/parcerias/<aba>` levam à aba equivalente) |
 
 ## Onde está cada parte
 
@@ -47,9 +49,10 @@ setor Parceiros confirmar.
   válido e e-mail), responsável financeiro (nome e telefone com DDD), e-mail para a prestação de contas, comissão de
   recorrência (sim/não) e comissão de venda (sim/não). Outras solicitações é opcional. **Não se pedem documentos do
   parceiro.**
-- **Comissões:** recorrência de **10%** ou **5%**; venda de **50% da 1ª taxa administrativa**. O comercial pode pedir
-  **outro percentual**: a diretoria é avisada no envio e a minuta só sai depois da decisão. Não aprovado, vale o padrão
-  (a venda volta para 50%; a recorrência fica para a advogada registrar a que ficou no contrato). "Não" nas duas avisa
+- **Comissões:** recorrência de **10%** ou **5%**; venda de **50% da 1ª taxa administrativa**. A tela não oferece
+  mais **outro percentual**. O servidor ainda trata pedidos antigos com outro percentual: a diretoria é avisada no envio e
+  a minuta só sai depois da decisão; não aprovado, vale o padrão (a venda volta para 50%; a recorrência fica para a
+  advogada registrar a que ficou no contrato). "Não" nas duas avisa
   que o contrato fica sem comissão.
 - **CNPJ repetido:** se o CNPJ já tem solicitação enviada (e não cancelada), não dá para enviar outra. Se já está na base
   de parceiros, o portal avisa (não impede).
@@ -70,8 +73,9 @@ setor Parceiros confirmar.
   existente**: o `id`, o nome e a UF dele ficam; os dados do contrato são atualizados. Sem confirmação, a rotina lembra o
   setor Parceiros a cada **2 dias úteis**. Cadastrado, quem pediu é avisado de que já pode indicar condomínios (o
   parceiro aparece na seção Parceria do formulário de implantação).
-- **Demandas Jurídicas:** os pedidos enviados aparecem na lista, nas planilhas e nos indicadores, no tipo "Contrato de
-  Parceria", com o prazo de 72h úteis e a primeira minuta como entrega. Clicar abre a solicitação.
+- **Demandas Jurídicas:** os pedidos enviados aparecem na lista, nas planilhas e nos indicadores, no tipo de parceria
+  da Tabela de prazos (o primeiro com "parceri" no nome, ex.: "Contrato (parcerias)"; sem ele, "Contrato de Parceria"),
+  com o prazo de 72h úteis e a primeira minuta como entrega. Clicar abre a solicitação.
 
 ## Dados
 

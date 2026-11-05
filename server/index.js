@@ -9,6 +9,7 @@ const { criarServicoModulos } = require('./modulos');
 const { criarRegistros } = require('./registros');
 const { criarDocumentos } = require('./documentos');
 const { criarBoletosCarteira } = require('./boletos-carteira');
+const { criarAvisosViagens } = require('./viagens');
 const { criarRenegociacoes } = require('./renegociacoes');
 const { criarAcessos } = require('./acessos');
 const { criarRegras } = require('./regras');
@@ -95,6 +96,8 @@ async function criarApp(cfg) {
   const regras = criarRegras(db);
   // Controle de Emissão de Boletos: o cadastro acompanha a carteira de condomínios
   const boletosCarteira = criarBoletosCarteira({ db, documentos, espera: cfg.esperaCarteiraMs ?? 3000 });
+  // Gestão de Viagens: avisos (sino e e-mail) quando o status de uma viagem muda
+  const avisosViagens = criarAvisosViagens({ db, documentos, avisos });
   // Controle de Renegociações: renegociação salva como Fechado vira ticket para a assistente de crédito
   const renegociacoes = criarRenegociacoes({ db, seg, modulos, registros, avisos, expediente, cfg });
   // Implantação: lembretes (fila sem designação, prazo para iniciar, documentos pendentes); o intervalo é ligado em iniciar()
@@ -105,7 +108,7 @@ async function criarApp(cfg) {
   const rotinasParcerias = criarRotinasParcerias({ db, avisos, regras, expediente });
   // Demandas Jurídicas: vence hoje e passou do prazo
   const rotinasJuridico = criarRotinasJuridico({ db, avisos, regras, expediente });
-  const ctx = { db, seg, modulos, registros, documentos, avisos, expediente, acessos, regras, boletosCarteira, renegociacoes, rotinasImplantacao, rotinasContratos, rotinasParcerias, rotinasJuridico, cfg };
+  const ctx = { db, seg, modulos, registros, documentos, avisos, expediente, acessos, regras, boletosCarteira, avisosViagens, renegociacoes, rotinasImplantacao, rotinasContratos, rotinasParcerias, rotinasJuridico, cfg };
 
   const app = express();
   app.disable('x-powered-by');

@@ -4,16 +4,21 @@ Da negociação fechada com o síndico ao contrato assinado. Substitui o formul�
 Microsoft Forms e o e-mail com o PDF. O comercial pede a minuta a partir de uma análise de crédito liberada, quem
 elabora os contratos (Jurídico) redige em até 72h úteis, a minuta vai e volta com os ajustes até a assinatura, e a
 advogada registra as **condições fechadas**, que seguem para a Implantação. Telas próprias do portal, com os mesmos
-padrões da Análise de Crédito e da Implantação, no grupo **Jurídico** do menu:
+padrões da Análise de Crédito e da Implantação, no grupo **Jurídico** do menu.
 
-| Menu | Endereço | Abas |
-|---|---|---|
-| **Solicitação de Contrato** | `#/contratos` | Minhas solicitações, Fila do Jurídico (assumir), Diretoria, Quem elabora |
-| **Acompanhamento de demandas Jurídicas** | `#/acompanhamento-contratos` | Assinaturas (quem elabora), Controle (todos os contratos, até os encerrados) |
-| **Dashboard Jurídico** | `#/dashboard-juridico` | — (quem elabora e a diretoria) |
-| **Demandas Jurídicas** | `#/demandas-juridicas` | Minhas demandas (todos), Todas as demandas, Indicadores (SLA), Tabela de prazos, Importar planilha — veja a seção [Demandas Jurídicas](#demandas-jurídicas) |
+O menu **Jurídico** tem duas entradas, que juntam a Solicitação de Contrato, a Solicitação de Contrato Parceria e as
+Demandas Jurídicas:
 
-Os endereços antigos (`#/contratos/assinaturas`, `#/contratos/controle`, `#/contratos/painel`) levam à tela nova.
+| Menu | Endereço | Quem vê | Abas |
+|---|---|---|---|
+| **Solicitações ao Jurídico** | `#/juridico/pedidos` | todo mundo | **Meus pedidos** (contratos, parcerias e demandas, com o que espera por você) e o botão **Novo pedido** (contrato de garantia, contrato de parceria ou outra atividade) |
+| **Painel do Jurídico** | `#/juridico/painel/<aba>` | Jurídico, diretoria e setor Parceiros | **Fila**, **Comigo**, **Assinaturas** (contratos · parcerias), **Todos**, **Diretoria** (contratos · parcerias), **Cadastro de parceiros**, **Indicadores** (prazos e SLA · contratos), **Configurar** (Tabela de prazos · Importar planilha) |
+
+O contrato e a parceria continuam abrindo na tela deles (`#/contratos/<id>`, `#/parcerias/<id>`); a demanda abre em
+`#/juridico/demanda/<id>`. Os endereços antigos (`#/contratos/fila`, `#/acompanhamento-contratos/…`,
+`#/dashboard-juridico`, `#/parcerias/…`, `#/demandas-juridicas/…`) levam à aba equivalente (`ANTIGAS_JUR` em `public/app.js`).
+
+Quem elabora é marcado em *Configurações → Acessos → Solicitação de Contrato*.
 
 O contrato com **empresas parceiras** tem tela própria, ao lado: **Solicitação de Contrato Parceria** (`#/parcerias`),
 com a mesma permissão de quem elabora. Veja `docs/parcerias/LEIAME.md`.
@@ -92,11 +97,11 @@ comercial) e `cancelada`. O pedido de ajuste volta a solicitação para `em_elab
   **solicitar a implantação** (veja abaixo). O Jurídico não abre a implantação.
 - **Controle:** os cartões Atividades pendentes (na fila), Em análise do Jurídico (em elaboração), Aguardando retorno do
   solicitante (minuta com o comercial e pendência) e os demais da situação.
-- **Contratos encerrados:** ficam em Acompanhamento de demandas Jurídicas → **Controle** (filtro "Assinado" ou busca). As condições ficam travadas; quem
+- **Contratos encerrados:** ficam em Painel do Jurídico → **Todos** (situação "Concluído", origem "Solicitação de Contrato", ou busca). As condições ficam travadas; quem
   elabora usa **Corrigir condições**, com o motivo obrigatório. O histórico guarda o que mudou (de → para), e o
   executivo e a Implantação (quem conduz, ou a coordenação) são avisados.
 
-## Dashboard Jurídico
+## Indicadores dos contratos (Painel do Jurídico → Indicadores → Contratos)
 
 Item próprio do menu Jurídico, para quem elabora e a diretoria (`GET /api/contratos/painel?ano=&mes=`; mês 0 = ano
 todo, datas em Brasília):
@@ -159,14 +164,19 @@ entram pelo portal e ficam no banco.
 ## Demandas Jurídicas
 
 Tudo o que se pede ao Jurídico (aditivo, rescisão, análise de contrato de fornecedor, parecer…), no lugar da planilha
-"Acompanhamento — Atividades Jurídicas". Fica no menu **Jurídico → Demandas Jurídicas**, para todo mundo.
+"Acompanhamento — Atividades Jurídicas". Quem pede usa **Solicitações ao Jurídico → Novo pedido → Outra atividade jurídica**;
+o pedido sai sempre no nome de quem está no portal, com o setor e a data de hoje: a pessoa só escolhe a atividade (o
+prazo aparece na hora, já com a data), o cliente e o que precisa. A lista de atividades é a Tabela de Prazos da planilha
+(`AJUSTES` em `server/db.js` a cria quando a tabela está vazia); contrato de garantia e de parceria não aparecem nela,
+porque têm pedido próprio (`pedido_proprio`). Data da solicitação, situação, data de conclusão (entrega) e responsável só
+o Jurídico muda, depois, na demanda.
 
 | Parte | Arquivo |
 |---|---|
 | Rotas (perfil, lista, uma demanda, comentário, Tabela de prazos, indicadores, planilha, importação) e a rotina de prazos | `server/rotas/juridico.js` |
 | Leitura e conferência da planilha (títulos, Tabela de Prazos, datas, status, solicitante, o que já está no portal) e os dias úteis | `server/juridico/importacao.js` |
-| Tabelas `juridico_tipos`, `juridico_demandas`, `juridico_eventos`, `juridico_importacoes` | `server/db.js` |
-| Telas | `public/app.js` (bloco Demandas Jurídicas) |
+| Tabelas `juridico_tipos`, `juridico_demandas` (com `canal` e `status_em`), `juridico_eventos`, `juridico_importacoes`, `juridico_lembretes` | `server/db.js` |
+| Telas | `public/app.js` (blocos Demandas Jurídicas e "Jurídico: Solicitações ao Jurídico e Painel do Jurídico") |
 | Testes (dados fictícios) | `test/juridico.test.js` |
 | Tutoriais | `juridico-demandas-pedir` e `juridico-demandas-conduzir` (`server/tutoriais.js`, `docs/tutoriais/fonte/roteiros.js`) |
 
@@ -180,6 +190,17 @@ entregues; as entregues guardam o SLA que tiveram.
 
 **Situações:** Pendente, Em andamento, Aguardando retorno, Aguardando assinaturas, Concluído, Contrato perdido.
 
+**Canal** (`canal`, só no banco): `portal` para o que é pedido no portal e `planilha` para o que foi importado (a API
+ainda aceita e-mail, WhatsApp, telefone e reunião, mas a tela não pergunta).
+
+**Fila e Comigo.** *Fila*: contratos e parcerias na fila e demandas em aberto sem responsável (pendentes ou sem entrega);
+na demanda, **Pegar** passa para quem clicou, em andamento. *Comigo*: tudo o que está em aberto com a pessoa. Nas duas,
+primeiro as atrasadas, depois as que vencem hoje, as sem entrega e as que esperam retorno ou assinatura.
+
+**Meus pedidos** (`vis=minhas`): as demandas que a pessoa pediu ou lançou, os contratos e as parcerias dela, inclusive os
+rascunhos. "Com você" marca o que espera por ela: demanda aguardando retorno; contrato ou parceria em rascunho, com
+pendência ou com a minuta.
+
 **Solicitação de Contrato na mesma lista.** Os contratos enviados pelo comercial aparecem na lista, nas planilhas e nos
 indicadores sem ser lançados de novo, no tipo marcado na Tabela de prazos (*Recebe a Solicitação de Contrato*), com o
 prazo deles (72h úteis), a primeira minuta enviada como entrega e a etapa traduzida para a situação (fila → Pendente,
@@ -190,6 +211,12 @@ conferência → Aguardando assinaturas, assinado → Concluído, cancelada → 
 pediu (e-mail em *Aguardando retorno* e *Concluído*). Responsável escolhido: a pessoa. Comentário: o outro lado. A rotina
 (a cada 10 minutos, no expediente) avisa no dia do prazo e quando ele passa, uma vez cada, quem é responsável (ou a
 equipe do Jurídico, se ninguém foi escolhido).
+
+**Aviso semanal.** A mesma rotina manda a cada pessoa, no máximo uma vez a cada 7 dias (`juridico_lembretes`), a lista
+do que espera por ela há **15 dias ou mais**: demandas que ela pediu em *Aguardando retorno* ou *Aguardando assinaturas*
+(contando desde a última mudança de situação, `status_em`, ou a entrega) e os contratos e parcerias dela com pendência,
+com a minuta ou em assinatura (desde o último evento). Sai no sino e por e-mail, com o link para Meus pedidos. Quem não
+tem acesso ao portal (só o nome, vindo da planilha) não recebe.
 
 **Importar a planilha.** Aba *Importar planilha* (administração e coordenação/supervisão do Jurídico). O portal acha a
 linha de títulos, cria os tipos da Tabela de Prazos (os que já existem no portal ficam como estão), liga o solicitante à

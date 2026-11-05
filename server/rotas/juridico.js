@@ -10,7 +10,11 @@
  *  - Os pedidos da Solicitação de Contrato entram na lista e nos indicadores sozinhos, no tipo marcado na Tabela de prazos,
  *    com o prazo dela (72h úteis) e a primeira minuta como entrega. Não se lançam de novo aqui.
  *  - Avisos (sino e e-mail): demanda nova para o Jurídico; mudança de situação e comentário para quem pediu; no dia do prazo
- *    e quando passa do prazo, para quem é responsável (ou para o Jurídico, se ninguém foi escolhido).
+ *    e quando passa do prazo, para quem é responsável (ou para o Jurídico, se ninguém foi escolhido); e, uma vez por semana,
+ *    a cada pessoa, o que está esperando por ela há 15 dias ou mais (retorno, minuta ou assinatura).
+ *  - O pedido é sempre de quem está no portal (nome, setor e a data de hoje); o prazo sai da Tabela de prazos. O canal
+ *    (canal) fica no banco: portal, ou planilha para as importadas.
+ *  - Na tela: "Solicitações ao Jurídico" (Meus pedidos, de todo mundo) e "Painel do Jurídico" (Fila, Comigo, Todos…), em public/app.js.
  *
  * Quem faz o quê (definido no portal, nunca no código):
  *  - Jurídico: quem é do setor Jurídico ou tem a permissão "Elaborar as minutas de contrato" (Configurações → Acessos →
@@ -33,6 +37,12 @@ const SETOR_JURIDICO = 'Jurídico';
 const PERMISSAO = 'contratos.elaborar';
 const HORAS_CONTRATO = 72; // Solicitação de Contrato (e de Contrato Parceria): minuta em 72h úteis
 const TIPO_PARCERIA = 'Contrato de Parceria';
+const CANAIS = { portal: 'Portal', email: 'E-mail', whatsapp: 'WhatsApp', telefone: 'Telefone', reuniao: 'Reunião', planilha: 'Planilha (importada)' };
+const DIAS_PARADO = 15; // aviso semanal: o que espera por quem pediu há 15 dias ou mais
+const DIAS_ENTRE_AVISOS = 7;
+// etapas da Solicitação de Contrato (e da Parceria) em que o pedido espera por quem pediu
+const ETAPAS_ESPERA = ['pendencia', 'minuta_enviada', 'em_assinatura'];
+const NOME_ETAPA = { pendencia: 'pendência com você', minuta_enviada: 'minuta com você', em_assinatura: 'em assinatura' };
 // situação da solicitação de contrato, nos termos da planilha
 const ETAPA_STATUS = { fila: 'pendente', em_elaboracao: 'em_andamento', pendencia: 'aguardando_retorno', minuta_enviada: 'aguardando_retorno',
   para_assinar: 'aguardando_assinaturas', em_assinatura: 'aguardando_assinaturas', conferencia: 'aguardando_assinaturas', assinado: 'concluido', cancelada: 'contrato_perdido' };
@@ -40,6 +50,8 @@ const ETAPA_STATUS = { fila: 'pendente', em_elaboracao: 'em_andamento', pendenci
 const texto = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
 const diaBrasilia = (d = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(d));
 const dataBr = (d) => (d ? d.split('-').reverse().join('/') : '');
+const linkDemanda = (id) => `#/juridico/demanda/${id}`;
+const diasEntre = (a, b) => Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 86400000);
 const ehDia = (s) => !!I.dia(s) && I.dia(s) === s;
 
 /* quem conduz as demandas: o setor Jurídico e quem elabora os contratos (ninguém: a administração) */
@@ -51,7 +63,9 @@ async function equipeJuridica(db, regras) {
 }
 
 /* Rotina (roda a cada poucos minutos, só no expediente): no dia do prazo e quando passa dele, avisa uma vez quem é
- * responsável (ou o Jurídico). Demanda importada já vencida não avisa (é histórico). */
+ * responsável (ou o Jurídico). Demanda importada já vencida não avisa (é histórico). E o aviso semanal: cada pessoa recebe,
+ * no máximo uma vez a cada 7 dias, a lista do que espera por ela há 15 dias ou mais (demandas aguardando retorno ou
+ * assinaturas; contratos e parcerias com pendência, minuta ou em assinatura). */
 function criarRotinasJuridico({ db, avisos, regras, expediente }) {
   async function executar(agora = new Date()) {
     const feito = { vence_hoje: 0, atrasadas: 0 };
@@ -62,18 +76,59 @@ function criarRotinasJuridico({ db, avisos, regras, expediente }) {
     const abertas = `SELECT d.id, d.numero, d.cliente, d.responsavel_id, d.prazo::text AS prazo, t.nome AS tipo FROM juridico_demandas d JOIN juridico_tipos t ON t.id = d.tipo_id
       WHERE d.entregue_em IS NULL AND d.status NOT IN ('concluido','contrato_perdido')`;
     for (const d of (await db.q(`${abertas} AND d.prazo = $1::date AND d.aviso_vence_em IS NULL`, [m.dia])).rows) {
-      await avisos.notificar(await para(d), { tipo: 'juridico', link: `#/demandas-juridicas/${d.id}`, email: true,
+      await avisos.notificar(await para(d), { tipo: 'juridico', link: linkDemanda(d.id), email: true,
         titulo: `Vence hoje · demanda #${d.numero} · ${d.tipo}`, texto: `${d.tipo}${d.cliente ? ' · ' + d.cliente : ''}: o prazo de entrega é hoje.` });
       await db.q('UPDATE juridico_demandas SET aviso_vence_em = $2 WHERE id = $1', [d.id, m.dia]);
       feito.vence_hoje++;
     }
     for (const d of (await db.q(`${abertas} AND d.prazo < $1::date AND d.aviso_atraso_em IS NULL`, [m.dia])).rows) {
-      await avisos.notificar(await para(d), { tipo: 'juridico', link: `#/demandas-juridicas/${d.id}`, email: true,
+      await avisos.notificar(await para(d), { tipo: 'juridico', link: linkDemanda(d.id), email: true,
         titulo: `Passou do prazo · demanda #${d.numero} · ${d.tipo}`, texto: `${d.tipo}${d.cliente ? ' · ' + d.cliente : ''}: o prazo era ${dataBr(d.prazo)} e a entrega ainda não foi registrada.` });
       await db.q('UPDATE juridico_demandas SET aviso_atraso_em = $2, aviso_vence_em = COALESCE(aviso_vence_em, $2) WHERE id = $1', [d.id, m.dia]);
       feito.atrasadas++;
     }
+    feito.semanal = await avisoSemanal(m.dia);
     return feito;
+  }
+
+  async function avisoSemanal(hoje) {
+    const ate = new Date(Date.parse(`${hoje}T12:00:00Z`) - DIAS_PARADO * 86400000).toISOString().slice(0, 10);
+    const itens = [];
+    for (const d of (await db.q(`SELECT d.id, d.numero, d.cliente, d.status, d.solicitante_id AS para, t.nome AS tipo,
+        COALESCE(d.status_em, d.entregue_em, d.solicitada_em)::text AS desde FROM juridico_demandas d JOIN juridico_tipos t ON t.id = d.tipo_id
+      WHERE d.status IN ('aguardando_retorno','aguardando_assinaturas') AND d.solicitante_id IS NOT NULL
+        AND COALESCE(d.status_em, d.entregue_em, d.solicitada_em) <= $1::date`, [ate])).rows) {
+      itens.push({ para: d.para, ref: `#${d.numero}`, texto: `${d.tipo} · ${d.cliente}`, situacao: STATUS[d.status], desde: d.desde });
+    }
+    for (const [tabela, eventos, chave, nome, rotulo] of [['contratos', 'contrato_eventos', 'contrato_id', 'condominio', 'Contrato'],
+      ['parcerias', 'parceria_eventos', 'parceria_id', 'empresa', 'Contrato de parceria']]) {
+      for (const c of (await db.q(`SELECT c.id, c.protocolo, c.etapa, c.${nome} AS nome, c.solicitante_id AS para,
+          (SELECT MAX(ev.criado_em) FROM ${eventos} ev WHERE ev.${chave} = c.id) AS desde FROM ${tabela} c
+        WHERE c.etapa = ANY($1::text[]) AND c.solicitante_id IS NOT NULL`, [ETAPAS_ESPERA])).rows) {
+        const desde = c.desde ? diaBrasilia(c.desde) : null;
+        if (!desde || desde > ate) continue;
+        itens.push({ para: c.para, ref: c.protocolo, texto: `${rotulo} · ${c.nome}`, situacao: NOME_ETAPA[c.etapa], desde });
+      }
+    }
+    const porPessoa = new Map();
+    for (const x of itens) (porPessoa.get(x.para) || porPessoa.set(x.para, []).get(x.para)).push(x);
+    let enviados = 0;
+    for (const [uid, lista] of porPessoa) {
+      const ult = await db.um('SELECT enviado_em::text AS em FROM juridico_lembretes WHERE usuario_id = $1', [uid]);
+      if (ult && diasEntre(ult.em, hoje) < DIAS_ENTRE_AVISOS) continue;
+      lista.sort((a, b) => a.desde.localeCompare(b.desde));
+      const n = lista.length;
+      const linha = (x) => `${x.ref} ${x.texto} (${x.situacao}, há ${diasEntre(x.desde, hoje)} dias)`;
+      await avisos.notificar([uid], { tipo: 'juridico', link: '#/juridico/pedidos', email: true,
+        titulo: `${n === 1 ? '1 pedido ao Jurídico espera' : n + ' pedidos ao Jurídico esperam'} por você há ${DIAS_PARADO} dias ou mais`,
+        texto: lista.slice(0, 5).map(linha).join('; ') + (n > 5 ? `; e mais ${n - 5}.` : '.'),
+        detalhes: { intro: 'Estes pedidos estão esperando um retorno seu (resposta, minuta ou assinatura). Se já foram resolvidos, avise o Jurídico pelo comentário para encerrar.',
+          linhas: lista.slice(0, 15).map((x) => [x.ref, `${x.texto} · ${x.situacao} há ${diasEntre(x.desde, hoje)} dias`]), botao: 'Abrir Meus pedidos' } });
+      await db.q(`INSERT INTO juridico_lembretes (usuario_id, enviado_em, itens) VALUES ($1, $2, $3)
+        ON CONFLICT (usuario_id) DO UPDATE SET enviado_em = excluded.enviado_em, itens = excluded.itens`, [uid, hoje, n]);
+      enviados++;
+    }
+    return enviados;
   }
   return { executar };
 }
@@ -87,7 +142,7 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
   const evento = (t, id, usuarioId, tipo, detalhe) => t.q('INSERT INTO juridico_eventos (demanda_id, usuario_id, tipo, detalhe) VALUES ($1, $2, $3, $4::jsonb)',
     [id, usuarioId, tipo, JSON.stringify(detalhe || {})]);
   const prazoDe = (solicitada, horas) => I.somarDiasUteis(solicitada, I.diasDoPrazo(horas), expediente.ehDiaUtil);
-  const link = (id) => `#/demandas-juridicas/${id}`;
+  const link = linkDemanda;
 
   /* ---------- quem é a pessoa nas Demandas Jurídicas ---------- */
   async function perfil(u) {
@@ -118,38 +173,46 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
     const onde = vis === 'minhas' ? `WHERE (d.solicitante_id = ${v(u.id)} OR d.criado_por = $1)` : vis && vis.id ? `WHERE d.id = ${v(vis.id)}` : '';
     const manuais = (await db.q(`SELECT d.id, d.numero, d.status, d.tipo_id, t.nome AS tipo, d.solicitante_id, d.solicitante_nome, d.setor, d.uf, d.cliente, d.condominio_id,
         d.objeto, d.observacoes, d.responsavel_id, ur.nome AS responsavel_nome, d.solicitada_em::text AS solicitada_em, d.horas, d.prazo::text AS prazo,
-        d.entregue_em::text AS entregue_em, d.importacao_id, d.criado_por, d.criado_em, d.atualizado_em
+        d.entregue_em::text AS entregue_em, d.importacao_id, d.criado_por, d.criado_em, d.atualizado_em, d.canal
       FROM juridico_demandas d JOIN juridico_tipos t ON t.id = d.tipo_id LEFT JOIN usuarios ur ON ur.id = d.responsavel_id ${onde}`, args)).rows
-      .map((d) => ({ ...d, origem: 'demanda', ref: String(d.numero) }));
+      .map((d) => ({ ...d, origem: 'demanda', ref: String(d.numero), espera_voce: d.status === 'aguardando_retorno' }));
     const tipoCt = (await db.um('SELECT id, nome FROM juridico_tipos WHERE contratos ORDER BY id LIMIT 1')) || { id: null, nome: 'Contrato (Solicitação de Contrato)' };
+    // a parceria entra no tipo de parceria da Tabela de prazos (ex.: "Contrato (parcerias)"), se houver
+    const tipoCp = (await db.um("SELECT id, nome FROM juridico_tipos WHERE nome ILIKE '%parceri%' ORDER BY ordem, id LIMIT 1")) || { id: null, nome: TIPO_PARCERIA };
+    // em Meus pedidos entram também os rascunhos (ainda não enviados) de contrato e de parceria
+    const enviados = vis === 'minhas' ? "((c.etapa <> 'rascunho' AND c.enviado_em IS NOT NULL) OR c.etapa = 'rascunho')" : "c.etapa <> 'rascunho' AND c.enviado_em IS NOT NULL";
     const args2 = [];
     if (vis && vis.id) return marcar(manuais, hoje);
     const onde2 = vis === 'minhas' ? `AND (c.solicitante_id = $1 OR e.usuario_id = $1)` : '';
     if (vis === 'minhas') args2.push(u.id);
-    const contratos = (await db.q(`SELECT c.id, c.protocolo, c.etapa, c.condominio, c.uf, c.enviado_em, c.prazo, c.solicitante_id, us.nome AS solicitante_nome,
+    const contratos = (await db.q(`SELECT c.id, c.protocolo, c.etapa, c.condominio, c.uf, c.enviado_em, c.criado_em, c.prazo, c.solicitante_id, us.nome AS solicitante_nome,
         c.responsavel_id, ur.nome AS responsavel_nome, c.atualizado_em,
         (SELECT MIN(ev.criado_em) FROM contrato_eventos ev WHERE ev.contrato_id = c.id AND ev.tipo = 'minuta_enviada') AS primeira_minuta_em,
         (SELECT s.nome FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id WHERE sm.usuario_id = c.solicitante_id ORDER BY sm.lider DESC, s.ordem LIMIT 1) AS setor
       FROM contratos c LEFT JOIN executivos e ON e.id = c.executivo_id LEFT JOIN usuarios us ON us.id = c.solicitante_id LEFT JOIN usuarios ur ON ur.id = c.responsavel_id
-      WHERE c.etapa <> 'rascunho' AND c.enviado_em IS NOT NULL ${onde2}`, args2)).rows
-      .map((c) => ({ id: `ct-${c.id}`, contrato_id: c.id, origem: 'contrato', ref: c.protocolo, numero: null, status: ETAPA_STATUS[c.etapa] || 'pendente', etapa: c.etapa,
+      WHERE ${enviados} ${onde2}`, args2)).rows
+      .map((c) => ({ id: `ct-${c.id}`, contrato_id: c.id, origem: 'contrato', ref: c.protocolo || 'Rascunho', numero: null, status: ETAPA_STATUS[c.etapa] || 'pendente', etapa: c.etapa,
         tipo_id: tipoCt.id, tipo: tipoCt.nome, solicitante_id: c.solicitante_id, solicitante_nome: c.solicitante_nome || '', setor: c.setor || '', uf: c.uf || '',
-        cliente: c.condominio || '', objeto: `Solicitação de Contrato ${c.protocolo}`, observacoes: '', responsavel_id: c.responsavel_id, responsavel_nome: c.responsavel_nome,
-        solicitada_em: diaBrasilia(c.enviado_em), horas: HORAS_CONTRATO, prazo: c.prazo ? diaBrasilia(c.prazo) : null,
-        entregue_em: c.primeira_minuta_em ? diaBrasilia(c.primeira_minuta_em) : null, atualizado_em: c.atualizado_em }));
+        cliente: c.condominio || '', objeto: c.protocolo ? `Solicitação de Contrato ${c.protocolo}` : 'Solicitação de Contrato (rascunho)', observacoes: '',
+        responsavel_id: c.responsavel_id, responsavel_nome: c.responsavel_nome, canal: 'portal',
+        solicitada_em: diaBrasilia(c.enviado_em || c.criado_em), horas: HORAS_CONTRATO, prazo: c.prazo ? diaBrasilia(c.prazo) : null,
+        entregue_em: c.primeira_minuta_em ? diaBrasilia(c.primeira_minuta_em) : null, atualizado_em: c.atualizado_em,
+        espera_voce: ['rascunho', 'pendencia', 'minuta_enviada'].includes(c.etapa) }));
     // Solicitação de Contrato Parceria: entra igual, com o mesmo prazo (72h úteis) e a primeira minuta como entrega
     const onde3 = vis === 'minhas' ? 'AND c.solicitante_id = $1' : '';
-    const parcerias = (await db.q(`SELECT c.id, c.protocolo, c.etapa, c.empresa, c.enviado_em, c.prazo, c.solicitante_id, us.nome AS solicitante_nome,
+    const parcerias = (await db.q(`SELECT c.id, c.protocolo, c.etapa, c.empresa, c.enviado_em, c.criado_em, c.prazo, c.solicitante_id, us.nome AS solicitante_nome,
         c.responsavel_id, ur.nome AS responsavel_nome, c.atualizado_em,
         (SELECT MIN(ev.criado_em) FROM parceria_eventos ev WHERE ev.parceria_id = c.id AND ev.tipo = 'minuta_enviada') AS primeira_minuta_em,
         (SELECT s.nome FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id WHERE sm.usuario_id = c.solicitante_id ORDER BY sm.lider DESC, s.ordem LIMIT 1) AS setor
       FROM parcerias c LEFT JOIN usuarios us ON us.id = c.solicitante_id LEFT JOIN usuarios ur ON ur.id = c.responsavel_id
-      WHERE c.etapa <> 'rascunho' AND c.enviado_em IS NOT NULL ${onde3}`, args2)).rows
-      .map((c) => ({ id: `cp-${c.id}`, parceria_id: c.id, origem: 'parceria', ref: c.protocolo, numero: null, status: ETAPA_STATUS[c.etapa] || 'pendente', etapa: c.etapa,
-        tipo_id: null, tipo: TIPO_PARCERIA, solicitante_id: c.solicitante_id, solicitante_nome: c.solicitante_nome || '', setor: c.setor || '', uf: '',
-        cliente: c.empresa || '', objeto: `Solicitação de Contrato Parceria ${c.protocolo}`, observacoes: '', responsavel_id: c.responsavel_id, responsavel_nome: c.responsavel_nome,
-        solicitada_em: diaBrasilia(c.enviado_em), horas: HORAS_CONTRATO, prazo: c.prazo ? diaBrasilia(c.prazo) : null,
-        entregue_em: c.primeira_minuta_em ? diaBrasilia(c.primeira_minuta_em) : null, atualizado_em: c.atualizado_em }));
+      WHERE ${enviados} ${onde3}`, args2)).rows
+      .map((c) => ({ id: `cp-${c.id}`, parceria_id: c.id, origem: 'parceria', ref: c.protocolo || 'Rascunho', numero: null, status: ETAPA_STATUS[c.etapa] || 'pendente', etapa: c.etapa,
+        tipo_id: tipoCp.id, tipo: tipoCp.nome, solicitante_id: c.solicitante_id, solicitante_nome: c.solicitante_nome || '', setor: c.setor || '', uf: '',
+        cliente: c.empresa || '', objeto: c.protocolo ? `Solicitação de Contrato Parceria ${c.protocolo}` : 'Solicitação de Contrato Parceria (rascunho)', observacoes: '',
+        responsavel_id: c.responsavel_id, responsavel_nome: c.responsavel_nome, canal: 'portal',
+        solicitada_em: diaBrasilia(c.enviado_em || c.criado_em), horas: HORAS_CONTRATO, prazo: c.prazo ? diaBrasilia(c.prazo) : null,
+        entregue_em: c.primeira_minuta_em ? diaBrasilia(c.primeira_minuta_em) : null, atualizado_em: c.atualizado_em,
+        espera_voce: ['rascunho', 'pendencia', 'minuta_enviada'].includes(c.etapa) }));
     return marcar([...manuais, ...contratos, ...parcerias], hoje)
       .sort((a, b) => (b.solicitada_em || '').localeCompare(a.solicitada_em || '') || String(b.ref).localeCompare(String(a.ref), 'pt-BR', { numeric: true }));
   }
@@ -170,9 +233,20 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
       && (!q.tipo || String(d.tipo_id) === String(q.tipo))
       && (!q.setor || d.setor === q.setor)
       && (!q.origem || d.origem === q.origem)
+      && (!q.canal || d.canal === q.canal)
       && (!q.ano || (d.solicitada_em || '').startsWith(String(q.ano))));
   }
   const pct = (a, b) => (b ? Math.round((a / b) * 1000) / 10 : null);
+  /* Fila: o que chegou e ninguém pegou (contrato e parceria na fila; demanda em aberto, sem responsável, pendente ou sem entrega).
+     Comigo: o que está em aberto com a pessoa. Nas duas, primeiro as atrasadas, as que vencem hoje e as sem entrega. */
+  function daVez(lista, vis, u) {
+    const aberta = (d) => !FECHADOS.includes(d.status);
+    const l = vis === 'fila'
+      ? lista.filter((d) => (d.origem === 'demanda' ? aberta(d) && !d.responsavel_id && (d.status === 'pendente' || !d.entregue_em) : d.etapa === 'fila'))
+      : lista.filter((d) => d.responsavel_id === u.id && aberta(d));
+    const peso = (d) => (d.atrasada ? 0 : d.vence_hoje ? 1 : !d.entregue_em ? 2 : 3);
+    return l.sort((a, b) => peso(a) - peso(b) || (a.prazo || '9').localeCompare(b.prazo || '9'));
+  }
 
   const podeVer = (p, u, d) => p.ve_tudo || d.solicitante_id === u.id || d.criado_por === u.id;
   async function carregar(req, res) {
@@ -201,8 +275,9 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
     const u = req.usuario;
     const equipe = p.juridico ? await equipeJuridica(db, regras) : [];
     res.json({
-      perfil: p, status: STATUS, hoje: diaBrasilia(), horas_contrato: HORAS_CONTRATO,
-      tipos: (await tipos()).map((t) => ({ ...t, dias: I.diasDoPrazo(t.horas) })),
+      perfil: p, status: STATUS, canais: CANAIS, hoje: diaBrasilia(), horas_contrato: HORAS_CONTRATO,
+      // prazo de um pedido feito hoje; contrato de garantia e de parceria têm pedido próprio (Novo pedido → Contrato…)
+      tipos: (await tipos()).map((t) => ({ ...t, dias: I.diasDoPrazo(t.horas), prazo_hoje: prazoDe(diaBrasilia(), t.horas), pedido_proprio: t.contratos || /parceri/i.test(t.nome) })),
       eu: { id: u.id, nome: u.nome, setor: await setorDe(u.id), uf: await ufDe(u.id) },
       // o Jurídico lança pelos outros: escolhe a pessoa (o setor e a UF vêm dela) e quem fica responsável
       pessoas: p.juridico ? (await db.q(`SELECT u.id, u.nome, (SELECT s.nome FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id WHERE sm.usuario_id = u.id
@@ -216,9 +291,11 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
   /* ===================== listagem ===================== */
   r.get('/api/juridico/demandas', async (req, res) => {
     const p = await perfil(req.usuario);
-    const vis = req.query.vis === 'todas' ? 'todas' : 'minhas';
+    const vis = ['todas', 'fila', 'comigo'].includes(req.query.vis) ? req.query.vis : 'minhas';
     if (vis === 'todas' && !p.ve_tudo) return erro(res, 403, 'A lista completa é do Jurídico e da diretoria.');
-    const todas = await demandas(p, req.usuario, vis);
+    if (['fila', 'comigo'].includes(vis) && !p.juridico) return erro(res, 403, 'A fila é do Jurídico.');
+    const base = await demandas(p, req.usuario, vis === 'minhas' ? 'minhas' : 'todas');
+    const todas = ['fila', 'comigo'].includes(vis) ? daVez(base, vis, req.usuario) : base;
     const mes = diaBrasilia().slice(0, 7);
     const conta = (f) => todas.filter(f).length;
     const entreguesMes = todas.filter((d) => (d.entregue_em || '').startsWith(mes));
@@ -229,7 +306,7 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
       sla_mes: pct(entreguesMes.filter((d) => d.sla === 'dentro').length, entreguesMes.length),
     };
     const lista = filtrar(todas, req.query);
-    res.json({ demandas: lista, contadores, total: todas.length,
+    res.json({ demandas: lista, contadores, total: todas.length, espera_voce: vis === 'minhas' ? todas.filter((d) => d.espera_voce).length : 0,
       setores: [...new Set(todas.map((d) => d.setor).filter(Boolean))].sort(), anos: [...new Set(todas.map((d) => Number((d.solicitada_em || '').slice(0, 4))).filter(Boolean))].sort() });
   });
 
@@ -298,8 +375,10 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
     const cliente = texto(b.cliente, 200);
     if (!cliente) return erro(res, 400, 'Informe o cliente.');
     const hoje = diaBrasilia();
-    let solicitanteId = u.id, solicitanteNome = u.nome, solicitada = hoje, responsavel = null, status = 'pendente', entregue = null;
+    let solicitanteId = u.id, solicitanteNome = u.nome, solicitada = hoje, responsavel = null, status = 'pendente', entregue = null, canal = 'portal';
     if (p.juridico) {
+      // o Jurídico ainda pode informar outro canal pela API; na tela, todo pedido é feito pelo portal
+      if (CANAIS[b.canal] && b.canal !== 'planilha') canal = b.canal;
       if (b.solicitante_id) {
         const s = await db.um('SELECT id, nome FROM usuarios WHERE id = $1 AND ativo', [Number(b.solicitante_id) || 0]);
         if (!s) return erro(res, 400, 'Solicitante não encontrado.');
@@ -323,11 +402,11 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
       await t.q('SELECT pg_advisory_xact_lock(7240514)');
       const { n } = await t.um('SELECT COALESCE(MAX(numero), 0) + 1 AS n FROM juridico_demandas');
       const d = await t.um(`INSERT INTO juridico_demandas (numero, tipo_id, status, solicitante_id, solicitante_nome, setor, uf, cliente, condominio_id, objeto, observacoes,
-          responsavel_id, solicitada_em, horas, prazo, entregue_em, criado_por, aviso_vence_em, aviso_atraso_em)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $18) RETURNING id, numero`,
+          responsavel_id, solicitada_em, horas, prazo, entregue_em, criado_por, aviso_vence_em, aviso_atraso_em, canal, status_em)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $18, $19, $20) RETURNING id, numero`,
       [n, tipo.id, status, solicitanteId, solicitanteNome, setor, uf, cliente, condominio, texto(b.objeto, 2000), texto(b.observacoes, 2000), responsavel, solicitada,
-        tipo.horas, prazo, entregue, u.id, prazo < hoje ? hoje : null]); // lançada com o prazo já vencido: não avisa o atraso (já se sabe)
-      await evento(t, d.id, u.id, 'criada', { status, tipo: tipo.nome });
+        tipo.horas, prazo, entregue, u.id, prazo < hoje ? hoje : null, canal, status === 'pendente' ? solicitada : hoje]); // lançada com o prazo já vencido: não avisa o atraso (já se sabe)
+      await evento(t, d.id, u.id, 'criada', { status, tipo: tipo.nome, canal });
       return d;
     });
     const titulo = `Demanda #${novo.numero} · ${tipo.nome} · ${cliente}`;
@@ -361,7 +440,7 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
     const hoje = diaBrasilia();
     const novo = { tipo_id: d.tipo_id, status: d.status, solicitante_id: d.solicitante_id, solicitante_nome: d.solicitante_nome, setor: d.setor, uf: d.uf,
       cliente: d.cliente, objeto: d.objeto, observacoes: d.observacoes, responsavel_id: d.responsavel_id, solicitada_em: d.solicitada_em, entregue_em: d.entregue_em,
-      horas: d.horas, prazo: d.prazo };
+      horas: d.horas, prazo: d.prazo, canal: d.canal };
     let tipo = null;
     if (b.tipo_id !== undefined && Number(b.tipo_id) !== d.tipo_id) {
       tipo = await db.um('SELECT id, nome, horas FROM juridico_tipos WHERE id = $1', [Number(b.tipo_id) || 0]);
@@ -382,6 +461,7 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
     }
     for (const [k, max] of [['setor', 80], ['objeto', 2000], ['observacoes', 2000]]) if (b[k] !== undefined) novo[k] = texto(b[k], max);
     if (b.uf !== undefined) novo.uf = texto(b.uf, 10).toUpperCase();
+    if (b.canal !== undefined) { if (!CANAIS[b.canal]) return erro(res, 400, 'Como chegou: opção inválida.'); novo.canal = b.canal; }
     if (b.cliente !== undefined) { novo.cliente = texto(b.cliente, 200); if (!novo.cliente) return erro(res, 400, 'Informe o cliente.'); }
     if (b.responsavel_id !== undefined) {
       if (b.responsavel_id && !(await equipeJuridica(db, regras)).includes(Number(b.responsavel_id)) && Number(b.responsavel_id) !== d.responsavel_id) return erro(res, 400, 'O responsável precisa ser do Jurídico.');
@@ -409,9 +489,10 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
     await db.tx(async (t) => {
       await t.q(`UPDATE juridico_demandas SET tipo_id = $2, status = $3, solicitante_id = $4, solicitante_nome = $5, setor = $6, uf = $7, cliente = $8, objeto = $9,
           observacoes = $10, responsavel_id = $11, solicitada_em = $12, entregue_em = $13, horas = $14, prazo = $15, condominio_id = $16, atualizado_em = now(),
+          canal = $17, status_em = CASE WHEN $3 <> status THEN $18::date ELSE status_em END,
           aviso_vence_em = CASE WHEN $15::date <> prazo THEN NULL ELSE aviso_vence_em END, aviso_atraso_em = CASE WHEN $15::date <> prazo THEN NULL ELSE aviso_atraso_em END
         WHERE id = $1`, [d.id, novo.tipo_id, novo.status, novo.solicitante_id, novo.solicitante_nome, novo.setor, novo.uf, novo.cliente, novo.objeto, novo.observacoes,
-        novo.responsavel_id, novo.solicitada_em, novo.entregue_em, novo.horas, novo.prazo, condominio]);
+        novo.responsavel_id, novo.solicitada_em, novo.entregue_em, novo.horas, novo.prazo, condominio, novo.canal, hoje]);
       const de = {}, para = {};
       for (const k of mudou) { de[k] = d[k] ?? null; para[k] = novo[k] ?? null; }
       if (tipo) { de.tipo = d.tipo; para.tipo = tipo.nome; }
@@ -569,8 +650,8 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
       for (const x of entra) {
         if (x.solicitante_id && !x.setor && !setores.has(x.solicitante_id)) setores.set(x.solicitante_id, await setorDe(x.solicitante_id));
         const d = await t.um(`INSERT INTO juridico_demandas (numero, tipo_id, status, solicitante_id, solicitante_nome, setor, uf, cliente, condominio_id, objeto, observacoes,
-            solicitada_em, horas, prazo, entregue_em, aviso_vence_em, aviso_atraso_em, importacao_id, linha_planilha, criado_por)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $16, $17, $18, $19) RETURNING id`,
+            solicitada_em, horas, prazo, entregue_em, aviso_vence_em, aviso_atraso_em, importacao_id, linha_planilha, criado_por, canal, status_em)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $16, $17, $18, $19, 'planilha', COALESCE($15::date, $12::date)) RETURNING id`,
         [manterNumeros ? x.numero : proximo++, tipoId.get(x.tipo), x.status, x.solicitante_id, x.solicitante_nome, x.setor || setores.get(x.solicitante_id) || '', x.uf,
           x.cliente, condPorNome.get(sem(x.cliente)) || null, x.objeto, x.observacoes, x.solicitada_em, x.horas, x.prazo, x.entregue_em || null,
           x.prazo <= hoje ? hoje : null, id, x.linha, req.usuario.id]); // histórico: o que já venceu não gera aviso
