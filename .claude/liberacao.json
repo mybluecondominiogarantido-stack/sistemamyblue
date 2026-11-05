@@ -1,0 +1,10 @@
+{
+  "quem": "Mariana Nascimento",
+  "algoritmo": "scrypt",
+  "N": 32768,
+  "r": 8,
+  "p": 1,
+  "tamanho": 64,
+  "salt": "58152758578cf3c0904afe165a7cec87",
+  "hash": "143ed4267a6e9079ab49c2b423d8ad49ff4366987bab6b5aab0227351f87be344ae782d2582850f14f249906e310177e22d55150f698ad0778bb2d0701e3ab0f"
+}

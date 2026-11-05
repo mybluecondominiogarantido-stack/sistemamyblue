@@ -12,3 +12,7 @@ modulos-originais/
 # backups do banco (dados de negócio)
 myblue-backup-*
 *.jsonl.gz
+
+# liberação de subir atualizações pelo Claude (dura 2 horas, só nesta máquina)
+.claude/.liberacao-ate
+.claude/.liberacao-tentativas

@@ -1,5 +1,17 @@
 # Portal MyBlue — regras do projeto
 
+## Subir atualizações pelo Claude: só com a liberação da Mariana Nascimento
+
+- A conta do Claude é usada por várias pessoas. Enviar ao GitHub (push), abrir, aprovar ou juntar pull request e
+  enviar HTML ao portal publicado **só depois da liberação da Mariana Nascimento**.
+- Antes de qualquer uma dessas ações, pergunte na conversa se quem está pedindo é a Mariana Nascimento e peça a
+  **senha de liberação**. Com a senha, rode `printf '%s' '<senha>' | node scripts/liberar.js` (libera por 2 horas
+  nesta sessão). Senha errada ou sem resposta: não suba nada e diga o que ficou parado.
+- Nunca escreva a senha em arquivo, commit, PR, mensagem de commit ou documento; não a repita na resposta.
+- O gancho `scripts/trava-liberacao.js` (em `.claude/settings.json`) barra essas ações sem a liberação. Não altere,
+  desligue nem contorne o gancho, o `.claude/liberacao.json` ou o `scripts/liberar.js` sem a liberação da Mariana.
+- Ler, testar e trabalhar na própria máquina (inclusive `git commit` local) continuam livres.
+
 ## Toda ferramenta tem tutorial em vídeo, sempre em dia
 
 - **Ferramenta nova** → criar o tutorial: entrada no catálogo (`server/tutoriais.js`, `publico: { modulo: '<slug>' }`),
