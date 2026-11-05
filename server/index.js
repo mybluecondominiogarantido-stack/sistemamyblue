@@ -26,6 +26,7 @@ const { rotasCdn } = require('./rotas/cdn');
 const { rotasCredito } = require('./rotas/credito');
 const { rotasImplantacoes, criarRotinasImplantacao } = require('./rotas/implantacoes');
 const { rotasContratos, criarRotinasContratos } = require('./rotas/contratos');
+const { rotasParcerias, criarRotinasParcerias } = require('./rotas/parcerias');
 const { rotasJuridico, criarRotinasJuridico } = require('./rotas/juridico');
 
 function carregarEnv(arquivo) {
@@ -100,9 +101,11 @@ async function criarApp(cfg) {
   const rotinasImplantacao = criarRotinasImplantacao({ db, seg, avisos, expediente });
   // Solicitação de Contrato: prazo da minuta vencido
   const rotinasContratos = criarRotinasContratos({ db, avisos, regras });
+  // Solicitação de Contrato Parceria: prazo da minuta vencido e o parceiro ainda não cadastrado na base de comissão
+  const rotinasParcerias = criarRotinasParcerias({ db, avisos, regras, expediente });
   // Demandas Jurídicas: vence hoje e passou do prazo
   const rotinasJuridico = criarRotinasJuridico({ db, avisos, regras, expediente });
-  const ctx = { db, seg, modulos, registros, documentos, avisos, expediente, acessos, regras, boletosCarteira, renegociacoes, rotinasImplantacao, rotinasContratos, rotinasJuridico, cfg };
+  const ctx = { db, seg, modulos, registros, documentos, avisos, expediente, acessos, regras, boletosCarteira, renegociacoes, rotinasImplantacao, rotinasContratos, rotinasParcerias, rotinasJuridico, cfg };
 
   const app = express();
   app.disable('x-powered-by');
@@ -135,6 +138,7 @@ async function criarApp(cfg) {
   app.use(rotasCredito(ctx));
   app.use(rotasImplantacoes(ctx));
   app.use(rotasContratos(ctx));
+  app.use(rotasParcerias(ctx));
   app.use(rotasJuridico(ctx));
 
   const publico = path.join(__dirname, '..', 'public');
@@ -191,6 +195,7 @@ async function iniciar(cfg = lerConfig()) {
   const rodar = () => {
     ctx.rotinasImplantacao.executar().catch((e) => console.error('[implantação] rotina:', e.message));
     ctx.rotinasContratos.executar().catch((e) => console.error('[contratos] rotina:', e.message));
+    ctx.rotinasParcerias.executar().catch((e) => console.error('[parcerias] rotina:', e.message));
     ctx.rotinasJuridico.executar().catch((e) => console.error('[jurídico] rotina:', e.message));
   };
   const rotinas = setInterval(rodar, 10 * 60 * 1000);

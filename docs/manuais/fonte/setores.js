@@ -436,6 +436,9 @@ const SETORES = [
         nome: 'Parceiros', setorPortal: 'Parceiros',
         papel: 'Relacionamento com parceiros e prestação de contas das comissões dos parceiros.',
         ferramentas: ['parceiros'],
+        tambem: [
+          '<b>Solicitação de Contrato Parceria</b> (menu do portal, <i>Jurídico</i>): quando o contrato com uma empresa parceira é assinado, o setor recebe o aviso "Cadastrar o parceiro". Abra a solicitação, confira os dados (CNPJ, contatos, e-mail da prestação de contas e comissões) e clique em <b>Cadastrar parceiro</b>: ele entra na Prestação de Contas sem digitar de novo. CNPJ já na base: o contrato é ligado ao cadastro existente. Sem cadastro em 2 dias úteis, o aviso é repetido.',
+        ],
         recebe: [
           ['Dúvida sobre comissão', 18, 'media', 'Parceiro, mês de referência e o valor em dúvida.'],
           ['Cadastro de parceiro', 18, 'media', 'Dados do parceiro e dados bancários (anexe documentos).'],
@@ -493,6 +496,7 @@ const SETORES = [
     ferramentas: ['partnerchip'],
     tambem: [
       '<b>Solicitação de Contrato</b> (menu do portal): fechada a negociação, o executivo pede a minuta a partir da análise liberada, com as condições e as objeções e solicitações do síndico. O Jurídico tem 72h úteis; a minuta vai e volta com os ajustes até a assinatura (acompanhe em <i>Jurídico → Acompanhamento de demandas Jurídicas</i>), e com o contrato assinado e as condições registradas pelo Jurídico você clica em <b>Solicitar implantação</b>, no próprio contrato (ou em <i>Implantação → Nova implantação → No portal</i>): ela já vem com as condições fechadas. Toda implantação começa de um contrato: contrato assinado <b>fora do portal</b> entra em <i>Nova implantação → Fora do portal</i>, com o retorno da análise, e o Jurídico registra as condições antes de seguir ao setor.',
+      '<b>Solicitação de Contrato Parceria</b> (menu do portal, <i>Jurídico</i>): no lugar do formulário do Forms e do e-mail, o executivo (ou o Comercial e o CS) pede o contrato com a empresa parceira: empresa, CNPJ, representante legal, responsável financeiro, e-mail da prestação de contas e as comissões (recorrência de 10% ou 5%; venda de 50% da 1ª taxa administrativa; outro percentual vai para a diretoria). O Jurídico tem 72h úteis para a minuta; você leva ao parceiro e pede ajuste ou a assinatura. Assinado, o setor Parceiros cadastra o parceiro e você é avisado de que já pode indicar condomínios.',
       '<b>Comissões de Novos Condomínios</b>: o condomínio fechado entra na Carteira com a <b>vigência</b> e o <b>executivo de negócios</b>. No início do mês a gestão comercial clica em <i>Puxar da carteira</i> e escolhe a vigência; cada executivo vê os condomínios dele, informa se tem parceiro (só da lista; parceiro novo é pedido ao Financeiro por ticket) e a gestão aprova. O passo a passo está no <b>Manual do Portal – Setor Administrativa/Financeira</b> (subárea Comissões de Novos Condomínios).',
     ],
     recebe: [
@@ -571,6 +575,7 @@ const SETORES = [
     ferramentas: [],
     tambem: [
       '<b>Solicitação de Contrato</b> (menu do portal): quem a administração marca em <i>Quem elabora</i> recebe os pedidos do comercial, assume da fila, redige a minuta em até 72h úteis, responde aos ajustes e, com o contrato assinado, registra as <b>condições fechadas</b> (em <i>Acompanhamento de Contratos → Assinaturas</i>); o executivo é avisado e solicita a implantação, que vem com elas. Contrato assinado fora do portal chega direto em Assinaturas, pela implantação: registradas as condições, ela segue sozinha para o setor Implantação. Os números ficam no <b>Dashboard Jurídico</b>. O que o manual reserva à diretoria passa por ela antes da minuta.',
+      '<b>Solicitação de Contrato Parceria</b> (menu do portal): os pedidos de contrato com empresas parceiras chegam na mesma fila de quem elabora (protocolo CP-…, 72h úteis para a minuta). O percentual de comissão fora do padrão espera a diretoria. Com a via assinada, registre as comissões, a vigência e os contatos: o setor Parceiros é avisado para cadastrar o parceiro. Os pedidos também aparecem nas Demandas Jurídicas.',
       '<b>Demandas Jurídicas</b> (menu do portal, <i>Jurídico → Demandas Jurídicas</i>): o acompanhamento de tudo o que se pede ao Jurídico, no lugar da planilha. Qualquer pessoa abre a demanda (atividade, cliente e objeto) e acompanha em <i>Minhas demandas</i>; o Jurídico vê todas (com os contratos da Solicitação de Contrato), escolhe o responsável, muda a situação e registra a entrega. O prazo de cada atividade fica na <b>Tabela de prazos</b>, em horas úteis (8h = 1 dia útil); atrasada é automática, e os <b>Indicadores (SLA)</b> mostram o % entregue no prazo por atividade e por mês.',
     ],
     recebe: [

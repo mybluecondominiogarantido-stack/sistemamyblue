@@ -782,6 +782,76 @@ CREATE TABLE IF NOT EXISTS contrato_eventos (
 );
 CREATE INDEX IF NOT EXISTS idx_contrato_eventos ON contrato_eventos(contrato_id, criado_em);
 
+-- ===== Solicitação de Contrato Parceria (server/rotas/parcerias.js) =====
+-- o comercial pede o contrato com a empresa parceira (o antigo formulário do Microsoft Forms), quem elabora (Jurídico)
+-- redige em até 72h úteis, o comercial leva ao parceiro, pede ajustes ou a assinatura, a advogada registra as condições
+-- (comissões e vigência) e o setor Parceiros cadastra o parceiro na base de comissão (Prestação de Contas).
+CREATE TABLE IF NOT EXISTS parceria_protocolos (
+  dia DATE PRIMARY KEY,
+  ultimo INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS parcerias (
+  id SERIAL PRIMARY KEY,
+  protocolo TEXT UNIQUE,
+  etapa TEXT NOT NULL DEFAULT 'rascunho' CHECK (etapa IN ('rascunho','fila','em_elaboracao','pendencia','minuta_enviada','para_assinar','em_assinatura','conferencia','assinado','cancelada')),
+  empresa TEXT NOT NULL DEFAULT '',
+  cnpj TEXT NOT NULL DEFAULT '',
+  solicitante_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  responsavel_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  assumido_em TIMESTAMPTZ,
+  formulario JSONB NOT NULL DEFAULT '{}'::jsonb,
+  -- percentual fora do padrão: { itens, aprovado, observacao, por, decidido_em }
+  diretoria JSONB NOT NULL DEFAULT '{}'::jsonb,
+  enviado_em TIMESTAMPTZ,
+  prazo TIMESTAMPTZ,
+  aviso_prazo_em TIMESTAMPTZ,
+  minuta_enviada_em TIMESTAMPTZ,
+  ajustes INTEGER NOT NULL DEFAULT 0,
+  ultimo_ajuste_em TIMESTAMPTZ,
+  assinatura_pedida_em TIMESTAMPTZ,
+  em_assinatura_em TIMESTAMPTZ,
+  assinado_em TIMESTAMPTZ,
+  -- condições do contrato assinado (comissões, vigência, contatos), registradas pela advogada
+  fechado JSONB NOT NULL DEFAULT '{}'::jsonb,
+  fechado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  fechado_em TIMESTAMPTZ,
+  -- o setor Parceiros confirma o cadastro na base de comissão (lembrete a cada 2 dias úteis até confirmar)
+  parceiro_id TEXT,
+  parceiro_cadastrado_em TIMESTAMPTZ,
+  parceiro_cadastrado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  aviso_parceiros_em TIMESTAMPTZ,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_parcerias_etapa ON parcerias(etapa);
+CREATE INDEX IF NOT EXISTS idx_parcerias_solicitante ON parcerias(solicitante_id);
+
+CREATE TABLE IF NOT EXISTS parceria_documentos (
+  id SERIAL PRIMARY KEY,
+  parceria_id INTEGER NOT NULL REFERENCES parcerias(id) ON DELETE CASCADE,
+  tipo TEXT NOT NULL,
+  nome TEXT NOT NULL,
+  mime TEXT NOT NULL DEFAULT 'application/octet-stream',
+  tamanho INTEGER NOT NULL DEFAULT 0,
+  sha256 TEXT,
+  conteudo BYTEA,
+  enviado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  enviado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  substituido_em TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_parceria_docs ON parceria_documentos(parceria_id, tipo);
+
+CREATE TABLE IF NOT EXISTS parceria_eventos (
+  id SERIAL PRIMARY KEY,
+  parceria_id INTEGER NOT NULL REFERENCES parcerias(id) ON DELETE CASCADE,
+  usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  tipo TEXT NOT NULL,
+  detalhe JSONB NOT NULL DEFAULT '{}'::jsonb,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_parceria_eventos ON parceria_eventos(parceria_id, criado_em);
+
 -- ===== Demandas Jurídicas (server/rotas/juridico.js) =====
 -- tudo o que se pede ao Jurídico (aditivos, rescisões, pareceres…), com o prazo do tipo em horas úteis (÷ 8 = dias úteis),
 -- a data da entrega e o SLA (entregue até o prazo). Os pedidos da Solicitação de Contrato entram na lista sozinhos (não ficam aqui).
@@ -877,7 +947,7 @@ const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 
   'analise_lancamentos', 'analise_exclusoes', 'analise_alertas', 'analise_eventos',
   'implantacao_protocolos', 'implantacoes', 'implantacao_documentos', 'implantacao_eventos', 'implantacao_liberacoes', 'implantacao_parametros',
   'implantacao_autorizacoes', 'implantacao_pausas', 'implantacao_fichas', 'implantacao_ficha_versoes', 'implantacao_antecipacoes', 'implantacao_importacoes',
-  'contrato_protocolos', 'contratos', 'contrato_documentos', 'contrato_eventos', 'renegociacao_tickets', 'renegociacao_relatorios',
+  'contrato_protocolos', 'contratos', 'contrato_documentos', 'contrato_eventos', 'parceria_protocolos', 'parcerias', 'parceria_documentos', 'parceria_eventos', 'renegociacao_tickets', 'renegociacao_relatorios',
   'juridico_tipos', 'juridico_importacoes', 'juridico_demandas', 'juridico_eventos'];
 const RLS = TABELAS.map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`).join(';\n');
 
