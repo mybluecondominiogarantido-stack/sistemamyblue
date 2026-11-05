@@ -315,7 +315,7 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
     const p = await perfil(req.usuario);
     const vis = req.query.vis === 'todas' && p.ve_tudo ? 'todas' : 'minhas';
     const lista = filtrar(await demandas(p, req.usuario, vis), req.query);
-    const cab = ['#', 'Atividade', 'Solicitante', 'Cliente', 'Setor', 'Estado', 'Objeto da demanda', 'Data da Solicitação', 'Prazo de Entrega', 'Data da Entrega',
+    const cab = ['#', 'Atividade', 'Solicitante', 'Cliente', 'Setor', 'Estado', 'Objeto da demanda', 'Data da Solicitação', 'Prazo de Entrega', 'Data de Conclusão',
       'Status', 'Observações', 'SLA', 'Responsável', 'Origem'];
     const linhas = lista.map((d) => [d.origem === 'demanda' ? d.numero : d.ref, d.tipo, d.solicitante_nome, d.cliente, d.setor, d.uf, d.objeto, dataBr(d.solicitada_em),
       dataBr(d.prazo), dataBr(d.entregue_em), STATUS[d.status] + (d.atrasada ? ' (atrasada)' : ''), d.observacoes,

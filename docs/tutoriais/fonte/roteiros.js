@@ -1570,7 +1570,7 @@ module.exports = [
       const A = '1 · Meus pedidos';
       await t.legenda('Contrato de garantia, contrato de parceria, aditivo, rescisão, parecer: tudo o que você pede ao Jurídico fica em <b>Jurídico → Solicitações ao Jurídico</b>.', { etapa: A, ms: 300 });
       await t.clicar(menu('#/juridico/pedidos'), { depois: 1800, dx: 0.3 });
-      await t.legenda('Em <b>Meus pedidos</b>, cada um com a situação, o prazo, a entrega e se saiu dentro do prazo. O que espera por você vem marcado <b>com você</b>.', { etapa: A, ms: 600 });
+      await t.legenda('Em <b>Meus pedidos</b>, cada um com a situação, o prazo, a conclusão e se saiu dentro do prazo. O que espera por você vem marcado <b>com você</b>.', { etapa: A, ms: 600 });
       await t.mostrar('#esperaDj', 2400);
       await t.mostrar('#tbDj', 2600);
 

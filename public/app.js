@@ -7887,7 +7887,7 @@
         opcoes([['', 'Todas as origens'], ['demanda', 'Demandas'], ['contrato', 'Solicitação de Contrato'], ['parceria', 'Solicitação de Contrato Parceria']], f.origem) + '</select>' +
         '' : '') +
       (todas || minhas ? '<select class="campo" id="fAnoDj" style="width:auto" aria-label="Ano da solicitação"></select>' : '') + '</div>' +
-      '<div class="tabela-wrap"><table style="min-width:1080px"><thead><tr><th>Nº</th><th>Atividade</th><th>' + (minhas ? 'Com quem' : 'Solicitante') + '</th><th>Cliente / objeto</th><th>Solicitada</th><th>Prazo</th><th>Entrega</th><th>Situação</th><th>' + (vis === 'fila' ? '' : 'SLA') + '</th></tr></thead>' +
+      '<div class="tabela-wrap"><table style="min-width:1080px"><thead><tr><th>Nº</th><th>Atividade</th><th>' + (minhas ? 'Com quem' : 'Solicitante') + '</th><th>Cliente / objeto</th><th>Solicitada</th><th>Prazo</th><th>Conclusão</th><th>Situação</th><th>' + (vis === 'fila' ? '' : 'SLA') + '</th></tr></thead>' +
       '<tbody id="tbDj"></tbody></table></div><div class="ajuda" id="rodapeDj" style="padding:10px 16px"></div></div>';
     // em Meus pedidos, com quem está o pedido agora
     var comQuem = function (d) {
