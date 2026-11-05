@@ -5993,7 +5993,7 @@
           '<tfoot><tr><td class="fixa f0"></td><td class="fixa f1"><b>' + lista.length + ' implantaç' + (lista.length === 1 ? 'ão' : 'ões') + '</b></td>' + COLS.slice(2).map(function (c) { return '<td' + (c[0] === 'onboarding' ? ' class="centro"' : '') + '>' + (c[0] === 'onboarding' ? '<b>' + feitosOnb + ' feitos</b>' : c[0] === 'pct' ? '<b>' + mediaDe(lista) + '% médio</b>' : '') + '</td>'; }).join('') + '</tr></tfoot>';
       }
       raiz.innerHTML = cab + '<section class="painel"><div class="cab-painel"><h2>Controle de implantações · ' + esc(f.ano) + (f.mes ? ' · ' + MESES_LONGO[f.mes - 1] : '') + '</h2><span class="espaco"></span><span class="ajuda" style="margin:0">clique no título da coluna para ordenar</span>' + (resumida && ordem.k !== 'mes' ? '<button class="btn ghost" data-agrupar>Agrupar por mês</button>' : '') + '</div>' +
-        '<div class="tabela-wrap ctrl-wrap"><table class="ctrl-acomp' + (resumida ? ' resumida' : '') + '">' + corpo + '</table></div>' +
+        '<div class="tabela-wrap ctrl-wrap"><table class="ctrl-acomp tabela-resp' + (resumida ? ' resumida' : '') + '">' + corpo + '</table></div>' +
         '<p class="ajuda" style="margin:0;padding:8px 16px 14px">' + (resumida
           ? 'Selos verdes: etapa feita; âmbar: falta. Passe o mouse no selo para ver o detalhe. CNPJ, administradora, síndico e as datas de contrato e documentação estão na <b>Planilha completa</b> (e no Excel).'
           : 'Cabeçalho e as duas primeiras colunas ficam fixos ao rolar.') +
@@ -8721,7 +8721,7 @@
     }) : null;
     var rotularTabelas = function () {
       $$('#conteudo table.tabela-resp, .fundo-modal table.tabela-resp').forEach(function (t) {
-        var cab = $$('thead tr:last-child th', t).map(function (th) { return th.textContent.trim(); });
+        var cab = $$('thead tr:last-child th', t).map(function (th) { return th.textContent.replace(/[▲▼]/g, '').trim(); });
         $$('tbody > tr', t).forEach(function (tr) {
           var i = 0;
           Array.prototype.forEach.call(tr.children, function (td) {

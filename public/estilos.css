@@ -249,6 +249,12 @@ table.tabela-resp.cartoes td[data-rotulo=""],table.tabela-resp.cartoes td[data-r
 table.tabela-resp.cartoes td[data-rotulo=""]::before,table.tabela-resp.cartoes td[colspan]::before{display:none}
 table.tabela-resp.cartoes td:empty{display:none}
 table.tabela-resp.cartoes td .campo{max-width:100%}
+/* Controle de Acompanhamento em cartões: sem colunas presas e sem caixa de rolagem própria; cada implantação é um cartão */
+.ctrl-wrap:has(>table.cartoes){max-height:none;overflow:visible}
+table.ctrl-acomp.cartoes td,table.ctrl-acomp.cartoes td.fixa{position:relative;left:auto!important;border-right:0!important;box-shadow:none!important;background:transparent}
+table.ctrl-acomp.cartoes tbody tr.aberta{box-shadow:inset 3px 0 0 var(--amber)}
+table.ctrl-acomp.cartoes tr.grupo-ctrl,table.ctrl-acomp.cartoes tr.grupo-ctrl td{padding:10px 16px;background:var(--bg)}
+table.ctrl-acomp.cartoes .obs-td,table.ctrl-acomp.cartoes .obs-ctrl{width:100%!important;min-width:0!important}
 table{width:100%;border-collapse:collapse;font-size:13.5px}
 th{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);text-align:left;font-weight:800;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface-2);white-space:nowrap}
 td{padding:11px 14px;border-bottom:1px solid var(--border);vertical-align:middle}
