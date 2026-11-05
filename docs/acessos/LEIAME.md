@@ -26,7 +26,7 @@ a supervisão, das pessoas que gerenciam.
 | **Análise de Crédito**: executivo, analista, diretoria | *Configurações → Acessos → Análise de Crédito* (marca, entre os usuários do portal, quem é executivo, analista — entra no setor **Análise de Crédito** — e diretoria) | administração |
 | **Implantação**: comercial, equipe, coordenação, gestor da Análise de Crédito | comercial = executivo da Análise de Crédito; equipe = setor **Implantação**; coordenação = líder, coordenação ou supervisão do setor Implantação; gestor = líder, coordenação ou supervisão do setor Análise de Crédito (*Configurações → Pessoas* e *Configurações → Setores e equipes*) | administração; coordenação/supervisão nos setores delas |
 | **Solicitação de Contrato**: comercial, quem elabora, diretoria | comercial = executivo da Análise de Crédito; quem elabora = pessoas marcadas em *Configurações → Acessos → Solicitação de Contrato* (permissão *Elaborar as minutas de contrato*); diretoria = a da Análise de Crédito | administração |
-| **Demandas Jurídicas**: quem pede, o Jurídico, diretoria | quem pede = qualquer pessoa do portal; Jurídico = setor **Jurídico** e quem elabora os contratos; diretoria = a da Análise de Crédito | administração (setor e quem elabora); a importação da planilha, também a coordenação/supervisão do Jurídico |
+| **Jurídico** (Pedir ao Jurídico e Painel do Jurídico): quem pede, o Jurídico, diretoria | quem pede = qualquer pessoa do portal; Jurídico = setor **Jurídico** e quem elabora os contratos; diretoria = a da Análise de Crédito | administração (setor e quem elabora); a importação da planilha, também a coordenação/supervisão do Jurídico |
 | **Demonstrativos de premiação**: quem lê o de cada pessoa | a própria Gestão de Premiações, ao enviar | quem usa a Gestão de Premiações |
 
 > Atenção: mudar os setores de uma pessoa (em *Pessoas* ou em *Setores e equipes*) muda também a equipe de
@@ -181,26 +181,27 @@ Detalhes em `docs/implantacao/LEIAME.md`.
 
 ## Solicitação de Contrato
 
-Tela própria do portal (menu **Solicitação de Contrato**), não é uma ferramenta em HTML. Quem faz o quê:
+Tela própria do portal (menu **Jurídico → Pedir ao Jurídico** para pedir; **Painel do Jurídico** para conduzir), não é uma ferramenta em HTML. Quem faz o quê:
 
 | Quem | Como entra | Pode |
 |---|---|---|
 | **Comercial** (executivo de negócios) | o mesmo cadastro de executivo da Análise de Crédito | pedir o contrato a partir das suas análises liberadas (ou do PDF, ou de condomínio de entrega), anexar a convenção (se a análise não trouxe), pedir ajuste na minuta ou a assinatura (síndico aprovou), ver o controle das suas e, com o contrato concluído, solicitar a implantação |
 | **Quem elabora** (Jurídico) | marcado pela administração em *Configurações → Acessos → Solicitação de Contrato* (sem ninguém marcado, a administração recebe) | ver a fila, as assinaturas, o Dashboard Jurídico, todas as solicitações e o controle; assumir e passar para outra pessoa; quem assumiu devolve com pendência e envia a minuta; marcar *Enviado para assinatura* e *Assinado* (com a via assinada); registrar e corrigir as condições fechadas (não solicita a implantação: é o executivo) |
-| **Diretoria** | permissão *Chancelar análises de crédito* | decidir os itens que o Manual do Contrato reserva à diretoria antes da minuta; ver o Dashboard Jurídico e o controle |
+| **Diretoria** | permissão *Chancelar análises de crédito* | decidir os itens que o Manual do Contrato reserva à diretoria antes da minuta; ver os Indicadores do Painel do Jurídico e o controle |
 | **Administração** | perfil | tudo, inclusive escolher quem elabora |
 
 Detalhes em `docs/contratos/LEIAME.md`.
 
-## Demandas Jurídicas
+## Jurídico: Pedir ao Jurídico e Painel do Jurídico
 
-Tela própria do portal (menu **Jurídico → Demandas Jurídicas**), não é uma ferramenta em HTML. Quem faz o quê:
+Telas próprias do portal (menu **Jurídico → Pedir ao Jurídico** e **Painel do Jurídico**), não são ferramentas em HTML. Quem faz o quê:
 
 | Quem | Como entra | Pode |
 |---|---|---|
-| **Quem pede** | qualquer pessoa do portal | abrir uma demanda em nome próprio (com a data de hoje), ver as suas em *Minhas demandas*, comentar e excluir enquanto está pendente |
-| **Jurídico** | setor **Jurídico** (*Configurações → Pessoas* ou *Setores e equipes*) ou a permissão *Elaborar as minutas de contrato* | ver todas, os indicadores e a Tabela de prazos; lançar pelos outros (com outra data); mudar situação, entrega, responsável e os dados; editar a Tabela de prazos; excluir |
-| **Diretoria** | permissão *Chancelar análises de crédito* | ver todas e os indicadores (só consulta) |
+| **Quem pede** | qualquer pessoa do portal | em *Pedir ao Jurídico*: abrir uma demanda em nome próprio (com a data de hoje), ver as suas em *Meus pedidos* (com os contratos e as parcerias que pediu), comentar e excluir enquanto está pendente; recebe o aviso semanal do que espera por ela há 15 dias ou mais |
+| **Jurídico** | setor **Jurídico** (*Configurações → Pessoas* ou *Setores e equipes*) ou a permissão *Elaborar as minutas de contrato* | no *Painel do Jurídico*: Fila (e Pegar), Comigo, Todos, Indicadores e Configurar; registrar o que chega por e-mail (com outra data e quem pediu); mudar situação, entrega, responsável, como chegou e os dados; editar a Tabela de prazos; excluir. Assinaturas aparece para quem elabora os contratos |
+| **Diretoria** | permissão *Chancelar análises de crédito* | no *Painel do Jurídico*: Todos, Indicadores e Diretoria (só consulta nas demandas) |
+| **Setor Parceiros** | quem é do setor Parceiros | no *Painel do Jurídico*: Cadastro de parceiros |
 | **Importar a planilha** | administração e coordenação/supervisão do setor Jurídico | importar e desfazer a importação |
 
 Detalhes em `docs/contratos/LEIAME.md` (seção Demandas Jurídicas).

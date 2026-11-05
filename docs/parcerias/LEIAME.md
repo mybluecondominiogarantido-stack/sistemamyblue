@@ -7,9 +7,11 @@ a advogada registra as condições (comissões, vigência e contatos) e o **seto
 **Prestação de Contas — Comissão de Parceiros** com um clique. Tela própria do portal, no grupo **Jurídico** do menu, ao
 lado da Solicitação de Contrato, com os mesmos padrões dela.
 
-| Menu | Endereço | Abas |
-|---|---|---|
-| **Solicitação de Contrato Parceria** | `#/parcerias` | Minhas solicitações, Fila do Jurídico, Assinaturas, Diretoria, Cadastro do parceiro, Controle |
+| Onde | O que |
+|---|---|
+| **Pedir ao Jurídico** (`#/juridico/pedidos`) | **Novo pedido → Contrato de parceria** abre o formulário; a parceria aparece em **Meus pedidos** |
+| **Painel do Jurídico** (`#/juridico/painel/<aba>`) | **Fila** e **Comigo** (com as demais demandas), **Assinaturas → Contratos de parceria**, **Diretoria → Contratos de parceria**, **Cadastro de parceiros** (setor Parceiros), **Todos** |
+| A solicitação | `#/parcerias/<id>` (os endereços antigos `#/parcerias/<aba>` levam à aba equivalente) |
 
 ## Onde está cada parte
 
@@ -71,8 +73,9 @@ setor Parceiros confirmar.
   existente**: o `id`, o nome e a UF dele ficam; os dados do contrato são atualizados. Sem confirmação, a rotina lembra o
   setor Parceiros a cada **2 dias úteis**. Cadastrado, quem pediu é avisado de que já pode indicar condomínios (o
   parceiro aparece na seção Parceria do formulário de implantação).
-- **Demandas Jurídicas:** os pedidos enviados aparecem na lista, nas planilhas e nos indicadores, no tipo "Contrato de
-  Parceria", com o prazo de 72h úteis e a primeira minuta como entrega. Clicar abre a solicitação.
+- **Demandas Jurídicas:** os pedidos enviados aparecem na lista, nas planilhas e nos indicadores, no tipo de parceria
+  da Tabela de prazos (o primeiro com "parceri" no nome, ex.: "Contrato (parcerias)"; sem ele, "Contrato de Parceria"),
+  com o prazo de 72h úteis e a primeira minuta como entrega. Clicar abre a solicitação.
 
 ## Dados
 
