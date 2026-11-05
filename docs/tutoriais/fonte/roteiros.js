@@ -236,6 +236,37 @@ async function demandasTut(base) {
   return ids;
 }
 
+/* ---------- Solicitação de Contrato Parceria (dados fictícios) ---------- */
+const FORM_CP = {
+  empresa: 'Imobiliária Exemplo Ltda', cnpj: '22.444.888/0001-94', representante_nome: 'Representante Fictício', representante_cpf: '529.982.247-25',
+  representante_email: 'rep@exemplo.com', financeiro_nome: 'Financeiro Fictício', financeiro_telefone: '(85) 99999-0000', email_prestacao: 'contas@exemplo.com',
+  recorrencia: 'sim', recorrencia_pct: '10', venda: 'sim', venda_pct: '50', outras: '',
+};
+/* parceria pedida pela executiva (Vera) e levada pela advogada (Lara) até a etapa pedida */
+async function parceriaTut(base, empresa, cnpj, { ate } = {}) {
+  const vera = await sessaoCr(base, 'vera@myblue.com.br');
+  const lara = await sessaoCr(base, 'lara@myblue.com.br');
+  const pdf = Buffer.from('%PDF-1.4\n% exemplo\n%%EOF\n');
+  const { id } = await vera('POST', '/api/parcerias', { formulario: { ...FORM_CP, empresa, cnpj } });
+  const env = await vera('POST', `/api/parcerias/${id}/enviar`, {});
+  if (env.erro) throw new Error('enviar a parceria: ' + env.erro);
+  if (!ate) return id;
+  await lara('POST', `/api/parcerias/${id}/assumir`, {});
+  await lara('POST', `/api/parcerias/${id}/documentos`, pdf, { 'x-tipo': 'minuta', 'x-nome-arquivo': 'Minuta_parceria_exemplo.pdf' });
+  await lara('POST', `/api/parcerias/${id}/minuta`, {});
+  if (ate === 'minuta') return id;
+  await vera('POST', `/api/parcerias/${id}/pedir-assinatura`, {});
+  if (ate === 'para_assinar') return id;
+  await lara('POST', `/api/parcerias/${id}/em-assinatura`, {});
+  await lara('POST', `/api/parcerias/${id}/documentos`, pdf, { 'x-tipo': 'contrato_assinado', 'x-nome-arquivo': 'Contrato_parceria_assinado.pdf' });
+  await lara('POST', `/api/parcerias/${id}/assinado`, {});
+  if (ate === 'conferencia') return id;
+  const d = await lara('GET', `/api/parcerias/${id}`);
+  const r = await lara('PUT', `/api/parcerias/${id}/fechado`, { condicoes: { ...d.parceria.fechado, inicio: dia1() }, concluir: true });
+  if (r.erro) throw new Error(`concluir a parceria: ${r.erro} ${JSON.stringify(r.faltas || '')}`);
+  return id;
+}
+
 /* ---------- Da Análise de Crédito à Implantação (um condomínio fictício do começo ao fim) ---------- */
 /* troca quem está no portal sem passar pela tela de login (o cartão do capítulo cobre a troca) */
 async function trocarPessoa(t, email) {
@@ -1402,6 +1433,130 @@ module.exports = [
     resumo: ['<b>Assumir</b> · 72h úteis para a minuta', '<b>Enviar minuta</b> · ajustes · <b>Enviado para assinatura</b> · <b>Assinado</b>', 'Registre as condições fechadas · <b>Concluir</b> · Indicadores'],
   },
 
+  /* ======================= Solicitação de Contrato Parceria ======================= */
+  {
+    nome: 'parceria-solicitar',
+    entrar: 'vera@myblue.com.br',
+    inicio: '#/juridico/pedidos',
+    async preparar(cen, base) { cen.cpMinuta = await parceriaTut(base, 'Administradora Modelo Ltda', '33.555.999/0001-94', { ate: 'minuta' }); },
+    abertura: ['Do pedido do contrato com a empresa parceira ao parceiro na base de comissão.', ['Novo pedido: contrato de parceria', 'Empresa, representante e financeiro', 'Comissões de recorrência e de venda', 'Minuta, ajuste e assinatura']],
+    async gravar(t, cen) {
+      const A = '1 · Novo pedido';
+      await t.legenda('No menu <b>Jurídico → Pedir ao Jurídico</b>, o contrato de parceria substitui o formulário do Forms e o e-mail com o PDF.', { etapa: A, ms: 600 });
+      await t.mostrar(menu('#/juridico/pedidos'), 1600, { dx: 0.3 });
+      await t.legenda('Clique em <b>Novo pedido</b> e escolha <b>Contrato de parceria</b>.', { etapa: A, ms: 300 });
+      await t.clicar('#btNovoJ', { depois: 900 });
+      await t.clicar('input[name=tipoPedJ][value=parceria]', { depois: 600 });
+      await t.clicar('#pedJOk', { depois: 2200 });
+
+      const B = '2 · Empresa parceira';
+      await t.legenda('Preencha a empresa e o <b>CNPJ</b>: o portal confere na hora e avisa se ele já é parceiro ou já tem pedido aberto.', { etapa: B, ms: 300 });
+      await t.digitar('#c_empresa', 'Imobiliária Exemplo Ltda', { atraso: 30 });
+      await t.digitar('#c_cnpj', '22.444.888/0001-94', { atraso: 45 });
+      await t.legenda('O <b>representante legal</b> recebe a minuta e assina; o <b>responsável financeiro</b> e o e-mail da prestação de contas seguem para o setor Parceiros.', { etapa: B, ms: 300 });
+      await t.digitar('#c_representante_nome', 'Representante Fictício', { atraso: 30 });
+      await t.digitar('#c_representante_cpf', '529.982.247-25', { atraso: 45 });
+      await t.digitar('#c_representante_email', 'rep@exemplo.com', { atraso: 30 });
+      await t.digitar('#c_financeiro_nome', 'Financeiro Fictício', { atraso: 30 });
+      await t.digitar('#c_financeiro_telefone', '(85) 99999-0000', { atraso: 40 });
+      await t.digitar('#c_email_prestacao', 'contas@exemplo.com', { atraso: 30 });
+
+      const C = '3 · Comissões';
+      await t.legenda('As comissões no padrão: <b>recorrência</b> de 10% ou 5% e <b>venda</b> de 50% da 1ª taxa administrativa. Não se pedem documentos do parceiro.', { etapa: C, ms: 300 });
+      await t.clicar('input[name=c_recorrencia][value=sim]', { depois: 500 });
+      await t.clicar('input[name=c_recorrencia_pct][value="10"]', { depois: 500 });
+      await t.clicar('input[name=c_venda][value=sim]', { depois: 500 });
+      await t.clicar('input[name=c_venda_pct][value="50"]', { depois: 700 });
+      await t.legenda('Em <b>Outras solicitações</b> (opcional), qualquer combinado que não está no formulário.', { etapa: C, ms: 300 });
+      await t.digitar('#c_outras', 'Prestação de contas até o dia 10 de cada mês.', { atraso: 30 });
+
+      const D = '4 · Enviar e acompanhar';
+      await t.legenda('<b>Enviar ao Jurídico</b>: sai o protocolo CP, e o Jurídico tem <b>72h úteis</b> para a minuta.', { etapa: D, ms: 300 });
+      await t.clicar('#btEnviarCp', { depois: 2800 });
+      await t.ir(`#/parcerias/${cen.cpMinuta}`, 1800);
+      await t.legenda('Quando a minuta chega, leve ao parceiro. Pediu mudança? <b>Pedir ajuste</b>: volta ao Jurídico com mais 72h úteis.', { etapa: D, ms: 300 });
+      await t.mostrar('#btAjusteCp', 2400);
+      await t.legenda('Aprovou? <b>Parceiro aprovou: pedir assinatura</b>. Assinado, o Jurídico registra as comissões e o setor Parceiros cadastra o parceiro; você é avisado quando ele puder indicar condomínios.', { etapa: D, ms: 300 });
+      await t.mostrar('#btPedirAssCp', 3400);
+      await t.legenda('Seus pedidos ficam em <b>Pedir ao Jurídico → Meus pedidos</b>, com o que espera por você marcado.', { etapa: D, ms: 300 });
+      await t.ir('#/juridico/pedidos', 1800);
+      await t.mostrar('#tbDj', 2600);
+    },
+    resumo: ['<b>Novo pedido</b> · Contrato de parceria', 'Empresa, representante, financeiro e comissões', '<b>Enviar ao Jurídico</b> · ajuste · <b>pedir assinatura</b>'],
+  },
+  {
+    nome: 'parceria-elaborar',
+    entrar: 'lara@myblue.com.br',
+    inicio: '#/juridico/painel/fila',
+    async preparar(cen, base) {
+      cen.cpFila = await parceriaTut(base, 'Imobiliária Exemplo Ltda', '22.444.888/0001-94');
+      cen.cpParaAssinar = await parceriaTut(base, 'Administradora Modelo Ltda', '33.555.999/0001-94', { ate: 'para_assinar' });
+      cen.cpConferencia = await parceriaTut(base, 'Corretora Fictícia Ltda', '44.666.001/0001-45', { ate: 'conferencia' });
+    },
+    abertura: ['Do pedido de parceria ao contrato assinado, com as comissões registradas.', ['Assumir da fila', 'Minuta e ajustes', 'Assinatura', 'Registrar as comissões e a vigência']],
+    async gravar(t, cen) {
+      const A = '1 · Fila';
+      await t.legenda('O pedido de parceria chega na <b>Fila</b> do <b>Painel do Jurídico</b>, junto com os contratos e as demandas, com o prazo de 72h úteis.', { etapa: A, ms: 600 });
+      await t.mostrar('#tbDj', 2400);
+      await t.clicar(`#tbDj tr[data-id="cp-${cen.cpFila}"]`, { depois: 1800 });
+      await t.legenda('Clique em <b>Assumir</b>. Dá para passar para um colega a qualquer momento.', { etapa: A, ms: 300 });
+      await t.clicar('#btAssumirCp', { depois: 2000 });
+
+      const B = '2 · Minuta';
+      await t.legenda('Faltou informação? <b>Devolver com pendência</b>: o reenvio volta para você, com novo prazo.', { etapa: B, ms: 300 });
+      await t.mostrar('#btPendCp', 2200);
+      const lara = await sessaoCr(t.base, 'lara@myblue.com.br');
+      await lara('POST', `/api/parcerias/${cen.cpFila}/documentos`, Buffer.from('%PDF-1.4\n% exemplo\n%%EOF\n'), { 'x-tipo': 'minuta', 'x-nome-arquivo': 'Minuta_parceria_exemplo.pdf' });
+      await t.legenda('Anexe a minuta em Documentos e clique em <b>Enviar minuta ao comercial</b>. Cada versão fica guardada.', { etapa: B, ms: 300 });
+      await t.p.reload(); await t.pausa(1600);
+      await t.clicar('#btMinutaCp', { depois: 900 });
+      await t.clicar('#mTxtCpOk', { depois: 2400 });
+
+      const C = '3 · Assinatura';
+      await t.legenda('Quando quem pediu informa que o parceiro aprovou, a parceria aparece em <b>Assinaturas → Contratos de parceria</b>.', { etapa: C, ms: 300 });
+      await t.ir('#/juridico/painel/assinaturas/parcerias', 1800);
+      await t.clicar(`#tbCp tr[data-id="${cen.cpParaAssinar}"]`, { depois: 1800 });
+      await t.legenda('Mande para assinatura e clique em <b>Enviado para assinatura</b>. Voltou assinado? <b>Assinado</b>, anexando a via assinada.', { etapa: C, ms: 300 });
+      await t.clicar('#btEmAssCp', { depois: 900 });
+      await t.digitar('#mTxtCp', 'Enviado ao representante legal pela plataforma de assinatura.', { atraso: 30 });
+      await t.clicar('#mTxtCpOk', { depois: 2200 });
+
+      const D = '4 · Comissões';
+      await t.ir(`#/parcerias/${cen.cpConferencia}`, 1800);
+      await t.legenda('Com a via assinada, registre as <b>condições do contrato</b>: elas vêm do pedido; corrija o que mudou e informe o <b>início da vigência</b>.', { etapa: D, ms: 600 });
+      await t.mostrar('#fechadoCp', 2600);
+      await t.preencherCampo('#c_f_inicio', dia1());
+      await t.legenda('<b>Concluir</b>: o contrato fica assinado e o setor Parceiros é avisado para cadastrar o parceiro na Prestação de Contas.', { etapa: D, ms: 300 });
+      await t.clicar('#btFechConcluirCp', { depois: 900 });
+      await t.clicar('#mOk', { depois: 2400 });
+      await t.legenda('Percentual fora do padrão (pedido antigo) espera a diretoria, em <b>Painel do Jurídico → Diretoria</b>, antes da minuta.', { etapa: D, ms: 3200 });
+    },
+    resumo: ['<b>Assumir</b> · 72h úteis para a minuta', '<b>Enviar minuta</b> · ajustes · <b>Enviado para assinatura</b> · <b>Assinado</b>', 'Registre as comissões e a vigência · <b>Concluir</b>'],
+  },
+  {
+    nome: 'parceria-cadastrar',
+    entrar: 'paula@myblue.com.br',
+    inicio: '#/juridico/painel/parceiros',
+    async preparar(cen, base) { cen.cpConcluida = await parceriaTut(base, 'Imobiliária Exemplo Ltda', '22.444.888/0001-94', { ate: 'concluido' }); },
+    abertura: ['O parceiro na base de comissão, sem digitar de novo.', ['O aviso do contrato assinado', 'Conferir os dados', 'Cadastrar parceiro']],
+    async gravar(t, cen) {
+      const A = '1 · Contrato assinado';
+      await t.legenda('Quando o Jurídico conclui um contrato de parceria, o setor Parceiros recebe o aviso <b>Cadastrar o parceiro</b> no sino e por e-mail.', { etapa: A, ms: 600 });
+      await t.legenda('Em <b>Jurídico → Painel do Jurídico → Cadastro de parceiros</b>, os que esperam o cadastro vêm primeiro.', { etapa: A, ms: 300 });
+      await t.mostrar(menu('#/juridico/painel'), 1600, { dx: 0.3 });
+      await t.mostrar('#tbCp', 2400);
+      await t.clicar(`#tbCp tr[data-id="${cen.cpConcluida}"]`, { depois: 1800 });
+
+      const B = '2 · Cadastrar';
+      await t.legenda('Confira os dados do contrato assinado: CNPJ, contatos, o e-mail da prestação de contas e as comissões.', { etapa: B, ms: 300 });
+      await t.mostrar('#btCadParcCp', 3000);
+      await t.legenda('<b>Cadastrar parceiro</b>: ele entra na <b>Prestação de Contas — Comissão de Parceiros</b> sem digitar de novo. CNPJ já na base: o contrato é ligado ao cadastro que existe.', { etapa: B, ms: 300 });
+      await t.clicar('#btCadParcCp', { depois: 900 });
+      await t.clicar('#mOk', { depois: 2600 });
+      await t.legenda('Quem pediu é avisado de que já pode indicar condomínios: o parceiro aparece na seção Parceria do formulário de implantação. Sem cadastro em 2 dias úteis, o aviso se repete.', { etapa: B, ms: 3600 });
+    },
+    resumo: ['Aviso <b>Cadastrar o parceiro</b>', '<b>Painel do Jurídico → Cadastro de parceiros</b>', 'Confira e clique em <b>Cadastrar parceiro</b>'],
+  },
   {
     nome: 'juridico-demandas-pedir',
     entrar: 'vera@myblue.com.br',
