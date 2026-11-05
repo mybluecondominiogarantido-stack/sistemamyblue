@@ -834,7 +834,7 @@
       return '<tr' + (grupo ? ' class="auto"' : '') + '><td style="min-width:180px">' + (grupo ? '<span class="etiqueta cinza">grupo</span> ' : '') + '<b>' + esc(rotulo) + '</b></td><td style="width:55%">' + input + '</td></tr>';
     }
     var html = '<div class="painel"><div class="cab-painel"><div style="flex:1;min-width:0"><h2>Telas do portal</h2><p class="ajuda" style="margin:2px 0 0">Em branco, fica o nome padrão. O título da tela acompanha o nome do menu.</p></div></div>' +
-      '<div class="tabela-wrap"><table><thead><tr><th>Nome padrão</th><th>Nome no menu</th></tr></thead><tbody>' +
+      '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Nome padrão</th><th>Nome no menu</th></tr></thead><tbody>' +
       MENU_FIXO.map(function (g) {
         var mod = g.ferramenta && mods.find(function (x) { return x.slug === g.ferramenta; });
         return (g.grupo ? linha(g.grupo[1], campo('rotulo', g.grupo[0], ROTULOS[g.grupo[0]] || '', g.grupo[1]), true) : '') +
@@ -842,7 +842,7 @@
           g.itens.map(function (i) { return linha(i[1], campo('rotulo', i[0], ROTULOS[i[0]] || '', i[1])); }).join('');
       }).join('') + '</tbody></table></div></div>' +
       '<div class="painel" style="margin-top:16px"><div class="cab-painel"><div style="flex:1;min-width:0"><h2>Setores e ferramentas</h2><p class="ajuda" style="margin:2px 0 0">O nome do setor é o grupo no menu; o da ferramenta, o item. Mudar aqui é o mesmo que mudar em Setores e equipes e em Ferramentas.</p></div></div>' +
-      '<div class="tabela-wrap"><table><thead><tr><th>Hoje</th><th>Novo nome</th></tr></thead><tbody>' +
+      '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Hoje</th><th>Novo nome</th></tr></thead><tbody>' +
       setores.map(function (st) {
         var dele = mods.filter(function (x) { return x.setor_id === st.id && x.slug !== MOD_COMISSAO; });
         if (!dele.length) return '';
@@ -896,7 +896,7 @@
       ed.innerHTML = '<p class="ajuda" style="margin:0 0 12px">Escreva o texto exatamente como aparece na ferramenta e o nome novo. O portal troca esse texto onde ele aparece sozinho ' +
         '(numa aba, num botão, num título); um texto mais longo que só contenha essas palavras continua igual.</p>' +
         '<datalist id="sugTextos">' + q.sugestoes.map(function (t) { return '<option value="' + esc(t) + '">'; }).join('') + '</datalist>' +
-        '<div class="tabela-wrap"><table><thead><tr><th>Texto que aparece hoje</th><th>Novo nome</th><th></th></tr></thead><tbody>' +
+        '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Texto que aparece hoje</th><th>Novo nome</th><th></th></tr></thead><tbody>' +
         (linhas.map(function (l, i) {
           return '<tr><td><input class="campo" list="sugTextos" data-i="' + i + '" data-c="0" value="' + esc(l[0]) + '" placeholder="Ex.: Novo recibo" maxlength="80" aria-label="Texto que aparece hoje"></td>' +
             '<td><input class="campo" data-i="' + i + '" data-c="1" value="' + esc(l[1]) + '" placeholder="Nome novo" maxlength="80" aria-label="Novo nome"></td>' +
@@ -1073,7 +1073,7 @@
     cont.innerHTML = '<div class="painel"><div class="cab-painel"><h2>Marcações</h2><input class="campo" id="qMarc" type="search" placeholder="Buscar pessoa" style="max-width:260px;margin-left:auto"></div>' +
       '<div class="corpo" style="padding-bottom:4px"><p class="ajuda" style="margin:0"><b>Supervisão da Central de Tickets</b>: vê os tickets de todos os setores e direciona (troca o responsável, transfere, muda situação, prioridade e prazo). ' +
       'Não dá acesso à administração. Já vem com os perfis Coordenador e Supervisor.<br><b>Marketing — Central de Links</b>: troca o fundo da campanha do mês e edita os links da Central de Links. Vale na hora.</p></div>' +
-      '<div class="tabela-wrap"><table><thead><tr><th>Pessoa</th><th>Perfil</th><th style="text-align:center">Supervisão da Central de Tickets</th><th style="text-align:center">Marketing — Central de Links</th></tr></thead><tbody id="tbMarc">' +
+      '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Pessoa</th><th>Perfil</th><th style="text-align:center">Supervisão da Central de Tickets</th><th style="text-align:center">Marketing — Central de Links</th></tr></thead><tbody id="tbMarc">' +
       pessoas.map(function (u) {
         return '<tr data-t="' + esc(normal(u.nome + ' ' + u.email)) + '"><td><b>' + esc(u.nome) + '</b><span class="sec">' + esc(u.email) + '</span></td><td>' + esc(PAPEL[u.papel] || 'Usuário') + '</td>' +
           '<td style="text-align:center">' + celula(u, 'supervisor_tickets') + '</td><td style="text-align:center">' + celula(u, 'editor_links') + '</td></tr>';
@@ -1300,7 +1300,7 @@
     var marca = function (k, on) { return '<input type="checkbox" data-k="' + esc(k) + '"' + (on ? ' checked' : '') + ' aria-label="Aplicar">'; };
     var tabela = function (titulo, ajuda, cab, linhas) {
       return linhas.length ? '<details open style="margin-top:12px"><summary style="cursor:pointer;font-weight:800">' + titulo + ' (' + linhas.length + ')</summary><p class="ajuda" style="margin:6px 0">' + ajuda + '</p>' +
-        '<div class="tabela-wrap" style="max-height:340px;overflow-y:auto"><table><thead><tr><th></th>' + cab.map(function (c) { return '<th>' + c + '</th>'; }).join('') + '</tr></thead><tbody>' + linhas.join('') + '</tbody></table></div></details>' : '';
+        '<div class="tabela-wrap" style="max-height:340px;overflow-y:auto"><table class="tabela-resp"><thead><tr><th></th>' + cab.map(function (c) { return '<th>' + c + '</th>'; }).join('') + '</tr></thead><tbody>' + linhas.join('') + '</tbody></table></div></details>' : '';
     };
     cont.innerHTML =
       (p.ativa ? '<div class="msg ok">Automático ligado: quando a Base de Clientes muda ou uma competência é criada, o controle recebe as mudanças a partir de <b>' + comp(p.comp) + '</b> (primeira competência ainda sem emissão).</div>'
@@ -1380,7 +1380,7 @@
         '<div class="linha" style="margin:0 0 10px;gap:10px"><div class="segmento" role="group" aria-label="Mostrar">' +
         [['com', 'Quem abre'], ['setor', 'Do setor'], ['todas', 'Todas as pessoas']].map(function (f) { return '<button type="button" class="' + (filtro === f[0] ? 'on' : '') + '" data-filtro="' + f[0] + '">' + f[1] + '</button>'; }).join('') + '</div>' +
         '<input class="campo" type="search" id="buscaAcesso" placeholder="Buscar pessoa ou setor…" value="' + esc(termo) + '" style="max-width:240px;margin-left:auto"></div>' +
-        '<div class="tabela-wrap"><table><thead><tr><th>Pessoa</th><th style="text-align:center">Abre</th><th>Como</th><th>Papel</th></tr></thead><tbody>' +
+        '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Pessoa</th><th style="text-align:center">Abre</th><th>Como</th><th>Papel</th></tr></thead><tbody>' +
         (lista.map(linha).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">Ninguém aqui. Use <b>Todas as pessoas</b> para liberar alguém, inclusive de outro setor.</td></tr>') +
         '</tbody></table></div>' +
         (filtro !== 'todas' ? '<div class="linha" style="margin-top:10px"><button class="btn ghost sm" type="button" id="btLiberarOutra">' + IC.mais + 'Liberar outra pessoa</button></div>' : '') +
@@ -2099,7 +2099,7 @@
       '<label class="linha" style="font-weight:700;font-size:13px;color:var(--muted)"><input type="checkbox" id="fTat"> só atrasados</label>' +
       (visao === 'setor' || visao === 'todos' ? '<label class="linha" style="font-weight:700;font-size:13px;color:var(--muted)"><input type="checkbox" id="fTsr"> sem responsável</label>' : '') +
       '<span class="espaco"></span><button class="btn primary" id="btNovoTicket">' + IC.mais + 'Novo ticket</button></div>' +
-      '<div class="tabela-wrap"><table><thead><tr><th>Nº</th><th>Assunto</th><th>Setor</th><th>Prioridade</th><th>Situação</th><th>' + (visao === 'minha' ? 'Aberto por' : 'Responsável') + '</th><th>Prazo</th></tr></thead>' +
+      '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Nº</th><th>Assunto</th><th>Setor</th><th>Prioridade</th><th>Situação</th><th>' + (visao === 'minha' ? 'Aberto por' : 'Responsável') + '</th><th>Prazo</th></tr></thead>' +
       '<tbody id="tbT"></tbody></table></div></div></div>';
     $('#fTst').value = filtros.status;
     if ($('#fTse')) $('#fTse').value = filtros.setor;
@@ -2425,11 +2425,11 @@
         tile('Tempo médio de resolução', horas(g.horas_resolucao), 'da abertura até resolver') +
         tile('Tempo médio de 1ª resposta', horas(g.horas_primeira_resposta), 'até o primeiro retorno da equipe') +
         '</div>' +
-        '<div class="painel" style="margin-top:18px"><div class="cab-painel"><b style="font-family:var(--display)">Por setor</b></div><div class="tabela-wrap"><table><thead><tr><th>Setor</th>' + cabMetricas + '</tr></thead><tbody>' +
+        '<div class="painel" style="margin-top:18px"><div class="cab-painel"><b style="font-family:var(--display)">Por setor</b></div><div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Setor</th>' + cabMetricas + '</tr></thead><tbody>' +
         (r.por_setor.map(function (s) { return '<tr><td><b>' + esc(s.nome) + '</b></td>' + linhaMetricas(s) + '</tr>'; }).join('') || '<tr><td colspan="6" class="sec" style="text-align:center;padding:20px">Sem tickets ainda.</td></tr>') + '</tbody></table></div></div>' +
-        '<div class="painel" style="margin-top:18px"><div class="cab-painel"><b style="font-family:var(--display)">Por responsável</b></div><div class="tabela-wrap"><table><thead><tr><th>Pessoa</th>' + cabMetricas + '</tr></thead><tbody>' +
+        '<div class="painel" style="margin-top:18px"><div class="cab-painel"><b style="font-family:var(--display)">Por responsável</b></div><div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Pessoa</th>' + cabMetricas + '</tr></thead><tbody>' +
         (r.por_pessoa.map(function (s) { return '<tr><td><b>' + esc(s.nome) + '</b></td>' + linhaMetricas(s) + '</tr>'; }).join('') || '<tr><td colspan="6" class="sec" style="text-align:center;padding:20px">Nenhum ticket atribuído ainda.</td></tr>') + '</tbody></table></div></div>' +
-        '<div class="painel" style="margin-top:18px"><div class="cab-painel"><b style="font-family:var(--display)">Tipos de demanda mais abertos no período</b></div><div class="tabela-wrap"><table><thead><tr><th>Tipo</th><th>Setor</th><th class="num">Tickets</th></tr></thead><tbody>' +
+        '<div class="painel" style="margin-top:18px"><div class="cab-painel"><b style="font-family:var(--display)">Tipos de demanda mais abertos no período</b></div><div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Tipo</th><th>Setor</th><th class="num">Tickets</th></tr></thead><tbody>' +
         (r.por_categoria.map(function (c) { return '<tr><td>' + esc(c.nome) + '</td><td>' + esc(c.setor) + '</td><td class="num">' + c.n + '</td></tr>'; }).join('') || '<tr><td colspan="3" class="sec" style="text-align:center;padding:20px">Nada no período.</td></tr>') + '</tbody></table></div></div>';
     }
     $('#pDias').onchange = carregar;
@@ -2468,7 +2468,7 @@
       '<span class="ajuda" style="margin:0 0 0 auto">ver quem edita o quê</span></summary>' +
       '<p style="margin:12px 0 4px"><b>Todos veem a carteira.</b> ' + (eu.papel === 'admin' ? 'Como administrador, você edita tudo.' : pode.length ? 'Além disso, você pode:' : 'Você não tem permissão de edição.') + '</p>' +
       (eu.papel !== 'admin' && pode.length ? '<ul style="margin:0 0 10px;padding-left:20px">' + pode.map(function (x) { return '<li>' + esc(x.rotulo) + ' <span class="sec" style="display:inline">· por ' + esc(x.motivo) + '</span></li>'; }).join('') + '</ul>' : '') +
-      '<h4 style="margin:12px 0 6px;font-family:var(--display)">Quem pode cada coisa hoje</h4><div class="tabela-wrap"><table><thead><tr><th>O que</th><th>Quem (além da administração)</th></tr></thead><tbody>' +
+      '<h4 style="margin:12px 0 6px;font-family:var(--display)">Quem pode cada coisa hoje</h4><div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>O que</th><th>Quem (além da administração)</th></tr></thead><tbody>' +
       a.permissoes.map(function (p) {
         return '<tr><td>' + esc(p.rotulo) + '</td><td>' + (p.quem.length ? p.quem.map(function (q) { return esc(q.nome) + ' <span class="sec" style="display:inline">(' + esc(q.motivo) + ')</span>'; }).join(', ') : '<span style="color:var(--muted)">só a administração</span>') + '</td></tr>';
       }).join('') + '</tbody></table></div>' +
@@ -2640,7 +2640,7 @@
           (parecidos ? ', <b>' + parecidos + ' parecido' + (parecidos === 1 ? '' : 's') + '</b> com condomínio da carteira (confira)' : '') + (ja.length ? ' e ' + ja.length + ' já na carteira' : '') + '.';
         $('#nvPasso3').innerHTML = '<div class="painel"><div class="cab-painel"><div class="titulo-passo" style="margin:0"><span class="passo">3</span>Condomínios para adicionar</div><span class="espaco"></span>' +
           '<span class="ajuda" style="margin:0">Digite o <b>ID Vouch</b> de cada um e confira o apelido.</span></div>' +
-          (paraAdd.length ? '<div class="tabela-wrap"><table class="tab-novos"><colgroup><col style="width:38px"><col style="width:110px"><col style="width:31%"><col style="width:50px"><col style="width:56px"><col style="width:16%"><col style="width:108px"><col style="width:17%"></colgroup>' +
+          (paraAdd.length ? '<div class="tabela-wrap"><table class="tab-novos tabela-resp"><colgroup><col style="width:38px"><col style="width:110px"><col style="width:31%"><col style="width:50px"><col style="width:56px"><col style="width:16%"><col style="width:108px"><col style="width:17%"></colgroup>' +
             '<thead><tr><th><input type="checkbox" id="nvTodos"></th><th>ID Vouch *</th><th>Condomínio (Apelido Vouch)</th><th>UF</th><th>Venc.</th><th>Administradora</th><th>Vigência</th><th>Situação</th></tr></thead><tbody>' +
             paraAdd.map(function (it, i) {
               var par = it.carteira.situacao === 'parecido';
@@ -2741,7 +2741,7 @@
         '<label class="linha" style="font-weight:700;font-size:13px;color:var(--muted)"><input type="checkbox" id="cfSem"> sem responsável</label>' +
         '<select class="campo" id="cfVig" style="max-width:230px" title="Mês/ano em que o condomínio entrou"><option value="">Todas as vigências</option>' + vigencias + '</select>' +
         '<span class="espaco"></span>' + acoes + '</div>' +
-        '<div class="tabela-wrap"><table class="tabela-carteira"><colgroup>' + cols.map(function (c) { return '<col style="width:' + c[2] + '">'; }).join('') + '</colgroup><thead><tr>' + cols.map(function (c) {
+        '<div class="tabela-wrap"><table class="tabela-carteira tabela-resp"><colgroup>' + cols.map(function (c) { return '<col style="width:' + c[2] + '">'; }).join('') + '</colgroup><thead><tr>' + cols.map(function (c) {
           return '<th data-ordem="' + c[0] + '" style="cursor:pointer" title="Ordenar">' + esc(c[1]) + ' <span data-seta="' + c[0] + '"></span></th>';
         }).join('') + '</tr></thead><tbody id="tbC"></tbody></table></div>' +
         '<div class="ajuda" id="cTotal" style="padding:10px 16px;border-top:1px solid var(--border)"></div></div>';
@@ -2811,7 +2811,7 @@
           return '<div class="painel" style="margin-bottom:18px"><div class="cab-painel"><b style="font-family:var(--display)">' + esc(fn.rotulo) + '</b>' +
             '<span class="sec" style="color:var(--muted);font-weight:600;font-size:13px">' + nomes.length + ' pessoa' + (nomes.length === 1 ? '' : 's') + '</span><span class="espaco"></span>' +
             (sem ? '<a href="#" class="etiqueta ambar" data-sem="1">' + sem + ' ativo' + (sem === 1 ? '' : 's') + ' sem responsável</a>' : '') + '</div>' +
-            '<div class="tabela-wrap"><table><thead><tr><th>Pessoa</th><th>Ramal</th><th class="num">Ativos</th><th>Por UF</th><th class="num">Distratados</th>' + (editaveis.length ? '<th></th>' : '') + '</tr></thead><tbody>' +
+            '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Pessoa</th><th>Ramal</th><th class="num">Ativos</th><th>Por UF</th><th class="num">Distratados</th>' + (editaveis.length ? '<th></th>' : '') + '</tr></thead><tbody>' +
             (linhas.map(function (l) { return l.html; }).join('') || '<tr><td colspan="6" class="sec" style="text-align:center;padding:20px">Ninguém nesta função.</td></tr>') + '</tbody></table></div></div>';
         }).join('');
       $$('[data-ver]').forEach(function (a) {
@@ -3264,7 +3264,7 @@
       '<button class="btn ghost sm" id="btColarLinks">' + IC.documento + 'Colar lista de links</button>' +
       '<button class="btn primary sm" id="btNovoLink">' + IC.mais + 'Novo link</button></div>';
     if (!j.links.length) return html + '<div style="padding:30px;text-align:center;color:var(--muted);font-weight:700">Nenhum link cadastrado.</div></div>';
-    html += '<div class="tabela-wrap"><table><thead><tr><th style="width:70px">Ordem</th><th>Link</th><th>Grupo</th><th>Situação</th></tr></thead><tbody>' +
+    html += '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th style="width:70px">Ordem</th><th>Link</th><th>Grupo</th><th>Situação</th></tr></thead><tbody>' +
       j.links.map(function (l, i) {
         return '<tr class="clicavel" data-link="' + l.id + '"><td style="white-space:nowrap">' +
           '<button class="btn icon ghost" data-mover="-1" title="Subir" aria-label="Subir"' + (i === 0 ? ' disabled' : '') + '>' + IC.cima + '</button> ' +
@@ -3381,7 +3381,7 @@
       '<select class="campo" id="aUsu" style="max-width:220px"><option value="">Todas as pessoas</option>' + usuarios.map(function (u) { return '<option value="' + u.id + '">' + esc(u.nome) + '</option>'; }).join('') + '</select>' +
       '<select class="campo" id="aMod" style="max-width:260px"><option value="">Todos os módulos</option>' + mods.map(function (m) { return '<option value="' + esc(m.slug) + '">' + esc(m.nome) + '</option>'; }).join('') + '</select>' +
       '<label class="linha" style="font-weight:700;font-size:13px;color:var(--muted)"><input type="checkbox" id="aOcultar" checked> ocultar aberturas e salvamentos automáticos</label></div>' +
-      '<div class="tabela-wrap"><table><thead><tr><th>Quando</th><th>Pessoa</th><th>Ação</th><th>Módulo</th><th>Detalhes</th></tr></thead><tbody id="tbAud"></tbody></table></div>' +
+      '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Quando</th><th>Pessoa</th><th>Ação</th><th>Módulo</th><th>Detalhes</th></tr></thead><tbody id="tbAud"></tbody></table></div>' +
       '<div style="padding:12px;text-align:center"><button class="btn ghost sm" id="btMaisAud">Carregar mais</button></div></div></div>';
     var pagina = 0;
     async function carregar(reiniciar) {
@@ -3513,7 +3513,7 @@
       '<span class="ajuda">Cada arquivo vai para o tutorial com o mesmo nome (ex.: ticket-atender.mp4 e ticket-atender.vtt).</span></div>' +
       '<input type="file" accept=".mp4,.vtt,video/mp4,text/vtt" multiple hidden id="inTut"></label>' +
       '<div id="resTut" class="pilha" style="margin-bottom:16px"></div>' +
-      '<div class="painel"><div class="tabela-wrap"><table><thead><tr><th>Tutorial</th><th>Para quem</th><th>Situação</th><th></th></tr></thead><tbody>' +
+      '<div class="painel"><div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Tutorial</th><th>Para quem</th><th>Situação</th><th></th></tr></thead><tbody>' +
       j.grupos.map(function (g) {
         var itens = j.tutoriais.filter(function (t) { return t.grupo === g; });
         if (!itens.length) return '';
@@ -3633,7 +3633,7 @@
         '<div class="tiles" style="margin-bottom:16px"><div class="tile"><span class="rot-tile">Pessoas</span><b>' + lista.length + '</b></div>' +
         '<div class="tile"><span class="rot-tile">Total da equipe</span><b style="font-size:22px">' + reais(total) + '</b></div>' +
         '<div class="tile' + (cientes < lista.length ? ' alerta' : '') + '"><span class="rot-tile">Cientes</span><b>' + cientes + ' de ' + lista.length + '</b></div></div>' +
-        '<div class="painel"><div class="tabela-wrap"><table><thead><tr><th>Pessoa</th><th>Setor</th><th style="text-align:right">Comissão</th><th>Situação</th></tr></thead><tbody>' +
+        '<div class="painel"><div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Pessoa</th><th>Setor</th><th style="text-align:right">Comissão</th><th>Situação</th></tr></thead><tbody>' +
         lista.map(function (x) {
           return '<tr class="clicavel" data-id="' + x.id + '"><td><b>' + esc(x.nome) + '</b><span class="sec">' + esc(x.cargo || '') + '</span></td><td>' + esc(x.setor || '—') + '</td>' +
             '<td style="text-align:right;font-weight:800;font-variant-numeric:tabular-nums">' + reais(x.valor) + '</td><td>' + situacaoComissao(x, false) + '</td></tr>';
@@ -3793,7 +3793,7 @@
     }
     $('#corpoCr').innerHTML = tiles + '<div class="painel"><div class="cab-painel"><input class="campo" id="qCr" type="search" placeholder="Buscar por condomínio, CNPJ ou protocolo" style="max-width:360px"><span class="espaco"></span>' +
       (aba === 'fila' ? '<span class="ajuda" style="margin:0">Ordenado pelo prazo</span>' : '') + '</div>' +
-      '<div class="tabela-wrap"><table style="min-width:900px"><thead><tr><th>Protocolo</th><th>Condomínio</th><th>' + (aba === 'minhas' ? 'Analista' : 'Executivo') + '</th><th>Situação</th><th>' + (interno ? 'Prévia do motor' : 'Resultado') + '</th><th>Prazo</th></tr></thead><tbody id="tbCr"></tbody></table></div></div>';
+      '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Protocolo</th><th>Condomínio</th><th>' + (aba === 'minhas' ? 'Analista' : 'Executivo') + '</th><th>Situação</th><th>' + (interno ? 'Prévia do motor' : 'Resultado') + '</th><th>Prazo</th></tr></thead><tbody id="tbCr"></tbody></table></div></div>';
     var seq = 0;
     async function carregar() {
       var meu = ++seq;
@@ -3876,7 +3876,7 @@
       campoCr('fAgU', 'Água + gás — por unidade (R$)', fmtNumCr(ag.por_unidade)) + selCr('fAgB', 'Água + gás no boleto?', ag.compoe_boleto ? 'sim' : 'nao', [['nao', 'Não compõe o boleto'], ['sim', 'Compõe o boleto']]) +
       campoCr('fBol', 'Custo atual do boleto (R$/UH)', fmtNumCr(f.custo_boleto_atual), { ph: 'opcional', ajuda: 'Sem informação, o comparativo usa R$ 2,50.' }) + '</div>' +
       '<div><div class="linha" style="margin-bottom:8px"><span class="rot" style="margin:0">Taxas extras vigentes</span><span class="espaco"></span><button type="button" class="btn ghost sm" id="btExtra">' + IC.mais + 'Adicionar taxa extra</button></div>' +
-      '<div class="painel tabela-wrap" style="box-shadow:none"><table style="min-width:720px"><thead><tr><th>Descrição</th><th>Valor por UH</th><th>Início</th><th>Fim</th><th>Ata</th><th></th></tr></thead>' +
+      '<div class="painel tabela-wrap" style="box-shadow:none"><table class="tabela-resp"><thead><tr><th>Descrição</th><th>Valor por UH</th><th>Início</th><th>Fim</th><th>Ata</th><th></th></tr></thead>' +
       '<tbody id="tbExtras">' + (f.taxas_extras || []).map(linhaExtraCr).join('') + '</tbody></table></div>' +
       '<div class="ajuda">Informe o valor por unidade, não o total. Anexe a ata em Documentos.</div></div></div></section>' +
 
@@ -4015,7 +4015,7 @@
       '<div class="tile"><span class="rot-tile">Receita líquida</span><b>' + (r.valores.receita_liquida != null ? reais(r.valores.receita_liquida) : '—') + '</b><span class="sec">bruta ' + (r.valores.receita_bruta != null ? reais(r.valores.receita_bruta) : '—') + '</span></div>' +
       '<div class="tile"><span class="rot-tile">Receita MyBlue</span><b>' + (r.indicadores ? reais(r.indicadores.receita_myblue) : '—') + '</b><span class="sec">por mês</span></div>' +
       '<div class="tile' + (r.indicadores && r.indicadores.exposicao > 40000 ? ' alerta' : '') + '"><span class="rot-tile">Exposição mensal</span><b>' + (r.indicadores ? reais(r.indicadores.exposicao) : '—') + '</b><span class="sec">' + (r.comparativo ? 'ganho anual ' + reais(r.comparativo.ganho_anual) : '') + '</span></div></div>' +
-      '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Memória de cálculo</h2>' + (function () { var n = r.meses.filter(function (x) { return !x.fora_da_media; }).length; return n && n < r.meses.length ? '<span class="espaco"></span><span class="etiqueta azul">' + (n === 1 ? '1 mês considerado' : n + ' meses considerados') + '</span>' : ''; })() + '</div><div class="tabela-wrap"><table><thead><tr><th>Competência</th><th>Vencimento</th><th class="num">Inadimplentes</th><th class="num">Valor em aberto</th><th class="num">% da receita bruta</th></tr></thead><tbody>' +
+      '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Memória de cálculo</h2>' + (function () { var n = r.meses.filter(function (x) { return !x.fora_da_media; }).length; return n && n < r.meses.length ? '<span class="espaco"></span><span class="etiqueta azul">' + (n === 1 ? '1 mês considerado' : n + ' meses considerados') + '</span>' : ''; })() + '</div><div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Competência</th><th>Vencimento</th><th class="num">Inadimplentes</th><th class="num">Valor em aberto</th><th class="num">% da receita bruta</th></tr></thead><tbody>' +
       (r.meses.some(function (x) { return !x.fora_da_media; }) ? r.meses.filter(function (x) { return !x.fora_da_media; }) : r.meses).map(function (x) { return '<tr><td><b>' + esc(x.rotulo) + '</b></td><td>' + dataBr(x.vencimento) + '</td><td class="num">' + x.inadimplentes + '</td><td class="num">' + reais(x.valor) + '</td><td class="num">' + pctCr(x.pct) + '</td></tr>'; }).join('') +
       '</tbody></table></div><div class="corpo" style="border-top:1px solid var(--border);font-size:13px;font-weight:600;color:var(--ink-2)">Escopo: ' + fmtNumCr(r.escopo.uh_total) + ' UH (' + esc({ convencao: 'convenção', formulario: 'formulário' }[r.escopo.uh_fonte] || '—') + ') − ' + fmtNumCr(r.escopo.uh_isentas) + ' isentas − ' + r.escopo.exclusoes.length + ' fora do escopo = <b>' + fmtNumCr(r.escopo.uh_escopo) + ' UH</b>. Valor por UH ' + (r.valores.valor_por_uh != null ? reais(r.valores.valor_por_uh) : '—') + '.' +
       (r.escopo.exclusoes.length ? '<div style="margin-top:6px">' + r.escopo.exclusoes.map(function (x) { return esc(x.unidade) + ' — ' + esc(x.motivo) + (x.detalhe ? ' (' + esc(x.detalhe) + ')' : '') + ', débito ' + reais(x.debito); }).join('; ') + '</div>' : '') + '</div></section>' +
@@ -4025,7 +4025,7 @@
         r.divergencias.map(function (x) { return '<div><b>' + esc(CAMPO_CR[x.campo] || x.campo) + '</b>: ' + esc(Object.keys(x.valores).map(function (k) { return (FONTE_CR[k] || k) + ' ' + x.valores[k]; }).join(' × ')) + ' — vale ' + esc(String(x.usado)) + ' (' + esc(FONTE_CR[x.fonte] || x.fonte) + ')</div>'; }).join('') + '</div></section>' : '') +
       '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Consulta Assertiva (espólios)</h2></div><div class="corpo pilha"><div class="msg ' + (r.assertiva.indicada ? 'aviso' : 'ok') + '">' + esc(r.assertiva.texto) + '</div>' +
       (r.assertiva.candidatos.length ? (editavel ? '<div class="ajuda" style="margin:0">Consulte cada pessoa na Assertiva e registre o resultado. Espólio confirmado sai do escopo: a MyBlue não garante a unidade. Sem o registro de todas, o retorno não é liberado. Depois clique em <b>Salvar e calcular</b>.</div>' : '') +
-        '<div class="tabela-wrap"><table><thead><tr><th>Unidade</th><th>Titular</th><th>Documento</th><th class="num">Taxas em aberto</th><th>Desde</th><th>Padrão</th><th>Consulta Assertiva</th></tr></thead><tbody>' +
+        '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Unidade</th><th>Titular</th><th>Documento</th><th class="num">Taxas em aberto</th><th>Desde</th><th>Padrão</th><th>Consulta Assertiva</th></tr></thead><tbody>' +
         r.assertiva.candidatos.map(function (x) {
           var c = consultas[x.unidade] || x.consulta || {};
           var consulta = editavel ? '<select class="campo" data-assertiva="' + esc(x.unidade) + '" style="min-width:220px" aria-label="Resultado da consulta Assertiva de ' + esc(x.unidade) + '">' +
@@ -4420,10 +4420,10 @@
       '<label class="linha" style="font-weight:700;font-size:13px;color:var(--muted)"><input type="checkbox" id="soPapel"> só quem tem papel</label></div>' +
       '<div class="corpo" style="padding-top:12px;padding-bottom:4px"><p class="ajuda" style="margin:0">Marque o papel de cada pessoa na Análise de Crédito; vale na hora. <b>Executivo</b>: pede análises e acompanha as suas (boleto vazio segue a política: R$ 2,00; Maranhão R$ 5,50). ' +
       '<b>Analista</b>: entra no setor ' + esc(j.setor_analistas) + ' e analisa. <b>Diretoria</b>: chancela as análises com inadimplência entre 35% e 40%.</p></div>' +
-      '<div class="tabela-wrap"><table style="min-width:900px"><thead><tr><th>Pessoa</th><th style="text-align:center">Executivo</th><th>UF</th><th>Região</th><th>Boleto próprio (R$)</th><th style="text-align:center">Analista de crédito</th><th style="text-align:center">Diretoria</th></tr></thead>' +
+      '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Pessoa</th><th style="text-align:center">Executivo</th><th>UF</th><th>Região</th><th>Boleto próprio (R$)</th><th style="text-align:center">Analista de crédito</th><th style="text-align:center">Diretoria</th></tr></thead>' +
       '<tbody id="tbPes">' + j.pessoas.map(linha).join('') + '</tbody></table></div></div>' +
       '<div class="painel" style="margin-top:16px"><div class="cab-painel"><h2>Executivos sem acesso ao portal</h2><span class="ajuda" style="margin:0">quem não entra no portal; o analista pede a análise em nome dele</span><span class="espaco"></span><button class="btn ghost sm" id="btNovoEx">' + IC.mais + 'Novo executivo</button></div>' +
-      '<div class="tabela-wrap"><table><thead><tr><th>Nome</th><th>UF / região</th><th>Boleto próprio</th><th>Situação</th></tr></thead><tbody>' +
+      '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Nome</th><th>UF / região</th><th>Boleto próprio</th><th>Situação</th></tr></thead><tbody>' +
       (j.executivos_sem_usuario.map(function (e) { return '<tr class="clicavel" data-ex="' + e.id + '"><td><b>' + esc(e.nome) + '</b></td><td>' + esc([e.uf, e.regiao].filter(Boolean).join(' · ') || '—') + '</td><td>' + (e.boleto != null ? reais(e.boleto) : '<span class="sec">da política</span>') + '</td><td>' + (e.ativo ? '<span class="etiqueta verde">ativo</span>' : '<span class="etiqueta cinza">inativo</span>') + '</td></tr>'; }).join('') ||
         '<tr><td colspan="4"><span class="sec">Nenhum.</span></td></tr>') + '</tbody></table></div></div>';
 
@@ -4474,14 +4474,14 @@
       ['assertiva_min_taxas', 'Assertiva: taxas em aberto (mínimo)'], ['validade_dias', 'Validade da proposta (dias)'], ['sla_horas', 'Prazo ao executivo (h)'], ['sla_horas_diretoria', 'Prazo com diretoria (h)'], ['prazo_analista_corte', 'Corte do prazo do analista (hora)']];
     var ed = p.admin;
     $('#corpoCr').innerHTML = '<div class="grade-2" style="align-items:start"><div class="painel"><div class="cab-painel"><h2>Faixas de precificação</h2><span class="ajuda" style="margin:0">teto inclusivo · boleto ' + reais(a.boleto_padrao) + (a.boleto_por_uf && a.boleto_por_uf.MA ? ' (MA ' + reais(a.boleto_por_uf.MA) + ')' : '') + '</span></div>' +
-      '<div class="tabela-wrap"><table><thead><tr><th>Inadimplência até (%)</th><th>Taxa ADM (%)</th></tr></thead><tbody id="tbFaixas">' +
+      '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Inadimplência até (%)</th><th>Taxa ADM (%)</th></tr></thead><tbody id="tbFaixas">' +
       a.faixas.map(function (f) { return '<tr><td>' + (ed ? '<input class="campo" data-f="ate" value="' + fmtNumCr(f.ate) + '">' : fmtNumCr(f.ate)) + '</td><td>' + (ed ? '<input class="campo" data-f="taxa" value="' + fmtNumCr(f.taxa_adm) + '">' : pctCr(f.taxa_adm)) + '</td></tr>'; }).join('') + '</tbody></table></div></div>' +
       '<div class="pilha"><div class="painel"><div class="cab-painel"><h2>Parâmetros</h2><span class="espaco"></span><span class="etiqueta azul">versão ' + esc(a.versao) + '</span></div><div class="corpo grade-2">' +
       PARAMS.map(function (x) { return campoCr('pp_' + x[0], x[1], fmtNumCr(a[x[0]]), { dis: !ed }); }).join('') +
       selCr('pp_media_zerados', 'Mês-base sem inadimplência', a.media_sem_meses_zerados === false ? 'nao' : 'sim', [['sim', 'Sai da média (soma ÷ meses com débito)'], ['nao', 'Entra como zero (soma ÷ 3)']], !ed) + '</div>' +
       (ed ? '<div class="corpo" style="border-top:1px solid var(--border)"><div class="grade-2">' + campoCr('ppVer', 'Nome da nova versão', '', { ph: 'ex.: 1.3' }) + campoCr('ppDesc', 'O que mudou', '') + '</div>' +
         '<div class="linha" style="justify-content:flex-end;margin-top:12px"><button class="btn primary" id="btPolSalvar">Salvar como nova versão</button></div><div class="ajuda">As análises já calculadas guardam a versão usada; as próximas usam a nova.</div></div>' : '') + '</div>' +
-      '<div class="painel"><div class="cab-painel"><h2>Versões</h2></div><div class="tabela-wrap"><table><tbody>' + j.versoes.map(function (v) { return '<tr><td><b>' + esc(v.versao) + '</b>' + (v.ativa ? ' <span class="etiqueta verde">em uso</span>' : '') + '<span class="sec">' + esc(v.descricao) + '</span></td><td>' + quando(v.criado_em) + '</td></tr>'; }).join('') + '</tbody></table></div></div></div></div>';
+      '<div class="painel"><div class="cab-painel"><h2>Versões</h2></div><div class="tabela-wrap"><table class="tabela-resp"><tbody>' + j.versoes.map(function (v) { return '<tr><td><b>' + esc(v.versao) + '</b>' + (v.ativa ? ' <span class="etiqueta verde">em uso</span>' : '') + '<span class="sec">' + esc(v.descricao) + '</span></td><td>' + quando(v.criado_em) + '</td></tr>'; }).join('') + '</tbody></table></div></div></div></div>';
     if (ed) $('#btPolSalvar').onclick = async function () {
       var parametros = {};
       PARAMS.forEach(function (x) { var n = numCr($('#pp_' + x[0]).value); if (n != null) parametros[x[0]] = n; });
@@ -4669,7 +4669,7 @@
     var max = Math.max.apply(null, p.mensal.map(function (x) { return x.contratos; }).concat([1]));
     var periodo = (f.mes ? MESES_LONGO[f.mes - 1].toLowerCase() + ' de ' : '') + j.ano;
     var tabela = function (titulo, cab, linhas) {
-      return '<section class="painel" style="flex:1 1 300px"><div class="cab-painel"><h2>' + esc(titulo) + '</h2></div><div class="tabela-wrap"><table><thead><tr><th>' + esc(cab) + '</th><th class="num">Contratos</th><th class="num">% médio</th></tr></thead><tbody>' +
+      return '<section class="painel" style="flex:1 1 300px"><div class="cab-painel"><h2>' + esc(titulo) + '</h2></div><div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>' + esc(cab) + '</th><th class="num">Contratos</th><th class="num">% médio</th></tr></thead><tbody>' +
         (linhas.map(function (x) { return '<tr><td>' + esc(x.nome) + '</td><td class="num">' + x.contratos + '</td><td class="num">' + x.pct_medio + '%</td></tr>'; }).join('') || '<tr><td colspan="3" class="sec">Nada no período.</td></tr>') + '</tbody></table></div></section>';
     };
     // metas: o percentual batido (na carteira filtrada); a lista do que está pendente fica logo abaixo
@@ -4735,7 +4735,7 @@
       '<div class="corpo pilha" style="gap:14px"><div class="cards-acomp duas" style="margin:0">' +
       tileAcomp('Concluídas no prazo', conc.length ? Math.round(noPrazo * 100 / conc.length) + '%' : '—', noPrazo + ' de ' + conc.length + ' concluídas', { barra: conc.length ? noPrazo * 100 / conc.length : 0 }) +
       tileAcomp('Tempo médio', media(dias), 'dias úteis entre iniciar e concluir') + '</div>' +
-      '<div class="tabela-wrap"><table><thead><tr><th>Assistente</th><th class="num">Contratos</th><th class="num">% médio</th><th class="num">Concluídas</th><th class="num">Tempo médio</th><th class="num">No prazo</th></tr></thead><tbody>' +
+      '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Assistente</th><th class="num">Contratos</th><th class="num">% médio</th><th class="num">Concluídas</th><th class="num">Tempo médio</th><th class="num">No prazo</th></tr></thead><tbody>' +
       (porAss.join('') || '<tr><td colspan="6" class="sec">Nada no período.</td></tr>') + '</tbody></table></div>' +
       '<p class="ajuda" style="margin:0">As em andamento, com o prazo de cada uma, ficam no Painel de atividades (Fila); o dia do início e da conclusão, no Controle e na linha do tempo de cada implantação. <button class="link-acomp" data-ir-visao="fila">ver as em andamento →</button></p></div></section>';
   }
@@ -4757,12 +4757,12 @@
     return '<section class="painel" style="margin-top:16px"><div class="cab-painel"><h2>Pós-implantação</h2><span class="espaco"></span><span class="ajuda" style="margin:0">espólios, levantamento de pendências e 1ª prestação de contas · prazos em dias úteis</span></div>' +
       '<div class="corpo linha" style="gap:16px;align-items:stretch">' +
       '<div class="cards-acomp uma" style="margin:0;flex:1 1 220px">' + tileAcomp('Feitas no prazo em ' + mes, pct(tot), tot.prazo + ' de ' + tot.n + ' etapas feitas no mês', { barra: tot.n ? tot.prazo * 100 / tot.n : 0 }) + '</div>' +
-      '<div class="tabela-wrap" style="flex:2 1 360px"><table><thead><tr><th>Etapa</th><th class="num">Feitas (' + mes.slice(0, 3) + ')</th><th class="num">No prazo</th></tr></thead><tbody>' +
+      '<div class="tabela-wrap" style="flex:2 1 360px"><table class="tabela-resp"><thead><tr><th>Etapa</th><th class="num">Feitas (' + mes.slice(0, 3) + ')</th><th class="num">No prazo</th></tr></thead><tbody>' +
       [['espolio', 'Espólios', j.parametros.espolio_dias, 'depois de assumir'], ['pendencias', 'Levantamento de pendências', j.parametros.pendencias_dias, 'depois dos boletos'], ['prestacao', '1ª prestação de contas', j.parametros.prestacao_dias, 'depois do repasse']].map(function (e) {
         var x = feitas(base, e[0]);
         return '<tr><td><b>' + e[1] + '</b><span class="sec">' + diasUteisImp(e[2]) + ' ' + e[3] + '</span></td><td class="num">' + x.n + '</td><td class="num">' + pct(x) + '</td></tr>';
       }).join('') + '</tbody></table></div>' +
-      '<div class="tabela-wrap" style="flex:1 1 240px"><table><thead><tr><th>Assistente</th><th class="num">Feitas (' + mes.slice(0, 3) + ')</th><th class="num">No prazo</th></tr></thead><tbody>' +
+      '<div class="tabela-wrap" style="flex:1 1 240px"><table class="tabela-resp"><thead><tr><th>Assistente</th><th class="num">Feitas (' + mes.slice(0, 3) + ')</th><th class="num">No prazo</th></tr></thead><tbody>' +
       (Object.keys(nomes).sort().map(function (n) { var x = feitas(base.filter(function (l) { return l.responsavel_nome === n; })); return '<tr><td>' + esc(n) + '</td><td class="num">' + x.n + '</td><td class="num">' + pct(x) + '</td></tr>'; }).join('') || '<tr><td colspan="3" class="sec">Nada no mês.</td></tr>') +
       '</tbody></table></div></div>' +
       '<p class="ajuda" style="margin:0;padding:0 16px 14px">As em aberto, as atrasadas e as que vencem hoje ou amanhã ficam no Painel de atividades → Pós-implantação. <button class="link-acomp" data-ir-pos>ver as em aberto →</button></p></section>';
@@ -4792,7 +4792,7 @@
     corpo.innerHTML = '<div class="linha" style="gap:8px;padding:12px 16px 0">' + [['todas', 'Todas'], ['vencido', 'Prazo vencido'], ['dez', 'Vencem em até 10 dias'], ['prazo', 'No prazo']].map(function (s) {
       return '<button class="pilula-acomp' + (f.pendOnb === s[0] ? ' on' : '') + '" data-pfo="' + s[0] + '">' + s[1] + ' <span class="n">' + onb.filter(FILTRO[s[0]]).length + '</span></button>';
     }).join('') + '</div>' +
-      '<div class="tabela-wrap"><table><thead><tr><th>Condomínio</th><th>Assistente</th><th>Limite · ' + j.parametros.onboarding_dias + ' dias do 1º vencimento</th><th>Onboarding</th><th>Situação</th><th></th></tr></thead><tbody>' +
+      '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Condomínio</th><th>Assistente</th><th>Limite · ' + j.parametros.onboarding_dias + ' dias do 1º vencimento</th><th>Onboarding</th><th>Situação</th><th></th></tr></thead><tbody>' +
       (lista.map(function (l) {
         var o = l.onboarding, d = dias(l);
         var acao = coord && l.responsavel_id && o.situacao !== 'marcado' ? '<button class="btn ghost sm" data-cobrar-onb="' + l.id + '" data-quem="' + esc(l.responsavel_nome || '') + '">Cobrar ' + esc(primeiroNome(l.responsavel_nome)) + '</button>'
@@ -4857,7 +4857,7 @@
     };
     raiz.innerHTML = '<div class="cards-acomp quatro">' + cards + '</div>' +
       '<section class="painel"><div class="cab-painel"><h2>' + (minha ? 'Suas implantações em aberto' : 'Em aberto') + '</h2><span class="espaco"></span><span class="ajuda" style="margin:0">do que pede ação primeiro · ' + itens.length + '</span></div>' +
-      '<div class="tabela-wrap"><table><thead><tr><th>Protocolo · Condomínio</th><th>Situação</th><th>Etapas</th>' + (minha ? '' : '<th>Assistente</th>') + '<th>Prazo</th><th>Pendências</th><th></th></tr></thead><tbody>' +
+      '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Protocolo · Condomínio</th><th>Situação</th><th>Etapas</th>' + (minha ? '' : '<th>Assistente</th>') + '<th>Prazo</th><th>Pendências</th><th></th></tr></thead><tbody>' +
       (itens.map(function (i) {
         var bt = i.etapa === 'fila' ? (pf.coordenacao || pf.admin ? ['Designar', true] : ['Abrir', false]) : !i.iniciado_em && i.responsavel_id === eu.id ? ['Iniciar', true] : ['Abrir', false];
         return '<tr class="clicavel" data-imp="' + i.id + '"><td><b>' + esc(i.condominio || 'Sem nome') + '</b><span class="sec">' + esc([i.protocolo, i.uf].filter(Boolean).join(' · ')) + '</span></td>' +
@@ -4877,7 +4877,7 @@
     var pf = j.perfil, coord = !!(pf.coordenacao || pf.admin);
     var lista = j.linhas.filter(function (l) { return l.etapa === 'concluida' && passaAcomp(l, { semAno: true, semMes: true }); });
     raiz.innerHTML = '<section class="painel"><div class="cab-painel"><h2>Aguardando a Base de Clientes</h2><span class="espaco"></span><span class="ajuda" style="margin:0">concluídas: a coordenação confere os dados e confirma a entrada na Base de Clientes</span></div>' +
-      '<div class="tabela-wrap"><table><thead><tr><th>Condomínio</th><th>Conduzida por</th><th>Concluída em</th><th>Etapas</th><th></th></tr></thead><tbody>' +
+      '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Condomínio</th><th>Conduzida por</th><th>Concluída em</th><th>Etapas</th><th></th></tr></thead><tbody>' +
       (lista.map(function (l) {
         return '<tr class="clicavel" data-imp="' + l.id + '"><td><b>' + esc(l.condominio) + '</b><span class="sec">' + esc([l.protocolo || (l.numero ? 'Nº ' + l.numero : ''), l.uf].filter(Boolean).join(' · ')) + '</span></td><td>' + esc(l.responsavel_nome || '—') + '</td>' +
           '<td>' + (l.concluido_em ? dataBr(String(l.concluido_em).slice(0, 10)) : '—') + '</td><td>' + selosImp(l.feitas) + '</td>' +
@@ -4914,7 +4914,7 @@
         tileAcomp('Rascunhos', n(function (i) { return i.etapa === 'rascunho'; }), 'ainda não enviados') +
         tileAcomp('Na Base de Clientes', n(function (i) { return i.etapa === 'na_carteira'; }), 'entraram na Base de Clientes') + '</div>' +
         '<section class="painel"><div class="cab-painel"><h2>Suas implantações</h2><span class="espaco"></span><span class="ajuda" style="margin:0">Abrir: acompanhar o andamento, anexar o que falta e responder à pendência</span></div>' +
-        '<div class="tabela-wrap"><table><thead><tr><th>Protocolo · Condomínio</th><th>Situação</th><th>Assistente</th><th>Falta de você</th><th></th></tr></thead><tbody>' +
+        '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Protocolo · Condomínio</th><th>Situação</th><th>Assistente</th><th>Falta de você</th><th></th></tr></thead><tbody>' +
         (l.map(function (i) {
           var bt = i.etapa === 'rascunho' ? ['Continuar', false] : i.etapa === 'pendencia' ? ['Responder', true] : falta(i) ? ['Enviar documentos', false] : ['Abrir', false];
           return '<tr class="clicavel" data-id="' + i.id + '"><td><b>' + esc(i.condominio || 'Sem nome') + '</b><span class="sec">' + esc([i.protocolo || 'Rascunho', i.uf, i.uh_total ? i.uh_total + ' un.' : ''].filter(Boolean).join(' · ')) + '</span></td>' +
@@ -4973,7 +4973,7 @@
         (x.no_portal ? '<div class="msg erro">Esta análise está no portal: o contrato é pedido em Solicitação de Contrato.</div>' : '') +
         (x.contrato && !x.no_portal ? '<div class="msg erro">Esta análise já tem contrato no portal (' + esc(x.contrato) + '): quando estiver concluído, escolha em "No portal".</div>' : '') +
         (['reprovada', 'pendente'].indexOf(l.resultado) >= 0 ? '<div class="msg erro">Análise ' + esc(RES_CR[l.resultado][0].toLowerCase()) + ': não abre implantação.</div>' : '') +
-        '<div class="painel tabela-wrap" style="box-shadow:none"><table><thead><tr><th>Campo</th><th>Lido</th><th>Onde no PDF</th></tr></thead><tbody>' +
+        '<div class="painel tabela-wrap" style="box-shadow:none"><table class="tabela-resp"><thead><tr><th>Campo</th><th>Lido</th><th>Onde no PDF</th></tr></thead><tbody>' +
         linha('Protocolo e data', esc(l.protocolo) + ' · ' + dataBr(l.data), 'página 1, topo') +
         linha('Razão social · CNPJ', esc(l.razao_social) + (l.cnpj ? ' · ' + esc(l.cnpj) : ''), 'página 1') +
         linha('Executivo solicitante', esc(l.executivo), 'página 1') +
@@ -5110,7 +5110,7 @@
         { extra: '<input class="campo" id="i_honorarios_outro" data-se="honorarios_op:outro" style="width:110px" placeholder="%" value="' + esc(honOutro ? fmtNumCr(f.honorarios) : '') + '" aria-label="Outro percentual de honorários">' }) +
       marcasImp('garantias', 'O que será garantido (marque todos)', f.garantias, m.garantias, { extra: '<input class="campo" id="i_garantia_outra" style="max-width:220px" placeholder="Outra (descreva)" value="' + esc(f.garantia_outra || '') + '" aria-label="Outra garantia">' }) +
       '<div style="grid-column:1/-1"><div class="linha" style="margin-bottom:8px"><span class="rot" style="margin:0">Taxa extra vigente' + (temRef ? ' (preenchida com a análise, pode ajustar)' : '') + '</span><span class="espaco"></span><button type="button" class="btn ghost sm" id="btExtraImp">' + IC.mais + 'Adicionar taxa extra</button></div>' +
-      '<div class="painel tabela-wrap" style="box-shadow:none"><table style="min-width:720px"><thead><tr><th>Descrição</th><th>Valor por unidade</th><th>Início</th><th>Fim</th><th>Ata</th><th></th></tr></thead><tbody id="tbExtrasImp">' +
+      '<div class="painel tabela-wrap" style="box-shadow:none"><table class="tabela-resp"><thead><tr><th>Descrição</th><th>Valor por unidade</th><th>Início</th><th>Fim</th><th>Ata</th><th></th></tr></thead><tbody id="tbExtrasImp">' +
       (f.taxas_extras || []).map(linhaExtraCr).join('') + '</tbody></table></div></div></div></section>' +
 
       '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">4</span>Parceria</h2></div><div class="corpo grade-3">' +
@@ -5794,7 +5794,7 @@
         (f.mesVig !== j.mes_vigente ? '<button class="btn ghost sm" id="mvHoje">Voltar ao mês vigente</button>' : '') + '</div>' +
         '<div class="cards-acomp">' + tileAcomp('Implantações do mês', lista.length, MESES_LONGO[m - 1].toLowerCase() + ' de ' + a) + tileAcomp('Concluídas (100%)', conta('concluida'), '', { barra: lista.length ? conta('concluida') * 100 / lista.length : 0 }) + tileAcomp('Só falta o onboarding', conta('so_onboarding')) +
         tileAcomp('Entre 40% e 99%', conta('alta') + conta('media')) + tileAcomp('Abaixo de 40%', conta('baixa'), '', { cor: conta('baixa') ? 'red' : '' }) + '</div>' +
-        '<section class="painel"><div class="tabela-wrap"><table style="min-width:1040px"><thead><tr><th>1º vencimento</th><th>Condomínio</th><th>Analista</th><th class="centro">Documentação</th><th class="centro">Vouch</th><th class="centro">Onboarding</th><th class="centro">Boletos</th><th class="centro">Envio</th><th class="num">%</th><th>Faixa</th></tr></thead><tbody>' +
+        '<section class="painel"><div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>1º vencimento</th><th>Condomínio</th><th>Analista</th><th class="centro">Documentação</th><th class="centro">Vouch</th><th class="centro">Onboarding</th><th class="centro">Boletos</th><th class="centro">Envio</th><th class="num">%</th><th>Faixa</th></tr></thead><tbody>' +
         (lista.map(function (l) {
           var o = l.onboarding;
           return '<tr class="clicavel" data-imp="' + l.id + '"><td>' + dataBr(l.primeiro_vencimento) + (l.vencimento_previsto ? '<span class="sec">previsto</span>' : '') + '</td><td><b>' + esc(l.condominio) + '</b><span class="sec">início ' + dataBr(l.inicio) + (l.uf ? ' · ' + esc(l.uf) : '') + '</span></td>' +
@@ -5993,7 +5993,7 @@
           '<tfoot><tr><td class="fixa f0"></td><td class="fixa f1"><b>' + lista.length + ' implantaç' + (lista.length === 1 ? 'ão' : 'ões') + '</b></td>' + COLS.slice(2).map(function (c) { return '<td' + (c[0] === 'onboarding' ? ' class="centro"' : '') + '>' + (c[0] === 'onboarding' ? '<b>' + feitosOnb + ' feitos</b>' : c[0] === 'pct' ? '<b>' + mediaDe(lista) + '% médio</b>' : '') + '</td>'; }).join('') + '</tr></tfoot>';
       }
       raiz.innerHTML = cab + '<section class="painel"><div class="cab-painel"><h2>Controle de implantações · ' + esc(f.ano) + (f.mes ? ' · ' + MESES_LONGO[f.mes - 1] : '') + '</h2><span class="espaco"></span><span class="ajuda" style="margin:0">clique no título da coluna para ordenar</span>' + (resumida && ordem.k !== 'mes' ? '<button class="btn ghost" data-agrupar>Agrupar por mês</button>' : '') + '</div>' +
-        '<div class="tabela-wrap ctrl-wrap"><table class="ctrl-acomp' + (resumida ? ' resumida' : '') + '">' + corpo + '</table></div>' +
+        '<div class="tabela-wrap ctrl-wrap"><table class="ctrl-acomp tabela-resp' + (resumida ? ' resumida' : '') + '">' + corpo + '</table></div>' +
         '<p class="ajuda" style="margin:0;padding:8px 16px 14px">' + (resumida
           ? 'Selos verdes: etapa feita; âmbar: falta. Passe o mouse no selo para ver o detalhe. CNPJ, administradora, síndico e as datas de contrato e documentação estão na <b>Planilha completa</b> (e no Excel).'
           : 'Cabeçalho e as duas primeiras colunas ficam fixos ao rolar.') +
@@ -6050,7 +6050,7 @@
         tileAcomp('Não batidas', conta('nao_batida'), 'passaram do prazo', { card: 'nao_batida', on: f.docSit === 'nao_batida', cor: conta('nao_batida') ? 'red' : '' }) +
         tileAcomp('Documentos recebidos', r.recebidos_pct + '%', r.mais_pendentes.length ? 'mais pendente: ' + esc(r.mais_pendentes[0].nome) + ' (' + r.mais_pendentes[0].n + ')' : '') + '</div>' +
         '<section class="painel"><div class="cab-painel"><h2>Contratos e documentos da meta</h2><span class="espaco"></span><span class="ajuda" style="margin:0">' + lista.length + ' contrato(s) · clique num documento que falta para anexar ou marcar recebido</span></div>' +
-        '<div class="tabela-wrap"><table style="min-width:900px"><thead><tr><th>Condomínio</th><th>Prazo</th>' + p.docs_meta.map(function (t) { return '<th class="centro" title="' + esc(nomeDoc[t] || t) + '">' + esc(curto[t] || nomeDoc[t] || t) + '</th>'; }).join('') + '<th>Status</th></tr></thead><tbody>' +
+        '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Condomínio</th><th>Prazo</th>' + p.docs_meta.map(function (t) { return '<th class="centro" title="' + esc(nomeDoc[t] || t) + '">' + esc(curto[t] || nomeDoc[t] || t) + '</th>'; }).join('') + '<th>Status</th></tr></thead><tbody>' +
         (lista.map(function (l) {
           var d = l.documentacao;
           return '<tr><td style="min-width:190px"><a href="#/implantacao/' + l.id + '"><b>' + esc(l.condominio) + '</b></a><span class="sec">' + esc([l.responsavel_nome || 'na fila', l.executivo_nome].filter(Boolean).join(' · ')) + (l.origem === 'entrega' ? ' · entrega' : '') + '</span></td>' +
@@ -6154,7 +6154,7 @@
         tileAcomp('Devolvidas', dev.length, dev.length ? 'corrigir e reenviar' : '', { cor: dev.length ? 'red' : '' }) + '</div>' +
         '<section class="painel"><div class="cab-painel"><h2>Antecipações · ' + esc(periodo) + '</h2><span class="espaco"></span>' +
         (j.pode.antecipacao ? '<span class="ajuda" style="margin:0">' + nMarc + ' marcada(s)</span><button class="btn primary sm" id="anEnviar"' + (nMarc ? '' : ' disabled') + '>Enviar marcadas ao Controle de Repasses (' + nMarc + ')</button>' : '') + '</div>' +
-        '<div class="tabela-wrap"><table style="min-width:1240px"><thead><tr>' + (j.pode.antecipacao ? '<th>Enviar</th>' : '') + '<th>Condomínio</th><th>Executivo</th><th>Início do contrato</th><th class="num">Valor</th><th>Data da antecipação</th><th>Prazo</th><th>Implantação</th><th>Controle de Repasses</th></tr></thead><tbody>' +
+        '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr>' + (j.pode.antecipacao ? '<th>Enviar</th>' : '') + '<th>Condomínio</th><th>Executivo</th><th>Início do contrato</th><th class="num">Valor</th><th>Data da antecipação</th><th>Prazo</th><th>Implantação</th><th>Controle de Repasses</th></tr></thead><tbody>' +
         (lista.map(function (l) {
           var e = l.antecipacao_envio;
           return '<tr data-imp="' + l.id + '">' + (j.pode.antecipacao ? '<td class="centro">' + (podeEnviar(l) ? '<input type="checkbox" data-marca-ant="' + l.id + '"' + (marcadas[l.id] ? ' checked' : '') + ' aria-label="Marcar ' + esc(l.condominio) + ' para enviar">' : '') + '</td>' : '') +
@@ -6216,7 +6216,7 @@
         tileAcomp('Enviadas no prazo no mês', doMes.length ? Math.round(noPrazo * 100 / doMes.length) + '%' : '—', doMes.length ? noPrazo + ' de ' + doMes.length : 'nenhum envio no mês', { barra: doMes.length ? noPrazo * 100 / doMes.length : 0 }) +
         tileAcomp('Devolvidas com pergunta', base.filter(function (x) { return x.situacao === 'devolvida'; }).length, 'responder ou enviar nova versão') + '</div>' +
         '<section class="painel"><div class="cab-painel"><h2>Fichas de transição</h2><span class="espaco"></span><span class="ajuda" style="margin:0">prazo: ' + (j.parametros.ficha_dias || 5) + ' dias úteis da conclusão da implantação até o envio ao Crédito</span></div>' +
-        '<div class="tabela-wrap"><table style="min-width:1100px"><thead><tr><th>Condomínio</th><th>Conduzida por</th><th>Assistente de crédito</th><th>Versão</th><th>Situação</th><th>Prazo (' + (j.parametros.ficha_dias || 5) + ' dias úteis)</th></tr></thead><tbody>' +
+        '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Condomínio</th><th>Conduzida por</th><th>Assistente de crédito</th><th>Versão</th><th>Situação</th><th>Prazo (' + (j.parametros.ficha_dias || 5) + ' dias úteis)</th></tr></thead><tbody>' +
         (lista.map(function (x) {
           var s = x.prazo || {};
           var prazo = !x.primeiro_envio_em ? (s.status === 'atrasado' ? etq(['ATRASADA · ' + diasUteisImp(s.atraso), 'vermelha']) + '<span class="sec">prazo era ' + dataBr(s.vence) + ' · alerta à assistente e à coordenação</span>' + (coord ? '<button class="link-acomp sub-link" data-cobrar-ficha="' + x.id + '">Cobrar</button>' : '')
@@ -6284,7 +6284,7 @@
         tileAcomp('Etapas no prazo no mês', feitasMes.length ? Math.round(noPrazo * 100 / feitasMes.length) + '%' : '—', feitasMes.length ? noPrazo + ' de ' + feitasMes.length : 'nenhuma feita no mês', { barra: feitasMes.length ? noPrazo * 100 / feitasMes.length : 0 }) +
         tileAcomp('Espólios devolvidos', devolvidas, 'reenviar na Análise de Espólio') + '</div>' +
         '<section class="painel"><div class="cab-painel"><h2>Pós-implantação</h2><span class="espaco"></span><span class="ajuda" style="margin:0">espólios ' + diasUteisImp(p.espolio_dias) + ' de assumir · pendências ' + diasUteisImp(p.pendencias_dias) + ' dos boletos · prestação ' + diasUteisImp(p.prestacao_dias) + ' do repasse</span></div>' +
-        '<div class="tabela-wrap"><table style="min-width:1100px"><thead><tr><th>Condomínio</th><th>Conduzida por</th><th>Espólios</th><th>Levantamento de pendências</th><th>1ª prestação de contas</th></tr></thead><tbody>' +
+        '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Condomínio</th><th>Conduzida por</th><th>Espólios</th><th>Levantamento de pendências</th><th>1ª prestação de contas</th></tr></thead><tbody>' +
         (lista.map(function (l) {
           return '<tr class="clicavel" data-imp="' + l.id + '"><td style="min-width:230px"><a href="#/implantacao/' + l.id + '"><b>' + esc(l.condominio) + '</b></a><span class="sec">' + esc([l.protocolo, l.uf, 'assumida ' + dataBr(l.assumida).slice(0, 5)].filter(Boolean).join(' · ')) + '</span></td>' +
             '<td>' + esc(l.responsavel_nome || '—') + '</td>' + l.etapas.map(function (x) { return celula(x, l); }).join('') + '</tr>';
@@ -6328,7 +6328,7 @@
       j.documentos.map(function (d) { return '<label class="marca"><input type="checkbox" data-docmeta value="' + esc(d.tipo) + '"' + (p.docs_meta.indexOf(d.tipo) >= 0 ? ' checked' : '') + dis + '> ' + esc(d.nome) + '</label>'; }).join('') + '</div></div>' +
       (pode ? '<div class="corpo linha" style="gap:12px;align-items:flex-end;border-top:1px solid var(--border);background:var(--surface-2)"><div><label class="rot" for="pmVale">Vale a partir de</label><input class="campo" id="pmVale" type="date" value="' + esc(j.hoje) + '"></div>' +
         '<span class="ajuda" style="flex:1 1 220px;margin:0">Envios a partir dessa data seguem as regras novas.</span><button class="btn primary" id="pmSalvar">Salvar regras</button></div>' : '') + '</section>' +
-      '<section class="painel"><div class="cab-painel"><h2>Histórico</h2></div><div class="tabela-wrap"><table style="min-width:820px"><thead><tr><th>Vale a partir de</th><th>Regras</th><th>Quem alterou</th><th>Quando</th></tr></thead><tbody>' +
+      '<section class="painel"><div class="cab-painel"><h2>Histórico</h2></div><div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Vale a partir de</th><th>Regras</th><th>Quem alterou</th><th>Quando</th></tr></thead><tbody>' +
       (j.historico.map(function (h) {
         var v = h.valores;
         return '<tr><td><b>' + dataBr(h.vale_desde) + '</b></td><td>Onboarding ' + v.onboarding_dias + ' dias · documentação ' + v.documentacao_dias + ' dias · meta ' + v.meta_pct + '% · virada no dia ' + v.virada_dia + ' · concluir em ' + v.concluir_dias + ' dias úteis · ficha em ' + v.ficha_dias + ' dias úteis · marco ' + dataBr(v.marco) +
@@ -6378,14 +6378,14 @@
         var entra = p.itens.filter(function (x) { return !estado.pular[x.chave] && (x.situacao === 'pronta' || x.situacao === 'aviso' || (x.situacao === 'decisao' && estado.incluir[x.chave])); }).length;
         html += '<div class="cards-acomp">' + tileAcomp('Vão entrar', entra, r.controle + ' do Controle · ' + r.historico + ' do histórico') + tileAcomp('Prontas', r.pronta, 'tudo conferido') + tileAcomp('Com aviso', r.aviso, 'entram, com o que foi ajustado') +
           tileAcomp('Precisam de decisão', r.decisao, 'só entram se você marcar') + tileAcomp('Ficam de fora', r.fora, r.desconsideradas + ' desconsideradas · ' + r.substituidas + ' substituídas · ' + r.ja_no_portal + ' já no portal') + '</div>' +
-          '<div class="linha" style="gap:16px;align-items:flex-start"><div style="flex:1 1 320px;min-width:0"><b>Controle por mês</b> <span class="ajuda" style="margin:0">confira com a planilha</span><div class="tabela-wrap"><table><thead><tr><th>Mês</th><th class="num">Contratos</th><th class="num">100%</th><th class="num">% médio</th></tr></thead><tbody>' +
+          '<div class="linha" style="gap:16px;align-items:flex-start"><div style="flex:1 1 320px;min-width:0"><b>Controle por mês</b> <span class="ajuda" style="margin:0">confira com a planilha</span><div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Mês</th><th class="num">Contratos</th><th class="num">100%</th><th class="num">% médio</th></tr></thead><tbody>' +
           r.por_mes.map(function (m) { return '<tr><td>' + esc(m.mes) + '</td><td class="num">' + m.contratos + '</td><td class="num">' + m.concluidos + '</td><td class="num">' + m.pct_medio + '%</td></tr>'; }).join('') + '</tbody></table></div></div>' +
-          '<div style="flex:1 1 220px"><b>Histórico (só no Formulário)</b><div class="tabela-wrap"><table><thead><tr><th>Ano do contrato</th><th class="num">Implantações</th></tr></thead><tbody>' +
+          '<div style="flex:1 1 220px"><b>Histórico (só no Formulário)</b><div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Ano do contrato</th><th class="num">Implantações</th></tr></thead><tbody>' +
           Object.keys(r.anos_historico).map(function (a) { return '<tr><td>' + esc(a) + '</td><td class="num">' + r.anos_historico[a] + '</td></tr>'; }).join('') + '</tbody></table></div><p class="ajuda">Entram como concluídas, só para ter os dados dos outros anos.</p></div></div>' +
           '<div class="linha" style="gap:8px">' + [['todas', 'Todas'], ['pronta', 'Prontas'], ['aviso', 'Com aviso'], ['decisao', 'Decisão'], ['fora', 'De fora']].map(function (s) {
             return '<button class="pilula-acomp' + (estado.sit === s[0] ? ' on' : '') + '" data-imp-sit="' + s[0] + '">' + esc(s[1]) + ' <span class="n">' + (s[0] === 'todas' ? p.itens.length : r[s[0]]) + '</span></button>';
           }).join('') + '</div>' +
-          '<div class="tabela-wrap" style="max-height:60vh;overflow:auto"><table style="min-width:1100px"><thead><tr><th>Entra</th><th>Nº</th><th>Condomínio</th><th>Origem</th><th>Início</th><th class="num">%</th><th>Executivo</th><th>Implantado por</th><th>Base de Clientes</th><th>Situação</th></tr></thead><tbody>' +
+          '<div class="tabela-wrap" style="max-height:60vh;overflow:auto"><table class="tabela-resp"><thead><tr><th>Entra</th><th>Nº</th><th>Condomínio</th><th>Origem</th><th>Início</th><th class="num">%</th><th>Executivo</th><th>Implantado por</th><th>Base de Clientes</th><th>Situação</th></tr></thead><tbody>' +
           itens.map(function (x) {
             var marca = x.situacao === 'fora' ? '' : x.situacao === 'decisao' ? '<input type="checkbox" data-imp-incluir="' + esc(x.chave) + '"' + (estado.incluir[x.chave] ? ' checked' : '') + ' aria-label="Incluir">'
               : '<input type="checkbox" data-imp-pular="' + esc(x.chave) + '"' + (estado.pular[x.chave] ? '' : ' checked') + ' aria-label="Importar">';
@@ -6398,7 +6398,7 @@
           '<div class="linha" style="justify-content:flex-end"><button class="btn ghost" id="impExcel">' + IC.baixar + 'Baixar a conferência</button><button class="btn primary" id="impOk"' + (ativo || !entra ? ' disabled' : '') + '>Importar ' + entra + ' implantações</button></div>';
       }
       if (lotes.length) {
-        html += '<div><b>Importações</b><div class="tabela-wrap"><table><thead><tr><th>Quando</th><th>Quem</th><th class="num">Importadas</th><th class="num">De fora</th><th>Situação</th></tr></thead><tbody>' +
+        html += '<div><b>Importações</b><div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Quando</th><th>Quem</th><th class="num">Importadas</th><th class="num">De fora</th><th>Situação</th></tr></thead><tbody>' +
           lotes.map(function (l) {
             return '<tr><td>' + dataHoraCr(l.criado_em) + '</td><td>' + esc(l.criado_por_nome || '') + '</td><td class="num">' + esc(l.resumo.importadas || 0) + '</td><td class="num">' + (l.fora || []).length + '</td><td>' +
               (l.desfeita_em ? etq(['desfeita em ' + dataHoraCr(l.desfeita_em), 'cinza']) + (l.ativas ? '<span class="sec">' + l.ativas + ' ficaram (editadas depois)</span>' : '') : etq(['ativa · ' + l.ativas + ' implantações', 'verde']) + '<button class="link-acomp sub-link" data-desfazer-lote="' + l.id + '">Desfazer importação</button>') + '</td></tr>';
@@ -6480,7 +6480,7 @@
         }).join('') + '</div>';
       } else if (s.tabela) {
         var tb = s.tabela;
-        h += (tb.titulo ? '<div class="ficha-nota" style="padding:8px 18px 4px">' + esc(tb.titulo) + '</div>' : '') + '<div class="tabela-wrap"><table class="ficha-tab"><thead><tr>' + tb.cab.map(function (x) { return '<th>' + esc(x) + '</th>'; }).join('') + (ed && tb.add ? '<th></th>' : '') + '</tr></thead><tbody>' +
+        h += (tb.titulo ? '<div class="ficha-nota" style="padding:8px 18px 4px">' + esc(tb.titulo) + '</div>' : '') + '<div class="tabela-wrap"><table class="ficha-tab tabela-resp"><thead><tr>' + tb.cab.map(function (x) { return '<th>' + esc(x) + '</th>'; }).join('') + (ed && tb.add ? '<th></th>' : '') + '</tr></thead><tbody>' +
           (tb.linhas.map(function (l, n) {
             if (!Array.isArray(l)) return '<tr class="grupo"><td colspan="' + tb.cab.length + '">' + esc(l.grupo) + '</td></tr>';
             return '<tr>' + l.map(function (c) { return '<td' + (c && typeof c === 'object' ? ' class="man"' : '') + '>' + celulaFicha(c, ed) + '</td>'; }).join('') +
@@ -6908,7 +6908,7 @@
     $('#corpoCt').innerHTML = '<div class="painel"><div class="cab-painel"><h2>Solicitação de Contrato: quem elabora</h2><input class="campo" id="qEqCt" type="search" placeholder="Buscar pessoa" style="max-width:260px;margin-left:auto"></div>' +
       '<div class="corpo" style="padding-bottom:4px"><p class="ajuda" style="margin:0">Quem está marcado recebe as solicitações (sino e e-mail), assume, redige a minuta, responde aos ajustes e registra as condições fechadas. ' +
       (j.pessoas.length ? '' : '<b>Ninguém marcado ainda: enquanto isso, a administração recebe.</b>') + '</p></div>' +
-      '<div class="tabela-wrap"><table><thead><tr><th>Pessoa</th><th>Setor Jurídico</th><th style="text-align:center">Elabora contratos</th></tr></thead><tbody id="tbEqCt">' +
+      '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Pessoa</th><th>Setor Jurídico</th><th style="text-align:center">Elabora contratos</th></tr></thead><tbody id="tbEqCt">' +
       j.usuarios.map(function (u) {
         return '<tr data-u="' + u.id + '"><td><b>' + esc(u.nome) + '</b><span class="sec">' + esc(u.email) + '</span></td><td>' + (u.juridico ? etq(['Jurídico', 'azul']) : '<span class="sec">—</span>') + '</td>' +
           '<td style="text-align:center"><input type="checkbox" data-eq="' + u.id + '"' + (marcadas.indexOf(u.id) >= 0 ? ' checked' : '') + ' aria-label="' + esc(u.nome) + ' elabora contratos"></td></tr>';
@@ -7335,7 +7335,7 @@
     var grupo = function (etapa, titulo, ajuda, desde, botao) {
       var lista = r.contratos.filter(function (c) { return c.etapa === etapa; });
       return '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>' + titulo + '</h2><span class="etiqueta ' + ETAPA_CT[etapa][1] + '">' + lista.length + '</span><span class="ajuda" style="margin:0">' + ajuda + '</span></div>' +
-        (lista.length ? '<div class="tabela-wrap"><table style="min-width:820px"><thead><tr><th>Protocolo</th><th>Condomínio</th><th>Executivo</th><th>Desde</th><th></th></tr></thead><tbody>' +
+        (lista.length ? '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Protocolo</th><th>Condomínio</th><th>Executivo</th><th>Desde</th><th></th></tr></thead><tbody>' +
           lista.map(function (c) {
             return '<tr class="clicavel" data-id="' + c.id + '"><td style="white-space:nowrap"><b>' + esc(c.protocolo) + '</b></td><td><b>' + esc(c.condominio) + '</b>' + (c.sem_convencao ? ' ' + etq(['sem convenção: peça antes de assinar', 'vermelha']) : '') +
               '<span class="sec">' + esc(c.uf || '') + (c.ajustes ? ' · ' + c.ajustes + ' ajuste(s)' : '') + '</span></td>' +
@@ -7442,7 +7442,7 @@
       '<section class="panel-ct"><div class="h-row-ct"><div><h2>Comparativo mês a mês — ' + f.ano + '</h2><div class="h-sub">Solicitados, aguardando assinatura, em assinatura e assinados em cada mês. Clique num mês para ver os números dele.</div></div>' +
         '<div class="legenda-ct">' + SERIES.map(function (x) { return '<span><i style="background:' + x[3] + '"></i>' + x[1] + '</span>'; }).join('') + '</div></div>' +
         '<div class="chart-ct"><svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Comparativo mês a mês em ' + f.ano + ': solicitados, aguardando assinatura, em assinatura e assinados">' + svg + '</svg></div>' +
-        '<details class="tab-ct"><summary>Ver em tabela</summary><div class="tabela-wrap"><table><thead><tr><th>Mês</th>' + SERIES.map(function (x) { return '<th style="text-align:right">' + x[1] + '</th>'; }).join('') + '</tr></thead><tbody>' +
+        '<details class="tab-ct"><summary>Ver em tabela</summary><div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Mês</th>' + SERIES.map(function (x) { return '<th style="text-align:right">' + x[1] + '</th>'; }).join('') + '</tr></thead><tbody>' +
         (mesesTab.map(function (m) {
           return '<tr' + (f.mes === m.mes ? ' class="sel-ct"' : '') + '><td>' + MESES_LONGO_CT[m.mes - 1] + '</td>' +
             SERIES.map(function (x) { return '<td style="text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap"><b>' + m[x[0]] + '</b>' + variacao(m, x[0]) + '</td>'; }).join('') + '</tr>';
@@ -7829,7 +7829,7 @@
   /* listas da Solicitação de Contrato e da Parceria por visão (no Painel: Diretoria, Assinaturas das parcerias, Cadastro de parceiros) */
   function listaCt(vis) {
     $('#corpoCt').innerHTML = '<div class="painel"><div class="cab-painel"><input class="campo" id="qCt" type="search" placeholder="Buscar por condomínio, CNPJ ou protocolo" style="max-width:360px"></div>' +
-      '<div class="tabela-wrap"><table style="min-width:960px"><thead><tr><th>Protocolo</th><th>Condomínio</th><th>Origem</th><th>Executivo</th><th>Situação</th><th>Com quem</th><th>Prazo da minuta</th></tr></thead><tbody id="tbCt"></tbody></table></div></div>';
+      '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Protocolo</th><th>Condomínio</th><th>Origem</th><th>Executivo</th><th>Situação</th><th>Com quem</th><th>Prazo da minuta</th></tr></thead><tbody id="tbCt"></tbody></table></div></div>';
     var seq = 0;
     async function carregar() {
       var meu = ++seq;
@@ -7846,7 +7846,7 @@
   }
   function listaCp(vis) {
     $('#corpoCp').innerHTML = '<div class="painel"><div class="cab-painel"><input class="campo" id="qCp" type="search" placeholder="Buscar por empresa, CNPJ ou protocolo" style="max-width:360px"></div>' +
-      '<div class="tabela-wrap"><table style="min-width:900px"><thead><tr><th>Protocolo</th><th>Empresa parceira</th><th>Pedida por</th><th>Situação</th><th>Com quem</th><th>Prazo da minuta</th></tr></thead><tbody id="tbCp"></tbody></table></div></div>';
+      '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Protocolo</th><th>Empresa parceira</th><th>Pedida por</th><th>Situação</th><th>Com quem</th><th>Prazo da minuta</th></tr></thead><tbody id="tbCp"></tbody></table></div></div>';
     var seq = 0;
     async function carregar() {
       var meu = ++seq;
@@ -7887,7 +7887,7 @@
         opcoes([['', 'Todas as origens'], ['demanda', 'Demandas'], ['contrato', 'Solicitação de Contrato'], ['parceria', 'Solicitação de Contrato Parceria']], f.origem) + '</select>' +
         '' : '') +
       (todas || minhas ? '<select class="campo" id="fAnoDj" style="width:auto" aria-label="Ano da solicitação"></select>' : '') + '</div>' +
-      '<div class="tabela-wrap"><table style="min-width:1080px"><thead><tr><th>Nº</th><th>Atividade</th><th>' + (minhas ? 'Com quem' : 'Solicitante') + '</th><th>Cliente / objeto</th><th>Solicitada</th><th>Prazo</th><th>Entrega</th><th>Situação</th><th>' + (vis === 'fila' ? '' : 'SLA') + '</th></tr></thead>' +
+      '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Nº</th><th>Atividade</th><th>' + (minhas ? 'Com quem' : 'Solicitante') + '</th><th>Cliente / objeto</th><th>Solicitada</th><th>Prazo</th><th>Entrega</th><th>Situação</th><th>' + (vis === 'fila' ? '' : 'SLA') + '</th></tr></thead>' +
       '<tbody id="tbDj"></tbody></table></div><div class="ajuda" id="rodapeDj" style="padding:10px 16px"></div></div>';
     // em Meus pedidos, com quem está o pedido agora
     var comQuem = function (d) {
@@ -8122,12 +8122,12 @@
         tile('Em aberto agora', R.abertas) + tile('Passaram do prazo', R.atrasadas, 'sem entrega, prazo vencido', true) + tile('Contratos perdidos', R.perdidos, 'solicitados em ' + r.ano) + '</div>' +
       '<section class="painel"><div class="cab-painel"><h2>% dentro do SLA por atividade — ' + r.ano + '</h2></div>' +
       '<div class="corpo" style="padding-top:0"><p class="ajuda" style="margin:0 0 8px">Pela data da entrega; só as demandas entregues. Embaixo de cada % , quantas foram no prazo do total entregue.</p></div>' +
-      '<div class="tabela-wrap"><table style="min-width:980px"><thead><tr><th>Atividade</th>' + MES.map(function (x) { return '<th style="text-align:center">' + x + '</th>'; }).join('') + '<th style="text-align:center">Ano</th></tr></thead><tbody>' +
+      '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Atividade</th>' + MES.map(function (x) { return '<th style="text-align:center">' + x + '</th>'; }).join('') + '<th style="text-align:center">Ano</th></tr></thead><tbody>' +
       (r.tipos.map(function (t) { return '<tr><td><b>' + esc(t.nome) + '</b></td>' + t.meses.map(function (c) { return celula(c); }).join('') + celula(t.total, true) + '</tr>'; }).join('') ||
         '<tr><td colspan="14"><div class="vazio" style="border:0;padding:24px">Nenhuma entrega em ' + r.ano + '.</div></td></tr>') +
       (r.tipos.length ? '<tr class="sel-ct"><td><b>Total</b></td>' + r.total.meses.map(function (c) { return celula(c); }).join('') + celula(r.total.total, true) + '</tr>' : '') +
       '</tbody></table></div></section>' +
-      '<section class="painel" style="margin-top:16px"><div class="cab-painel"><h2>Por setor — ' + r.ano + '</h2></div><div class="tabela-wrap"><table><thead><tr><th>Setor</th><th style="text-align:right">Solicitadas</th>' +
+      '<section class="painel" style="margin-top:16px"><div class="cab-painel"><h2>Por setor — ' + r.ano + '</h2></div><div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Setor</th><th style="text-align:right">Solicitadas</th>' +
       '<th style="text-align:right">Entregues</th><th style="text-align:center">No SLA</th><th style="text-align:right">Em aberto agora</th></tr></thead><tbody>' +
       (r.setores.map(function (s) {
         return '<tr><td><b>' + esc(s.nome) + '</b></td><td style="text-align:right">' + s.solicitadas + '</td><td style="text-align:right">' + s.sla.total + '</td>' + celula(s.sla) + '<td style="text-align:right">' + s.abertas + '</td></tr>';
@@ -8143,7 +8143,7 @@
       $('#corpoDj').innerHTML = '<div class="painel"><div class="cab-painel"><h2>Tabela de prazos</h2></div><div class="corpo" style="padding-top:0"><p class="ajuda" style="margin:0">' +
         'O prazo de cada atividade, em horas úteis: cada 8h é um dia útil (arredondado para cima), contado a partir do dia seguinte à solicitação, sem fins de semana e feriados. ' +
         'Mudou o prazo? As demandas ainda não entregues desse tipo são recalculadas; as entregues guardam o SLA que tiveram. Tipo que não se usa mais: desmarque <b>Em uso</b>.</p></div>' +
-        '<div class="tabela-wrap"><table><thead><tr><th>Tipo de atividade</th><th style="width:130px">Prazo (h úteis)</th><th>Dias úteis</th><th style="text-align:center">Em uso</th>' +
+        '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Tipo de atividade</th><th style="width:130px">Prazo (h úteis)</th><th>Dias úteis</th><th style="text-align:center">Em uso</th>' +
         '<th style="text-align:center" title="Os pedidos da Solicitação de Contrato aparecem na lista e nos indicadores como esta atividade">Recebe a Solicitação de Contrato</th></tr></thead><tbody>' +
         linhas.map(function (t, k) {
           var dias = Math.max(1, Math.ceil((Number(t.horas) || 0) / 8));
@@ -8188,7 +8188,7 @@
       (ativo ? '<div class="msg aviso">Já existe uma importação ativa (' + dataHoraCr(ativo.criado_em) + ', ' + ativo.ativas + ' demanda(s)). Para importar de novo, desfaça a anterior abaixo.</div>' :
         '<div class="arquivo-envio"><input class="campo" id="djArq" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="flex:1;min-width:220px">' +
         '<button class="btn primary" id="djLer">' + IC.enviar + 'Ler planilha</button></div>') + '<div id="djPrevia"></div></div></div>' +
-      (lotes.length ? '<section class="painel" style="margin-top:16px"><div class="cab-painel"><h2>Importações</h2></div><div class="tabela-wrap"><table><thead><tr><th>Quando</th><th>Quem</th><th style="text-align:right">Importadas</th><th style="text-align:right">No portal hoje</th><th></th></tr></thead><tbody>' +
+      (lotes.length ? '<section class="painel" style="margin-top:16px"><div class="cab-painel"><h2>Importações</h2></div><div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>Quando</th><th>Quem</th><th style="text-align:right">Importadas</th><th style="text-align:right">No portal hoje</th><th></th></tr></thead><tbody>' +
         lotes.map(function (l) {
           return '<tr><td>' + dataHoraCr(l.criado_em) + '</td><td>' + esc(l.criado_por_nome || '—') + '</td><td style="text-align:right">' + (l.resumo.importadas || 0) + '</td><td style="text-align:right">' + l.ativas + '</td>' +
             '<td style="text-align:right">' + (l.desfeita_em ? '<span class="sec">desfeita em ' + dataHoraCr(l.desfeita_em) + '</span>' : '<button class="btn ghost sm" data-desfazer="' + l.id + '">Desfazer</button>') + '</td></tr>';
@@ -8220,7 +8220,7 @@
       var tabela = function (titulo, itens, marcar) {
         if (!itens.length) return '';
         return '<details class="painel"' + (marcar ? ' open' : '') + '><summary class="cab-painel" style="cursor:pointer"><h2 style="display:inline;font-size:14px">' + titulo + ' (' + itens.length + ')</h2></summary>' +
-          '<div class="tabela-wrap"><table><thead><tr><th>' + (marcar ? 'Importar?' : '') + '</th><th>Linha</th><th>#</th><th>Atividade</th><th>Solicitante</th><th>Cliente</th><th>Solicitada</th><th>Observação</th></tr></thead><tbody>' +
+          '<div class="tabela-wrap"><table class="tabela-resp"><thead><tr><th>' + (marcar ? 'Importar?' : '') + '</th><th>Linha</th><th>#</th><th>Atividade</th><th>Solicitante</th><th>Cliente</th><th>Solicitada</th><th>Observação</th></tr></thead><tbody>' +
           itens.map(function (x) { return linhaIt(x, marcar ? '<input type="checkbox" data-incluir="' + x.linha + '" aria-label="Importar a linha ' + x.linha + ' mesmo assim">' : ''); }).join('') + '</tbody></table></div></details>';
       };
       // avisos agrupados (ex.: "solicitante sem cadastro no portal" em muitas linhas)
@@ -8705,6 +8705,41 @@
     window.addEventListener('hashchange', rotear);
     // o título das telas fixas acompanha o nome trocado no menu
     new MutationObserver(function () { $$('#conteudo .pagina h1').forEach(function (h) { trocarNomesFixos(h, CHAVE_DO_ITEM); }); }).observe($('#conteudo'), { childList: true });
+    // tabelas responsivas (.tabela-resp): sem barra de rolagem lateral. Cada célula leva o nome da coluna e, quando a tabela
+    // não cabe no espaço, ela vira cartões (classe "cartoes"). Volta a ser tabela quando o espaço chega à largura que ela pedia.
+    var medirTabela = function (t) {
+      var wrap = t.parentNode, larg = wrap.clientWidth;
+      if (!larg) return;
+      if (t.classList.contains('cartoes')) {
+        if (larg >= Number(t.getAttribute('data-larg') || 0)) { t.classList.remove('cartoes'); medirTabela(t); }
+        return;
+      }
+      if (t.scrollWidth > larg + 1) { t.setAttribute('data-larg', t.scrollWidth); t.classList.add('cartoes'); }
+    };
+    var obsTam = window.ResizeObserver ? new ResizeObserver(function (lista) {
+      lista.forEach(function (e) { var t = e.target.querySelector(':scope > table.tabela-resp'); if (t) medirTabela(t); });
+    }) : null;
+    var rotularTabelas = function () {
+      $$('#conteudo table.tabela-resp, .fundo-modal table.tabela-resp').forEach(function (t) {
+        var cab = $$('thead tr:last-child th', t).map(function (th) { return th.textContent.replace(/[▲▼]/g, '').trim(); });
+        $$('tbody > tr', t).forEach(function (tr) {
+          var i = 0;
+          Array.prototype.forEach.call(tr.children, function (td) {
+            var rot = td.colSpan > 1 ? '' : (cab[i] || '');
+            if (td.getAttribute('data-rotulo') !== rot) td.setAttribute('data-rotulo', rot);
+            i += td.colSpan || 1;
+          });
+        });
+        if (obsTam && !t.__obs) { t.__obs = true; obsTam.observe(t.parentNode); }
+        // conteúdo novo pode pedir mais largura: mede de novo como tabela
+        if (t.classList.contains('cartoes')) t.classList.remove('cartoes');
+        medirTabela(t);
+      });
+    };
+    var esperaTab = 0;
+    new MutationObserver(function () { cancelAnimationFrame(esperaTab); esperaTab = requestAnimationFrame(rotularTabelas); })
+      .observe(document.body, { childList: true, subtree: true });
+    window.addEventListener('resize', function () { $$('table.tabela-resp').forEach(medirTabela); });
     rotear();
   }
   iniciar();
