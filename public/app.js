@@ -242,10 +242,10 @@
         '<a href="#/carteira" class="' + (rota.indexOf('#/carteira') === 0 ? 'on' : '') + '">' + IC.casa + 'Base de Clientes</a>' +
         (resumoCredito && resumoCredito.acesso ? '<div class="grupo">Análise de Crédito</div><a href="#/credito" class="' + (rota.indexOf('#/credito') === 0 ? 'on' : '') + '">' + IC.escudo +
           '<span>Análise de Crédito</span><i data-contador="credito" class="contador" hidden></i></a>' : '') +
-        // Jurídico: Pedir ao Jurídico (todo mundo) e o Painel do Jurídico (Jurídico, diretoria e o setor Parceiros)
+        // Jurídico: Solicitações ao Jurídico (todo mundo) e o Painel do Jurídico (Jurídico, diretoria e o setor Parceiros)
         '<div class="grupo">Jurídico</div>' +
         '<a href="#/juridico/pedidos" class="' + (rota.indexOf('#/juridico/pedidos') === 0 ? 'on' : '') + '">' + IC.documento +
-          '<span>Pedir ao Jurídico</span><i data-contador="jur-pedidos" class="contador" hidden></i></a>' +
+          '<span>Solicitações ao Jurídico</span><i data-contador="jur-pedidos" class="contador" hidden></i></a>' +
         (temPainelJ() ? '<a href="#/juridico/painel" class="' + (rota.indexOf('#/juridico/painel') === 0 ? 'on' : '') + '">' + IC.pasta +
           '<span>Painel do Jurídico</span><i data-contador="jur-painel" class="contador" hidden></i></a>' : '') +
         (resumoImp && resumoImp.acesso ? '<div class="grupo">Implantação</div><a href="#/implantacao" class="' + (rota.indexOf('#/implantacao') === 0 ? 'on' : '') + '">' + IC.casa +
@@ -332,7 +332,7 @@
     // o Acompanhamento virou parte do Painel de implantação
     if (partes[0] === 'acompanhamento') { location.replace('#/implantacao/' + (ANTIGAS_ACOMP[partes[1]] || 'dashboard')); return; }
     if (partes[0] === 'implantacao') return /^\d+$/.test(partes[1] || '') ? (partes[2] === 'ficha' ? paginaFichaImp(Number(partes[1])) : paginaImplantacaoDetalhe(Number(partes[1]))) : paginaImplantacao(partes[1], partes[2]);
-    // Jurídico: Pedir ao Jurídico (#/juridico/pedidos), Painel do Jurídico (#/juridico/painel/<aba>/<sub>) e uma demanda (#/juridico/demanda/<id>)
+    // Jurídico: Solicitações ao Jurídico (#/juridico/pedidos), Painel do Jurídico (#/juridico/painel/<aba>/<sub>) e uma demanda (#/juridico/demanda/<id>)
     if (partes[0] === 'juridico') return partes[1] === 'demanda' && /^\d+$/.test(partes[2] || '') ? paginaJuridico('', '', '', Number(partes[2])) : paginaJuridico(partes[1], partes[2], partes[3]);
     if (partes[0] === 'contratos' && /^\d+$/.test(partes[1] || '')) return paginaContratoDetalhe(Number(partes[1]));
     if (partes[0] === 'parcerias' && /^\d+$/.test(partes[1] || '')) return paginaParceriaDetalhe(Number(partes[1]));
@@ -4797,7 +4797,7 @@
         '<label class="opcao-radio"><input type="radio" name="origImp" value="portal" checked><div><b>No portal</b><span>Escolha na lista dos seus contratos concluídos pelo Jurídico: as condições fechadas, o contrato assinado e a convenção vêm junto.</span></div></label>' +
         '<label class="opcao-radio"><input type="radio" name="origImp" value="fora"><div><b>Fora do portal</b><span>Anexe o contrato assinado e o retorno da análise. Você preenche o formulário; a advogada registra as condições do contrato depois que você enviar.</span></div></label></div>' +
         '<div data-orig="portal"><span class="rot">Seus contratos concluídos, ainda sem implantação</span>' +
-        '<div class="painel" style="box-shadow:none;overflow:hidden">' + (j.contratos.map(linhaCt).join('') || '<div class="vazio" style="border:0;padding:24px">Nenhum contrato concluído sem implantação. O contrato é pedido em <a href="#/juridico/pedidos">Pedir ao Jurídico</a>; quando o Jurídico concluir, ele aparece aqui.</div>') + '</div></div>' +
+        '<div class="painel" style="box-shadow:none;overflow:hidden">' + (j.contratos.map(linhaCt).join('') || '<div class="vazio" style="border:0;padding:24px">Nenhum contrato concluído sem implantação. O contrato é pedido em <a href="#/juridico/pedidos">Solicitações ao Jurídico</a>; quando o Jurídico concluir, ele aparece aqui.</div>') + '</div></div>' +
         '<div data-orig="fora" hidden><div class="pilha" style="gap:12px">' +
         '<div><span class="rot">Contrato assinado (PDF)</span><label class="btn ghost" style="align-self:flex-start">' + IC.enviar + 'Escolher o contrato assinado<input type="file" id="arqCtFora" accept="application/pdf" hidden></label><div id="nomeCtFora" class="ajuda"></div></div>' +
         '<div><span class="rot">Retorno da análise de crédito (PDF)</span><label class="btn ghost" style="align-self:flex-start">' + IC.enviar + 'Escolher o PDF do retorno<input type="file" id="arqPdfImp" accept="application/pdf" hidden></label><div id="lidoPdfImp" style="margin-top:12px"></div></div>' +
@@ -5162,7 +5162,7 @@
     }
     if (!ct) {
       return '<div class="msg aviso" style="margin-bottom:16px">Sem contrato assinado no portal para este condomínio. As condições do contrato ficam como o comercial preencher aqui' +
-        (d.pode.editar ? '; se o contrato ainda vai ser pedido, use <a href="#/juridico/pedidos">Pedir ao Jurídico</a>.' : '.') + '</div>';
+        (d.pode.editar ? '; se o contrato ainda vai ser pedido, use <a href="#/juridico/pedidos">Solicitações ao Jurídico</a>.' : '.') + '</div>';
     }
     var link = '<a href="#/contratos/' + ct.id + '">' + esc(ct.protocolo || 'solicitação em rascunho') + '</a>';
     if (!ct.fechado) return '<div class="msg info" style="margin-bottom:16px">Contrato ' + link + ': ' + esc((ETAPA_CT[ct.etapa] || [ct.etapa])[0].toLowerCase()) + '. As condições fechadas aparecem aqui quando a advogada concluir.</div>';
@@ -7528,7 +7528,7 @@
   var resumoDj = null;
   // filtros de cada lista (o Jurídico abre nas em aberto; quem pediu vê todas as suas)
   var filtrosDj = { minhas: { q: '', status: '', tipo: '', ano: '' }, fila: { q: '' }, comigo: { q: '' },
-    todas: { q: '', status: 'abertas', tipo: '', setor: '', origem: '', canal: '', ano: '' } };
+    todas: { q: '', status: 'abertas', tipo: '', setor: '', origem: '', ano: '' } };
   var FECHADA_DJ = ['concluido', 'contrato_perdido'];
   var STATUS_DJ = {
     pendente: ['Pendente', 'cinza'], em_andamento: ['Em andamento', 'azul'], aguardando_retorno: ['Aguardando retorno', 'ambar'],
@@ -7536,7 +7536,7 @@
   };
   var UFS_DJ = ['AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO'];
   var ROTULO_CAMPO_DJ = { tipo_id: 'atividade', status: 'situação', solicitante_id: 'solicitante', solicitante_nome: 'solicitante', setor: 'setor', uf: 'estado', cliente: 'cliente',
-    objeto: 'objeto', observacoes: 'observações', responsavel_id: 'responsável', solicitada_em: 'data da solicitação', entregue_em: 'data da entrega', prazo: 'prazo', horas: 'horas', canal: 'como chegou' };
+    objeto: 'objeto', observacoes: 'observações', responsavel_id: 'responsável', solicitada_em: 'data da solicitação', entregue_em: 'data de conclusão', prazo: 'prazo', horas: 'horas', canal: 'como chegou' };
 
   async function carregarMetaDj(forcar) {
     if (!metaDj || forcar) metaDj = await api('GET', '/api/juridico/meta');
@@ -7546,7 +7546,7 @@
     try { resumoDj = await api('GET', '/api/juridico/resumo'); } catch (e) { return; }
     desenharContadorDj();
   }
-  /* contadores do menu Jurídico: em "Pedir ao Jurídico", o que espera pela pessoa (resposta, minuta, pendência);
+  /* contadores do menu Jurídico: em "Solicitações ao Jurídico", o que espera pela pessoa (resposta, minuta, pendência);
      no "Painel do Jurídico", o que é do Jurídico fazer (fila, com você, assinaturas, diretoria, cadastro de parceiros, atrasadas) */
   function desenharContadorDj() {
     var dj = resumoDj || {}, ct = resumoCt || {}, cp = resumoCp || {};
@@ -7576,10 +7576,10 @@
   }
   function prazoTipoDj(t) { return t.horas + 'h úteis · ' + t.dias + (t.dias === 1 ? ' dia útil' : ' dias úteis'); }
 
-  /* ======================= Jurídico: Pedir ao Jurídico e Painel do Jurídico ======================= */
+  /* ======================= Jurídico: Solicitações ao Jurídico e Painel do Jurídico ======================= */
   // Tudo o que se pede ao Jurídico num lugar só: contrato de garantia (Solicitação de Contrato), contrato de parceria
   // (Solicitação de Contrato Parceria) e as demais atividades (Demandas Jurídicas, inclusive o que chega por e-mail).
-  // Quem pede usa "Pedir ao Jurídico"; o Jurídico, a diretoria e o setor Parceiros, o "Painel do Jurídico".
+  // Quem pede usa "Solicitações ao Jurídico"; o Jurídico, a diretoria e o setor Parceiros, o "Painel do Jurídico".
   var ABAS_PJ = [['fila', 'Fila'], ['comigo', 'Comigo'], ['assinaturas', 'Assinaturas'], ['todos', 'Todos'], ['diretoria', 'Diretoria'],
     ['parceiros', 'Cadastro de parceiros'], ['indicadores', 'Indicadores'], ['configurar', 'Configurar']];
   async function metasJuridico() {
@@ -7610,21 +7610,19 @@
     if (secao === 'painel' && !abas.length) secao = 'pedidos';
     var painel = secao === 'painel';
     if (painel && !abas.some(function (a) { return a[0] === aba; })) aba = abas[0][0];
-    var titulo = painel ? 'Painel do Jurídico' : 'Pedir ao Jurídico';
+    var titulo = painel ? 'Painel do Jurídico' : 'Solicitações ao Jurídico';
     var nomeAba = painel ? abas.find(function (a) { return a[0] === aba; })[1] : 'Meus pedidos';
     definirBarra('<span class="setor">Jurídico</span><span class="sep">/</span><span class="nome">' + titulo + ' · ' + esc(nomeAba) + '</span>');
-    var jur = M.dj.perfil.juridico;
     var lista = !painel || ['fila', 'comigo', 'todos'].indexOf(aba) >= 0;
     $('#conteudo').innerHTML = '<div class="pagina"><div class="linha" style="align-items:flex-end;margin-bottom:6px"><div style="flex:1 1 420px"><h1>' + titulo + '</h1>' +
-      '<p class="sub" style="margin:0">' + (painel ? 'Tudo o que chega ao Jurídico num lugar só: contratos de garantia, contratos de parceria e as demais atividades, pedidas no portal ou por e-mail. Cada atividade tem o seu prazo em horas úteis (8h = 1 dia útil).'
+      '<p class="sub" style="margin:0">' + (painel ? 'Tudo o que chega ao Jurídico num lugar só: contratos de garantia, contratos de parceria e as demais atividades. Cada atividade tem o seu prazo em horas úteis (8h = 1 dia útil).'
         : 'Contrato de garantia, contrato de parceria, aditivo, rescisão, análise de contrato, parecer: peça aqui e acompanhe o prazo e a situação de cada pedido.') + '</p></div>' +
       (lista && (!painel || aba === 'todos') ? '<button class="btn ghost" id="btXlsJ">' + IC.baixar + 'Baixar planilha</button>' : '') +
-      (painel ? (jur ? '<button class="btn primary" id="btRegJ">' + IC.mais + 'Registrar demanda</button>' : '') : '<button class="btn primary" id="btNovoJ">' + IC.mais + 'Novo pedido</button>') + '</div>' +
+      (painel ? '' : '<button class="btn primary" id="btNovoJ">' + IC.mais + 'Novo pedido</button>') + '</div>' +
       (painel && abas.length > 1 ? '<nav class="abas" style="margin-top:16px">' + abas.map(function (a) { return '<a href="#/juridico/painel/' + a[0] + '" class="' + (a[0] === aba ? 'on' : '') + '">' + esc(a[1]) + '</a>'; }).join('') + '</nav>' : '') +
       '<div id="corpoJ" style="margin-top:16px"></div></div>';
     var recarregar = function () { paginaJuridico(secao, aba, sub); atualizarDj(); };
     if ($('#btNovoJ')) $('#btNovoJ').onclick = function () { escolherPedidoJ(M, recarregar); };
-    if ($('#btRegJ')) $('#btRegJ').onclick = function () { novaDemandaDj(M.dj, recarregar); };
     var vis = !painel ? 'minhas' : aba === 'todos' ? 'todas' : aba;
     if ($('#btXlsJ')) $('#btXlsJ').onclick = function () { location.href = '/api/juridico/demandas.xlsx?' + filtroUrlDj(vis); };
     atualizarDj();
@@ -7737,7 +7735,7 @@
         '<select class="campo" id="fTpDj" style="width:auto" aria-label="Atividade">' + opcoes([['', 'Todas as atividades']].concat(m.tipos.map(function (t) { return [t.id, t.nome]; })), f.tipo) + '</select>' : '') +
       (todas ? '<select class="campo" id="fSeDj" style="width:auto" aria-label="Setor"></select><select class="campo" id="fOrDj" style="width:auto" aria-label="Origem">' +
         opcoes([['', 'Todas as origens'], ['demanda', 'Demandas'], ['contrato', 'Solicitação de Contrato'], ['parceria', 'Solicitação de Contrato Parceria']], f.origem) + '</select>' +
-        '<select class="campo" id="fCaDj" style="width:auto" aria-label="Como chegou">' + opcoes([['', 'Chegou por qualquer canal']].concat(Object.keys(m.canais).map(function (k) { return [k, m.canais[k]]; })), f.canal) + '</select>' : '') +
+        '' : '') +
       (todas || minhas ? '<select class="campo" id="fAnoDj" style="width:auto" aria-label="Ano da solicitação"></select>' : '') + '</div>' +
       '<div class="tabela-wrap"><table style="min-width:1080px"><thead><tr><th>Nº</th><th>Atividade</th><th>' + (minhas ? 'Com quem' : 'Solicitante') + '</th><th>Cliente / objeto</th><th>Solicitada</th><th>Prazo</th><th>Entrega</th><th>Situação</th><th>' + (vis === 'fila' ? '' : 'SLA') + '</th></tr></thead>' +
       '<tbody id="tbDj"></tbody></table></div><div class="ajuda" id="rodapeDj" style="padding:10px 16px"></div></div>';
@@ -7771,7 +7769,7 @@
         var externo = d.origem === 'contrato' || d.origem === 'parceria';
         return '<tr class="clicavel" data-id="' + esc(d.id) + '"><td style="white-space:nowrap"><b>' + (externo ? esc(d.ref) : '#' + esc(d.ref)) + '</b>' +
           (d.origem === 'contrato' ? '<span class="sec">Solicitação de Contrato</span>' : d.origem === 'parceria' ? '<span class="sec">Contrato Parceria</span>' : '') + '</td>' +
-          '<td>' + esc(d.tipo) + (!minhas && m.canais[d.canal] && d.canal !== 'portal' ? '<span class="sec">por ' + esc(m.canais[d.canal].toLowerCase()) + '</span>' : '') + '</td>' +
+          '<td>' + esc(d.tipo) + '</td>' +
           '<td>' + (minhas ? comQuem(d) : esc(d.solicitante_nome || '—') + '<span class="sec">' + esc([d.setor, d.uf].filter(Boolean).join(' · ')) + '</span>') + '</td>' +
           '<td style="max-width:320px"><b>' + esc(d.cliente || '—') + '</b>' + (d.objeto ? '<span class="sec corta" title="' + esc(d.objeto) + '">' + esc(d.objeto) + '</span>' : '') + '</td>' +
           '<td style="white-space:nowrap">' + dataBr(d.solicitada_em) + '</td><td style="white-space:nowrap">' + (d.prazo ? dataBr(d.prazo) : '<span class="sec">—</span>') + '</td>' +
@@ -7799,46 +7797,41 @@
     }
     var espera;
     $('#qDj').oninput = function () { f.q = this.value.trim(); clearTimeout(espera); espera = setTimeout(carregar, 300); };
-    [['#fStDj', 'status'], ['#fTpDj', 'tipo'], ['#fSeDj', 'setor'], ['#fOrDj', 'origem'], ['#fCaDj', 'canal'], ['#fAnoDj', 'ano']].forEach(function (x) {
+    [['#fStDj', 'status'], ['#fTpDj', 'tipo'], ['#fSeDj', 'setor'], ['#fOrDj', 'origem'], ['#fAnoDj', 'ano']].forEach(function (x) {
       if ($(x[0])) $(x[0]).onchange = function () { f[x[1]] = this.value; carregar(); };
     });
     carregar();
   }
 
   /* ---------- formulário (nova e edição pelo Jurídico) ---------- */
+  /* formulário: no pedido novo, só a atividade (com o prazo já calculado), o cliente e o que precisa; quem pede é quem está
+     no portal, com o setor e a data de hoje. Na edição, o Jurídico corrige os dados, a situação, a conclusão e o responsável. */
   function formDj(m, d, novo) {
-    var p = m.perfil, jur = p.juridico;
     d = d || {};
     var opt = function (v, rot, atual) { return '<option value="' + esc(v) + '"' + (String(v) === String(atual == null ? '' : atual) ? ' selected' : '') + '>' + esc(rot) + '</option>'; };
-    var tipos = m.tipos.filter(function (t) { return t.ativo || t.id === d.tipo_id; });
-    // o Jurídico lança o pedido de outra pessoa: começa sem ninguém escolhido
-    var solic = d.solicitante_id ? String(d.solicitante_id) : d.solicitante_nome ? 'outro' : '';
-    // quem pediu e já não está ativo, e o estado escrito de outro jeito (ex.: "DF/GO", da planilha), continuam na lista
-    var pessoas = m.pessoas.concat(d.solicitante_id && !m.pessoas.some(function (x) { return x.id === d.solicitante_id; }) ? [{ id: d.solicitante_id, nome: d.solicitante_nome }] : []);
-    var ufs = UFS_DJ.concat(d.uf && UFS_DJ.indexOf(d.uf) < 0 ? [d.uf] : []);
-    // quem lança pelo Jurídico já fica como responsável (dá para trocar)
-    var resp = novo ? (m.equipe.some(function (x) { return x.id === m.eu.id; }) ? m.eu.id : '') : d.responsavel_id;
-    var html = '<div class="grade-2"><div><label class="rot" for="djTipo">Atividade</label><select class="campo" id="djTipo"><option value="">Escolha…</option>' +
+    // contrato de garantia e de parceria têm pedido próprio (Novo pedido → Contrato…)
+    var tipos = m.tipos.filter(function (t) { return t.id === d.tipo_id || (t.ativo && !(novo && t.pedido_proprio)); });
+    var html = (novo ? '<div class="ajuda" style="margin:0">Pedido de <b>' + esc(m.eu.nome) + '</b>' + (m.eu.setor ? ' · ' + esc(m.eu.setor) : '') + ' · solicitado hoje, ' + dataBr(m.hoje) + '</div>' : '') +
+      '<div class="grade-2"><div><label class="rot" for="djTipo">Atividade</label><select class="campo" id="djTipo"><option value="">Escolha…</option>' +
       tipos.map(function (t) { return opt(t.id, t.nome + ' (' + t.horas + 'h úteis)', d.tipo_id); }).join('') + '</select><div class="ajuda" id="djPrazo"></div></div>' +
       '<div><label class="rot" for="djCliente">Cliente</label><input class="campo" id="djCliente" list="djConds" maxlength="200" value="' + esc(d.cliente || '') + '" placeholder="Condomínio, administradora, fornecedor…">' +
       '<datalist id="djConds">' + m.condominios.map(function (n) { return '<option value="' + esc(n) + '">'; }).join('') + '</datalist></div></div>' +
       '<div><label class="rot" for="djObjeto">Objeto da demanda</label><textarea class="campo" id="djObjeto" rows="3" maxlength="2000" placeholder="O que precisa ser feito">' + esc(d.objeto || '') + '</textarea></div>';
-    if (jur) {
+    if (!novo && m.perfil.juridico) {
+      var solic = d.solicitante_id ? String(d.solicitante_id) : d.solicitante_nome ? 'outro' : '';
+      // quem pediu e já não está ativo, e o estado escrito de outro jeito (ex.: "DF/GO", da planilha), continuam na lista
+      var pessoas = m.pessoas.concat(d.solicitante_id && !m.pessoas.some(function (x) { return x.id === d.solicitante_id; }) ? [{ id: d.solicitante_id, nome: d.solicitante_nome }] : []);
+      var ufs = UFS_DJ.concat(d.uf && UFS_DJ.indexOf(d.uf) < 0 ? [d.uf] : []);
       html += '<div class="grade-2"><div><label class="rot" for="djSolic">Quem pediu</label><select class="campo" id="djSolic">' + (solic ? '' : opt('', 'Escolha…', '')) +
         pessoas.map(function (x) { return opt(x.id, x.nome, solic); }).join('') + opt('outro', 'Outra pessoa (sem cadastro no portal)', solic) + '</select>' +
         '<input class="campo" id="djSolicNome" maxlength="120" placeholder="Nome de quem pediu" style="margin-top:6px" value="' + esc(d.solicitante_id ? '' : d.solicitante_nome || '') + '"' + (solic === 'outro' ? '' : ' hidden') + '></div>' +
-        '<div class="grade-2"><div><label class="rot" for="djSetor">Setor</label><input class="campo" id="djSetor" maxlength="80" value="' + esc(novo ? '' : d.setor || '') + '"></div>' +
+        '<div class="grade-2"><div><label class="rot" for="djSetor">Setor</label><input class="campo" id="djSetor" maxlength="80" value="' + esc(d.setor || '') + '"></div>' +
         '<div><label class="rot" for="djUf">Estado</label><select class="campo" id="djUf">' + opt('', '—', d.uf) + ufs.map(function (u) { return opt(u, u, d.uf); }).join('') + '</select></div></div></div>' +
         '<div class="grade-3"><div><label class="rot" for="djData">Data da solicitação</label><input class="campo" id="djData" type="date" max="' + m.hoje + '" value="' + esc(d.solicitada_em || m.hoje) + '"></div>' +
         '<div><label class="rot" for="djStatus">Situação</label><select class="campo" id="djStatus">' + Object.keys(STATUS_DJ).map(function (k) { return opt(k, STATUS_DJ[k][0], d.status || 'pendente'); }).join('') + '</select></div>' +
-        '<div><label class="rot" for="djEntrega">Data da entrega</label><input class="campo" id="djEntrega" type="date" max="' + m.hoje + '" value="' + esc(d.entregue_em || '') + '"></div></div>' +
-        '<div class="grade-2"><div><label class="rot" for="djResp">Responsável no Jurídico</label><select class="campo" id="djResp">' + opt('', 'Ninguém ainda', resp) +
-        m.equipe.map(function (x) { return opt(x.id, x.nome, resp); }).join('') + '</select></div>' +
-        '<div><label class="rot" for="djCanal">Como chegou</label><select class="campo" id="djCanal">' + Object.keys(m.canais).filter(function (k) { return k !== 'planilha' || d.canal === 'planilha'; })
-          .map(function (k) { return opt(k, m.canais[k], d.canal || (novo ? 'email' : '')); }).join('') + '</select></div></div>';
-    } else {
-      html += '<div class="grade-2"><div><label class="rot" for="djUf">Estado</label><select class="campo" id="djUf">' + opt('', '—', m.eu.uf) + UFS_DJ.map(function (u) { return opt(u, u, m.eu.uf); }).join('') + '</select></div>' +
-        '<div><span class="rot">Solicitante</span><div style="padding:9px 0;font-weight:700">' + esc(m.eu.nome) + (m.eu.setor ? ' <span class="sec" style="display:inline">· ' + esc(m.eu.setor) + '</span>' : '') + '</div></div></div>';
+        '<div><label class="rot" for="djEntrega">Data de conclusão</label><input class="campo" id="djEntrega" type="date" max="' + m.hoje + '" value="' + esc(d.entregue_em || '') + '"></div></div>' +
+        '<div class="grade-2"><div><label class="rot" for="djResp">Responsável no Jurídico</label><select class="campo" id="djResp">' + opt('', 'Ninguém ainda', d.responsavel_id) +
+        m.equipe.map(function (x) { return opt(x.id, x.nome, d.responsavel_id); }).join('') + '</select></div><div></div></div>';
     }
     html += '<div><label class="rot" for="djObs">Observações</label><textarea class="campo" id="djObs" rows="2" maxlength="2000">' + esc(d.observacoes || '') + '</textarea></div>';
     return '<div class="pilha" style="gap:14px">' + html + '</div>';
@@ -7846,7 +7839,9 @@
   function ligarFormDj(raiz, m) {
     var mostrarPrazo = function () {
       var t = m.tipos.find(function (x) { return String(x.id) === $('#djTipo', raiz).value; });
-      $('#djPrazo', raiz).textContent = t ? 'Prazo: ' + prazoTipoDj(t) + ', contados a partir do dia seguinte à solicitação.' : '';
+      // no pedido novo, a data: hoje + os dias úteis do tipo (Tabela de prazos)
+      $('#djPrazo', raiz).textContent = !t ? '' : $('#djData', raiz) ? 'Prazo: ' + prazoTipoDj(t) + ', contados a partir do dia seguinte à solicitação.'
+        : 'Prazo de entrega: ' + dataBr(t.prazo_hoje) + ' (' + prazoTipoDj(t) + ').';
     };
     $('#djTipo', raiz).onchange = mostrarPrazo;
     mostrarPrazo();
@@ -7863,8 +7858,9 @@
   }
   function lerFormDj(raiz, m) {
     var b = { tipo_id: Number($('#djTipo', raiz).value) || null, cliente: $('#djCliente', raiz).value.trim(), objeto: $('#djObjeto', raiz).value.trim(),
-      observacoes: $('#djObs', raiz).value.trim(), uf: $('#djUf', raiz).value };
-    if (m.perfil.juridico) {
+      observacoes: $('#djObs', raiz).value.trim() };
+    if ($('#djSolic', raiz)) {
+      b.uf = $('#djUf', raiz).value;
       var s = $('#djSolic', raiz).value;
       if (s === 'outro') { b.solicitante_id = null; b.solicitante_nome = $('#djSolicNome', raiz).value.trim(); } else b.solicitante_id = Number(s) || null;
       b.setor = $('#djSetor', raiz).value.trim();
@@ -7872,27 +7868,24 @@
       b.status = $('#djStatus', raiz).value;
       b.entregue_em = $('#djEntrega', raiz).value;
       b.responsavel_id = Number($('#djResp', raiz).value) || null;
-      b.canal = $('#djCanal', raiz).value;
     }
     return b;
   }
 
   function novaDemandaDj(m, depois) {
-    var mo = modal({ titulo: m.perfil.juridico ? 'Registrar demanda' : 'Novo pedido ao Jurídico', largo: true,
-      corpo: (m.perfil.juridico ? '<div class="msg info" style="margin-bottom:14px">Pedido que chegou por e-mail, WhatsApp ou telefone: escolha a <b>atividade</b> e <b>quem pediu</b>. O prazo sai da Tabela de prazos, a partir da data da solicitação; quem pediu é avisado se tiver acesso ao portal.</div>'
-        : '<div class="msg info" style="margin-bottom:14px">O Jurídico recebe o aviso na hora. Você acompanha em <b>Pedir ao Jurídico</b> e é avisado quando a situação mudar.</div>') + formDj(m, null, true),
-      pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="djOk">' + IC.enviar + (m.perfil.juridico ? 'Registrar' : 'Enviar ao Jurídico') + '</button>' });
+    var mo = modal({ titulo: 'Novo pedido ao Jurídico', largo: true,
+      corpo: '<div class="msg info" style="margin-bottom:14px">O Jurídico recebe o aviso na hora. Você acompanha em <b>Solicitações ao Jurídico</b> e é avisado quando a situação mudar.</div>' + formDj(m, null, true),
+      pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="djOk">' + IC.enviar + 'Enviar ao Jurídico</button>' });
     ligarFormDj(mo, m);
     $('#djOk', mo).onclick = async function () {
       var b = lerFormDj(mo, m);
       if (!b.tipo_id) { toast('Escolha a atividade.', 'erro'); return; }
       if (!b.cliente) { toast('Informe o cliente.', 'erro'); return; }
-      if (m.perfil.juridico && !b.solicitante_id && !b.solicitante_nome) { toast('Escolha quem pediu.', 'erro'); return; }
       this.disabled = true;
       try {
         var r = await api('POST', '/api/juridico/demandas', b);
         mo.fechar();
-        toast('Demanda #' + r.numero + ' registrada. Prazo de entrega: ' + dataBr(r.prazo) + '.', 'ok');
+        toast('Pedido #' + r.numero + ' enviado ao Jurídico. Prazo de entrega: ' + dataBr(r.prazo) + '.', 'ok');
         depois();
       } catch (e) { toast(e.message, 'erro'); this.disabled = false; }
     };
@@ -7904,9 +7897,9 @@
     try { j = await api('GET', '/api/juridico/demandas/' + id); } catch (e) { toast(e.message, 'erro'); return; }
     var d = j.demanda, pd = j.pode;
     var resumo = '<dl class="info-ticket" style="margin:0 0 16px"><dt>Situação</dt><dd>' + etqDj(d) + '</dd><dt>Atividade</dt><dd>' + esc(d.tipo) + ' <span class="sec" style="display:inline">· ' + d.horas + 'h úteis</span></dd>' +
-      '<dt>Solicitada</dt><dd>' + dataBr(d.solicitada_em) + (m.canais[d.canal] ? ' <span class="sec" style="display:inline">· ' + esc(m.canais[d.canal].toLowerCase()) + '</span>' : '') + '</dd>' +
+      '<dt>Solicitada</dt><dd>' + dataBr(d.solicitada_em) + '</dd>' +
       '<dt>Prazo de entrega</dt><dd>' + dataBr(d.prazo) + '</dd>' +
-      '<dt>Entrega</dt><dd>' + (d.entregue_em ? dataBr(d.entregue_em) + ' ' + slaDj(d) : '—') + '</dd>' +
+      '<dt>Conclusão</dt><dd>' + (d.entregue_em ? dataBr(d.entregue_em) + ' ' + slaDj(d) : '—') + '</dd>' +
       (pd.editar ? '' : '<dt>Cliente</dt><dd>' + esc(d.cliente) + '</dd><dt>Objeto</dt><dd style="white-space:pre-wrap">' + esc(d.objeto || '—') + '</dd>' +
         '<dt>Solicitante</dt><dd>' + esc(d.solicitante_nome || '—') + (d.setor ? ' · ' + esc(d.setor) : '') + (d.uf ? ' · ' + esc(d.uf) : '') + '</dd>' +
         '<dt>Responsável</dt><dd>' + esc(d.responsavel_nome || 'Ninguém ainda') + '</dd>' + (d.observacoes ? '<dt>Observações</dt><dd style="white-space:pre-wrap">' + esc(d.observacoes) + '</dd>' : '')) + '</dl>';

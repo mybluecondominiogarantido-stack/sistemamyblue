@@ -11,7 +11,7 @@ Demandas Jurídicas:
 
 | Menu | Endereço | Quem vê | Abas |
 |---|---|---|---|
-| **Pedir ao Jurídico** | `#/juridico/pedidos` | todo mundo | **Meus pedidos** (contratos, parcerias e demandas, com o que espera por você) e o botão **Novo pedido** (contrato de garantia, contrato de parceria ou outra atividade) |
+| **Solicitações ao Jurídico** | `#/juridico/pedidos` | todo mundo | **Meus pedidos** (contratos, parcerias e demandas, com o que espera por você) e o botão **Novo pedido** (contrato de garantia, contrato de parceria ou outra atividade) |
 | **Painel do Jurídico** | `#/juridico/painel/<aba>` | Jurídico, diretoria e setor Parceiros | **Fila**, **Comigo**, **Assinaturas** (contratos · parcerias), **Todos**, **Diretoria** (contratos · parcerias), **Cadastro de parceiros**, **Indicadores** (prazos e SLA · contratos), **Configurar** (Tabela de prazos · Importar planilha) |
 
 O contrato e a parceria continuam abrindo na tela deles (`#/contratos/<id>`, `#/parcerias/<id>`); a demanda abre em
@@ -164,16 +164,19 @@ entram pelo portal e ficam no banco.
 ## Demandas Jurídicas
 
 Tudo o que se pede ao Jurídico (aditivo, rescisão, análise de contrato de fornecedor, parecer…), no lugar da planilha
-"Acompanhamento — Atividades Jurídicas". Quem pede usa **Pedir ao Jurídico → Novo pedido → Outra atividade jurídica**;
-o Jurídico registra o que chega por e-mail, WhatsApp ou telefone em **Painel do Jurídico → Registrar demanda**: escolhe
-a atividade e quem pediu (o setor e o estado vêm do cadastro), e fica como responsável.
+"Acompanhamento — Atividades Jurídicas". Quem pede usa **Solicitações ao Jurídico → Novo pedido → Outra atividade jurídica**;
+o pedido sai sempre no nome de quem está no portal, com o setor e a data de hoje: a pessoa só escolhe a atividade (o
+prazo aparece na hora, já com a data), o cliente e o que precisa. A lista de atividades é a Tabela de Prazos da planilha
+(`AJUSTES` em `server/db.js` a cria quando a tabela está vazia); contrato de garantia e de parceria não aparecem nela,
+porque têm pedido próprio (`pedido_proprio`). Data da solicitação, situação, data de conclusão (entrega) e responsável só
+o Jurídico muda, depois, na demanda.
 
 | Parte | Arquivo |
 |---|---|
 | Rotas (perfil, lista, uma demanda, comentário, Tabela de prazos, indicadores, planilha, importação) e a rotina de prazos | `server/rotas/juridico.js` |
 | Leitura e conferência da planilha (títulos, Tabela de Prazos, datas, status, solicitante, o que já está no portal) e os dias úteis | `server/juridico/importacao.js` |
 | Tabelas `juridico_tipos`, `juridico_demandas` (com `canal` e `status_em`), `juridico_eventos`, `juridico_importacoes`, `juridico_lembretes` | `server/db.js` |
-| Telas | `public/app.js` (blocos Demandas Jurídicas e "Jurídico: Pedir ao Jurídico e Painel do Jurídico") |
+| Telas | `public/app.js` (blocos Demandas Jurídicas e "Jurídico: Solicitações ao Jurídico e Painel do Jurídico") |
 | Testes (dados fictícios) | `test/juridico.test.js` |
 | Tutoriais | `juridico-demandas-pedir` e `juridico-demandas-conduzir` (`server/tutoriais.js`, `docs/tutoriais/fonte/roteiros.js`) |
 
@@ -187,8 +190,8 @@ entregues; as entregues guardam o SLA que tiveram.
 
 **Situações:** Pendente, Em andamento, Aguardando retorno, Aguardando assinaturas, Concluído, Contrato perdido.
 
-**Como chegou** (`canal`): Portal (quem pede pelo portal), E-mail (o padrão quando o Jurídico registra), WhatsApp,
-Telefone, Reunião e Planilha (importada). Aparece na lista ("por e-mail"), no filtro de **Todos** e na planilha baixada.
+**Canal** (`canal`, só no banco): `portal` para o que é pedido no portal e `planilha` para o que foi importado (a API
+ainda aceita e-mail, WhatsApp, telefone e reunião, mas a tela não pergunta).
 
 **Fila e Comigo.** *Fila*: contratos e parcerias na fila e demandas em aberto sem responsável (pendentes ou sem entrega);
 na demanda, **Pegar** passa para quem clicou, em andamento. *Comigo*: tudo o que está em aberto com a pessoa. Nas duas,

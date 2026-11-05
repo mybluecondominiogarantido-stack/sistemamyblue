@@ -137,7 +137,11 @@ test('importar a planilha: prévia, tipos da Tabela de Prazos, números da plani
   assert.equal(r3.solicitante_id, ids['exec@teste.com']);
   assert.equal(r3.atrasada, true);
   tipos = (await adv('GET', '/api/juridico/meta')).json.tipos;
-  assert.deepEqual(tipos.map((t) => [t.nome, t.horas, t.contratos]), [['Contrato (garantia)', 8, true], ['Aditivo', 16, false], ['Rescisão', 24, false]]);
+  // a lista de atividades já vem no portal (a Tabela de Prazos da planilha); a importação não cria repetidos
+  assert.equal(tipos.length, 9);
+  assert.deepEqual(tipos.slice(0, 3).map((t) => [t.nome, t.horas, t.contratos, t.pedido_proprio]), [['Contrato (garantia)', 8, true, true], ['Aditivo', 16, false, false], ['Rescisão', 24, false, false]]);
+  assert.equal(tipos.find((t) => t.nome === 'Contrato (parcerias)').pedido_proprio, true); // contrato de parceria tem pedido próprio
+  assert.equal(tipos[1].prazo_hoje, I.somarDiasUteis(diaBr(), 2, util));
   // a rotina não avisa o atraso do histórico
   await ctx.rotinasJuridico.executar(new Date());
   assert.ok(!(await avisosDe('adv@teste.com')).some((a) => /Passou do prazo/.test(a.titulo)));
@@ -248,13 +252,13 @@ test('o que chega por e-mail: o Jurídico escolhe o tipo e quem pediu; Fila e Co
   const meta = (await adv('GET', '/api/juridico/meta')).json;
   assert.equal(meta.canais.email, 'E-mail');
   const aditivo = meta.tipos.find((t) => t.nome === 'Aditivo');
-  // pelo portal, o canal é sempre "portal"; o Jurídico lança com o canal (e-mail se não disser)
+  // o pedido é feito pelo portal (canal "portal"); só pela API o Jurídico informa outro canal
   const pelo = await comercial('POST', '/api/juridico/demandas', { tipo_id: aditivo.id, cliente: 'Condomínio Kappa', canal: 'whatsapp' });
   assert.equal((await adv('GET', `/api/juridico/demandas/${pelo.json.id}`)).json.demanda.canal, 'portal');
   const email = await adv('POST', '/api/juridico/demandas', { tipo_id: aditivo.id, cliente: 'Condomínio Lambda', solicitante_id: ids['exec@teste.com'] });
   const zap = await adv('POST', '/api/juridico/demandas', { tipo_id: aditivo.id, cliente: 'Condomínio Mi', solicitante_id: ids['exec@teste.com'], canal: 'whatsapp',
     responsavel_id: ids['adv@teste.com'] });
-  assert.equal((await adv('GET', `/api/juridico/demandas/${email.json.id}`)).json.demanda.canal, 'email');
+  assert.equal((await adv('GET', `/api/juridico/demandas/${email.json.id}`)).json.demanda.canal, 'portal');
   assert.deepEqual((await adv('GET', '/api/juridico/demandas?vis=todas&canal=whatsapp')).json.demandas.map((x) => x.id), [zap.json.id]);
   // Fila: o que ninguém pegou; Comigo: o que está com a advogada (as atrasadas primeiro)
   const fila = (await adv('GET', '/api/juridico/demandas?vis=fila')).json.demandas.map((x) => x.id);
