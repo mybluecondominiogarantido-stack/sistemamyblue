@@ -47,9 +47,10 @@ setor Parceiros confirmar.
   válido e e-mail), responsável financeiro (nome e telefone com DDD), e-mail para a prestação de contas, comissão de
   recorrência (sim/não) e comissão de venda (sim/não). Outras solicitações é opcional. **Não se pedem documentos do
   parceiro.**
-- **Comissões:** recorrência de **10%** ou **5%**; venda de **50% da 1ª taxa administrativa**. O comercial pode pedir
-  **outro percentual**: a diretoria é avisada no envio e a minuta só sai depois da decisão. Não aprovado, vale o padrão
-  (a venda volta para 50%; a recorrência fica para a advogada registrar a que ficou no contrato). "Não" nas duas avisa
+- **Comissões:** recorrência de **10%** ou **5%**; venda de **50% da 1ª taxa administrativa**. A tela não oferece
+  mais **outro percentual**. O servidor ainda trata pedidos antigos com outro percentual: a diretoria é avisada no envio e
+  a minuta só sai depois da decisão; não aprovado, vale o padrão (a venda volta para 50%; a recorrência fica para a
+  advogada registrar a que ficou no contrato). "Não" nas duas avisa
   que o contrato fica sem comissão.
 - **CNPJ repetido:** se o CNPJ já tem solicitação enviada (e não cancelada), não dá para enviar outra. Se já está na base
   de parceiros, o portal avisa (não impede).
