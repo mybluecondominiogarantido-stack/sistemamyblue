@@ -168,7 +168,7 @@ test('pedir ao Jurídico: qualquer pessoa abre, o prazo sai do tipo em dias úte
   assert.equal(r.json.prazo, I.somarDiasUteis(diaBr(), 2, util));
   const d = (await comercial('GET', `/api/juridico/demandas/${idD}`)).json.demanda;
   assert.deepEqual([d.solicitante_id, d.solicitada_em, d.setor, d.uf, d.status], [ids['exec@teste.com'], diaBr(), 'Comercial', 'CE', 'pendente']);
-  assert.ok((await avisosDe('adv@teste.com')).some((a) => /Nova demanda para o Jurídico · Aditivo/.test(a.titulo) && a.link === `#/demandas-juridicas/${idD}`));
+  assert.ok((await avisosDe('adv@teste.com')).some((a) => /Nova demanda para o Jurídico · Aditivo/.test(a.titulo) && a.link === `#/juridico/demanda/${idD}`));
   assert.ok(emails.some((m) => m.para.email === 'adv@teste.com'));
   // quem pediu vê as suas; a lista completa é do Jurídico e da diretoria
   // quem pediu vê as suas (a nova e a da planilha que ficou), mesmo as lançadas pelo Jurídico
@@ -242,4 +242,58 @@ test('os pedidos da Solicitação de Contrato entram na lista e nos indicadores,
   const x = await adv('GET', '/api/juridico/demandas.xlsx?vis=todas');
   assert.equal(x.status, 200);
   assert.match(x.headers.get('content-type'), /spreadsheetml/);
+});
+
+test('o que chega por e-mail: o Jurídico escolhe o tipo e quem pediu; Fila e Comigo; rascunho e "espera por você" em Meus pedidos', async () => {
+  const meta = (await adv('GET', '/api/juridico/meta')).json;
+  assert.equal(meta.canais.email, 'E-mail');
+  const aditivo = meta.tipos.find((t) => t.nome === 'Aditivo');
+  // pelo portal, o canal é sempre "portal"; o Jurídico lança com o canal (e-mail se não disser)
+  const pelo = await comercial('POST', '/api/juridico/demandas', { tipo_id: aditivo.id, cliente: 'Condomínio Kappa', canal: 'whatsapp' });
+  assert.equal((await adv('GET', `/api/juridico/demandas/${pelo.json.id}`)).json.demanda.canal, 'portal');
+  const email = await adv('POST', '/api/juridico/demandas', { tipo_id: aditivo.id, cliente: 'Condomínio Lambda', solicitante_id: ids['exec@teste.com'] });
+  const zap = await adv('POST', '/api/juridico/demandas', { tipo_id: aditivo.id, cliente: 'Condomínio Mi', solicitante_id: ids['exec@teste.com'], canal: 'whatsapp',
+    responsavel_id: ids['adv@teste.com'] });
+  assert.equal((await adv('GET', `/api/juridico/demandas/${email.json.id}`)).json.demanda.canal, 'email');
+  assert.deepEqual((await adv('GET', '/api/juridico/demandas?vis=todas&canal=whatsapp')).json.demandas.map((x) => x.id), [zap.json.id]);
+  // Fila: o que ninguém pegou; Comigo: o que está com a advogada (as atrasadas primeiro)
+  const fila = (await adv('GET', '/api/juridico/demandas?vis=fila')).json.demandas.map((x) => x.id);
+  assert.ok(fila.includes(pelo.json.id) && fila.includes(email.json.id) && !fila.includes(zap.json.id));
+  const comigo = (await adv('GET', '/api/juridico/demandas?vis=comigo')).json.demandas;
+  assert.ok(comigo.some((x) => x.id === zap.json.id));
+  assert.ok(comigo.every((x) => x.responsavel_id === ids['adv@teste.com']));
+  assert.equal((await comercial('GET', '/api/juridico/demandas?vis=fila')).status, 403);
+  assert.equal((await diretor('GET', '/api/juridico/demandas?vis=comigo')).status, 403);
+  // Meus pedidos: o rascunho de contrato aparece e "espera por você"
+  const { id: rasc } = await ctx.db.um(`INSERT INTO contratos (etapa, origem, condominio, solicitante_id) VALUES ('rascunho', 'entrega', 'Condomínio Rascunho', $1) RETURNING id`,
+    [ids['exec@teste.com']]);
+  const meus = (await comercial('GET', '/api/juridico/demandas?vis=minhas')).json;
+  const r = meus.demandas.find((x) => x.id === `ct-${rasc}`);
+  assert.deepEqual([r.ref, r.etapa, r.espera_voce], ['Rascunho', 'rascunho', true]);
+  assert.ok(meus.espera_voce >= 2); // o rascunho e o contrato com a minuta
+  assert.ok(!(await adv('GET', '/api/juridico/demandas?vis=todas')).json.demandas.some((x) => x.id === `ct-${rasc}`));
+});
+
+test('aviso semanal: quem pediu recebe a lista do que espera por ela há 15 dias ou mais, no máximo uma vez a cada 7 dias', async () => {
+  const aditivo = (await adv('GET', '/api/juridico/meta')).json.tipos.find((t) => t.nome === 'Aditivo');
+  const velha = await adv('POST', '/api/juridico/demandas', { tipo_id: aditivo.id, cliente: 'Condomínio Parado', solicitante_id: ids['outro@teste.com'],
+    solicitada_em: '2026-06-01', entregue_em: '2026-06-02', status: 'aguardando_retorno' });
+  await ctx.db.q("UPDATE juridico_demandas SET status_em = '2026-06-02' WHERE id = $1", [velha.json.id]);
+  const recente = await adv('POST', '/api/juridico/demandas', { tipo_id: aditivo.id, cliente: 'Condomínio Recente', solicitante_id: ids['outro@teste.com'], status: 'aguardando_retorno' });
+  await ctx.db.q("UPDATE juridico_demandas SET status_em = '2026-11-25' WHERE id = $1", [recente.json.id]);
+  const quarta = new Date('2026-12-02T13:00:00Z'); // dia útil, 10h em Brasília
+  const antes = (await avisosDe('outro@teste.com')).length;
+  const f = await ctx.rotinasJuridico.executar(quarta);
+  assert.ok(f.semanal >= 1);
+  const novos = (await avisosDe('outro@teste.com')).slice(antes);
+  assert.equal(novos.length, 1);
+  assert.equal(novos[0].titulo, '1 pedido ao Jurídico espera por você há 15 dias ou mais');
+  assert.match(novos[0].texto, /Condomínio Parado/);
+  assert.doesNotMatch(novos[0].texto, /Condomínio Recente/); // está aguardando há menos de 15 dias
+  assert.equal(novos[0].link, '#/juridico/pedidos');
+  // no dia seguinte não repete; uma semana depois, sim
+  await ctx.rotinasJuridico.executar(new Date('2026-12-03T13:00:00Z'));
+  assert.equal((await avisosDe('outro@teste.com')).length, antes + 1);
+  await ctx.rotinasJuridico.executar(new Date('2026-12-09T13:00:00Z'));
+  assert.equal((await avisosDe('outro@teste.com')).length, antes + 2);
 });
