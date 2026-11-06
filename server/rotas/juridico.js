@@ -342,6 +342,27 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
     const nomes = [...new Set(doAno.map((d) => d.tipo))].sort((a, b) => (ordem.has(a) ? ordem.get(a) : 999) - (ordem.has(b) ? ordem.get(b) : 999) || a.localeCompare(b));
     const setores = [...new Set(todas.map((d) => d.setor || 'Sem setor'))].sort();
     const solicitadasAno = todas.filter((d) => (d.solicitada_em || '').startsWith(String(ano)));
+    // por pessoa (quem pediu), por quem conduz no Jurídico e por estado: como as colunas da planilha
+    const doAnoOuAberta = (d) => (d.solicitada_em || '').startsWith(String(ano)) || (d.sla && d.entregue_em.startsWith(String(ano))) || !FECHADOS.includes(d.status);
+    const agrupar = (chave) => {
+      const g = new Map();
+      for (const d of todas.filter(doAnoOuAberta)) {
+        const nome = (chave(d) || '').trim();
+        if (!nome) continue;
+        const k = nome.toLowerCase();
+        if (!g.has(k)) g.set(k, { nome, lista: [] });
+        g.get(k).lista.push(d);
+      }
+      return [...g.values()].map(({ nome, lista: l }) => {
+        const setores = [...new Set(l.map((d) => d.setor).filter(Boolean))];
+        return { nome, setor: setores.join(', '), solicitadas: l.filter((d) => (d.solicitada_em || '').startsWith(String(ano))).length,
+          sla: celula(l.filter((d) => d.sla && d.entregue_em.startsWith(String(ano)))),
+          abertas: l.filter((d) => !FECHADOS.includes(d.status)).length, atrasadas: l.filter((d) => d.atrasada).length,
+          // em aberto, separado: o que está com o Jurídico e o que já foi feito e espera retorno ou assinatura
+          no_juridico: l.filter((d) => ['pendente', 'em_andamento'].includes(d.status)).length,
+          esperando: l.filter((d) => ['aguardando_retorno', 'aguardando_assinaturas'].includes(d.status)).length };
+      }).sort((a, b) => b.solicitadas - a.solicitadas || b.abertas - a.abertas || a.nome.localeCompare(b.nome));
+    };
     res.json({
       ano, anos,
       tipos: nomes.map((n) => { const l = doAno.filter((d) => d.tipo === n); return { nome: n, meses: porMes(l), total: celula(l) }; }),
@@ -351,6 +372,9 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
         return { nome: s, solicitadas: l.filter((d) => (d.solicitada_em || '').startsWith(String(ano))).length, sla: celula(l.filter((d) => d.sla && d.entregue_em.startsWith(String(ano)))),
           abertas: l.filter((d) => !FECHADOS.includes(d.status)).length };
       }).filter((s) => s.solicitadas || s.sla.total || s.abertas),
+      pessoas: agrupar((d) => d.solicitante_nome),
+      responsaveis: agrupar((d) => d.responsavel_nome),
+      estados: agrupar((d) => d.uf || 'Sem estado'),
       resumo: { solicitadas: solicitadasAno.length, entregues: doAno.length, dentro: doAno.filter((d) => d.sla === 'dentro').length, pct: celula(doAno).pct,
         abertas: todas.filter((d) => !FECHADOS.includes(d.status)).length, atrasadas: todas.filter((d) => d.atrasada).length,
         perdidos: solicitadasAno.filter((d) => d.status === 'contrato_perdido').length },

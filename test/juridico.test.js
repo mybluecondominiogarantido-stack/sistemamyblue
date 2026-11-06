@@ -242,6 +242,13 @@ test('os pedidos da Solicitação de Contrato entram na lista e nos indicadores,
   const garantia = ind.tipos.find((t) => t.nome === 'Contrato (garantia)');
   assert.deepEqual(garantia.meses[5], { dentro: 1, total: 1, pct: 100 }); // junho: o contrato (no prazo); a importada do Beta foi desfeita
   assert.ok(ind.resumo.entregues >= 2);
+  // por pessoa (quem pediu) e por estado, como as colunas da planilha
+  const pessoa = ind.pessoas.find((x) => x.nome === l[0].solicitante_nome);
+  assert.ok(pessoa && pessoa.solicitadas >= 1 && pessoa.sla.dentro >= 1);
+  assert.match(pessoa.setor, /Comercial/);
+  const rn = ind.estados.find((x) => x.nome === 'RN');
+  assert.ok(rn && rn.sla.total >= 1);
+  assert.ok(Array.isArray(ind.responsaveis));
   assert.equal((await comercial('GET', '/api/juridico/indicadores')).status, 403);
   const x = await adv('GET', '/api/juridico/demandas.xlsx?vis=todas');
   assert.equal(x.status, 200);

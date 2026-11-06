@@ -8192,8 +8192,39 @@
       '<th style="text-align:right">Entregues</th><th style="text-align:center">No SLA</th><th style="text-align:right">Em aberto agora</th></tr></thead><tbody>' +
       (r.setores.map(function (s) {
         return '<tr><td><b>' + esc(s.nome) + '</b></td><td style="text-align:right">' + s.solicitadas + '</td><td style="text-align:right">' + s.sla.total + '</td>' + celula(s.sla) + '<td style="text-align:right">' + s.abertas + '</td></tr>';
-      }).join('') || '<tr><td colspan="5"><span class="sec">Nada no ano.</span></td></tr>') + '</tbody></table></div></section>';
+      }).join('') || '<tr><td colspan="5"><span class="sec">Nada no ano.</span></td></tr>') + '</tbody></table></div></section>' +
+      grupoPessoasDj('Por pessoa — quem pediu', 'Pessoa', 'Cada pessoa que pediu ao Jurídico (como a coluna Solicitante da planilha). Clique no nome para ver os pedidos dela.', r.pessoas, true) +
+      (r.responsaveis.length ? grupoPessoasDj('Por quem conduz no Jurídico', 'Responsável', 'Quem do Jurídico pegou as demandas.', r.responsaveis, false) : '') +
+      grupoPessoasDj('Por estado', 'Estado', 'Pelo estado de cada pedido (coluna Estado da planilha).', r.estados, false);
     $$('#corpoDj [data-ano]').forEach(function (b) { b.onclick = function () { anoDj = Number(b.getAttribute('data-ano')); abaIndicadoresDj(); }; });
+    // nome da pessoa: abre Todos já filtrado pelos pedidos dela no ano
+    $$('#corpoDj [data-pessoa]').forEach(function (b) {
+      b.onclick = function () {
+        filtrosDj.todas = { q: b.getAttribute('data-pessoa'), status: '', tipo: '', setor: '', origem: '', ano: String(r.ano) };
+        location.hash = '#/juridico/painel/todos';
+      };
+    });
+    // uma tabela por pessoa (ou estado), com a barra do % no prazo para ver de longe quem está bem e quem não está
+    function grupoPessoasDj(titulo, rotulo, ajuda, lista, clicavel) {
+      var barra = function (c) {
+        if (!c.total) return '<td><span class="sec">nenhuma concluída no ano</span></td>';
+        var cor = c.pct >= 90 ? 'var(--green)' : c.pct >= 70 ? '#c98a1b' : 'var(--red)';
+        return '<td style="min-width:200px" title="' + c.dentro + ' de ' + c.total + ' concluída(s) no prazo"><div style="display:flex;align-items:center;gap:8px">' +
+          '<div style="flex:1;height:10px;border-radius:5px;background:#e5e7eb;overflow:hidden"><div style="height:100%;width:' + c.pct + '%;background:' + cor + '"></div></div>' +
+          '<b style="color:' + cor + ';min-width:44px;text-align:right;font-variant-numeric:tabular-nums">' + String(c.pct).replace('.', ',') + '%</b></div>' +
+          '<span class="sec">' + c.dentro + ' de ' + c.total + ' no prazo</span></td>';
+      };
+      var num = function (n, alerta) { return '<td style="text-align:right;font-variant-numeric:tabular-nums">' + (n ? (alerta ? '<b style="color:var(--red)">' + n + '</b>' : n) : '<span class="sec">0</span>') + '</td>'; };
+      return '<section class="painel" style="margin-top:16px"><div class="cab-painel"><h2>' + titulo + ' — ' + r.ano + '</h2></div>' +
+        '<div class="corpo" style="padding-top:0"><p class="ajuda" style="margin:0 0 8px">' + ajuda + '</p></div>' +
+        '<div class="tabela-wrap"><table style="min-width:760px"><thead><tr><th>' + rotulo + '</th><th style="text-align:right">Pedidos no ano</th><th>Concluídas no prazo</th>' +
+        '<th style="text-align:right" title="Pendentes ou em andamento">Com o Jurídico</th><th style="text-align:right" title="O Jurídico já fez; espera retorno ou assinatura">Esperando retorno ou assinatura</th>' +
+        '<th style="text-align:right" title="Sem conclusão e com o prazo vencido">Atrasadas</th></tr></thead><tbody>' +
+        (lista.map(function (x) {
+          var nome = clicavel ? '<button data-pessoa="' + esc(x.nome) + '" style="font:inherit;font-weight:700;padding:0;border:0;background:none;cursor:pointer;text-align:left;color:inherit;text-decoration:underline">' + esc(x.nome) + '</button>' : '<b>' + esc(x.nome) + '</b>';
+          return '<tr><td>' + nome + (x.setor && rotulo !== 'Estado' ? '<span class="sec">' + esc(x.setor) + '</span>' : '') + '</td>' + num(x.solicitadas) + barra(x.sla) + num(x.no_juridico) + num(x.esperando) + num(x.atrasadas, true) + '</tr>';
+        }).join('') || '<tr><td colspan="6"><span class="sec">Nada no ano.</span></td></tr>') + '</tbody></table></div></section>';
+    }
   }
 
   /* ---------- Tabela de prazos: o Jurídico edita; o prazo novo vale para as não entregues ---------- */
