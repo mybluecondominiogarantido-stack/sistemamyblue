@@ -367,13 +367,13 @@ module.exports = [
     inicio: 'login',
     async preparar(cen) {
       // pessoa nova, ainda com a senha temporária
-      await cen.admin('POST', '/api/admin/usuarios', { data_nascimento: '1990-05-10', data_admissao: '2024-02-01', nome: 'Nina Torres', email: 'nina@myblue.com.br', senha: 'Bemvinda1', setores: [cen.S('CS')], modulos: ['renegociacoes'] });
+      await cen.admin('POST', '/api/admin/usuarios', { data_nascimento: '1990-05-10', data_admissao: '2024-02-01', nome: 'Nora Torres', email: 'nora@myblue.com.br', senha: 'Bemvinda1', setores: [cen.S('CS')], modulos: ['renegociacoes'] });
     },
     abertura: ['Do primeiro login até achar as suas ferramentas.', ['Criar a sua senha', 'A tela inicial e o menu', 'Abrir uma ferramenta', 'Avisos e a sua conta']],
     async gravar(t, cen) {
       const E = '1 · Primeiro acesso';
       await t.legenda('No primeiro acesso, entre com o e-mail e a <b>senha temporária</b> que você recebeu.', { etapa: E, ms: 1000 });
-      await t.digitar('#email', 'nina@myblue.com.br');
+      await t.digitar('#email', 'nora@myblue.com.br');
       await t.digitar('#senha', 'Bemvinda1', { atraso: 60 });
       await t.clicar('#btEntrar', { depois: 1500 });
       await t.legenda('Agora crie a <b>sua senha</b>: pelo menos 8 caracteres, com letras e números.', { etapa: E, ms: 900 });
