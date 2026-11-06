@@ -531,6 +531,9 @@ th.centro,td.centro{text-align:center}
 .mes-acomp .bs{height:180px;display:flex;align-items:flex-end;gap:2px}
 .mes-acomp .bs i{width:16px;border-radius:4px 4px 0 0;display:block}
 .mes-acomp .m{font-size:12px;font-weight:800;color:var(--muted)}
+.mes-acomp.alvo-ct{cursor:pointer;border-radius:10px;padding:4px 0}
+.mes-acomp.alvo-ct:hover,.mes-acomp.sel{background:#eaf7f9}
+.mes-acomp.sel .m{color:var(--teal-d)}
 .mes-acomp .v{font-size:11.5px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
 .num-acomp{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:14px 16px}
 .num-acomp div{display:flex;flex-direction:column;gap:2px}
@@ -600,11 +603,11 @@ tr.sel-ct td{background:var(--surface-2)}
 .dif-ct.mais{color:var(--green)}
 .dif-ct.menos{color:var(--red)}
 .sit-ct{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px}
-.sit-ct .c{border:1px solid var(--border);border-radius:12px;padding:11px 13px;background:var(--surface-2)}
+.sit-ct .c{border:1px solid var(--border);border-radius:12px;padding:11px 13px;background:var(--surface)}
 .sit-ct .c .k{font-size:11.5px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
 .sit-ct .c .v{font-family:var(--display);font-weight:700;font-size:20px;margin-top:4px}
 .sit-ct .c .s{font-size:12px;color:var(--muted);font-weight:700}
-.sit-ct .c.alerta{background:var(--red-bg);border-color:#f0c8c4}
+.sit-ct .c.alerta{background:var(--surface)}
 .sit-ct .c.alerta .v{color:var(--red)}
 .sit-ct.tempos-ct{margin:14px 0 0;padding-top:14px;border-top:1px dashed var(--border-2)}
 .sit-ct.tempos-ct .c{background:var(--surface)}
@@ -645,7 +648,9 @@ tr.sel-ct td{background:var(--surface-2)}
 @media (max-width:760px){.ficha-dados{grid-template-columns:1fr}.ficha-dados>div{grid-template-columns:1fr;gap:2px}}
 /* Acompanhamento: cabeçalho, filtros lembrados, abas com ícones e contadores, cartões clicáveis */
 .cab-acomp{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:16px}
-.tit-acomp{border-left:3px solid var(--border-2);padding-left:16px}
+/* título ocupa o espaço livre: os botões ficam juntos à direita e só descem de linha em tela estreita */
+.tit-acomp{flex:1 1 420px;min-width:0}
+.cab-acomp>.espaco{display:none}
 .tit-acomp h1{margin:0 0 4px}
 .aviso-acomp{margin-bottom:16px;font-weight:600;line-height:1.5}
 .filtros-acomp{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:12px}
