@@ -12,7 +12,7 @@ Demandas Jurídicas:
 | Menu | Endereço | Quem vê | Abas |
 |---|---|---|---|
 | **Solicitações ao Jurídico** | `#/juridico/pedidos` | todo mundo | **Meus pedidos** (contratos, parcerias e demandas, com o que espera por você) e o botão **Novo pedido** (contrato de garantia, contrato de parceria ou outra atividade) |
-| **Painel do Jurídico** | `#/juridico/painel/<aba>` | Jurídico, diretoria e setor Parceiros | **Fila**, **Comigo**, **Assinaturas** (contratos · parcerias), **Todos**, **Diretoria** (contratos · parcerias), **Cadastro de parceiros**, **Indicadores** (prazos e SLA · contratos), **Configurar** (Tabela de prazos · Importar planilha) |
+| **Painel do Jurídico** | `#/juridico/painel/<aba>` | Jurídico, diretoria e setor Parceiros | **Para fazer**, **Assinaturas** (contratos · parcerias), **Todos**, **Diretoria** (contratos · parcerias), **Cadastro de parceiros**, **Indicadores** (prazos e SLA · contratos). A Tabela de prazos e a importação ficam em **Configurações → Jurídico** (`#/config/juridico/prazos`, `/importar`), para a administração e a coordenação/supervisão do Jurídico |
 
 O contrato e a parceria continuam abrindo na tela deles (`#/contratos/<id>`, `#/parcerias/<id>`); a demanda abre em
 `#/juridico/demanda/<id>`. Os endereços antigos (`#/contratos/fila`, `#/acompanhamento-contratos/…`,
@@ -193,9 +193,11 @@ entregues; as entregues guardam o SLA que tiveram.
 **Canal** (`canal`, só no banco): `portal` para o que é pedido no portal e `planilha` para o que foi importado (a API
 ainda aceita e-mail, WhatsApp, telefone e reunião, mas a tela não pergunta).
 
-**Fila e Comigo.** *Fila*: contratos e parcerias na fila e demandas em aberto sem responsável (pendentes ou sem entrega);
-na demanda, **Pegar** passa para quem clicou, em andamento. *Comigo*: tudo o que está em aberto com a pessoa. Nas duas,
-primeiro as atrasadas, depois as que vencem hoje, as sem entrega e as que esperam retorno ou assinatura.
+**Para fazer** (`vis=fazer`): numa lista só, em cima *Ninguém pegou ainda* (contratos e parcerias na fila e demandas em
+aberto sem responsável, pendentes ou sem entrega; na demanda, **Pegar** passa para quem clicou, em andamento) e embaixo
+*Com você* (tudo o que está em aberto com a pessoa). Nas duas partes, primeiro as atrasadas, depois as que vencem hoje,
+as sem entrega e as que esperam retorno ou assinatura. As visões `fila` e `comigo` continuam na API; os endereços antigos
+`#/juridico/painel/fila` e `/comigo` abrem Para fazer, e `/configurar` leva a Configurações → Jurídico.
 
 **Meus pedidos** (`vis=minhas`): as demandas que a pessoa pediu ou lançou, os contratos e as parcerias dela, inclusive os
 rascunhos. "Com você" marca o que espera por ela: demanda aguardando retorno; contrato ou parceria em rascunho, com
@@ -218,7 +220,7 @@ do que espera por ela há **15 dias ou mais**: demandas que ela pediu em *Aguard
 com a minuta ou em assinatura (desde o último evento). Sai no sino e por e-mail, com o link para Meus pedidos. Quem não
 tem acesso ao portal (só o nome, vindo da planilha) não recebe.
 
-**Importar a planilha.** Aba *Importar planilha* (administração e coordenação/supervisão do Jurídico). O portal acha a
+**Importar a planilha.** *Configurações → Jurídico → Importar planilha* (administração e coordenação/supervisão do Jurídico). O portal acha a
 linha de títulos, cria os tipos da Tabela de Prazos (os que já existem no portal ficam como estão), liga o solicitante à
 pessoa do portal pelo nome (sem cadastro, fica o nome), e mostra a prévia antes de gravar. Prazo, entrega e status vêm da
 planilha ("Atrasado" vira automático); os números (#) da planilha são mantidos quando estão livres. O que já venceu

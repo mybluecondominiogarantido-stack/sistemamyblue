@@ -126,7 +126,7 @@ const TUTORIAIS = [
   { slug: 'juridico-demandas-pedir', grupo: 'Ferramentas', publico: 'todos', titulo: 'Solicitações ao Jurídico — fazer um pedido e acompanhar',
     descricao: 'Meus pedidos (contratos, parcerias e as demais atividades) e o que espera por você, Novo pedido (contrato de garantia, contrato de parceria ou outra atividade), o prazo de entrega, responder ao Jurídico pelo comentário e o aviso semanal do que está parado com você.' },
   { slug: 'juridico-demandas-conduzir', grupo: 'Ferramentas', publico: 'juridico', titulo: 'Painel do Jurídico — fila, situação, prazos e indicadores',
-    descricao: 'Fila e Pegar, Comigo com as atrasadas primeiro, situação e entrega (SLA), Todos com os filtros e a planilha, Indicadores e a Tabela de prazos.' },
+    descricao: 'Para fazer (o que ninguém pegou, com Pegar, e o que está com você, as atrasadas primeiro), situação e data de conclusão (SLA), Todos com os filtros e a planilha, Indicadores e onde fica a Tabela de prazos.' },
   { slug: 'gestao-usuarios', grupo: 'Gestão do setor', publico: 'gestor', titulo: 'Usuários do setor',
     descricao: 'Criar o acesso de alguém do setor, liberar ferramentas e redefinir a senha.' },
   { slug: 'gestao-ferramentas', grupo: 'Gestão do setor', publico: 'gestor', titulo: 'Ferramentas do setor',

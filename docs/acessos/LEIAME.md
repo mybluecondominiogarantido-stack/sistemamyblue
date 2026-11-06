@@ -199,7 +199,7 @@ Telas próprias do portal (menu **Jurídico → Solicitações ao Jurídico** e 
 | Quem | Como entra | Pode |
 |---|---|---|
 | **Quem pede** | qualquer pessoa do portal | em *Solicitações ao Jurídico*: abrir uma demanda em nome próprio (com a data de hoje), ver as suas em *Meus pedidos* (com os contratos e as parcerias que pediu), comentar e excluir enquanto está pendente; recebe o aviso semanal do que espera por ela há 15 dias ou mais |
-| **Jurídico** | setor **Jurídico** (*Configurações → Pessoas* ou *Setores e equipes*) ou a permissão *Elaborar as minutas de contrato* | no *Painel do Jurídico*: Fila (e Pegar), Comigo, Todos, Indicadores e Configurar; mudar situação, data de conclusão, responsável e os dados (inclusive quem pediu e a data da solicitação); editar a Tabela de prazos; excluir. Assinaturas aparece para quem elabora os contratos |
+| **Jurídico** | setor **Jurídico** (*Configurações → Pessoas* ou *Setores e equipes*) ou a permissão *Elaborar as minutas de contrato* | no *Painel do Jurídico*: Para fazer (e Pegar), Todos e Indicadores; mudar situação, data de conclusão, responsável e os dados (inclusive quem pediu e a data da solicitação); excluir. Assinaturas aparece para quem elabora os contratos. A Tabela de prazos e a importação ficam em *Configurações → Jurídico*, para a coordenação/supervisão do Jurídico e a administração |
 | **Diretoria** | permissão *Chancelar análises de crédito* | no *Painel do Jurídico*: Todos, Indicadores e Diretoria (só consulta nas demandas) |
 | **Setor Parceiros** | quem é do setor Parceiros | no *Painel do Jurídico*: Cadastro de parceiros |
 | **Importar a planilha** | administração e coordenação/supervisão do setor Jurídico | importar e desfazer a importação |

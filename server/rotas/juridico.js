@@ -260,7 +260,7 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
   /* ===================== perfil, contadores e listas do formulário ===================== */
   r.get('/api/juridico/resumo', async (req, res) => {
     const p = await perfil(req.usuario);
-    const out = { acesso: true, juridico: p.juridico, ve_tudo: p.ve_tudo };
+    const out = { acesso: true, juridico: p.juridico, ve_tudo: p.ve_tudo, gerencia: p.gerencia };
     const hoje = diaBrasilia();
     if (p.juridico) {
       Object.assign(out, await db.um(`SELECT COUNT(*) FILTER (WHERE status = 'pendente')::int AS pendentes,
@@ -291,11 +291,13 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
   /* ===================== listagem ===================== */
   r.get('/api/juridico/demandas', async (req, res) => {
     const p = await perfil(req.usuario);
-    const vis = ['todas', 'fila', 'comigo'].includes(req.query.vis) ? req.query.vis : 'minhas';
+    const vis = ['todas', 'fila', 'comigo', 'fazer'].includes(req.query.vis) ? req.query.vis : 'minhas';
     if (vis === 'todas' && !p.ve_tudo) return erro(res, 403, 'A lista completa é do Jurídico e da diretoria.');
-    if (['fila', 'comigo'].includes(vis) && !p.juridico) return erro(res, 403, 'A fila é do Jurídico.');
+    if (['fila', 'comigo', 'fazer'].includes(vis) && !p.juridico) return erro(res, 403, 'A fila é do Jurídico.');
     const base = await demandas(p, req.usuario, vis === 'minhas' ? 'minhas' : 'todas');
-    const todas = ['fila', 'comigo'].includes(vis) ? daVez(base, vis, req.usuario) : base;
+    // Para fazer: primeiro o que ninguém pegou (grupo "fila"), depois o que está com a pessoa (grupo "comigo")
+    const todas = vis === 'fazer' ? [...daVez(base, 'fila', req.usuario).map((d) => ({ ...d, grupo: 'fila' })), ...daVez(base, 'comigo', req.usuario).map((d) => ({ ...d, grupo: 'comigo' }))]
+      : ['fila', 'comigo'].includes(vis) ? daVez(base, vis, req.usuario) : base;
     const mes = diaBrasilia().slice(0, 7);
     const conta = (f) => todas.filter(f).length;
     const entreguesMes = todas.filter((d) => (d.entregue_em || '').startsWith(mes));

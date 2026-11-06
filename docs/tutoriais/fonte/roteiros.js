@@ -863,9 +863,9 @@ module.exports = [
       await t.clicar('#mOk', { depois: 3000 });
       await t.clicar('.fundo-modal [data-fechar]', { depois: 1000 });
 
-      await cartaoJor(t, 'Enquanto isso · Executivo', 'Pede o contrato com as condições negociadas', { email: 'lara@myblue.com.br', rota: '#/juridico/painel/fila', antes: () => P.pedirContrato() });
+      await cartaoJor(t, 'Enquanto isso · Executivo', 'Pede o contrato com as condições negociadas', { email: 'lara@myblue.com.br', rota: '#/juridico/painel/fazer', antes: () => P.pedirContrato() });
       const B = '2 · Advogada';
-      await t.legenda('O pedido chega na <b>Fila</b> do <b>Painel do Jurídico</b>, com o prazo de 72h úteis para a minuta.', { etapa: B, ms: 300 });
+      await t.legenda('O pedido chega em <b>Para fazer</b>, no <b>Painel do Jurídico</b>, com o prazo de 72h úteis para a minuta.', { etapa: B, ms: 300 });
       await t.clicar(`#tbDj tr[data-id="ct-${j.contrato}"]`, { depois: 1800 });
       await t.legenda('<b>Assumir</b>. As objeções e solicitações do síndico vêm com a resposta padrão do Jurídico.', { etapa: B, ms: 300 });
       await t.clicar('#btAssumirCt', { depois: 2000 });
@@ -1373,7 +1373,7 @@ module.exports = [
   {
     nome: 'contrato-elaborar',
     entrar: 'lara@myblue.com.br',
-    inicio: '#/juridico/painel/fila',
+    inicio: '#/juridico/painel/fazer',
     async preparar(cen, base) {
       cen.ctFila = await contratoTut(base, 'Residencial Vila das Palmeiras');
       cen.ctAssinado = await contratoTut(base, 'Edifício Mirante do Sol', { ate: 'assinado' });
@@ -1381,8 +1381,8 @@ module.exports = [
     },
     abertura: ['Da fila do Jurídico ao contrato assinado, com as condições fechadas.', ['Assumir da fila', 'Pedidos com a resposta padrão', 'Minuta, ajustes e assinatura', 'Registrar as condições fechadas', 'Indicadores dos contratos']],
     async gravar(t, cen) {
-      const A = '1 · Fila';
-      await t.legenda('Quando o comercial envia, quem elabora recebe o aviso no sino e por e-mail. A <b>Fila</b> do <b>Painel do Jurídico</b> mostra o prazo de cada minuta.', { etapa: A, ms: 600 });
+      const A = '1 · Para fazer';
+      await t.legenda('Quando o comercial envia, quem elabora recebe o aviso no sino e por e-mail. Em <b>Para fazer</b>, no <b>Painel do Jurídico</b>, aparece o prazo de cada minuta.', { etapa: A, ms: 600 });
       await t.mostrar('#tbDj', 2600);
       await t.clicar(`#tbDj tr[data-id="ct-${cen.ctFila}"]`, { depois: 1800 });
       await t.legenda('Clique em <b>Assumir</b>. Dá para passar para um colega a qualquer momento.', { etapa: A, ms: 400 });
@@ -1487,7 +1487,7 @@ module.exports = [
   {
     nome: 'parceria-elaborar',
     entrar: 'lara@myblue.com.br',
-    inicio: '#/juridico/painel/fila',
+    inicio: '#/juridico/painel/fazer',
     async preparar(cen, base) {
       cen.cpFila = await parceriaTut(base, 'Imobiliária Exemplo Ltda', '22.444.888/0001-94');
       cen.cpParaAssinar = await parceriaTut(base, 'Administradora Modelo Ltda', '33.555.999/0001-94', { ate: 'para_assinar' });
@@ -1495,8 +1495,8 @@ module.exports = [
     },
     abertura: ['Do pedido de parceria ao contrato assinado, com as comissões registradas.', ['Assumir da fila', 'Minuta e ajustes', 'Assinatura', 'Registrar as comissões e a vigência']],
     async gravar(t, cen) {
-      const A = '1 · Fila';
-      await t.legenda('O pedido de parceria chega na <b>Fila</b> do <b>Painel do Jurídico</b>, junto com os contratos e as demandas, com o prazo de 72h úteis.', { etapa: A, ms: 600 });
+      const A = '1 · Para fazer';
+      await t.legenda('O pedido de parceria chega em <b>Para fazer</b>, no <b>Painel do Jurídico</b>, junto com os contratos e as demandas, com o prazo de 72h úteis.', { etapa: A, ms: 600 });
       await t.mostrar('#tbDj', 2400);
       await t.clicar(`#tbDj tr[data-id="cp-${cen.cpFila}"]`, { depois: 1800 });
       await t.legenda('Clique em <b>Assumir</b>. Dá para passar para um colega a qualquer momento.', { etapa: A, ms: 300 });
@@ -1604,25 +1604,24 @@ module.exports = [
   {
     nome: 'juridico-demandas-conduzir',
     entrar: 'lara@myblue.com.br',
-    inicio: '#/juridico/painel/fila',
+    inicio: '#/juridico/painel/fazer',
     async preparar(cen, base) {
       cen.dj = await demandasTut(base);
       cen.ctFila = await contratoTut(base, 'Residencial Vila das Palmeiras');
       cen.ctMinuta = await contratoTut(base, 'Edifício Mirante do Sol', { ate: 'minuta' });
     },
-    abertura: ['Tudo o que chega ao Jurídico, num painel só.', ['Fila e Pegar', 'Comigo: situação e conclusão (SLA)', 'Todos e Indicadores', 'Tabela de prazos']],
+    abertura: ['Tudo o que chega ao Jurídico, num painel só.', ['Para fazer: Pegar e o que está com você', 'Situação e conclusão (SLA)', 'Todos e Indicadores', 'Tabela de prazos']],
     async gravar(t, cen) {
-      const A = '1 · Fila';
-      await t.legenda('O <b>Painel do Jurídico</b> abre na <b>Fila</b>: contratos, parcerias e demandas que chegaram e ninguém pegou, com o prazo de cada um.', { etapa: A, ms: 600 });
+      const A = '1 · Para fazer';
+      await t.legenda('O <b>Painel do Jurídico</b> abre em <b>Para fazer</b>: em cima, o que chegou e ninguém pegou ainda; embaixo, o que está com você. As atrasadas vêm primeiro.', { etapa: A, ms: 600 });
       await t.mostrar('#tbDj', 2800);
-      await t.legenda('Contrato abre a tela dele, com <b>Assumir</b>. Demanda: clique em <b>Pegar</b> e ela passa para você.', { etapa: A, ms: 300 });
+      await t.legenda('Contrato abre a tela dele, com <b>Assumir</b>. Demanda: clique em <b>Pegar</b> e ela desce para a parte <b>Com você</b>.', { etapa: A, ms: 300 });
       await t.clicar(`[data-pegar="${cen.dj.semDono}"]`, { depois: 1800 });
 
-      const C = '2 · Comigo';
-      await t.legenda('Em <b>Comigo</b>, o que está com você: primeiro as atrasadas e as que vencem hoje.', { etapa: C, ms: 300 });
-      await t.clicar('nav.abas a[href="#/juridico/painel/comigo"]', { depois: 1800 });
+      const C = '2 · Situação e conclusão';
+      await t.legenda('Abra uma das que estão com você e mude a <b>situação</b>: quem pediu recebe o aviso.', { etapa: C, ms: 300 });
       await t.clicar(`#tbDj tr[data-id="${cen.dj.atrasada}"]`, { depois: 1600 });
-      await t.legenda('Mude a <b>situação</b>: quem pediu recebe o aviso. Em <b>Aguardando assinaturas</b> ou <b>Concluído</b>, a <b>data de conclusão</b> vem com hoje (dá para corrigir). É ela que conta no SLA.', { etapa: C, ms: 300 });
+      await t.legenda('Em <b>Aguardando assinaturas</b> ou <b>Concluído</b>, a <b>data de conclusão</b> vem com hoje (dá para corrigir). É ela que conta no SLA.', { etapa: C, ms: 300 });
       await t.escolher('#djStatus', 'Aguardando assinaturas', { depois: 900 });
       await t.mostrar('#djEntrega', 1800);
       await t.clicar('#djSalvar', { depois: 2000 });
@@ -1636,17 +1635,13 @@ module.exports = [
       await t.legenda('<b>Baixar planilha</b> leva a lista, com os filtros, para o Excel.', { etapa: D, ms: 2400 });
 
       const E = '4 · Indicadores';
-      await t.legenda('Em <b>Indicadores</b>, o % entregue no prazo por atividade e por mês (como o Resumo SLA da planilha) e, ao lado, os números dos contratos.', { etapa: E, ms: 300 });
+      await t.legenda('Em <b>Indicadores</b>, o % concluído no prazo por atividade e por mês (como o Resumo SLA da planilha) e, ao lado, os números dos contratos.', { etapa: E, ms: 300 });
       await t.clicar('nav.abas a[href="#/juridico/painel/indicadores"]', { depois: 1800 });
       await t.mostrar('#corpoDj section.painel table', 3400);
-
-      const F = '5 · Configurar';
-      await t.legenda('Em <b>Configurar</b>, a <b>Tabela de prazos</b>: as horas de cada atividade. As não entregues são recalculadas; as entregues guardam o SLA que tiveram.', { etapa: F, ms: 300 });
-      await t.clicar('nav.abas a[href="#/juridico/painel/configurar"]', { depois: 1800 });
-      await t.mostrar('#corpoDj table', 2800);
-      await t.legenda('Avisos: no dia do prazo e quando ele passa, para quem é responsável; e, uma vez por semana, a quem pediu, o que está esperando por ele há 15 dias ou mais.', { etapa: F, ms: 3800 });
+      await t.legenda('A <b>Tabela de prazos</b> (as horas de cada atividade) fica em <b>Configurações → Jurídico</b>, com a coordenação do Jurídico e a administração.', { etapa: E, ms: 3400 });
+      await t.legenda('Avisos: no dia do prazo e quando ele passa, para quem é responsável; e, uma vez por semana, a quem pediu, o que está esperando por ele há 15 dias ou mais.', { etapa: E, ms: 3800 });
     },
-    resumo: ['<b>Fila</b> · Pegar · <b>Comigo</b>', 'Situação e data de conclusão (SLA)', '<b>Todos</b> · <b>Indicadores</b> · <b>Configurar</b>'],
+    resumo: ['<b>Para fazer</b> · Pegar · Com você', 'Situação e data de conclusão (SLA)', '<b>Todos</b> · <b>Indicadores</b> · prazos em Configurações → Jurídico'],
   },
 
   /* ======================= Gestão do setor ======================= */

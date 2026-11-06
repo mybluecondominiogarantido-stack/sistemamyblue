@@ -327,13 +327,13 @@
   var rotaAnterior = null;
   var ANTIGAS_ADMIN = { usuarios: 'pessoas', equipes: 'setores', modulos: 'ferramentas', auditoria: 'historico', tutoriais: 'ferramentas/tutoriais' };
   var ANTIGAS_JUR = {
-    contratos: { '': '', minhas: 'pedidos', fila: 'painel/fila', diretoria: 'painel/diretoria/contratos', assinaturas: 'painel/assinaturas/contratos', controle: 'painel/todos',
+    contratos: { '': '', minhas: 'pedidos', fila: 'painel/fazer', diretoria: 'painel/diretoria/contratos', assinaturas: 'painel/assinaturas/contratos', controle: 'painel/todos',
       painel: 'painel/indicadores/contratos' },
-    parcerias: { '': '', minhas: 'pedidos', fila: 'painel/fila', assinaturas: 'painel/assinaturas/parcerias', diretoria: 'painel/diretoria/parcerias', parceiros: 'painel/parceiros',
+    parcerias: { '': '', minhas: 'pedidos', fila: 'painel/fazer', assinaturas: 'painel/assinaturas/parcerias', diretoria: 'painel/diretoria/parcerias', parceiros: 'painel/parceiros',
       todas: 'painel/todos' },
     'acompanhamento-contratos': { '': 'painel/assinaturas/contratos', assinaturas: 'painel/assinaturas/contratos', controle: 'painel/todos' },
     'dashboard-juridico': { '': 'painel/indicadores/contratos' },
-    'demandas-juridicas': { '': '', minhas: 'pedidos', todas: 'painel/todos', indicadores: 'painel/indicadores/prazos', prazos: 'painel/configurar/prazos', importar: 'painel/configurar/importar' },
+    'demandas-juridicas': { '': '', minhas: 'pedidos', todas: 'painel/todos', indicadores: 'painel/indicadores/prazos', prazos: '#/config/juridico/prazos', importar: '#/config/juridico/importar' },
   };
   function rotear() {
     var h = location.hash || '#/';
@@ -368,7 +368,8 @@
     // endereços antigos do Jurídico (avisos, e-mails e favoritos): levam à aba equivalente
     if (ANTIGAS_JUR[partes[0]]) {
       if (partes[0] === 'contratos' && partes[1] === 'equipe' && podeConfigurar()) { location.replace('#/config/acessos/contratos'); return; } // Quem elabora fica em Acessos
-      location.replace('#/juridico/' + (ANTIGAS_JUR[partes[0]][partes[1] || ''] || ANTIGAS_JUR[partes[0]]['']));
+      var destino = ANTIGAS_JUR[partes[0]][partes[1] || ''] || ANTIGAS_JUR[partes[0]][''];
+      location.replace(destino.charAt(0) === '#' ? destino : '#/juridico/' + destino);
       return;
     }
     if (partes[0] === 'premiacoes') return paginaComissoes(partes[1]);
@@ -735,8 +736,12 @@
   // [chave, nome, ícone, só administração, o que tem]
   var SECOES_CONFIG = [['pessoas', 'Pessoas', 'usuarios', false, 'Cadastro, perfil e setor'], ['setores', 'Setores e equipes', 'pessoas', false, 'Líderes e tipos de demanda'],
     ['acessos', 'Acessos', 'cadeado', false, 'Quem pode fazer o quê'], ['ferramentas', 'Ferramentas', 'camadas', false, 'HTML, versões e tutoriais'], ['nomes', 'Nomes e abas', 'lapis', false, 'Menu e abas das ferramentas'],
+    ['juridico', 'Jurídico', 'documento', false, 'Prazos das atividades e importação'],
     ['sistema', 'Sistema', 'banco', true, 'Backup, envios e e-mail'], ['historico', 'Histórico', 'historico', true, 'Quem mudou o quê']];
-  function secoesConfig() { return SECOES_CONFIG.filter(function (s) { return !s[3] || eu.papel === 'admin'; }); }
+  // a seção Jurídico é da administração e da coordenação/supervisão do Jurídico
+  function secoesConfig() {
+    return SECOES_CONFIG.filter(function (s) { return (!s[3] || eu.papel === 'admin') && (s[0] !== 'juridico' || eu.papel === 'admin' || !!(resumoDj && resumoDj.gerencia)); });
+  }
   // menu das seções, na coluna da esquerda da página (no celular vira uma faixa no topo)
   function abasConfig(atual) {
     return '<nav class="cfg-nav" aria-label="Seções de Configurações"><h2>Configurações</h2>' + secoesConfig().map(function (s) {
@@ -771,6 +776,7 @@
     if (secao === 'acessos') return paginaAcessos(sub, id);
     if (secao === 'ferramentas') return sub === 'tutoriais' && eu.papel === 'admin' ? paginaAdminTutoriais() : paginaModulos();
     if (secao === 'nomes') return paginaNomes(sub, id);
+    if (secao === 'juridico') return paginaConfigJuridico(sub);
     if (secao === 'sistema') return paginaSistema();
     if (secao === 'historico') return paginaAuditoria();
   }
@@ -7678,7 +7684,7 @@
   var resumoDj = null;
   // filtros de cada lista (o Jurídico abre nas em aberto; quem pediu vê todas as suas)
   var filtrosDj = { minhas: { q: '', status: '', tipo: '', ano: '' }, fila: { q: '' }, comigo: { q: '' },
-    todas: { q: '', status: 'abertas', tipo: '', setor: '', origem: '', ano: '' } };
+    fazer: { q: '' }, todas: { q: '', status: 'abertas', tipo: '', setor: '', origem: '', ano: '' } };
   var FECHADA_DJ = ['concluido', 'contrato_perdido'];
   var STATUS_DJ = {
     pendente: ['Pendente', 'cinza'], em_andamento: ['Em andamento', 'azul'], aguardando_retorno: ['Aguardando retorno', 'ambar'],
@@ -7730,16 +7736,17 @@
   // Tudo o que se pede ao Jurídico num lugar só: contrato de garantia (Solicitação de Contrato), contrato de parceria
   // (Solicitação de Contrato Parceria) e as demais atividades (Demandas Jurídicas, inclusive o que chega por e-mail).
   // Quem pede usa "Solicitações ao Jurídico"; o Jurídico, a diretoria e o setor Parceiros, o "Painel do Jurídico".
-  var ABAS_PJ = [['fila', 'Fila'], ['comigo', 'Comigo'], ['assinaturas', 'Assinaturas'], ['todos', 'Todos'], ['diretoria', 'Diretoria'],
-    ['parceiros', 'Cadastro de parceiros'], ['indicadores', 'Indicadores'], ['configurar', 'Configurar']];
+  // a Tabela de prazos e a importação da planilha ficam em Configurações → Jurídico
+  var ABAS_PJ = [['fazer', 'Para fazer'], ['assinaturas', 'Assinaturas'], ['todos', 'Todos'], ['diretoria', 'Diretoria'],
+    ['parceiros', 'Cadastro de parceiros'], ['indicadores', 'Indicadores']];
   async function metasJuridico() {
     var r = await Promise.all([carregarMetaDj(true), carregarMetaCt(true).catch(function () { return null; }), carregarMetaCp(true).catch(function () { return null; })]);
     return { dj: r[0], ct: r[1], cp: r[2] };
   }
   function abasPainelJ(M) {
     var dj = M.dj.perfil, ct = M.ct ? M.ct.perfil : {}, cp = M.cp ? M.cp.perfil : {};
-    var pode = { fila: dj.juridico, comigo: dj.juridico, assinaturas: ct.elaborador || cp.elaborador, todos: dj.ve_tudo, diretoria: ct.diretoria || cp.diretoria,
-      parceiros: cp.parceiros, indicadores: dj.ve_tudo, configurar: dj.juridico || dj.gerencia };
+    var pode = { fazer: dj.juridico, assinaturas: ct.elaborador || cp.elaborador, todos: dj.ve_tudo, diretoria: ct.diretoria || cp.diretoria,
+      parceiros: cp.parceiros, indicadores: dj.ve_tudo };
     return ABAS_PJ.filter(function (a) { return pode[a[0]]; });
   }
   // sub-abas (ex.: Assinaturas → Contratos | Parcerias): [id, rótulo, pode]
@@ -7755,6 +7762,12 @@
   async function paginaJuridico(secao, aba, sub, abrirId) {
     var M;
     try { M = await metasJuridico(); } catch (e) { $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">' + esc(e.message) + '</div></div>'; return; }
+    // abas antigas: Fila e Comigo viraram "Para fazer"; Configurar foi para Configurações → Jurídico
+    if (aba === 'fila' || aba === 'comigo') aba = 'fazer';
+    if (aba === 'configurar') {
+      if (podeConfigurar() && secoesConfig().some(function (s) { return s[0] === 'juridico'; })) { location.replace('#/config/juridico/' + (sub || 'prazos')); return; }
+      aba = 'fazer';
+    }
     var abas = abasPainelJ(M);
     if (secao !== 'pedidos' && secao !== 'painel') secao = abas.length ? 'painel' : 'pedidos';
     if (secao === 'painel' && !abas.length) secao = 'pedidos';
@@ -7763,7 +7776,7 @@
     var titulo = painel ? 'Painel do Jurídico' : 'Solicitações ao Jurídico';
     var nomeAba = painel ? abas.find(function (a) { return a[0] === aba; })[1] : 'Meus pedidos';
     definirBarra('<span class="setor">Jurídico</span><span class="sep">/</span><span class="nome">' + titulo + ' · ' + esc(nomeAba) + '</span>');
-    var lista = !painel || ['fila', 'comigo', 'todos'].indexOf(aba) >= 0;
+    var lista = !painel || ['fazer', 'todos'].indexOf(aba) >= 0;
     $('#conteudo').innerHTML = '<div class="pagina"><div class="linha" style="align-items:flex-end;margin-bottom:6px"><div style="flex:1 1 420px"><h1>' + titulo + '</h1>' +
       '<p class="sub" style="margin:0">' + (painel ? 'Tudo o que chega ao Jurídico num lugar só: contratos de garantia, contratos de parceria e as demais atividades. Cada atividade tem o seu prazo em horas úteis (8h = 1 dia útil).'
         : 'Contrato de garantia, contrato de parceria, aditivo, rescisão, análise de contrato, parecer: peça aqui e acompanhe o prazo e a situação de cada pedido.') + '</p></div>' +
@@ -7794,9 +7807,22 @@
       corpo.innerHTML = s.html + '<div id="corpoDj"></div>';
       return abaIndicadoresDj();
     }
-    s = subAbasJ(aba, sub, [['prazos', 'Tabela de prazos', true], ['importar', 'Importar planilha', M.dj.perfil.gerencia]]);
-    corpo.innerHTML = s.html + '<div id="corpoDj"></div>';
-    return s.sub === 'importar' ? abaImportarDj() : abaPrazosDj(M.dj);
+  }
+
+  /* Configurações → Jurídico: a Tabela de prazos e a importação da planilha (administração e coordenação do Jurídico) */
+  async function paginaConfigJuridico(sub) {
+    barraConfig('Jurídico');
+    var m;
+    try { m = await carregarMetaDj(true); } catch (e) { $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">' + esc(e.message) + '</div></div>'; return; }
+    if (!naConfig('juridico')) return; // a pessoa já foi para outra tela
+    var abas = [['prazos', 'Tabela de prazos']].concat(m.perfil.gerencia ? [['importar', 'Importar planilha']] : []);
+    if (!abas.some(function (a) { return a[0] === sub; })) sub = 'prazos';
+    $('#conteudo').innerHTML = '<div class="pagina pagina-config">' + abasConfig('juridico') +
+      cabConfig('Jurídico', 'As atividades que se pedem ao Jurídico e o prazo de cada uma (é ele que calcula o prazo de todo pedido novo), e a importação da planilha antiga.') +
+      '<nav class="sub-abas" aria-label="Jurídico">' + abas.map(function (a) {
+        return '<a href="#/config/juridico/' + a[0] + '" class="' + (a[0] === sub ? 'on' : '') + '"' + (a[0] === sub ? ' aria-current="page"' : '') + '>' + a[1] + '</a>';
+      }).join('') + '</nav><div id="corpoDj"></div></div>';
+    return sub === 'importar' ? abaImportarDj() : abaPrazosDj(m);
   }
 
   /* Novo pedido: contrato de garantia (a partir da análise), contrato de parceria ou outra atividade jurídica */
@@ -7869,7 +7895,7 @@
       .map(function (k) { return '&' + k + '=' + encodeURIComponent(f[k]); }).join('');
   }
 
-  /* ---------- lista: Meus pedidos, Fila, Comigo e Todos (demandas, contratos e parcerias juntos) ---------- */
+  /* ---------- lista: Meus pedidos, Para fazer e Todos (demandas, contratos e parcerias juntos) ---------- */
   async function abaListaDj(m, vis, recarregar) {
     var f = filtrosDj[vis];
     var todas = vis === 'todas', minhas = vis === 'minhas';
@@ -7877,6 +7903,7 @@
     var AJUDA = {
       fila: 'O que chegou e ninguém pegou: contratos e parcerias na fila e demandas sem responsável. As atrasadas e as que vencem hoje vêm primeiro.',
       comigo: 'O que está com você, em aberto. Primeiro as atrasadas, as que vencem hoje e as que ainda não foram entregues; depois as que esperam retorno ou assinatura.',
+      fazer: 'Em cima, o que chegou e ninguém pegou ainda (na demanda, clique em Pegar; o contrato abre com Assumir). Embaixo, o que está com você. As atrasadas e as que vencem hoje vêm primeiro.',
     };
     $('#corpoDj').innerHTML = (todas ? '<div id="tilesDj" class="tiles" style="margin-bottom:16px;grid-template-columns:repeat(auto-fill,minmax(140px,1fr))"></div>' : '') +
       (AJUDA[vis] ? '<p class="ajuda" style="margin:0 0 12px">' + AJUDA[vis] + '</p>' : '') + '<div id="esperaDj"></div>' +
@@ -7887,7 +7914,7 @@
         opcoes([['', 'Todas as origens'], ['demanda', 'Demandas'], ['contrato', 'Solicitação de Contrato'], ['parceria', 'Solicitação de Contrato Parceria']], f.origem) + '</select>' +
         '' : '') +
       (todas || minhas ? '<select class="campo" id="fAnoDj" style="width:auto" aria-label="Ano da solicitação"></select>' : '') + '</div>' +
-      '<div class="tabela-wrap"><table style="min-width:1080px"><thead><tr><th>Nº</th><th>Atividade</th><th>' + (minhas ? 'Com quem' : 'Solicitante') + '</th><th>Cliente / objeto</th><th>Solicitada</th><th>Prazo</th><th>Conclusão</th><th>Situação</th><th>' + (vis === 'fila' ? '' : 'SLA') + '</th></tr></thead>' +
+      '<div class="tabela-wrap"><table style="min-width:1080px"><thead><tr><th>Nº</th><th>Atividade</th><th>' + (minhas ? 'Com quem' : 'Solicitante') + '</th><th>Cliente / objeto</th><th>Solicitada</th><th>Prazo</th><th>Conclusão</th><th>Situação</th><th>' + (vis === 'fila' || vis === 'fazer' ? '' : 'SLA') + '</th></tr></thead>' +
       '<tbody id="tbDj"></tbody></table></div><div class="ajuda" id="rodapeDj" style="padding:10px 16px"></div></div>';
     // em Meus pedidos, com quem está o pedido agora
     var comQuem = function (d) {
@@ -7915,9 +7942,19 @@
         ' por você (marcados “com você”): responda ao Jurídico, ajuste ou aprove a minuta, ou termine o rascunho.</div>' : '';
       if ($('#fSeDj')) $('#fSeDj').innerHTML = opcoes([['', 'Todos os setores']].concat(r.setores.map(function (s) { return [s, s]; })), f.setor);
       if ($('#fAnoDj')) $('#fAnoDj').innerHTML = opcoes([['', 'Todos os anos']].concat(r.anos.map(function (a) { return [a, a]; })), f.ano);
+      // Para fazer: um título antes de cada parte (ninguém pegou · com você)
+      var conta = { fila: 0, comigo: 0 };
+      r.demandas.forEach(function (d) { if (d.grupo) conta[d.grupo]++; });
+      var grupoAtual = null;
+      var titulo = function (d) {
+        if (vis !== 'fazer' || d.grupo === grupoAtual) return '';
+        grupoAtual = d.grupo;
+        return '<tr class="auto"><td colspan="9" style="background:var(--surface-2);font-weight:800">' + (d.grupo === 'fila' ? 'Ninguém pegou ainda' : 'Com você') + ' (' + conta[d.grupo] + ')</td></tr>';
+      };
+      var pegar = vis === 'fila' || vis === 'fazer';
       $('#tbDj').innerHTML = r.demandas.map(function (d) {
         var externo = d.origem === 'contrato' || d.origem === 'parceria';
-        return '<tr class="clicavel" data-id="' + esc(d.id) + '"><td style="white-space:nowrap"><b>' + (externo ? esc(d.ref) : '#' + esc(d.ref)) + '</b>' +
+        return titulo(d) + '<tr class="clicavel" data-id="' + esc(d.id) + '"><td style="white-space:nowrap"><b>' + (externo ? esc(d.ref) : '#' + esc(d.ref)) + '</b>' +
           (d.origem === 'contrato' ? '<span class="sec">Solicitação de Contrato</span>' : d.origem === 'parceria' ? '<span class="sec">Contrato Parceria</span>' : '') + '</td>' +
           '<td>' + esc(d.tipo) + '</td>' +
           '<td>' + (minhas ? comQuem(d) : esc(d.solicitante_nome || '—') + '<span class="sec">' + esc([d.setor, d.uf].filter(Boolean).join(' · ')) + '</span>') + '</td>' +
@@ -7925,9 +7962,9 @@
           '<td style="white-space:nowrap">' + dataBr(d.solicitada_em) + '</td><td style="white-space:nowrap">' + (d.prazo ? dataBr(d.prazo) : '<span class="sec">—</span>') + '</td>' +
           '<td style="white-space:nowrap">' + (d.entregue_em ? dataBr(d.entregue_em) : '<span class="sec">—</span>') + '</td>' +
           '<td>' + etqDj(d) + (!minhas && d.responsavel_nome ? '<span class="sec">' + esc(d.responsavel_nome) + '</span>' : '') + '</td>' +
-          '<td>' + (vis === 'fila' ? (d.origem === 'demanda' ? '<button class="btn ghost sm" data-pegar="' + d.id + '">Pegar</button>' : '') : slaDj(d)) + '</td></tr>';
+          '<td>' + (pegar ? (d.origem === 'demanda' && (vis === 'fila' || d.grupo === 'fila') ? '<button class="btn ghost sm" data-pegar="' + d.id + '">Pegar</button>' : '') : slaDj(d)) + '</td></tr>';
       }).join('') || '<tr><td colspan="9"><div class="vazio" style="border:0;padding:34px">' + (minhas && !r.total ? 'Você ainda não pediu nada ao Jurídico. Clique em <b>Novo pedido</b>.'
-        : vis === 'fila' ? 'A fila está vazia.' : vis === 'comigo' ? 'Nada com você agora.' : 'Nada com esses filtros.') + '</div></td></tr>';
+        : vis === 'fila' ? 'A fila está vazia.' : vis === 'comigo' ? 'Nada com você agora.' : vis === 'fazer' ? 'Nada para fazer agora: ninguém esperando na fila e nada com você.' : 'Nada com esses filtros.') + '</div></td></tr>';
       $('#rodapeDj').textContent = r.demandas.length + ' de ' + r.total + ' pedido(s).';
       $$('#tbDj [data-pegar]').forEach(function (b) {
         b.onclick = async function (ev) {
@@ -8170,7 +8207,7 @@
         try {
           var r = await api('PUT', '/api/juridico/tipos', { tipos: linhas.map(function (t) { return { id: t.id, nome: t.nome, horas: t.horas, ativo: t.ativo }; }), contratos_id: ct ? ct.id : null });
           toast('Tabela salva.' + (r.recalculadas ? ' ' + r.recalculadas + ' demanda(s) em aberto com o prazo recalculado.' : ''), 'ok');
-          paginaJuridico('painel', 'configurar', 'prazos');
+          paginaConfigJuridico('prazos');
         } catch (e) { toast(e.message, 'erro'); }
       };
     }
