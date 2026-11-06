@@ -876,9 +876,9 @@ module.exports = [
       await t.clicar('#btMinutaCt', { depois: 900 });
       await t.clicar('#mTxtCtOk', { depois: 2400 });
 
-      await cartaoJor(t, 'Enquanto isso · Executivo', 'Leva a minuta ao síndico, que aprova', { rota: '#/juridico/painel/assinaturas/contratos', antes: () => P.pedirAssinatura() });
+      await cartaoJor(t, 'Enquanto isso · Executivo', 'Leva a minuta ao síndico, que aprova', { rota: '#/juridico/painel/assinaturas', antes: () => P.pedirAssinatura() });
       await t.legenda('O executivo pediu a assinatura: em <b>Painel do Jurídico → Assinaturas</b>, mande assinar e marque <b>Enviado para assinatura</b>.', { etapa: B, ms: 300 });
-      await t.clicar(`[data-acao-ass="para_assinar"][data-c="${j.contrato}"]`, { depois: 900 });
+      await t.clicar(`[data-acao="pronto"][data-origem="contrato"][data-id="${j.contrato}"]`, { depois: 900 });
       await t.digitar('#mObsAssCt', 'Enviado pela Clicksign ao síndico.', { atraso: 35 });
       await t.clicar('#mEmAssOk', { depois: 2000 });
       await P.assinado();
@@ -1398,12 +1398,12 @@ module.exports = [
 
       const S = '3 · Assinatura';
       await t.legenda('O que vai para assinatura fica no <b>Painel do Jurídico → Assinaturas</b>.', { etapa: S, ms: 200 });
-      await t.ir('#/juridico/painel/assinaturas/contratos', 1800);
+      await t.ir('#/juridico/painel/assinaturas', 1800);
       await t.mostrar('nav.abas a[href="#/juridico/painel/assinaturas"]', 1600);
-      await t.legenda('Quando o executivo informa que o síndico aprovou, a minuta aparece na aba <b>Assinaturas</b> como <b>Pronto para assinatura</b>.', { etapa: S, ms: 600 });
-      await t.mostrar('#corpoCt section.painel', 2600);
+      await t.legenda('Quando o executivo informa que o síndico aprovou, a minuta aparece na aba <b>Assinaturas</b>, no bloco <b>Pronto para assinatura</b> (junto com as parcerias e as demais demandas).', { etapa: S, ms: 600 });
+      await t.mostrar('#corpoJ section.painel', 2600);
       await t.legenda('Mande para assinatura e clique em <b>Enviado para assinatura</b> (com uma observação, se quiser). O executivo é avisado.', { etapa: S, ms: 400 });
-      await t.clicar(`[data-acao-ass="para_assinar"][data-c="${cen.ctParaAssinar}"]`, { depois: 900 });
+      await t.clicar(`[data-acao="pronto"][data-origem="contrato"][data-id="${cen.ctParaAssinar}"]`, { depois: 900 });
       await t.digitar('#mObsAssCt', 'Enviado pela Clicksign ao síndico.', { atraso: 40 });
       await t.clicar('#mEmAssOk', { depois: 2000 });
       await t.legenda('Voltou a via assinada? <b>Assinado</b>: anexe o contrato assinado ali mesmo. Sem convenção, o portal avisa para pedir antes de assinar.', { etapa: S, ms: 3200 });
@@ -1513,9 +1513,9 @@ module.exports = [
       await t.clicar('#mTxtCpOk', { depois: 2400 });
 
       const C = '3 · Assinatura';
-      await t.legenda('Quando quem pediu informa que o parceiro aprovou, a parceria aparece em <b>Assinaturas → Contratos de parceria</b>.', { etapa: C, ms: 300 });
-      await t.ir('#/juridico/painel/assinaturas/parcerias', 1800);
-      await t.clicar(`#tbCp tr[data-id="${cen.cpParaAssinar}"]`, { depois: 1800 });
+      await t.legenda('Quando quem pediu informa que o parceiro aprovou, a parceria aparece em <b>Assinaturas</b>, no bloco <b>Pronto para assinatura</b>, junto com os contratos e as demandas.', { etapa: C, ms: 300 });
+      await t.ir('#/juridico/painel/assinaturas', 1800);
+      await t.clicar(`.ass-item[data-link="#/parcerias/${cen.cpParaAssinar}"]`, { depois: 1800 });
       await t.legenda('Mande para assinatura e clique em <b>Enviado para assinatura</b>. Voltou assinado? <b>Assinado</b>, anexando a via assinada.', { etapa: C, ms: 300 });
       await t.clicar('#btEmAssCp', { depois: 900 });
       await t.digitar('#mTxtCp', 'Enviado ao representante legal pela plataforma de assinatura.', { atraso: 30 });
