@@ -125,7 +125,7 @@ const TUTORIAIS = [
     descricao: 'Conferir os dados do contrato assinado e clicar em Cadastrar parceiro: ele entra na Prestação de Contas — Comissão de Parceiros sem digitar de novo (CNPJ já na base: o contrato é ligado ao cadastro existente).' },
   { slug: 'juridico-demandas-pedir', grupo: 'Ferramentas', publico: 'todos', titulo: 'Solicitações ao Jurídico — fazer um pedido e acompanhar',
     descricao: 'Meus pedidos (contratos, parcerias e as demais atividades) e o que espera por você, Novo pedido (contrato de garantia, contrato de parceria ou outra atividade), o prazo de entrega, responder ao Jurídico pelo comentário e o aviso semanal do que está parado com você.' },
-  { slug: 'juridico-demandas-conduzir', grupo: 'Ferramentas', publico: 'juridico', titulo: 'Painel do Jurídico — fila, situação, prazos e indicadores',
+  { slug: 'juridico-demandas-conduzir', grupo: 'Ferramentas', publico: 'juridico', titulo: 'Painel do Jurídico — minhas demandas, assinaturas e desempenho',
     descricao: 'Minhas demandas (as pendentes sem responsável, com Assumir, e as em andamento com você, as fora do SLA primeiro), situação e data de conclusão (SLA), Assinaturas (pronto para assinatura, aguardando assinaturas e assinado), o Painel de Desempenho por mês e ano, Todos com os filtros e a planilha.' },
   { slug: 'gestao-usuarios', grupo: 'Gestão do setor', publico: 'gestor', titulo: 'Usuários do setor',
     descricao: 'Criar o acesso de alguém do setor, liberar ferramentas e redefinir a senha.' },
