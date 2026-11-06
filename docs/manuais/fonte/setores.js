@@ -381,6 +381,19 @@ const FERRAMENTAS = {
     ],
     obs: 'Quem edita e aprova é quem tem o papel <b>Gestão</b> (identificador <code>gestao_administrativa</code>), dado no portal em <b>Quem abre e com qual papel</b> — a coordenação também precisa recebê-lo. Sem o papel, a pessoa busca, copia e envia sugestões; com acesso só de consulta, só busca e copia.',
   },
+  hsmOperacional: {
+    video: true,
+    nome: 'Biblioteca de HSM Operacional',
+    descricao: 'A biblioteca única de mensagens padrão da Cobrança, do Crédito e da Implantação. A pessoa escolhe o setor e a categoria (ou busca nos três setores de uma vez), abre a mensagem como ela fica no WhatsApp, lê as instruções de envio e copia o texto. O que está <b>[entre colchetes]</b> muda a cada envio e deve ser trocado antes de enviar.',
+    dados: 'As mensagens, as sugestões e a contagem de cópias ficam no banco do portal e são compartilhadas pela equipe, ao vivo. Na primeira abertura, quem pode gravar carrega a base inicial de mensagens que vem no HTML (aos poucos; se for interrompida, continua na próxima abertura).',
+    abas: [
+      ['Buscar mensagens', 'O seletor <b>Setor</b> (Todos os setores, Cobrança, Crédito ou Implantação) e as categorias do setor, com quantas mensagens tem cada uma; dentro da categoria, a etapa da cobrança (Preventiva, Educativa, Assertiva) ou o canal (grupo, WhatsApp privado, e-mail). A busca procura por título, texto, tag e destinatário. Ao abrir a mensagem, o quadro amarelo <b>Antes de enviar</b> traz as instruções (para quem, cópia, assunto, anexos), que não entram no texto copiado.'],
+      ['Templates do sistema', 'Os modelos cadastrados na ferramenta de disparo do WhatsApp, só para consulta (as variáveis {{1}}, {{2}} são preenchidas por ela). Mudar o texto aqui não altera o template lá.'],
+      ['Sugestões', 'Quem não é da gestão do setor sugere ajustes (<b>Sugerir ajuste</b> na mensagem) ou mensagens novas, com o motivo, e acompanha a resposta. Cada gestão vê as sugestões do seu setor: <b>Revisar</b> compara o texto atual com o sugerido, <b>Aprovar e publicar</b> troca na hora e <b>Recusar</b> exige um comentário.'],
+      ['Configurações (gestão)', 'Só os setores que a pessoa gere: <b>+ Nova mensagem</b>, <b>Editar</b>, <b>Arquivar</b> e restaurar; as cópias de cada mensagem por mês (ordenar por mais ou menos copiadas) e <b>Exportar Excel</b> ou <b>PDF</b>.'],
+    ],
+    obs: 'Cada setor tem a sua gestão, dada no portal em <b>Quem abre e com qual papel</b>: <code>gestao_cobranca</code> edita a Cobrança e os Templates do sistema; <code>gestao_credito</code>, o Crédito e a Implantação. A coordenação também precisa receber o papel. Sem papel, a pessoa busca, copia e envia sugestões; com acesso só de consulta, só busca e copia.',
+  },
   curadoria: {
     video: true,
     nome: 'Curadoria da Base — Painel de Campanhas',
@@ -409,6 +422,17 @@ const FERRAMENTAS = {
       ['Configurações', 'Quem aprova, quem entrega (almoxarifado), quem recebe os alertas de reposição e quem administra; o intervalo dos lembretes, a cobertura da sugestão de compra e a lista de setores.'],
     ],
     obs: 'O alerta de reposição dispara quando o projetado chega ao ponto de pedido (o maior entre o mínimo do item e consumo × prazo de reposição + segurança) e é verificado quando alguém da gestão abre a ferramenta.',
+  },
+  calendarioMarketing: {
+    video: true,
+    nome: 'Calendário de Marketing',
+    descricao: 'O calendário do Marketing: aniversários e tempo de casa da equipe, as datas comemorativas, eventos internos e campanhas de endomarketing, a agenda de eventos com fornecedores e valores e o encerramento de cada mês.',
+    dados: 'As datas de nascimento e de admissão vêm do cadastro de Pessoas do portal (a administração liga <b>Receber as datas da equipe</b> na ferramenta). Os itens de endomarketing, a agenda, os fornecedores, os encerramentos e quem foi cadastrado só na ferramenta ficam no banco do portal, compartilhados ao vivo.',
+    abas: [
+      ['Aniversários e endomarketing', 'Os números do mês, as <b>próximas celebrações</b> (aniversários e anos de casa em 7, 30 ou 90 dias), o quadro <b>mês a mês</b> dos próximos 12 meses, as datas comemorativas, eventos internos e campanhas (<b>Novo item</b>; as anuais avançam sozinhas) e a equipe, com <b>Novo colaborador</b> e <b>Importar lista</b> para quem não tem acesso ao portal.'],
+      ['Eventos, fornecedores e datas', 'A <b>agenda</b> de eventos e datas comemorativas com local, fornecedor, status e os valores orçado e realizado (somados no ano), os <b>encerramentos do mês</b> (último dia útil, com status e anotações) e os <b>fornecedores</b>, com quantos eventos e quanto já foi realizado com cada um.'],
+    ],
+    obs: 'Quem só consulta vê tudo, sem os botões de gravar. Sem a liberação das datas da equipe, a ferramenta avisa e mostra só quem foi cadastrado nela.',
   },
 
 };
@@ -476,7 +500,7 @@ const SETORES = [
   {
     nome: 'Cobrança', arquivo: 'cobranca',
     papel: 'Recupera os valores em atraso dos condomínios: boletos, acordos, negativações e acompanhamento da inadimplência.',
-    ferramentas: ['cobranca', 'resultados', 'curadoria', 'espolio', 'hsm', 'mailing'], carteira: 'analista de cobrança',
+    ferramentas: ['cobranca', 'resultados', 'curadoria', 'espolio', 'hsm', 'hsmOperacional', 'mailing'], carteira: 'analista de cobrança',
     recebe: [
       ['2ª via de boleto', 4, 'alta', 'Condomínio, unidade, mês de referência e para quem enviar.'],
       ['Proposta de acordo', 18, 'media', 'Unidade, meses em atraso e a proposta do condômino.'],
@@ -515,7 +539,7 @@ const SETORES = [
   {
     nome: 'Crédito', arquivo: 'credito',
     papel: 'Prepara prestações de contas, balancetes, recibos e controles de consumo dos condomínios.',
-    ferramentas: ['credito', 'boletos', 'repasses', 'gestaoCredito', 'hsmCredito'], carteira: 'assistente de crédito',
+    ferramentas: ['credito', 'boletos', 'repasses', 'gestaoCredito', 'hsmCredito', 'hsmOperacional'], carteira: 'assistente de crédito',
     recebe: [
       ['Prestação de contas', 27, 'media', 'Condomínio e mês de referência.'],
       ['Balancete', 27, 'media', 'Condomínio e período.'],
@@ -607,7 +631,7 @@ const SETORES = [
   {
     nome: 'Marketing', arquivo: 'marketing',
     papel: 'Comunicação da MyBlue: artes, campanhas, redes sociais, comunicados e materiais comerciais.',
-    ferramentas: ['brindes'],
+    ferramentas: ['brindes', 'calendarioMarketing'],
     recebe: [
       ['Arte / peça gráfica', 27, 'media', 'Formato, tamanho, texto e prazo de uso.'],
       ['Comunicado a condôminos', 18, 'media', 'Condomínio(s), texto-base e canal (e-mail, mural, WhatsApp).'],

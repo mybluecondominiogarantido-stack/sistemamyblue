@@ -70,11 +70,11 @@ async function subirPortal(porta) {
 /* cliente HTTP com sessão (para montar o cenário sem gravar) */
 function cliente(base) {
   let cookie = '';
-  return async function api(metodo, url, corpo, tipo) {
+  return async function api(metodo, url, corpo, tipo, extras) {
     const bruto = typeof corpo === 'string' || Buffer.isBuffer(corpo);
     const r = await fetch(base + url, {
       method: metodo,
-      headers: { cookie, origin: base, 'content-type': tipo || (bruto ? 'text/html' : 'application/json') },
+      headers: { cookie, origin: base, 'content-type': tipo || (bruto ? 'text/html' : 'application/json'), ...(extras || {}) },
       body: corpo == null ? undefined : bruto ? corpo : JSON.stringify(corpo),
     });
     const sc = r.headers.get('set-cookie'); if (sc) cookie = sc.split(';')[0];

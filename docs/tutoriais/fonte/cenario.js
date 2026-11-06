@@ -26,7 +26,9 @@ const EXTRAS = {
   'analise-de-espolio': ['Análise de Espólio', 'Cobrança', 'app'],
   'biblioteca-de-hsm': ['Biblioteca de HSM', 'Cobrança', 'documento'],
   'curadoria-da-base': ['Curadoria da Base', 'Cobrança', 'grafico'],
+  'biblioteca-de-hsm-operacional': ['Biblioteca de HSM Operacional', 'Cobrança', 'documento'],
   'controle-de-brindes': ['Controle de Brindes', 'Marketing', 'app'],
+  'calendario-de-marketing': ['Calendário de Marketing', 'Marketing', 'calendario'],
 };
 const exemplo = (t) => `<!doctype html><html><head><meta charset="utf-8"><title>${t}</title></head><body style="font-family:sans-serif;padding:40px;color:#13323a"><h2>${t}</h2><p>Ferramenta de exemplo.</p></body></html>`;
 

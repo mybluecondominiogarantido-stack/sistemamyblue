@@ -1649,13 +1649,15 @@ module.exports = [
   {
     nome: 'gestao-usuarios',
     entrar: 'caio@myblue.com.br',
-    inicio: '#/admin/usuarios',
+    inicio: '#/config/pessoas',
     abertura: ['Para coordenadores e supervisores.', ['Criar o acesso de alguém do setor', 'Liberar ferramentas', 'Redefinir a senha']],
     async gravar(t) {
-      await t.legenda('Em <b>Gestão do setor → Usuários do setor</b> ficam as pessoas do seu setor.', { etapa: '1 · Usuários do setor', ms: 3400 });
-      const N = '2 · Novo usuário';
-      await t.legenda('Clique em <b>Novo usuário</b> e preencha o nome, o e-mail (que é o login), a data de nascimento e a de admissão.', { etapa: N, ms: 300 });
-      await t.clicar('#btNovoUsu', { depois: 800 });
+      const P = '1 · Pessoas';
+      await t.legenda('Em <b>Configurações → Pessoas</b> ficam as pessoas dos seus setores. Clique numa delas para ver o cadastro ao lado.', { etapa: P, ms: 600 });
+      await t.mostrar('#listaPes', 2600);
+      const N = '2 · Nova pessoa';
+      await t.legenda('Clique em <b>Nova pessoa</b> e preencha o nome e o e-mail (que é o login).', { etapa: N, ms: 300 });
+      await t.clicar('a[href="#/config/pessoas/nova"]', { depois: 1000 });
       await t.digitar('#uNome', 'Rita Campos');
       await t.digitar('#uEmail', 'rita@myblue.com.br');
       await t.legenda('A <b>data de nascimento</b> e a <b>data de admissão</b> são obrigatórias.', { etapa: N, ms: 300 });
@@ -1663,83 +1665,103 @@ module.exports = [
       await t.preencherCampo('#uAdm', hoje());
       await t.legenda('O <b>setor</b> já vem marcado: a pessoa entra na equipe do setor na Central de Tickets.', { etapa: N, ms: 300 });
       await t.mostrar('input[name=uSetor]', 2600);
-      await t.legenda('Marque as <b>ferramentas</b> do setor que a pessoa vai usar.', { etapa: N, ms: 300 });
-      await t.clicar('input[name=uMod][value=credito]', { depois: 500 });
-      await t.clicar('input[name=uMod][value=boletos]', { depois: 700 });
-      await t.legenda('Deixe a senha em branco: o portal gera uma <b>temporária</b>. Clique em <b>Criar usuário</b>.', { etapa: N, ms: 1600 });
+      await t.legenda('Deixe a senha em branco: o portal gera uma <b>temporária</b>. Clique em <b>Criar pessoa</b>.', { etapa: N, ms: 1600 });
       await t.clicar('#btSalvarU', { depois: 1500 });
       await t.legenda('Copie os dados e envie para a pessoa. No 1º acesso ela cria a senha dela.', { etapa: N, ms: 300 });
       await t.mostrar('#btCopiar', 3000);
-      await t.clicar(fecharModal, { depois: 1200 });
-      const E = '3 · Editar';
-      await t.legenda('Para liberar outra ferramenta ou redefinir a senha, clique na pessoa.', { etapa: E, ms: 300 });
-      await t.clicar('#tbUsu tr:has-text("Davi Rocha")', { depois: 1000 });
-      await t.clicar('input[name=uMod][value=boletos]', { depois: 800 });
-      await t.legenda('<b>Redefinir senha</b> gera uma senha temporária nova. Para bloquear o acesso, desmarque <b>Usuário ativo</b>.', { etapa: E, ms: 400 });
-      await t.mostrar('#btResetSenha', 2000);
-      await t.mostrar('#uAtivo', 2000);
-      await t.clicar('#btSalvarU', { depois: 2000 });
+      await t.clicar(fecharModal, { depois: 1800 });
+      const A = '3 · Liberar ferramentas';
+      await t.legenda('Ao clicar em <b>Pronto</b>, o portal leva você para <b>Acessos → Por pessoa</b>: marque as <b>ferramentas</b> que ela vai usar.', { etapa: A, ms: 300 });
+      await t.clicar('input[name=aMod][value=credito]', { depois: 500 });
+      await t.clicar('input[name=aMod][value=boletos]', { depois: 700 });
+      await t.clicar('#btSalvarModsAc', { depois: 2000 });
+      await t.legenda('Embaixo, <b>Tudo o que ela acessa</b>: setor, tickets, Base de Clientes e cada ferramenta, num lugar só.', { etapa: A, ms: 300 });
+      await t.rolar(520, '#resumoAc');
+      await t.pausa(2400);
+      const E = '4 · Editar e redefinir a senha';
+      await t.legenda('Para mudar o cadastro, volte a <b>Pessoas</b> e clique na pessoa.', { etapa: E, ms: 300 });
+      await t.clicar('.cfg-nav a[href="#/config/pessoas"]', { depois: 1400 });
+      await t.clicar('#listaPes a:has-text("Davi Rocha")', { depois: 1400 });
+      await t.legenda('<b>Redefinir senha</b> gera uma senha temporária nova. Para bloquear o acesso, desligue <b>Ativa</b> e salve.', { etapa: E, ms: 400 });
+      await t.mostrar('#btResetSenha', 2200);
+      await t.mostrar('#uAtivoTxt', 2200, { dx: 0.1 });
+      await t.legenda('Para liberar outra ferramenta, use <b>Ver e alterar em Acessos</b>.', { etapa: E, ms: 400 });
+      await t.mostrar('#detPesAcessos a.btn', 2600);
     },
-    resumo: ['<b>Novo usuário</b>: nome, e-mail, nascimento, admissão e ferramentas', 'Envie a senha temporária para a pessoa', 'Clique na pessoa para liberar ferramentas ou redefinir a senha'],
+    resumo: ['<b>Configurações → Pessoas</b> · <b>Nova pessoa</b>: nome, e-mail, nascimento e admissão', 'Envie a senha temporária; as ferramentas ficam em <b>Acessos → Por pessoa</b>', 'Clique na pessoa para redefinir a senha ou desativar'],
   },
 
   {
     nome: 'gestao-ferramentas',
     entrar: 'caio@myblue.com.br',
-    inicio: '#/admin/modulos',
+    inicio: '#/config/ferramentas',
+    // uma versão a mais do Controle de Boletos, para "Usar esta" aparecer em Versões anteriores
+    async preparar(cen) {
+      await cen.admin('PUT', '/api/admin/modulos/boletos/arquivo', '<!doctype html><html><head><meta charset="utf-8"><title>Controle de Emissão de Boletos</title></head><body style="font-family:sans-serif;padding:40px">Ferramenta de exemplo.</body></html>',
+        null, { 'X-Descricao': encodeURIComponent('Versão de exemplo do tutorial.') });
+    },
     abertura: ['Para coordenadores e supervisores.', ['Enviar o HTML novo de uma ferramenta', 'Voltar para uma versão anterior', 'Quem abre, como e com qual papel', 'Cadastrar uma ferramenta nova', 'Quem edita a carteira']],
     async gravar(t, cen) {
-      await t.legenda('Em <b>Ferramentas do setor</b> ficam as ferramentas dos seus setores. Clique numa delas.', { etapa: '1 · Ferramentas do setor', ms: 2600 });
-      await t.clicar('tr[data-slug="boletos"]', { depois: 1200 });
+      const F = '1 · Ferramentas';
+      await t.legenda('Em <b>Configurações → Ferramentas</b> ficam as ferramentas dos seus setores. Clique numa delas.', { etapa: F, ms: 600 });
+      await t.clicar('.lista-sel a[href="#/config/ferramentas/boletos"]', { depois: 1600 });
       const H = '2 · Atualizar o HTML';
-      await t.legenda('A ferramenta mudou? Envie o <b>arquivo .html novo</b> aqui. Quem abrir já recebe a versão nova.', { etapa: H, ms: 600 });
-      await t.enviarArquivo('#zArq', '#inArq', cen.rec.html, { depois: 2600 });
+      await t.legenda('A ferramenta mudou? Envie o <b>arquivo .html novo</b> aqui e escreva o que mudou.', { etapa: H, ms: 600 });
+      await t.enviarArquivo('#zArq', '#inArq', cen.rec.html, { depois: 1200 });
+      await t.digitar('#descVersao', 'Nova coluna com o vencimento de cada boleto.', { atraso: 28 });
+      await t.clicar('#btEnviarVersao', { depois: 1800 });
+      await t.legenda('A versão nova entra em uso <b>depois que a administração aprovar</b>. Até lá, a atual continua valendo.', { etapa: H, ms: 3200 });
       await t.legenda('A versão anterior fica guardada. Em <b>Versões anteriores</b>, <b>Usar esta</b> volta para ela.', { etapa: H, ms: 300 });
       await t.clicar('summary:has-text("Versões anteriores")', { depois: 1200 });
       await t.mostrar('[data-versao]', 2600);
       const Q = '3 · Quem abre e com qual papel';
-      await t.legenda('Em <b>Quem abre e com qual papel</b>, marque quem usa a ferramenta. Coordenação e administração abrem sempre.', { etapa: Q, ms: 300 });
-      await t.rolar(520, '#edAcessos');
-      await t.clicar('.fundo-modal [data-filtro="setor"]', { depois: 900 });
-      await t.clicar('.fundo-modal tr:has-text("Davi Rocha") [data-abre]', { depois: 900 });
+      await t.legenda('Quem abre agora fica em <b>Configurações → Acessos</b>. Clique em <b>Ver e alterar quem abre</b>.', { etapa: Q, ms: 300 });
+      await t.clicar('[data-ir-acessos]', { depois: 2000 });
+      await t.legenda('Coordenação e administração abrem sempre. Em <b>Do setor</b>, ligue <b>Abre</b> para quem usa a ferramenta.', { etapa: Q, ms: 300 });
+      await t.clicar('[data-filtro="setor"]', { depois: 900 });
+      await t.clicar('tr:has-text("Davi Rocha") [data-abre]', { depois: 900 });
       await t.legenda('Em <b>Todas as pessoas</b> você libera também gente de <b>outros setores</b>.', { etapa: Q, ms: 300 });
-      await t.clicar('.fundo-modal [data-filtro="todas"]', { depois: 900 });
-      await t.clicar('.fundo-modal tr:has-text("Marcos Lima") [data-abre]', { depois: 700 });
+      await t.clicar('[data-filtro="todas"]', { depois: 900 });
+      await t.clicar('tr:has-text("Marcos Lima") [data-abre]', { depois: 700 });
       await t.legenda('Em <b>Como</b>, escolha se a pessoa <b>edita</b> ou <b>só consulta</b>: quem só consulta vê tudo, mas não grava.', { etapa: Q, ms: 300 });
-      await t.escolher('.fundo-modal tr:has-text("Marcos Lima") [data-como]', 'só consulta', { depois: 900 });
+      await t.escolher('tr:has-text("Marcos Lima") [data-como]', { value: 'consulta' }, { depois: 900 });
       await t.clicar('#btSalvarAcessos', { depois: 2200 });
-      await t.legenda('Se a ferramenta tiver <b>papéis</b> (ex.: Gestão, Financeiro), eles aparecem em colunas na mesma tabela.', { etapa: Q, ms: 3200 });
-      await t.clicar('.fundo-modal [data-fechar]', { depois: 900 });
+      await t.legenda('Se a ferramenta tiver <b>papéis</b> (ex.: Gestão, Financeiro), eles aparecem na coluna <b>Papel</b> da mesma tabela.', { etapa: Q, ms: 3200 });
       const N = '4 · Ferramenta nova';
-      await t.legenda('<b>Nova ferramenta</b> cadastra uma ferramenta do seu setor: nome, setor e ícone.', { etapa: N, ms: 300 });
+      await t.legenda('De volta a <b>Ferramentas</b>, <b>Nova ferramenta</b> cadastra uma ferramenta do seu setor: nome, setor e ícone.', { etapa: N, ms: 300 });
+      await t.clicar('.cfg-nav a[href="#/config/ferramentas"]', { depois: 1400 });
       await t.clicar('#btNovaFerr', { depois: 900 });
       await t.digitar('#nNome', 'Agenda do Crédito', { depois: 900 });
       await t.legenda('Ela fica <b>aguardando aprovação</b>: só a coordenação abre até a administração conferir o HTML e aprovar.', { etapa: N, ms: 3600 });
       await t.clicar('.fundo-modal [data-fechar]', { depois: 800 });
-      const C = '5 · Carteira: quem edita';
-      await t.legenda('<b>Carteira de condomínios: quem edita</b> mostra quem pode editar cada coisa na carteira, e por quê.', { etapa: C, ms: 300 });
-      await t.clicar('#btCartAcessos', { depois: 2400 });
-      await t.legenda('Na coluna do seu setor, você libera pessoas da equipe. O resto é configurado pela administração.', { etapa: C, ms: 300 });
-      await t.rolar(620, '#edCart');
-      await t.pausa(2600);
-      await t.clicar('.fundo-modal [data-fechar]', { depois: 800 });
+      const C = '5 · Base de Clientes: quem edita';
+      await t.legenda('Quem edita cada coisa na carteira fica em <b>Acessos → Base de Clientes</b>.', { etapa: C, ms: 300 });
+      await t.clicar('.cfg-nav a[href="#/config/acessos"]', { depois: 1400 });
+      await t.clicar('nav.sub-abas a[href="#/config/acessos/carteira"]', { depois: 2000 });
+      await t.legenda('Cada permissão mostra a regra e quem edita hoje. As dos outros setores são configuradas pela administração.', { etapa: C, ms: 300 });
+      const meu = '[data-perm]:has([data-salvar])';
+      await t.mostrar(meu, 3000, { dy: 0.3 });
+      await t.legenda('Na do seu setor, abra <b>Pessoas liberadas individualmente</b>, marque quem também edita e clique em <b>Salvar</b>.', { etapa: C, ms: 300 });
+      await t.clicar(`${meu} summary`, { depois: 1000 });
+      await t.clicar(`${meu} label:has-text("Bruna Reis") input`, { depois: 700 });
+      await t.clicar(`${meu} [data-salvar]`, { depois: 2400 });
     },
-    resumo: ['<b>Ferramentas do setor</b> → clique na ferramenta', 'Envie o HTML novo · <b>Versões anteriores</b> para voltar', '<b>Quem abre</b>: do setor ou de outros, edita ou só consulta, papel', '<b>Nova ferramenta</b>: aguarda a aprovação da administração', '<b>Carteira: quem edita</b>: libere pessoas na coluna do seu setor'],
+    resumo: ['<b>Configurações → Ferramentas</b> → clique na ferramenta', 'Envie o HTML novo (a administração aprova) · <b>Versões anteriores</b> para voltar', '<b>Acessos → Ferramentas</b>: do setor ou de outros, edita ou só consulta, papel', '<b>Nova ferramenta</b>: aguarda a aprovação da administração', '<b>Acessos → Base de Clientes</b>: libere pessoas nas permissões do seu setor'],
   },
 
   {
     nome: 'gestao-equipe',
     entrar: 'caio@myblue.com.br',
-    inicio: '#/admin/equipes',
+    inicio: '#/config/setores',
     abertura: ['Para coordenadores e supervisores.', ['Quem é líder do setor', 'Os tipos de demanda, com prazo e prioridade']],
     async gravar(t, cen) {
-      await t.legenda('Em <b>Equipe e tipos de demanda</b>, clique no seu setor.', { etapa: '1 · Equipe', ms: 2200 });
-      await t.clicar('[data-setor]', { depois: 1200 });
-      await t.legenda('A equipe vem do cadastro das pessoas. Marque quem é <b>líder</b>: o líder distribui os tickets do setor.', { etapa: '1 · Equipe', ms: 500 });
+      const L = '1 · Equipe e líderes';
+      await t.legenda('Em <b>Configurações → Setores e equipes</b>, clique no seu setor.', { etapa: L, ms: 2200 });
+      await t.clicar('.lista-sel a[href^="#/config/setores/"]', { depois: 1400 });
+      await t.legenda('A equipe vem do cadastro das pessoas, em <b>Pessoas</b>. Marque quem é <b>líder</b>: o líder distribui os tickets do setor.', { etapa: L, ms: 500 });
       await t.clicar(`input[name=eLider][value="${cen.id['bruna@myblue.com.br']}"]`, { depois: 900 });
-      await t.clicar('#btSalvarEquipe', { depois: 1800 });
+      await t.clicar('#btSalvarEquipe', { depois: 2000 });
       const T = '2 · Tipos de demanda';
-      await t.clicar('[data-setor]', { depois: 1200 });
       await t.legenda('Os <b>tipos de demanda</b> organizam a fila: cada um tem o prazo em <b>horas úteis</b> e a prioridade.', { etapa: T, ms: 600 });
       await t.digitar('#nCat', '2ª via de prestação de contas');
       await t.digitar('#nPrazo', '9');
@@ -1749,9 +1771,8 @@ module.exports = [
       await t.mostrar('#btSalvarCats', 2400);
       await t.legenda('Desmarque <b>ativo</b> para tirar um tipo da lista sem perder o histórico dos tickets.', { etapa: T, ms: 400 });
       await t.mostrar('[data-campo=ativo]', 2800);
-      await t.clicar(fecharModal, { depois: 800 });
     },
-    resumo: ['Clique no setor → marque os <b>líderes</b> e salve', 'Tipos de demanda: nome, prazo (horas úteis) e prioridade', 'Desative em vez de apagar'],
+    resumo: ['<b>Configurações → Setores e equipes</b> → marque os <b>líderes</b> e salve', 'Tipos de demanda: nome, prazo (horas úteis) e prioridade', 'Desative em vez de apagar'],
   },
 
   {
@@ -1784,69 +1805,87 @@ module.exports = [
   {
     nome: 'admin-usuarios',
     entrar: 'admin@myblue.com.br',
-    inicio: '#/admin/usuarios',
-    abertura: ['Só para a administração.', ['Perfis: usuário, supervisor, coordenador, administrador', 'O setor no cadastro', 'Marcações de supervisão e da Central de Links']],
+    inicio: '#/config/pessoas',
+    // o administrador do portal de teste nasce sem as datas; com elas, a tela abre sem o aviso de cadastro incompleto
+    async preparar(cen) {
+      const adm = (await cen.admin('GET', '/api/admin/usuarios')).usuarios.find((u) => u.email === 'admin@myblue.com.br');
+      await cen.admin('PATCH', `/api/admin/usuarios/${adm.id}`, { data_nascimento: '1985-01-15', data_admissao: '2020-03-02' });
+    },
+    abertura: ['Só para a administração.', ['Perfis: usuário, supervisor, coordenador, administrador', 'O setor no cadastro', 'Acessos e marcações de supervisão e da Central de Links']],
     async gravar(t) {
-      await t.legenda('Em <b>Usuários e acessos</b> ficam todas as pessoas do portal: perfil, setor e ferramentas.', { etapa: '1 · Usuários', ms: 3200 });
-      const N = '2 · Novo usuário';
-      await t.clicar('#btNovoUsu', { depois: 800 });
+      await t.legenda('Em <b>Configurações → Pessoas</b> fica o cadastro de todas as pessoas do portal: perfil, setor e se está ativa.', { etapa: '1 · Pessoas', ms: 3200 });
+      const N = '2 · Nova pessoa';
+      await t.clicar('a[href="#/config/pessoas/nova"]', { depois: 1000 });
       await t.digitar('#uNome', 'Otávio Neves');
       await t.digitar('#uEmail', 'otavio@myblue.com.br');
       await t.legenda('A <b>data de nascimento</b> e a <b>data de admissão</b> são obrigatórias.', { etapa: N, ms: 300 });
       await t.preencherCampo('#uNasc', '1988-07-02');
       await t.preencherCampo('#uAdm', hoje());
       await t.legenda('Escolha o <b>perfil</b>. Coordenador e supervisor gerenciam os setores marcados no cadastro.', { etapa: N, ms: 600 });
-      await t.clicar('input[name=uPapel][value=coordenador]', { depois: 1400 });
+      await t.escolher('#uPapel', { value: 'coordenador' }, { depois: 400 });
+      await t.mostrar('#uPapelAjuda', 2400, { dx: 0.2 });
       await t.legenda('Marque o <b>setor</b>: ele forma a equipe do setor na Central de Tickets.', { etapa: N, ms: 300 });
-      await t.clicar('.fundo-modal label:has-text("Jurídico") input[name=uSetor]', { depois: 1200 });
-      await t.legenda('Marcações extras: <b>supervisão da Central de Tickets</b> (todos os setores; já vem com coordenador e supervisor) e <b>Marketing: Central de Links</b>.', { etapa: N, ms: 300 });
-      await t.mostrar('#uSup', 1800, { dx: 0.05 });
-      await t.mostrar('#uLinks', 1800, { dx: 0.05 });
+      await t.clicar('#detPes label:has-text("Jurídico") input[name=uSetor]', { depois: 1200 });
       await t.clicar('#btSalvarU', { depois: 1500 });
       await t.legenda('Envie a senha temporária para a pessoa por um canal seguro.', { etapa: N, ms: 2200 });
-      await t.clicar(fecharModal, { depois: 1000 });
-      await t.legenda('O perfil e as marcações aparecem na lista. Clique na pessoa para mudar.', { etapa: '3 · Editar', ms: 300 });
-      await t.clicar('#tbUsu tr:has-text("Sueli Prado")', { depois: 1000 });
-      await t.mostrar('#uSup', 2600, { dx: 0.05 });
-      await t.legenda('<b>Tudo o que acessa</b> mostra num lugar só o que a pessoa pode: setores, tickets, Carteira e cada ferramenta.', { etapa: '3 · Editar', ms: 300 });
-      await t.clicar('#btVerAcessos', { depois: 2600 });
-      await t.clicar(fecharModal, { depois: 800 });
-      await t.clicar(fecharModal, { depois: 800 });
+      await t.clicar(fecharModal, { depois: 1800 });
+      const A = '3 · Acessos da pessoa';
+      await t.legenda('Depois do <b>Pronto</b>, o portal abre <b>Acessos → Por pessoa</b>: as ferramentas que ela abre e <b>Tudo o que ela acessa</b>.', { etapa: A, ms: 300 });
+      await t.mostrar('#corpoAc .pilha > .painel', 2400, { dy: 0.12 });
+      await t.rolar(600, '#resumoAc');
+      await t.pausa(2000);
+      const M = '4 · Marcações';
+      await t.legenda('Em <b>Marcações</b>: <b>supervisão da Central de Tickets</b> (todos os setores; já vem com coordenador e supervisor) e <b>Marketing: Central de Links</b>.', { etapa: M, ms: 300 });
+      await t.clicar('nav.sub-abas a[href="#/config/acessos/marcacoes"]', { depois: 1600 });
+      await t.mostrar('#tbMarc tr:has-text("Sueli Prado")', 3000, { dx: 0.6 });
+      const E = '5 · Editar';
+      await t.legenda('Para mudar o perfil ou o setor, volte a <b>Pessoas</b> e clique na pessoa.', { etapa: E, ms: 300 });
+      await t.clicar('.cfg-nav a[href="#/config/pessoas"]', { depois: 1400 });
+      await t.clicar('#listaPes a:has-text("Sueli Prado")', { depois: 1400 });
+      await t.mostrar('#uPapel', 2200);
+      await t.legenda('Embaixo, <b>O que ela acessa</b> resume o que a pessoa pode. <b>Ver e alterar em Acessos</b> leva direto para a pessoa.', { etapa: E, ms: 300 });
+      await t.mostrar('#detPesAcessos a.btn', 3000);
     },
-    resumo: ['Perfil + <b>setor</b> no cadastro definem o que a pessoa gerencia', 'Supervisão de tickets e Central de Links são marcações', '<b>Tudo o que acessa</b>: o que a pessoa pode, num lugar só'],
+    resumo: ['Perfil + <b>setor</b> no cadastro de <b>Pessoas</b> definem o que a pessoa gerencia', 'Ferramentas e <b>Tudo o que acessa</b> em <b>Acessos → Por pessoa</b>', 'Supervisão de tickets e Central de Links em <b>Acessos → Marcações</b>'],
   },
 
   {
     nome: 'admin-modulos',
     entrar: 'admin@myblue.com.br',
-    inicio: '#/admin/modulos',
+    inicio: '#/config/ferramentas',
     abertura: ['Só para a administração.', ['Cadastrar uma ferramenta nova', 'Enviar o HTML', 'Setores, envio em lote e backup']],
     async gravar(t, cen) {
-      await t.legenda('Em <b>Módulos e dados</b> ficam todas as ferramentas: setor, arquivo e onde os dados ficam.', { etapa: '1 · Módulos', ms: 3400 });
+      await t.legenda('Em <b>Configurações → Ferramentas</b> ficam todas as ferramentas: setor, arquivo e onde os dados ficam.', { etapa: '1 · Ferramentas', ms: 3400 });
       const N = '2 · Nova ferramenta';
-      await t.legenda('<b>Novo módulo</b> cadastra uma ferramenta nova: nome, setor e ícone.', { etapa: N, ms: 300 });
+      await t.legenda('<b>Nova ferramenta</b> cadastra uma ferramenta: nome, setor e ícone.', { etapa: N, ms: 300 });
       await t.clicar('#btNovoMod', { depois: 800 });
       await t.digitar('#nNome', 'Controle de Contratos');
       await t.escolher('#nSetor', 'Jurídico');
       await t.escolher('#nIcone', { value: 'documento' });
       await t.digitar('#nDesc', 'Contratos e vencimentos do Jurídico.', { atraso: 26 });
       await t.clicar('#btCriarMod', { depois: 2200 });
-      await t.legenda('Depois de criar, envie o <b>arquivo .html</b> da ferramenta.', { etapa: N, ms: 300 });
-      await t.enviarArquivo('#zArq', '#inArq', cen.rec.html, { depois: 2600 });
+      await t.legenda('Depois de criar, envie o <b>arquivo .html</b> da ferramenta e escreva o que ele traz.', { etapa: N, ms: 300 });
+      await t.enviarArquivo('#zArq', '#inArq', cen.rec.html, { depois: 1200 });
+      await t.digitar('#descVersao', 'Primeira versão do Controle de Contratos.', { atraso: 28 });
+      await t.clicar('#btEnviarVersao', { depois: 2200 });
       await t.legenda('Ferramenta nova já nasce <b>isolada</b>: roda separada do portal, sem a sessão de quem abre.', { etapa: N, ms: 300 });
       await t.mostrar('#mIsolada', 2400, { dx: 0.05 });
-      await t.legenda('Na mesma janela: onde os dados ficam, quem abre e com qual papel e as versões anteriores.', { etapa: N, ms: 300 });
-      await t.rolar(700, '.fundo-modal .modal-corpo');
+      await t.legenda('Na mesma tela: onde os dados ficam, as versões anteriores e a cópia dos dados. Mudou algo? Clique em <b>Salvar</b>.', { etapa: N, ms: 300 });
+      await t.rolar(700, '#detFerr');
       await t.pausa(1800);
-      await t.clicar('.fundo-modal .modal-cab [data-fechar]', { depois: 1200 });
+      await t.legenda('Quem abre e com qual papel fica em <b>Configurações → Acessos</b>: o botão leva direto para a ferramenta.', { etapa: N, ms: 300 });
+      await t.mostrar('[data-ir-acessos]', 2600);
       const O = '3 · Outras ações';
-      await t.legenda('<b>Setores</b> cria e renomeia setores. <b>Enviar vários HTMLs</b> publica cada arquivo no módulo certo.', { etapa: O, ms: 300 });
-      await t.mostrar('#btSetores', 1800);
-      await t.mostrar('#btLote', 1800);
+      await t.legenda('Em <b>Sistema</b>: <b>Enviar vários HTMLs</b> publica cada arquivo na ferramenta certa.', { etapa: O, ms: 300 });
+      await t.clicar('.cfg-nav a[href="#/config/sistema"]', { depois: 1600 });
+      await t.mostrar('#btLote', 2200);
       await t.legenda('<b>Backup do banco</b> baixa uma cópia de tudo. Faça com frequência.', { etapa: O, ms: 300 });
       await t.mostrar('#btBackup', 2600);
+      await t.legenda('Setores novos e nomes de setor: <b>Setores e equipes → Criar e renomear setores</b>.', { etapa: O, ms: 300 });
+      await t.clicar('.cfg-nav a[href="#/config/setores"]', { depois: 1600 });
+      await t.mostrar('#btSetores', 2600);
     },
-    resumo: ['<b>Novo módulo</b> → envie o HTML (nasce isolada)', 'HTML da coordenação em ferramenta não isolada: <b>aprovar</b> na janela', '<b>Backup do banco</b> com frequência'],
+    resumo: ['<b>Nova ferramenta</b> → envie o HTML (nasce isolada)', 'HTML da coordenação em ferramenta não isolada: <b>aprovar</b> na ferramenta', '<b>Sistema</b>: envio em lote e <b>Backup do banco</b> com frequência'],
   },
 ];
 

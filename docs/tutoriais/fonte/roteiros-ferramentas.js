@@ -270,6 +270,8 @@ module.exports = [
       await t.legenda('Em <b>Prestações do mês</b>, escolha a competência: cada parceiro aparece com o valor da comissão e a situação (lançado, enviado, pago).', { etapa: V, ms: 600 });
       await t.mostrar(f.locator('[data-mes].ativa, [data-mes].on').first(), 2600);
       await t.legenda('A competência é o mês do movimento; a comissão dela é paga no mês seguinte.', { etapa: V, ms: 3200 });
+      await t.legenda('Os <b>balanços da garantidora</b> (PDF) são anexados aqui, uma vez só para o mês inteiro. <b>Lista para buscar os balanços</b> mostra quais faltam.', { etapa: V, ms: 300 });
+      await t.mostrar(f.locator('#btnListaBal'), 2800);
 
       const L = '2 · Lançar o mês';
       await t.legenda('Para lançar, abra <b>Lançamento</b> e escolha o parceiro. A competência já vem marcada.', { etapa: L, ms: 300 });
@@ -288,8 +290,8 @@ module.exports = [
         await t.digitar(f.locator(`[data-i="${i}"][data-k="valorBoleto"]`), valores[n][6], { atraso: 45, depois: 250 });
         await t.digitar(f.locator(`[data-i="${i}"][data-k="qtdBoletos"]`), valores[n][7], { atraso: 60, depois: 250 });
       }
-      await t.legenda('O balanço da garantidora (PDF) pode ser anexado aqui, para ir junto no relatório. Depois, <b>Salvar e ver relatório</b>.', { etapa: L, ms: 300 });
-      await t.mostrar(f.locator('#dropzone'), 2600);
+      await t.legenda('No passo 2, quantos <b>balanços</b> do mês já chegaram (eles são anexados na tela do mês). Confira os valores e clique em <b>Salvar e ver relatório</b>.', { etapa: L, ms: 300 });
+      await t.mostrar(f.locator('#irAnexo'), 2600);
       await t.clicar(f.locator('#btnSalvarVer'), { depois: 2200 });
 
       const R = '3 · Relatório';
@@ -373,7 +375,9 @@ module.exports = [
       await t.clicar(f.locator('[data-abrir$="-v4101"]'), { depois: 1400 });
       await t.clicar(f.locator('label:has(input[name=tp][value=sim])'), { depois: 800 });
       await t.legenda('Escolha o parceiro <b>na lista</b> (a ferramenta sugere pela ADM informada). Se ele não estiver lá, peça ao Financeiro, por ticket, para cadastrá-lo. Depois marque <b>recorrência</b> e/ou <b>venda</b>.', { etapa: C, ms: 300 });
-      await t.escolher(f.locator('#rP1'), { value: 'p-alfaadministradora' });
+      // a lista de parceiros vem da Prestação de Contas: escolhe pelo nome, não pelo código
+      await f.locator('#rP1 option', { hasText: 'Alfa' }).first().waitFor({ state: 'attached', timeout: 20000 });
+      await t.escolher(f.locator('#rP1'), { value: await f.locator('#rP1 option', { hasText: 'Alfa' }).first().getAttribute('value') });
       await t.clicar(f.locator('#rRec'), { depois: 300 });
       if (!(await f.locator('#rRec').isChecked())) await f.locator('#rRec').check(); // a janela rola enquanto o cursor chega
       await t.pausa(600);
@@ -399,7 +403,7 @@ module.exports = [
       await t.legenda('<b>Cadastrar</b> cria o condomínio e o vínculo com o parceiro na <b>Prestação de Contas</b>, sem digitar de novo.', { etapa: F, ms: 300 });
       await t.clicar(f.locator('[data-cad]').first(), { depois: 1400 });
       await t.digitar(f.locator('#cNome'), 'Cond. Lago Azul', { atraso: 30 });
-      await t.escolher(f.locator('select[data-i="0"]'), { value: 'p-alfaadministradora' });
+      await t.escolher(f.locator('select[data-i="0"]'), { value: await f.locator('select[data-i="0"] option', { hasText: 'Alfa' }).first().getAttribute('value') });
       await t.clicar(f.locator('#cOk'), { depois: 2200 });
 
       const X = '5 · Acessos e Excel';
@@ -457,9 +461,8 @@ module.exports = [
       await t.escolher(f.locator('#fUf'), { index: 0 }, { depois: 800 });
 
       const X = '4 · Exportar';
-      await t.legenda('<b>Excel</b> exporta o painel. Os dados atualizam sozinhos; <b>Atualizar agora</b> busca na hora.', { etapa: X, ms: 300 });
-      await t.mostrar(f.locator('#exportBtn'), 2200);
-      await t.mostrar(f.locator('#refreshBtn'), 2000);
+      await t.legenda('<b>Excel</b> exporta o painel. Os números vêm da Prestação de Contas e atualizam sozinhos.', { etapa: X, ms: 300 });
+      await t.mostrar(f.locator('#exportBtn'), 3200);
     },
     resumo: ['<b>Visão geral</b>: apurado, pago e a pagar no ano', '<b>Parceiros</b>: clique para abrir a ficha', '<b>Condomínios</b>, filtros e <b>Excel</b>'],
   },
