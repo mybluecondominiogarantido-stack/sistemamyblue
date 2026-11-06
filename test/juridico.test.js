@@ -268,6 +268,13 @@ test('o que chega por e-mail: o Jurídico escolhe o tipo e quem pediu; Fila e Co
   assert.ok(comigo.every((x) => x.responsavel_id === ids['adv@teste.com']));
   assert.equal((await comercial('GET', '/api/juridico/demandas?vis=fila')).status, 403);
   assert.equal((await diretor('GET', '/api/juridico/demandas?vis=comigo')).status, 403);
+  // Para fazer (a aba do Painel): a fila em cima e o que está com a advogada embaixo, numa lista só
+  const fazer = (await adv('GET', '/api/juridico/demandas?vis=fazer')).json.demandas;
+  assert.deepEqual(fazer.map((x) => x.id), [...fila, ...comigo.map((x) => x.id)]);
+  assert.deepEqual([...new Set(fazer.map((x) => x.grupo))], ['fila', 'comigo']);
+  assert.equal((await comercial('GET', '/api/juridico/demandas?vis=fazer')).status, 403);
+  assert.equal((await comercial('GET', '/api/juridico/resumo')).json.gerencia, false);
+  assert.equal((await coord('GET', '/api/juridico/resumo')).json.gerencia, true);
   // Meus pedidos: o rascunho de contrato aparece e "espera por você"
   const { id: rasc } = await ctx.db.um(`INSERT INTO contratos (etapa, origem, condominio, solicitante_id) VALUES ('rascunho', 'entrega', 'Condomínio Rascunho', $1) RETURNING id`,
     [ids['exec@teste.com']]);
