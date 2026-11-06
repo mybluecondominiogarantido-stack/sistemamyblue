@@ -45,7 +45,7 @@ function documentos(ids, bia) {
     'kits/k-sindico': { nome: 'Kit síndico', itens: [{ itemId: 'i-br-sac', qtd: 1 }, { itemId: 'i-br-can', qtd: 1 }, { itemId: 'i-br-cad', qtd: 1 }], ativo: true, atualizadoEm: quando(-150), por: bia },
     'kits/k-evento': { nome: 'Kit evento', itens: [{ itemId: 'i-br-sch', qtd: 1 }, { itemId: 'i-br-bon', qtd: 1 }, { itemId: 'i-br-pan', qtd: 2 }], ativo: true, atualizadoEm: quando(-150), por: bia },
     'compras/c-mol': { itemId: 'i-br-mol', qtd: 1000, previsao: dia(9), fornecedor: 'Brindes & Cia', obs: 'Cotação aprovada pelo Suprimentos', status: 'aberta', criadoEm: quando(-12), por: bia },
-    'demandas/d-feira': { itemId: 'i-br-can', qtd: 300, data: dia(24), evento: 'Feira de condomínios — Recife', ativa: true, criadoEm: quando(-5), por: bia },
+    'demandas/d-feira': { itemId: 'i-br-can', qtd: 300, data: dia(24), evento: 'Feira de condomínios - Recife', ativa: true, criadoEm: quando(-5), por: bia },
   };
   for (const [iid, sku, nome, minimo, custo, fornecedor, leadTime] of ITENS) {
     docs['itens/' + iid] = { sku, nome, minimo, categoria: 'Brinde', unidade: 'un.', custo, fornecedor, leadTime, seguranca: 0, lote: 0, localizacao: 'Almoxarifado · prateleira ' + sku.slice(3),
@@ -55,7 +55,7 @@ function documentos(ids, bia) {
   // pedidos entregues nos últimos meses (as saídas formam a curva de consumo)
   const quem = [[vera, 'Vera Campos', 'vera@myblue.com.br', 'Comercial'], [davi, 'Davi Rocha', 'davi@myblue.com.br', 'Crédito'], [marcos, 'Marcos Lima', 'marcos@myblue.com.br', 'Cobrança'],
     [sara, 'Sara Alves', 'sara@myblue.com.br', 'Sucesso do Cliente'], [bia, 'Bia Torres', 'bia@myblue.com.br', 'Marketing']];
-  const eventos = ['Encontro de síndicos — Natal', 'Visita a condomínios da carteira', 'Assembleia do Res. Primavera', 'Café com síndicos — Fortaleza', 'Feira imobiliária — João Pessoa'];
+  const eventos = ['Encontro de síndicos - Natal', 'Visita a condomínios da carteira', 'Assembleia do Res. Primavera', 'Café com síndicos - Fortaleza', 'Feira imobiliária - João Pessoa'];
   let n = 0;
   for (let m = 5; m >= 0; m--) {
     for (let k = 0; k < 2; k++) {
@@ -66,7 +66,7 @@ function documentos(ids, bia) {
       docs['pedidos/' + pid] = { protocolo: pid, status: 'entregue', solicitanteId: sid, nome, email, setor, finalidade: 'Brindes para o evento', evento: eventos[(m + k) % eventos.length],
         dataDesejada: dia(d + 2), obs: '', linhas, kits: [], criadoEm: quando(d, 13), aprovacao: { por: bia, em: quando(d, 15), linhas, parcial: false, justificativa: '' },
         entrega: { por: bia, em: quando(d + 2, 16) }, historico: [{ em: quando(d, 13), por: sid, acao: 'criado', txt: 'Pedido criado' }, { em: quando(d, 15), por: bia, acao: 'aprovado', txt: 'Aprovado e reservado' },
-          { em: quando(d + 2, 16), por: bia, acao: 'entregue', txt: 'Entrega confirmada — saída registrada no estoque' }] };
+          { em: quando(d + 2, 16), por: bia, acao: 'entregue', txt: 'Entrega confirmada - saída registrada no estoque' }] };
       for (const l of linhas) docs[`movs/S-${pid}-${l.itemId}`] = { tipo: 'saida', itemId: l.itemId, qtd: l.qtd, motivo: 'Entrega do pedido ' + pid, pedidoId: pid, setor, evento: eventos[(m + k) % eventos.length], em: quando(d + 2, 16), por: bia };
     }
   }
@@ -78,7 +78,7 @@ function documentos(ids, bia) {
     historico: [{ em: quando(-2, 13), por: davi, acao: 'criado', txt: 'Pedido criado: 40 Bonés, 60 Canetas' }, { em: quando(-1, 10), por: bia, acao: 'aprovado', txt: 'Aprovado e reservado: 40 Bonés, 60 Canetas' }] };
   const kit = ['i-br-sac', 'i-br-can', 'i-br-cad'].map((itemId) => ({ itemId, qtd: 120, kitId: 'k-sindico' }));
   docs[`pedidos/BR-${dia(-1).slice(2).replace(/-/g, '')}-T4MV`] = { protocolo: `BR-${dia(-1).slice(2).replace(/-/g, '')}-T4MV`, status: 'pendente', solicitanteId: vera, nome: 'Vera Campos', email: 'vera@myblue.com.br',
-    setor: 'Comercial', finalidade: 'Kit para os síndicos convidados', evento: 'Encontro de síndicos — Fortaleza', dataDesejada: dia(6), obs: 'Retiro na véspera, pela manhã.',
+    setor: 'Comercial', finalidade: 'Kit para os síndicos convidados', evento: 'Encontro de síndicos - Fortaleza', dataDesejada: dia(6), obs: 'Retiro na véspera, pela manhã.',
     linhas: [...kit, { itemId: 'i-br-bon', qtd: 30 }], kits: [{ kitId: 'k-sindico', nome: 'Kit síndico', qtd: 120 }], criadoEm: quando(-1, 15),
     historico: [{ em: quando(-1, 15), por: vera, acao: 'criado', txt: 'Pedido criado: 120 Sacolas de papel, 120 Canetas, 120 Caderneta, 30 Bonés' }] };
   docs[`pedidos/BR-${dia(0).slice(2).replace(/-/g, '')}-P2LX`] = { protocolo: `BR-${dia(0).slice(2).replace(/-/g, '')}-P2LX`, status: 'pendente', solicitanteId: marcos, nome: 'Marcos Lima', email: 'marcos@myblue.com.br',
@@ -109,7 +109,7 @@ const roteiro = {
     await fr.addStyleTag({ content: '#banner .banner.red{display:none!important}' });
     await t.pausa(1500); // alertas de reposição verificados ao abrir
   },
-  abertura: ['Estoque de brindes, retiradas com aprovação e reposição — tudo calculado pelo livro de movimentações.',
+  abertura: ['Estoque de brindes, retiradas com aprovação e reposição, tudo calculado pelo livro de movimentações.',
     ['Painel: saldo, consumo e pendências', 'Pedido: aprovar e reservar', 'Confirmar a entrega (baixa no estoque)', 'Reposição: compra e recebimento']],
   async gravar(t) {
     const f = quadro(t);

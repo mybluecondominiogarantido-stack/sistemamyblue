@@ -471,7 +471,7 @@ module.exports = [
       const D = require('./dados-ficticios');
       const comp = D.compAnterior(new Date());
       const conds = (n, falha) => D.CONDS.slice(0, n).map((c, i) => ['Cond. ' + c, i !== falha]);
-      const doc = (x) => D.demonstrativo({ comp, titulo: 'Memória de cálculo — Condomínios com meta de redução de inadimplência', nota: 'Valor por condomínio que bate a meta.', ...x });
+      const doc = (x) => D.demonstrativo({ comp, titulo: 'Memória de cálculo - Condomínios com meta de redução de inadimplência', nota: 'Valor por condomínio que bate a meta.', ...x });
       const ids = cen.id;
       await cen.admin('POST', '/api/comissao/relatorios', { modulo: 'premiacoes', competencia: comp, relatorios: [
         { chave: 'cb1', usuario_id: ids['marcos@myblue.com.br'], nome: 'Marcos Lima', cargo: 'Analista de Cobrança', setor: 'Cobrança', valor: 495,
@@ -567,7 +567,7 @@ module.exports = [
       await t.legenda('Digite e escolha o condomínio da lista. O portal já mostra <b>para quem o ticket vai</b>.', { etapa: E, ms: 600 });
       await t.digitar('#tCond', 'Cond. Vila Rica · PE', { atraso: 45, depois: 2600 });
       await t.legenda('Escreva um <b>assunto</b> curto e, na <b>descrição</b>, tudo o que o setor precisa.', { etapa: E, ms: 700 });
-      await t.digitar('#tTitulo', '2ª via — apto 51');
+      await t.digitar('#tTitulo', '2ª via - apto 51');
       await t.digitar('#tDesc', 'Moradora pediu a 2ª via do boleto de outubro. Vencimento 10/10. Enviar para o e-mail do síndico.', { atraso: 22, depois: 600 });
       await t.legenda('A <b>prioridade</b> veio do tipo de demanda. Logo abaixo aparece o <b>prazo para resposta</b>.', { etapa: E, ms: 900 });
       await t.mostrar('#tPrazo', 2600);
@@ -707,7 +707,7 @@ module.exports = [
       await c('POST', '/api/auth/login', { email: 'mel@myblue.com.br', senha: 'Senha1234' });
       await c('POST', '/api/auth/senha', { atual: 'Senha1234', nova: 'Nova12345' });
     },
-    abertura: ['Para quem tem a marcação Marketing — Central de Links no cadastro.', ['Cadastrar um link', 'Mudar a ordem', 'Trocar o fundo da campanha']],
+    abertura: ['Para quem tem a marcação Marketing: Central de Links no cadastro.', ['Cadastrar um link', 'Mudar a ordem', 'Trocar o fundo da campanha']],
     async gravar(t, cen) {
       await t.legenda('Quem edita a Central de Links vê o botão <b>Editar links e fundo</b>.', { etapa: '1 · Editar', ms: 400 });
       await t.clicar('a[href="#/links/gestao"]', { depois: 1800 });
@@ -1550,7 +1550,7 @@ module.exports = [
       const B = '2 · Cadastrar';
       await t.legenda('Confira os dados do contrato assinado: CNPJ, contatos, o e-mail da prestação de contas e as comissões.', { etapa: B, ms: 300 });
       await t.mostrar('#btCadParcCp', 3000);
-      await t.legenda('<b>Cadastrar parceiro</b>: ele entra na <b>Prestação de Contas — Comissão de Parceiros</b> sem digitar de novo. CNPJ já na base: o contrato é ligado ao cadastro que existe.', { etapa: B, ms: 300 });
+      await t.legenda('<b>Cadastrar parceiro</b>: ele entra na <b>Prestação de Contas: Comissão de Parceiros</b> sem digitar de novo. CNPJ já na base: o contrato é ligado ao cadastro que existe.', { etapa: B, ms: 300 });
       await t.clicar('#btCadParcCp', { depois: 900 });
       await t.clicar('#mOk', { depois: 2600 });
       await t.legenda('Quem pediu é avisado de que já pode indicar condomínios: o parceiro aparece na seção Parceria do formulário de implantação. Sem cadastro em 2 dias úteis, o aviso se repete.', { etapa: B, ms: 3600 });
@@ -1799,7 +1799,7 @@ module.exports = [
       await t.clicar('input[name=uPapel][value=coordenador]', { depois: 1400 });
       await t.legenda('Marque o <b>setor</b>: ele forma a equipe do setor na Central de Tickets.', { etapa: N, ms: 300 });
       await t.clicar('.fundo-modal label:has-text("Jurídico") input[name=uSetor]', { depois: 1200 });
-      await t.legenda('Marcações extras: <b>supervisão da Central de Tickets</b> (todos os setores; já vem com coordenador e supervisor) e <b>Marketing — Central de Links</b>.', { etapa: N, ms: 300 });
+      await t.legenda('Marcações extras: <b>supervisão da Central de Tickets</b> (todos os setores; já vem com coordenador e supervisor) e <b>Marketing: Central de Links</b>.', { etapa: N, ms: 300 });
       await t.mostrar('#uSup', 1800, { dx: 0.05 });
       await t.mostrar('#uLinks', 1800, { dx: 0.05 });
       await t.clicar('#btSalvarU', { depois: 1500 });

@@ -42,11 +42,11 @@ module.exports = [
     inicio: '#/m/suprimentos',
     async preparar(cen) {
       const linhas = [
-        ['1021', 'Papelaria Central — material de escritório', 'R$ 486,90', 'Boleto', '1/1', dataBr(-6), 'Pago'],
-        ['1022', 'TechNet — manutenção de impressoras', 'R$ 1.250,00', 'Boleto', '1/1', dataBr(-2), 'Em aberto'],
-        ['1023', 'Limpa Bem — produtos de limpeza', 'R$ 732,40', 'PIX', '1/1', dataBr(3), 'Em aberto'],
-        ['1024', 'Gráfica Express — cartões de visita', 'R$ 320,00', 'Boleto', '1/1', dataBr(1), 'Em aberto'],
-        ['1025', 'Café Bom — café e copos', 'R$ 215,00', 'Cartão', '1/1', dataBr(10), 'Em aberto'],
+        ['1021', 'Papelaria Central - material de escritório', 'R$ 486,90', 'Boleto', '1/1', dataBr(-6), 'Pago'],
+        ['1022', 'TechNet - manutenção de impressoras', 'R$ 1.250,00', 'Boleto', '1/1', dataBr(-2), 'Em aberto'],
+        ['1023', 'Limpa Bem - produtos de limpeza', 'R$ 732,40', 'PIX', '1/1', dataBr(3), 'Em aberto'],
+        ['1024', 'Gráfica Express - cartões de visita', 'R$ 320,00', 'Boleto', '1/1', dataBr(1), 'Em aberto'],
+        ['1025', 'Café Bom - café e copos', 'R$ 215,00', 'Cartão', '1/1', dataBr(10), 'Em aberto'],
       ];
       await cen.admin('POST', '/api/gas/suprimentos', JSON.stringify({ action: 'addMany', rows: linhas }), 'text/plain');
     },
@@ -61,7 +61,7 @@ module.exports = [
       await t.clicar(f.locator('#newBtn'), { depois: 800 });
       await t.digitar(f.locator('#f_num'), '1031');
       await t.digitar(f.locator('#f_valor'), '1250,00');
-      await t.digitar(f.locator('#f_desc'), 'Clima Frio — manutenção do ar-condicionado', { atraso: 24 });
+      await t.digitar(f.locator('#f_desc'), 'Clima Frio - manutenção do ar-condicionado', { atraso: 24 });
       await t.legenda('À vista: informe o vencimento. <b>Próx. terça</b> e <b>Próx. quinta</b> preenchem a próxima janela de pagamento.', { etapa: V, ms: 300 });
       await t.clicar(f.locator('button:has-text("Próx. quinta")'), { depois: 1400 });
       await t.legenda('Deixe a situação <b>Em aberto</b> e clique em <b>Salvar pedido</b>.', { etapa: V, ms: 900 });
@@ -72,7 +72,7 @@ module.exports = [
       await t.clicar(f.locator('#newBtn'), { depois: 800 });
       await t.digitar(f.locator('#f_num'), '1032');
       await t.digitar(f.locator('#f_valor'), '2700,00');
-      await t.digitar(f.locator('#f_desc'), 'Móveis Sul — cadeiras', { atraso: 28 });
+      await t.digitar(f.locator('#f_desc'), 'Móveis Sul - cadeiras', { atraso: 28 });
       await t.clicar(f.locator('text=Em várias vezes'), { depois: 700 });
       await t.digitar(f.locator('#f_parc'), '3', { depois: 900 });
       await t.legenda('O portal sugere um vencimento por mês. Ajuste a data de cada parcela se precisar e confira o resumo.', { etapa: P, ms: 300 });
@@ -179,7 +179,7 @@ module.exports = [
       const K = '4 · Tickets do CS';
       await t.legenda('Em <b>Tickets</b>, registre as solicitações do CS: assunto, quem pediu, prioridade e prazo.', { etapa: K, ms: 300 });
       await t.clicar(f.locator('button.tab:has-text("Tickets")'), { depois: 1200 });
-      await t.digitar(f.locator('#ticket_assunto'), 'Ajuste de boleto — Res. Primavera', { atraso: 26 });
+      await t.digitar(f.locator('#ticket_assunto'), 'Ajuste de boleto - Res. Primavera', { atraso: 26 });
       await t.digitar(f.locator('#ticket_solicitante'), 'Síndico');
       await t.escolher(f.locator('#ticket_prioridade'), 'Média', { depois: 900 });
       await t.legenda('O prazo de conclusão sai da prioridade (dias úteis). Clique em <b>Salvar ticket</b>.', { etapa: K, ms: 1400 });
@@ -305,7 +305,7 @@ module.exports = [
 
       const E = '4 · Envio e pagamento';
       await t.clicar(f.locator('[data-aba=mes]'), { depois: 1500 });
-      await t.legenda('De volta ao mês: enviou a prestação ao parceiro? Marque <b>Enviado</b> — a data do envio fica registrada.', { etapa: E, ms: 300 });
+      await t.legenda('De volta ao mês: enviou a prestação ao parceiro? Marque <b>Enviado</b>, a data do envio fica registrada.', { etapa: E, ms: 300 });
       await t.clicar(f.locator(`[data-env="${parceiro}"]`), { depois: 1600 });
       await t.legenda('Quando o pagamento sair, marque <b>Pago</b>. Os filtros mostram o que falta enviar ou pagar.', { etapa: E, ms: 300 });
       await t.clicar(f.locator('[data-pag="p-alfaadministradora"]'), { depois: 1800 });
@@ -332,7 +332,7 @@ module.exports = [
       await noQuadro(t, 'parceiros', "setInterval(() => { const d = document.getElementById('novoParc'); if (d && !d.open) d.open = true; }, 100);");
       await t.pausa(900);
       await t.mostrar(f.locator('#novoParc'), 3600, { dy: 0.3 });
-      await t.legenda('Tudo fica salvo no portal, compartilhado com a equipe — e o <b>PartnerChip</b> mostra esses números em painéis.', { etapa: P, ms: 3600 });
+      await t.legenda('Tudo fica salvo no portal, compartilhado com a equipe, e o <b>PartnerChip</b> mostra esses números em painéis.', { etapa: P, ms: 3600 });
     },
     resumo: ['<b>Lançamento</b>: parceiro → valores de cada condomínio (e boletos, se houver excedente) → <b>Salvar e ver relatório</b>', '<b>Prestações do mês</b>: marcar enviado e pago, baixar os relatórios', '<b>Condomínios</b> e <b>Parceiros</b>: a carteira e as regras do contrato'],
   },
@@ -379,7 +379,7 @@ module.exports = [
       await t.pausa(600);
       await t.digitar(f.locator('#rObs'), 'Indicação do síndico, contrato assinado em setembro.', { atraso: 22 });
       await t.clicar(f.locator('#rEnviar'), { depois: 1800 });
-      await t.legenda('Sem parceiro? Marque <b>Não tem parceiro</b> — não gera comissão, mas fica registrado.', { etapa: C, ms: 300 });
+      await t.legenda('Sem parceiro? Marque <b>Não tem parceiro</b>, não gera comissão, mas fica registrado.', { etapa: C, ms: 300 });
       await t.clicar(f.locator('[data-abrir$="-v4103"]'), { depois: 1300 });
       await t.clicar(f.locator('label:has(input[name=tp][value=nao])'), { depois: 300 });
       if (!(await f.locator('input[name=tp][value=nao]').isChecked())) await f.locator('input[name=tp][value=nao]').check();
@@ -396,7 +396,7 @@ module.exports = [
       const F = '4 · Financeiro';
       await t.legenda('No <b>Financeiro</b> ficam as comissões aprovadas, pagas no mês seguinte.', { etapa: F, ms: 300 });
       await t.clicar(f.locator('[data-view=financeiro]'), { depois: 1800 });
-      await t.legenda('<b>Cadastrar</b> cria o condomínio e o vínculo com o parceiro na <b>Prestação de Contas</b> — sem digitar de novo.', { etapa: F, ms: 300 });
+      await t.legenda('<b>Cadastrar</b> cria o condomínio e o vínculo com o parceiro na <b>Prestação de Contas</b>, sem digitar de novo.', { etapa: F, ms: 300 });
       await t.clicar(f.locator('[data-cad]').first(), { depois: 1400 });
       await t.digitar(f.locator('#cNome'), 'Cond. Lago Azul', { atraso: 30 });
       await t.escolher(f.locator('select[data-i="0"]'), { value: 'p-alfaadministradora' });
@@ -501,7 +501,7 @@ module.exports = [
       const f = quadro(t, 'central-patrocinio');
 
       const N = '1 · Novo recibo';
-      await t.legenda('Anexe o <b>relatório de garantia</b> (PDF) e o nome, o CNPJ e o rateio são lidos sozinhos — ou preencha à mão.', { etapa: N, ms: 300 });
+      await t.legenda('Anexe o <b>relatório de garantia</b> (PDF) e o nome, o CNPJ e o rateio são lidos sozinhos, ou preencha à mão.', { etapa: N, ms: 300 });
       await t.mostrar(f.locator('#drop'), 2600);
       await t.digitar(f.locator('#condo'), 'Cond. Jardim Azul', { atraso: 32 });
       await t.digitar(f.locator('#cnpj'), '12.345.678/0001-90', { atraso: 28 });
@@ -518,7 +518,7 @@ module.exports = [
       const R = '2 · Recibos';
       await t.legenda('Em <b>Recibos</b>, por mês: o que falta enviar, aguardando assinatura, a pagar e os pagos.', { etapa: R, ms: 300 });
       await t.clicar(f.locator('[data-aba=recibos]'), { depois: 2200 });
-      await t.legenda('Enviou por e-mail? Marque <b>enviado</b>. Recebeu assinado? Marque <b>assinado</b> — o pagamento sai em até 7 dias.', { etapa: R, ms: 300 });
+      await t.legenda('Enviou por e-mail? Marque <b>enviado</b>. Recebeu assinado? Marque <b>assinado</b>, o pagamento sai em até 7 dias.', { etapa: R, ms: 300 });
       await t.clicar(f.locator('input[data-env]:visible').first(), { depois: 1500 });
       await t.clicar(f.locator('input[data-ass]:visible').first(), { depois: 1500 });
       await t.legenda('Em cada linha: baixar o PDF de novo, o e-mail para o síndico, editar e o histórico.', { etapa: R, ms: 300 });
@@ -643,7 +643,7 @@ module.exports = [
     ferramenta: 'credito',
     entrar: 'bruna@myblue.com.br',
     inicio: '#/m/credito',
-    abertura: ['As automações do setor de Crédito, num lugar só — tudo roda no navegador.', ['As ferramentas, na ordem do mês', 'Favoritas e busca', 'Exemplo: Planilha de Moradores', 'Voltar e abrir em nova aba']],
+    abertura: ['As automações do setor de Crédito, num lugar só, tudo roda no navegador.', ['As ferramentas, na ordem do mês', 'Favoritas e busca', 'Exemplo: Planilha de Moradores', 'Voltar e abrir em nova aba']],
     async gravar(t) {
       const f = quadro(t, 'credito');
       const xlsx = require(path.join(process.env.BIBLIOTECAS || '', 'node_modules', 'xlsx'));
@@ -666,7 +666,7 @@ module.exports = [
       const m = f.frameLocator('#frame-moradores');
       await t.legenda('Solte a planilha (ou o PDF de contatos) na área indicada.', { etapa: M, ms: 300 });
       await t.enviarArquivo(m.locator('#drop'), m.locator('#file'), planilha, { depois: 2200 });
-      await t.legenda('Confira os contatos lidos — qualquer campo pode ser corrigido — e informe o nome do condomínio.', { etapa: M, ms: 300 });
+      await t.legenda('Confira os contatos lidos, qualquer campo pode ser corrigido, e informe o nome do condomínio.', { etapa: M, ms: 300 });
       await t.digitar(m.locator('#condoNomeInput'), 'Cond. Jardim Azul', { atraso: 32 });
       await t.rolar(300);
       await t.clicar(m.locator('#btnGerarFinal'), { depois: 2200 });
@@ -724,7 +724,7 @@ module.exports = [
       await t.digitar(f.locator('#f-motivo'), 'Visita a condomínios da carteira', { atraso: 26 });
 
       const C = '3 · Cotações';
-      await t.legenda('Cada item (hospedagem, passagem, locação) recebe uma ou mais <b>cotações</b>. Marque a escolhida em cada item — a economia em relação à mais cara aparece no resumo.', { etapa: C, ms: 300 });
+      await t.legenda('Cada item (hospedagem, passagem, locação) recebe uma ou mais <b>cotações</b>. Marque a escolhida em cada item, a economia em relação à mais cara aparece no resumo.', { etapa: C, ms: 300 });
       await t.digitar(f.locator('[data-it=descricao]').first(), '2 diárias, quarto single', { atraso: 28 });
       await t.digitar(f.locator('[data-cot=fornecedor]').first(), 'Hotel Ponta Negra', { atraso: 30 });
       await t.digitar(f.locator('[data-cot=valor]').first(), '480,00', { atraso: 50 });

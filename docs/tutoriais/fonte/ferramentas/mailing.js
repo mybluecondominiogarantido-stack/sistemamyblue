@@ -31,7 +31,7 @@ module.exports = {
   ferramenta: SLUG,
   entrar: 'lia@myblue.com.br',
   inicio: '#/m/' + SLUG,
-  abertura: ['Arruma os telefones do mailing para o disparo e para salvar os contatos — tudo no navegador.', ['Carregar o mailing (.xlsx)', 'Planilha para o disparo: com ou sem variável', 'Contatos para salvar, um arquivo por condomínio']],
+  abertura: ['Arruma os telefones do mailing para o disparo e para salvar os contatos, tudo no navegador.', ['Carregar o mailing (.xlsx)', 'Planilha para o disparo: com ou sem variável', 'Contatos para salvar, um arquivo por condomínio']],
   async gravar(t) {
     const f = quadro(t);
     const xlsx = require(path.join(process.env.BIBLIOTECAS || '', 'node_modules', 'xlsx'));
@@ -62,7 +62,7 @@ module.exports = {
     const N = '3 · Contatos para salvar';
     await t.legenda('Em <b>Contatos para salvar</b>, a planilha para salvar os números no celular: telefone, nome e grupo.', { etapa: N, ms: 300 });
     await t.clicar(f.locator('.tab[data-tab="contatos"]'), { depois: 1600 });
-    await t.legenda('O nome junta a unidade, os dois primeiros nomes da pessoa e o condomínio, sem “Condomínio”, “Edifício” ou “Residencial” — ex.: <b>AP 101 ANA PAULA Jardim Azul</b>.', { etapa: N, ms: 300 });
+    await t.legenda('O nome junta a unidade, os dois primeiros nomes da pessoa e o condomínio, sem “Condomínio”, “Edifício” ou “Residencial”, ex.: <b>AP 101 ANA PAULA Jardim Azul</b>.', { etapa: N, ms: 300 });
     await t.mostrar(f.locator('#pane-contatos .desc'), 4200);
     await t.legenda('<b>Gerar “Novos contatos”</b>: um arquivo por condomínio; com mais de um, saem todos num <b>.zip</b>.', { etapa: N, ms: 300 });
     await t.clicar(f.locator('#btn2'), { depois: 1600 });
