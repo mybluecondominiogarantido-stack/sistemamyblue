@@ -283,9 +283,12 @@ Quem abre a ferramenta passa a ver essas datas, então ligue só onde for precis
 
 ## HTML novo da coordenação
 
-- Em ferramenta **isolada**, o HTML enviado pela coordenação/supervisão entra em uso na hora.
-- Em ferramenta **não isolada**, ele fica guardado e **aguarda a aprovação da administração** (aviso no sino e por
-  e-mail); a versão atual continua em uso. Na janela da ferramenta aparecem **Ver prévia** (sempre isolada, com os
+- Toda versão nova enviada pela coordenação/supervisão (ferramenta isolada ou não) fica guardada e **aguarda a
+  aprovação da administração** (aviso no sino e por e-mail); a versão atual continua em uso.
+- Quem envia escreve **o que mudou** (obrigatório para todos, inclusive a administração, menos na primeira versão da
+  ferramenta; o Claude escreve: na conversa em que a ferramenta foi
+  alterada, basta dizer "vou colocar no portal"). A descrição aparece na aprovação, no aviso e em *Versões anteriores*.
+- Ferramenta nova, ainda aguardando aprovação, recebe o HTML direto (ela inteira passa pela aprovação). Na janela da ferramenta aparecem **Ver prévia** (sempre isolada, com os
   dados reais), **Aprovar e usar** e **Recusar** (a versão é apagada e quem enviou é avisado).
 - A coordenação só volta a versões já aprovadas.
 

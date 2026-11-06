@@ -4,7 +4,8 @@
  *   - Padrao-Ferramentas-HTML.pdf: o padrão para quem cria ferramentas em HTML (texto para as instruções do projeto
  *     do Claude, regras, publicação no portal e checklist da administração);
  *   - Novas-Ferramentas-no-Portal.pdf: a proposta de construir as próximas ferramentas dentro do código do portal,
- *     com GitHub e aprovação da administração pelo pull request.
+ *     com GitHub e aprovação da administração pelo pull request;
+ *   (o guia rápido das gestoras sai de gerar-guia-gestoras.js, no modelo dos manuais de setor)
  *
  *   node docs/manuais/fonte/gerar-guias-ferramentas.js [html] [portal]
  */
@@ -75,6 +76,26 @@ ELA RODA ISOLADA (sandbox)
 - Baixar arquivos (Blob + link de download), imprimir, abrir nova aba e copiar funcionam
   normalmente.
 
+LAYOUT (a ferramenta tem de parecer parte do portal)
+- Ela abre dentro do portal, que já mostra o menu, o nome da ferramenta e quem está usando. Não faça
+  cabeçalho com logo, menu lateral, tela de login, tela de boas-vindas nem rodapé.
+- Comece pelo título (h1, o nome da ferramenta), uma linha de explicação embaixo e, se houver, as abas.
+- Use exatamente estas cores e fontes (Google Fonts):
+    :root{--azul:#199cb1;--azul-escuro:#147f90;--azul-claro:#e3f4f7;--texto:#13323a;--texto-2:#3c5660;
+      --apagado:#6f8a94;--fundo:#eef4f7;--cartao:#fff;--borda:#dde8ec;--borda-2:#cddde3;
+      --verde:#1f9d6b;--verde-claro:#e4f5ee;--ambar:#d98a1b;--ambar-claro:#fbf0db;--vermelho:#d8463b;--vermelho-claro:#fbe7e5}
+    Títulos: Quicksand 700. Todo o resto: Nunito Sans (texto 14px; nada menor que 12px).
+- Fundo da página var(--fundo). Conteúdo em cartões brancos com borda var(--borda), cantos de 16px.
+- Botões arredondados (pílula). Principal: fundo azul (var(--azul) para var(--azul-escuro)) e texto branco,
+  um só por tela. Secundário: branco com borda var(--borda-2). Campos: borda var(--borda-2), cantos de 11px.
+- Abas no topo: texto em Quicksand, a aba ativa sublinhada em var(--azul).
+- Tabelas: cabeçalho em letras pequenas maiúsculas cinza sobre fundo #f6fafb; valores em R$ à direita com
+  2 casas; datas dd/mm/aaaa.
+- Verde, âmbar e vermelho só para situação (pago, atenção, atrasado), em etiqueta arredondada com a palavra.
+- Ícones de traço simples (Lucide, com versão fixa). Nada de emoji como ícone, gradiente colorido, fundo
+  escuro ou animação chamativa.
+- Funciona no celular: tabela larga rola dentro dela mesma; a página não rola para o lado.
+
 QUALIDADE
 - Textos em português, claros, para quem não é técnico.
 - Mostre um aviso quando algo não puder ser salvo (o portal recusa gravação de quem só consulta).
@@ -83,7 +104,18 @@ QUALIDADE
 AO ENTREGAR, ESCREVA TAMBÉM
 1. O que a ferramenta grava e em quais coleções.
 2. Os papéis (identificador e o que cada um faz), ou "sem papéis".
-3. Um passo a passo curto, de 4 a 8 passos, para o vídeo tutorial (com dados fictícios).`;
+3. Um passo a passo curto, de 4 a 8 passos, para o vídeo tutorial (com dados fictícios).
+
+QUANDO EU DISSER QUE VOU COLOCAR NO PORTAL
+- Identifique sozinho se é uma FERRAMENTA NOVA (ainda não está no portal) ou uma ATUALIZAÇÃO (já houve
+  uma versão entregue nesta conversa, ou eu trouxe o arquivo que está no portal). Só se não der para saber,
+  pergunte isso, e nada mais.
+- Ferramenta nova: entregue, prontos para copiar, o Nome, a Descrição (1 a 2 linhas: para que serve), os
+  papéis (ou "sem papéis") e o passo a passo do tutorial.
+- Atualização: entregue o texto do campo "O que mudou nesta versão": até 5 linhas, simples e direto, uma
+  linha por mudança, para quem muda e se alguém precisa fazer algo diferente. Sem introdução, sem detalhes
+  técnicos, sem nomes de pessoas. A administração do portal lê esse texto antes de aprovar.
+- Nos dois casos, entregue também o arquivo .html final, completo.`;
 
 const PEDIDO = `Crie a ferramenta Controle de Contratos, setor Jurídico.
 Para que serve: acompanhar os contratos dos condomínios e avisar antes de vencer.
@@ -139,7 +171,7 @@ ${atencao('Nunca cole no chat planilhas, listas de condomínios ou dados de pess
 
 capH('Por que cada regra existe', tabela(['Regra', 'Por quê'], [
   ['Um arquivo só, bibliotecas das CDNs conhecidas', 'O portal entrega o arquivo e copia as bibliotecas dessas CDNs para servir mesmo se a rede da empresa bloquear. Outros sites não passam por isso.'],
-  ['Sem login, senha ou aba "Acessos"', 'Quem abre, se edita ou só consulta e o papel de cada um são definidos no portal (janela da ferramenta → <i>Quem abre e com qual papel</i>). Duas listas de acesso sempre ficam diferentes.'],
+  ['Sem login, senha ou aba "Acessos"', 'Quem abre, se edita ou só consulta e o papel de cada um são definidos no portal (<i>Configurações → Acessos → Ferramentas</i>). Duas listas de acesso sempre ficam diferentes.'],
   ['Nenhum dado real no arquivo', 'O HTML é guardado em versões e pode ser baixado. Dado embutido fica desatualizado e se espalha.'],
   ['Dados por <code>claude.use(\'db\')</code> ou localStorage', 'O portal guarda tudo no banco, com backup, histórico de quem alterou e o mesmo dado para todos. Planilha Google e banco externo ficam fora do backup e dos acessos.'],
   ['Condomínios da Carteira', 'A Carteira é a fonte única: condomínio novo, distrato ou troca de responsável aparecem sozinhos em todas as ferramentas.'],
@@ -152,10 +184,10 @@ capH('Por que cada regra existe', tabela(['Regra', 'Por quê'], [
 capH('Publicar no portal', `
 <h2>Ferramenta nova</h2>
 ${fluxo([
-  ['1. Cadastrar', 'Coordenação do setor: <i>Gestão do setor → Ferramentas do setor → Nova ferramenta</i>, e envia o HTML.'],
+  ['1. Cadastrar', 'Coordenação do setor: <i>Configurações → Ferramentas → Nova ferramenta</i>, e envia o HTML.'],
   ['2. Aguardar', 'A ferramenta fica <b>aguardando aprovação</b> e já nasce <b>isolada</b>. Só a coordenação e a administração a veem.'],
   ['3. Aprovar', 'A administração recebe o aviso (sino e e-mail), abre, testa e clica em <b>Aprovar</b>.'],
-  ['4. Liberar', 'Em <i>Quem abre e com qual papel</i>: quem abre, se edita ou só consulta e os papéis.'],
+  ['4. Liberar', 'Em <i>Configurações → Acessos → Ferramentas</i>: quem abre, se edita ou só consulta e os papéis.'],
 ])}
 <ul>
   <li>Quem criou a ferramenta e não é da coordenação do setor envia o arquivo para a coordenação ou para a administração cadastrar.</li>
@@ -163,10 +195,9 @@ ${fluxo([
   <li>O passo a passo da entrega vira o roteiro do vídeo tutorial.</li>
 </ul>
 <h2>Versão nova de uma ferramenta que já existe</h2>
-${tabela(['A ferramenta é…', 'O HTML novo enviado pela coordenação…'], [
-  ['<b>Isolada</b>', 'entra em uso na hora.'],
-  ['<b>Não isolada</b> (ferramentas antigas)', 'fica <b>aguardando aprovação</b>: a versão atual continua em uso. Na janela da ferramenta, a administração usa <b>Ver prévia</b> (sempre isolada, com os dados reais) e depois <b>Aprovar e usar</b> ou <b>Recusar</b> (a versão é apagada e quem enviou é avisado).'],
-])}
+<p>Toda versão nova enviada pela coordenação <b>aguarda a aprovação da administração</b>, isolada ou não; a versão atual continua em uso
+até lá. Antes de enviar, quem envia cola <b>o que mudou</b>: basta dizer ao Claude <i>"vou colocar no portal"</i> e ele entrega o
+texto pronto (capítulo 2, "Quando eu disser que vou colocar no portal"). A administração lê a descrição, abre <b>Ver prévia</b> (sempre isolada, com os dados reais) e aprova ou recusa.</p>
 ${dica('Toda versão fica guardada em <i>Versões anteriores</i>. A coordenação só volta a versões já aprovadas.')}
 `, 'Coordenação e administração');
 
@@ -180,14 +211,17 @@ capH('Antes de aprovar: o que conferir', `
   <li>Quem só consulta não consegue gravar (teste com alguém liberado como "só consulta").</li>
   <li>Os <b>papéis</b> vieram listados e foram cadastrados no portal com os mesmos identificadores.</li>
   <li>Veio o passo a passo para o <b>vídeo tutorial</b>.</li>
+  <li>O <b>layout</b> segue o portal: sem cabeçalho próprio, cores e fontes do capítulo 2, botões em pílula, um só botão principal.</li>
+  <li>Na versão nova, a <b>descrição do que mudou</b> bate com o que a prévia mostra.</li>
 </ul>
-${atencao('Ferramenta antiga, ainda <b>não isolada</b>: o HTML roda com a sessão de quem abre. Antes de ligar o isolamento (<i>Módulos e dados → ferramenta → Isolamento</i>), abra e teste. Detalhes no documento de acessos do portal (<code>docs/acessos/LEIAME.md</code>).')}
+${atencao('Ferramenta antiga, ainda <b>não isolada</b>: o HTML roda com a sessão de quem abre. Antes de ligar o isolamento (<i>Configurações → Ferramentas → ferramenta → Isolamento</i>), abra e teste. Detalhes no documento de acessos do portal (<code>docs/acessos/LEIAME.md</code>).')}
 `, 'Administração');
 
 html.push(capVersoes({
   intro: 'Este guia acompanha as regras do portal. Quando o portal mudar o que as ferramentas podem usar, atualize o texto do capítulo 2 aqui e nas instruções do projeto do Claude.',
   como: ['Altere o texto em <code>docs/manuais/fonte/gerar-guias-ferramentas.js</code>.', 'Gere de novo: <code>node docs/manuais/fonte/gerar-guias-ferramentas.js html</code>.', 'Cole o novo texto do capítulo 2 nas instruções do projeto do Claude.'],
-  historico: [['1.0', 'Outubro de 2026', 'Primeira versão: padrão, pedido, regras, publicação com aprovação e isolamento.']],
+  historico: [['1.0', 'Outubro de 2026', 'Primeira versão: padrão, pedido, regras, publicação com aprovação e isolamento.'],
+    ['1.1', 'Novembro de 2026', 'Layout do portal nas instruções do Claude; toda versão nova da coordenação passa pela aprovação, com a descrição do que mudou; caminhos de Configurações.']],
 }));
 
 /* ======================================================================================
@@ -305,7 +339,7 @@ async function gerar() {
   const saida = path.join(__dirname, '..');
   if (todos || quais.includes('html')) {
     const doc = documento({ chapeu: 'Guia · Ferramentas do portal', titulo: 'Padrão de ferramentas em HTML', sub: 'Como pedir, publicar e aprovar ferramentas no Portal MyBlue &nbsp;•&nbsp; MyBlue Condomínio Garantido',
-      versao: '1.0', data: 'Outubro de 2026', fim: 'Guia', css: CSS_GUIA }, html);
+      versao: '1.1', data: 'Novembro de 2026', fim: 'Guia', css: CSS_GUIA }, html);
     const destino = path.join(saida, 'Padrao-Ferramentas-HTML.pdf');
     await pdfTimbrado(page, doc, destino);
     console.log('ok', path.relative(process.cwd(), destino));

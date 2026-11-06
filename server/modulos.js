@@ -13,7 +13,7 @@ const jsonEmScript = (v) => JSON.stringify(v).replace(/</g, '\\u003c').replace(/
 
 function criarServicoModulos(db, cfg) {
   const COLUNAS = `m.*, s.nome AS setor_nome, s.ordem AS setor_ordem, v.enviado_em AS versao_em, v.tamanho, v.nome_original,
-    pv.enviado_em AS pendente_em, pv.nome_original AS pendente_nome, pu.nome AS pendente_por
+    pv.enviado_em AS pendente_em, pv.nome_original AS pendente_nome, pu.nome AS pendente_por, pv.descricao AS pendente_descricao, v.descricao AS versao_descricao
     FROM modulos m LEFT JOIN setores s ON s.id = m.setor_id LEFT JOIN modulo_versoes v ON v.id = m.versao_id
     LEFT JOIN modulo_versoes pv ON pv.id = m.versao_pendente_id LEFT JOIN usuarios pu ON pu.id = pv.enviado_por`;
 
@@ -34,11 +34,11 @@ function criarServicoModulos(db, cfg) {
 
   /* Grava um novo HTML como versão do módulo (no banco) e passa a usá-lo.
      aguardar: fica guardado como versão aguardando a aprovação da administração (a versão em uso não muda). */
-  async function salvarVersao(slug, buf, nomeOriginal, usuarioId, { aguardar = false } = {}) {
+  async function salvarVersao(slug, buf, nomeOriginal, usuarioId, { aguardar = false, descricao = null } = {}) {
     const sha = crypto.createHash('sha256').update(buf).digest('hex');
     return db.tx(async (t) => {
-      const v = await t.um(`INSERT INTO modulo_versoes (modulo_slug, conteudo, nome_original, tamanho, sha256, enviado_por, aprovada)
-        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`, [slug, buf, nomeOriginal ? String(nomeOriginal).slice(0, 200) : null, buf.length, sha, usuarioId || null, !aguardar]);
+      const v = await t.um(`INSERT INTO modulo_versoes (modulo_slug, conteudo, nome_original, tamanho, sha256, enviado_por, aprovada, descricao)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`, [slug, buf, nomeOriginal ? String(nomeOriginal).slice(0, 200) : null, buf.length, sha, usuarioId || null, !aguardar, descricao || null]);
       if (aguardar) {
         // uma versão aguardando por vez: a anterior que ainda não tinha sido aprovada sai
         await t.q('DELETE FROM modulo_versoes WHERE modulo_slug = $1 AND NOT aprovada AND id <> $2', [slug, v.id]);
@@ -68,7 +68,7 @@ function criarServicoModulos(db, cfg) {
     return v;
   }
 
-  const listarVersoes = async (slug) => (await db.q(`SELECT v.id, v.nome_original, v.tamanho, v.sha256, v.enviado_em, v.aprovada, u.nome AS enviado_por
+  const listarVersoes = async (slug) => (await db.q(`SELECT v.id, v.nome_original, v.tamanho, v.sha256, v.enviado_em, v.aprovada, v.descricao, u.nome AS enviado_por
     FROM modulo_versoes v LEFT JOIN usuarios u ON u.id = v.enviado_por WHERE v.modulo_slug = $1 ORDER BY v.id DESC`, [slug])).rows;
 
   // cache do HTML por versão (uma versão nunca muda, então o cache é sempre válido)

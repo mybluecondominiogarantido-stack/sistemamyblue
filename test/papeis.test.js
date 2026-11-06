@@ -10,8 +10,8 @@ const ids = {};
 
 function cliente() {
   let cookie = '';
-  return async function req(metodo, url, corpo) {
-    const headers = {};
+  return async function req(metodo, url, corpo, extras) {
+    const headers = { ...(extras || {}) };
     if (cookie) headers.cookie = cookie;
     let body;
     if (typeof corpo === 'string') { body = corpo; headers['content-type'] = 'text/html'; }
@@ -190,8 +190,9 @@ test('ferramentas do setor: HTML, versões e quem pode abrir', async () => {
   const lista = await coord('GET', '/api/admin/modulos');
   assert.equal(lista.status, 200, lista.texto);
   assert.deepEqual(lista.json.modulos.map((m) => m.slug).sort(), ['boletos', 'credito']);
+  const desc = (t) => ({ 'X-Descricao': encodeURIComponent(t) });
   // ferramenta não isolada: o HTML da coordenação aguarda a aprovação da administração
-  let r = await coord('PUT', '/api/admin/modulos/boletos/arquivo', html('Boletos v1'));
+  let r = await coord('PUT', '/api/admin/modulos/boletos/arquivo', html('Boletos v1'), desc('Primeira versão do controle de boletos.'));
   assert.equal(r.status, 200, r.texto);
   assert.equal(r.json.aguardando_aprovacao, true);
   const v1 = r.json.versao;
@@ -211,17 +212,22 @@ test('ferramentas do setor: HTML, versões e quem pode abrir', async () => {
   assert.equal((await emUso()).versao_id, v1);
   assert.equal((await emUso()).versao_pendente_id, null);
   // versão recusada é apagada; a em uso continua
-  r = await coord('PUT', '/api/admin/modulos/boletos/arquivo', html('Boletos v2'));
+  // versão nova (já há uma em uso): sem dizer o que mudou, não vai, nem para a coordenação nem para a administração
+  assert.equal((await coord('PUT', '/api/admin/modulos/boletos/arquivo', html('Boletos v2'))).status, 400, 'coordenação sem a descrição');
+  assert.equal((await admin('PUT', '/api/admin/modulos/boletos/arquivo', html('Boletos v2'))).status, 400, 'administração sem a descrição');
+  r = await coord('PUT', '/api/admin/modulos/boletos/arquivo', html('Boletos v2'), desc('Nova coluna de vencimento.'));
   assert.equal((await admin('POST', `/api/admin/modulos/boletos/versoes/${r.json.versao}/recusar`)).status, 200);
   assert.equal((await emUso()).versao_id, v1);
   assert.equal((await coord('GET', '/api/admin/modulos/boletos/versoes')).json.versoes.length, 1);
-  // ferramenta isolada: o HTML da coordenação entra em uso na hora
+  // ferramenta isolada também: toda versão nova da coordenação passa pela administração, com o que mudou
   await admin('PATCH', '/api/admin/modulos/boletos', { isolada: true });
-  r = await coord('PUT', '/api/admin/modulos/boletos/arquivo', html('Boletos v3'));
-  assert.equal(r.json.aguardando_aprovacao, undefined);
-  assert.equal((await emUso()).versao_id, r.json.versao);
+  r = await coord('PUT', '/api/admin/modulos/boletos/arquivo', html('Boletos v3'), desc('Filtro por data corrigido.'));
+  assert.equal(r.json.aguardando_aprovacao, true);
+  assert.equal((await emUso()).versao_id, v1, 'a versão aprovada continua em uso');
+  const pend = (await admin('GET', '/api/admin/modulos')).json.modulos.find((x) => x.slug === 'boletos');
+  assert.equal(pend.pendente_descricao, 'Filtro por data corrigido.', 'a administração lê o que mudou antes de aprovar');
   await admin('PATCH', '/api/admin/modulos/boletos', { isolada: false });
-  assert.equal((await coord('PUT', '/api/admin/modulos/cobranca/arquivo', html('Cobrança'))).status, 403, 'outro setor');
+  assert.equal((await coord('PUT', '/api/admin/modulos/cobranca/arquivo', html('Cobrança'), desc('Teste de outro setor.'))).status, 403, 'outro setor');
   const v = await coord('GET', '/api/admin/modulos/boletos/versoes');
   assert.equal(v.json.versoes.length, 2);
   assert.equal((await coord('POST', `/api/admin/modulos/boletos/versoes/${v.json.versoes[1].id}/usar`)).status, 200, 'versão aprovada: a coordenação volta a ela');

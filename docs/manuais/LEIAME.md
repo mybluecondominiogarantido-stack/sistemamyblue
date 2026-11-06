@@ -8,6 +8,7 @@ Todos no padrão visual da MyBlue (papel timbrado, capa, sumário por partes, ca
 - `Padrao-Ferramentas-HTML.pdf`: padrão para criar ferramentas em HTML (texto para as instruções do projeto do Claude, como pedir, regras, publicação com aprovação e checklist da administração).
 - `Novas-Ferramentas-no-Portal.pdf`: proposta de construir as próximas ferramentas dentro do código do portal, com GitHub e aprovação da administração pelo pull request.
   Os dois são gerados por `fonte/gerar-guias-ferramentas.js`.
+- `Guia-Gestoras-Ferramentas.pdf`: guia rápido das gestoras, no modelo dos manuais de setor (capa em degradê com a logo): layout no padrão do portal, acessos sempre no portal, ferramenta nova e atualização (sempre com aprovação; o texto do que mudou o Claude entrega quando a pessoa diz "vou colocar no portal"). Gerado por `fonte/gerar-guia-gestoras.js`, com as telas `fonte/img/gest-*.jpg` (dados fictícios) e as fontes em `fonte/fontes` (SIL OFL).
 - `setores/Manual-do-Portal-Setor-<Setor>.pdf` (Manual do Portal – Setor X): um por setor (Suprimentos, Parceiros e Comissões de Novos Condomínios estão no manual da Administrativa/Financeira, como subáreas), com as ferramentas do setor (o que cada aba faz e, nas da Administrativa/Financeira, o passo a passo de cada tarefa), como recebe e trata os tickets, a rotina da equipe e do líder, a gestão do setor, os tipos de demanda sugeridos e quando acionar outros setores.
 
 As telas usam dados fictícios. Para atualizar os manuais:

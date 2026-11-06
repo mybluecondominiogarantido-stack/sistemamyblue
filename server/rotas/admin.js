@@ -327,7 +327,7 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
       const setores = (await db.q('SELECT id, nome FROM setores WHERE id = ANY($1::int[]) ORDER BY ordem, nome', [[...req.setoresGeridos]])).rows;
       return res.json({ setores, icones: ICONES, modulos: meus.map((m) => ({ slug: m.slug, nome: m.nome, icone: m.icone, ativo: m.ativo, setor_id: m.setor_id, setor_nome: m.setor_nome, setor_ordem: m.setor_ordem, pendente: m.pendente,
         tem_arquivo: m.tem_arquivo, versao_id: m.versao_id, versao_em: m.versao_em, tamanho: m.tamanho, nome_original: m.nome_original, isolada: !!m.config.isolada,
-        versao_pendente_id: m.versao_pendente_id, pendente_em: m.pendente_em, pendente_por: m.pendente_por, pendente_nome: m.pendente_nome,
+        versao_pendente_id: m.versao_pendente_id, pendente_em: m.pendente_em, pendente_por: m.pendente_por, pendente_nome: m.pendente_nome, pendente_descricao: m.pendente_descricao,
         usuarios: perms.filter((p) => p.modulo_slug === m.slug && esc.gerencia(p.usuario_id)).map((p) => p.usuario_id) })) });
     }
     const lista = [];
@@ -452,21 +452,28 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     if (problema) return erro(res, 400, problema);
     let nomeOriginal = null;
     try { nomeOriginal = req.headers['x-nome-arquivo'] ? decodeURIComponent(String(req.headers['x-nome-arquivo'])) : null; } catch { /* nome malformado: fica sem */ }
+    // o que mudou nesta versão: obrigatório para todos, inclusive a administração (fica no registro de cada versão e,
+    // na da coordenação, a administração lê antes de aprovar). A primeira versão de uma ferramenta não precisa.
+    let descricao = '';
+    try { descricao = req.headers['x-descricao'] ? decodeURIComponent(String(req.headers['x-descricao'])) : ''; } catch { /* texto malformado: fica sem */ }
+    descricao = descricao.replace(/\r\n?/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+    if (descricao.length > 1500) return erro(res, 400, 'A descrição da atualização passou de 1.500 caracteres. Deixe só o essencial: o que mudou e para quem.');
+    if (m.versao_id && descricao.length < 10) return erro(res, 400, 'Escreva o que mudou nesta versão. O Claude escreve para você: na conversa em que a ferramenta foi alterada, diga "vou colocar no portal" e cole o texto que ele entregar.');
     const reconhecido = await modulos.reconhecer(buf);
-    // HTML da coordenação numa ferramenta já aprovada e não isolada: roda com a sessão de quem abre (inclusive a
-    // administração), então só entra em uso depois que a administração aprovar. Isolada, entra na hora.
-    const aguardar = req.usuario.papel !== 'admin' && !m.pendente && !m.config.isolada;
-    const id = await modulos.salvarVersao(m.slug, buf, nomeOriginal, req.usuario.id, { aguardar });
-    await seg.auditar(req, aguardar ? 'arquivo_aguardando' : 'arquivo_enviado', m.slug, { versao: id, nome: nomeOriginal, bytes: buf.length });
+    // versão nova enviada pela coordenação numa ferramenta já aprovada: só entra em uso depois que a administração
+    // aprovar, com a descrição do que mudou. Ferramenta nova (ainda aguardando aprovação) recebe o HTML direto.
+    const aguardar = req.usuario.papel !== 'admin' && !m.pendente;
+    const id = await modulos.salvarVersao(m.slug, buf, nomeOriginal, req.usuario.id, { aguardar, descricao });
+    await seg.auditar(req, aguardar ? 'arquivo_aguardando' : 'arquivo_enviado', m.slug, { versao: id, nome: nomeOriginal, bytes: buf.length, descricao: descricao || undefined });
     // aviso se o arquivo parece ser de outra ferramenta
     const aviso = reconhecido && reconhecido !== m.slug ? `Atenção: este arquivo parece ser da ferramenta "${(await modulos.obter(reconhecido)).nome}".` : null;
     if (aguardar) {
       if (avisos) {
         const admins = (await db.q("SELECT id FROM usuarios WHERE papel = 'admin' AND ativo")).rows.map((x) => x.id);
         await avisos.notificar(admins, { tipo: 'versao_aguardando', titulo: 'HTML novo aguardando aprovação',
-          texto: `${req.usuario.nome} enviou uma versão nova de "${m.nome}". Veja a prévia e aprove em Configurações → Ferramentas.`, link: '#/config/ferramentas', email: true, autor_id: req.usuario.id,
+          texto: `${req.usuario.nome} enviou uma versão nova de "${m.nome}"${descricao ? ': ' + descricao.split('\n')[0].slice(0, 140) : '.'} Veja a prévia e aprove em Configurações → Ferramentas.`, link: '#/config/ferramentas/' + m.slug, email: true, autor_id: req.usuario.id,
           detalhes: { assunto: `Aprovação pendente: nova versão de “${m.nome}”`, titulo: 'Nova versão de HTML para revisar', intro: `**${req.usuario.nome}** enviou uma nova versão de uma ferramenta do portal. Ela só entra em uso depois da sua aprovação.`,
-            linhas: [['Ferramenta', m.nome], ['Enviado por', req.usuario.nome], ['Onde aprovar', 'Configurações → Ferramentas']] } });
+            linhas: [['Ferramenta', m.nome], ['Enviado por', req.usuario.nome], ['O que mudou', descricao || null], ['Onde aprovar', 'Configurações → Ferramentas']] } });
       }
       return res.json({ ok: true, versao: id, aguardando_aprovacao: true, aviso });
     }
