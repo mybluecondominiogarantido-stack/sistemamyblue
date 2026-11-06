@@ -31,7 +31,12 @@ const { porSlug, rotuloPublico } = require('../../../server/tutoriais');
     try {
       const cen = await montarCenario(portal.base, { ferramentas });
       // versão da ferramenta só para a gravação (ex.: troca listas com nomes reais por fictícios); o arquivo original não muda
-      if (r.adaptarHtml) await cen.admin('PUT', `/api/admin/modulos/${r.ferramenta}/arquivo`, r.adaptarHtml(fs.readFileSync(ferramentas[r.ferramenta], 'utf8')));
+      // a versão nova precisa dizer o que mudou; se o portal recusar, para aqui: o vídeo não pode sair com os dados reais do HTML
+      if (r.adaptarHtml) {
+        const v = await cen.admin('PUT', `/api/admin/modulos/${r.ferramenta}/arquivo`, r.adaptarHtml(fs.readFileSync(ferramentas[r.ferramenta], 'utf8')), null,
+          { 'X-Descricao': encodeURIComponent('Cópia só para a gravação do tutorial, com dados fictícios.') });
+        if (!v || !v.ok || v.aguardando_aprovacao) throw new Error(`a cópia com dados fictícios de "${r.ferramenta}" não entrou em uso: ${JSON.stringify(v)}`);
+      }
       if (r.preparar) await r.preparar(cen, portal.base, br);
       t = await new Tutorial(br, portal.base, path.join(saida, r.nome + '.mp4'), { largura: r.largura }).abrir();
       if (r.entrar) await t.entrar(r.entrar, r.entrar.startsWith('admin@') ? 'Admin1234' : SENHA);
