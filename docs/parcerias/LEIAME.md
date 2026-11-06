@@ -10,7 +10,7 @@ lado da Solicitação de Contrato, com os mesmos padrões dela.
 | Onde | O que |
 |---|---|
 | **Solicitações ao Jurídico** (`#/juridico/pedidos`) | **Novo pedido → Contrato de parceria** abre o formulário; a parceria aparece em **Meus pedidos** |
-| **Painel do Jurídico** (`#/juridico/painel/<aba>`) | **Para fazer** (com as demais demandas), **Assinaturas → Contratos de parceria**, **Diretoria → Contratos de parceria**, **Cadastro de parceiros** (setor Parceiros), **Todos** |
+| **Painel do Jurídico** (`#/juridico/painel/<aba>`) | **Minhas demandas** (com as demais demandas), **Assinaturas** (junto com os contratos de garantia e as demandas), **Diretoria → Contratos de parceria**, **Cadastro de parceiros** (setor Parceiros), **Todos** |
 | A solicitação | `#/parcerias/<id>` (os endereços antigos `#/parcerias/<aba>` levam à aba equivalente) |
 
 ## Onde está cada parte

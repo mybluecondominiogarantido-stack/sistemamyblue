@@ -242,6 +242,13 @@ test('os pedidos da Solicitação de Contrato entram na lista e nos indicadores,
   const garantia = ind.tipos.find((t) => t.nome === 'Contrato (garantia)');
   assert.deepEqual(garantia.meses[5], { dentro: 1, total: 1, pct: 100 }); // junho: o contrato (no prazo); a importada do Beta foi desfeita
   assert.ok(ind.resumo.entregues >= 2);
+  // por pessoa (quem pediu) e por estado, como as colunas da planilha
+  const pessoa = ind.pessoas.find((x) => x.nome === l[0].solicitante_nome);
+  assert.ok(pessoa && pessoa.solicitadas >= 1 && pessoa.sla.dentro >= 1);
+  assert.match(pessoa.setor, /Comercial/);
+  const rn = ind.estados.find((x) => x.nome === 'RN');
+  assert.ok(rn && rn.sla.total >= 1);
+  assert.ok(Array.isArray(ind.responsaveis));
   assert.equal((await comercial('GET', '/api/juridico/indicadores')).status, 403);
   const x = await adv('GET', '/api/juridico/demandas.xlsx?vis=todas');
   assert.equal(x.status, 200);
@@ -307,4 +314,37 @@ test('aviso semanal: quem pediu recebe a lista do que espera por ela há 15 dias
   assert.equal((await avisosDe('outro@teste.com')).length, antes + 1);
   await ctx.rotinasJuridico.executar(new Date('2026-12-09T13:00:00Z'));
   assert.equal((await avisosDe('outro@teste.com')).length, antes + 2);
+});
+
+test('Assinaturas numa lista só: Pronto para assinatura → Aguardando assinaturas → Assinado; Painel de Desempenho por mês', async () => {
+  const tipo = (await adv('GET', '/api/juridico/meta')).json.tipos.find((t) => t.nome === 'Aditivo');
+  const n = await comercial('POST', '/api/juridico/demandas', { tipo_id: tipo.id, cliente: 'Condomínio Assina' });
+  assert.equal(n.status, 201, n.texto);
+  const id = n.json.id;
+  const grupoDe = async () => {
+    const a = (await adv('GET', '/api/juridico/assinaturas')).json;
+    return ['pronto', 'aguardando', 'assinado'].find((k) => a[k].some((x) => x.origem === 'demanda' && x.id === id)) || null;
+  };
+  assert.equal(await grupoDe(), null);
+  assert.equal((await adv('PATCH', `/api/juridico/demandas/${id}`, { status: 'pronto_assinatura' })).status, 200);
+  assert.equal(await grupoDe(), 'pronto');
+  assert.equal((await adv('PATCH', `/api/juridico/demandas/${id}`, { status: 'aguardando_assinaturas' })).status, 200);
+  assert.equal(await grupoDe(), 'aguardando');
+  assert.equal((await adv('PATCH', `/api/juridico/demandas/${id}`, { status: 'concluido' })).status, 200);
+  assert.equal(await grupoDe(), 'assinado');
+  const d = (await adv('GET', `/api/juridico/demandas/${id}`)).json.demanda;
+  assert.equal(d.assinado_em, diaBr());
+  assert.equal(d.entregue_em, diaBr()); // a minuta pronta conta como entrega (SLA)
+  assert.equal((await comercial('GET', '/api/juridico/assinaturas')).status, 403);
+  // Painel de Desempenho: o mês de hoje e o ano
+  const [ano, mes] = diaBr().split('-').map(Number);
+  const m = (await diretor('GET', `/api/juridico/indicadores?ano=${ano}&mes=${mes}`)).json;
+  assert.equal(m.mes, mes);
+  assert.equal(m.meses.length, 12);
+  assert.ok(m.meses[mes - 1].concluidas >= 1 && m.resumo.entregues >= 1);
+  assert.ok(m.atividades.some((x) => x.nome === 'Aditivo'));
+  assert.equal(typeof m.agora.pronto_assinatura, 'number');
+  const a = (await diretor('GET', `/api/juridico/indicadores?ano=${ano}`)).json;
+  assert.equal(a.mes, 0);
+  assert.ok(a.resumo.solicitadas >= m.resumo.solicitadas);
 });

@@ -187,7 +187,7 @@ Tela própria do portal (menu **Jurídico → Solicitações ao Jurídico** para
 |---|---|---|
 | **Comercial** (executivo de negócios) | o mesmo cadastro de executivo da Análise de Crédito | pedir o contrato a partir das suas análises liberadas (ou do PDF, ou de condomínio de entrega), anexar a convenção (se a análise não trouxe), pedir ajuste na minuta ou a assinatura (síndico aprovou), ver o controle das suas e, com o contrato concluído, solicitar a implantação |
 | **Quem elabora** (Jurídico) | marcado pela administração em *Configurações → Acessos → Solicitação de Contrato* (sem ninguém marcado, a administração recebe) | ver a fila, as assinaturas, o Dashboard Jurídico, todas as solicitações e o controle; assumir e passar para outra pessoa; quem assumiu devolve com pendência e envia a minuta; marcar *Enviado para assinatura* e *Assinado* (com a via assinada); registrar e corrigir as condições fechadas (não solicita a implantação: é o executivo) |
-| **Diretoria** | permissão *Chancelar análises de crédito* | decidir os itens que o Manual do Contrato reserva à diretoria antes da minuta; ver os Indicadores do Painel do Jurídico e o controle |
+| **Diretoria** | permissão *Chancelar análises de crédito* | decidir os itens que o Manual do Contrato reserva à diretoria antes da minuta; ver o Painel de Desempenho do Painel do Jurídico e o controle |
 | **Administração** | perfil | tudo, inclusive escolher quem elabora |
 
 Detalhes em `docs/contratos/LEIAME.md`.
@@ -199,8 +199,8 @@ Telas próprias do portal (menu **Jurídico → Solicitações ao Jurídico** e 
 | Quem | Como entra | Pode |
 |---|---|---|
 | **Quem pede** | qualquer pessoa do portal | em *Solicitações ao Jurídico*: abrir uma demanda em nome próprio (com a data de hoje), ver as suas em *Meus pedidos* (com os contratos e as parcerias que pediu), comentar e excluir enquanto está pendente; recebe o aviso semanal do que espera por ela há 15 dias ou mais |
-| **Jurídico** | setor **Jurídico** (*Configurações → Pessoas* ou *Setores e equipes*) ou a permissão *Elaborar as minutas de contrato* | no *Painel do Jurídico*: Para fazer (e Pegar), Todos e Indicadores; mudar situação, data de conclusão, responsável e os dados (inclusive quem pediu e a data da solicitação); excluir. Assinaturas aparece para quem elabora os contratos. A Tabela de prazos e a importação ficam em *Configurações → Jurídico*, para a coordenação/supervisão do Jurídico e a administração |
-| **Diretoria** | permissão *Chancelar análises de crédito* | no *Painel do Jurídico*: Todos, Indicadores e Diretoria (só consulta nas demandas) |
+| **Jurídico** | setor **Jurídico** (*Configurações → Pessoas* ou *Setores e equipes*) ou a permissão *Elaborar as minutas de contrato* | no *Painel do Jurídico*: Minhas demandas (e Assumir), Assinaturas, Painel de Desempenho e Todos; mudar situação, data de conclusão, responsável e os dados (inclusive quem pediu e a data da solicitação); excluir. A Tabela de prazos e a importação ficam em *Configurações → Jurídico*, para a coordenação/supervisão do Jurídico e a administração |
+| **Diretoria** | permissão *Chancelar análises de crédito* | no *Painel do Jurídico*: Todos, Painel de Desempenho e Diretoria (só consulta nas demandas) |
 | **Setor Parceiros** | quem é do setor Parceiros | no *Painel do Jurídico*: Cadastro de parceiros |
 | **Importar a planilha** | administração e coordenação/supervisão do setor Jurídico | importar e desfazer a importação |
 

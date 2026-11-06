@@ -12,7 +12,7 @@ Demandas Jurídicas:
 | Menu | Endereço | Quem vê | Abas |
 |---|---|---|---|
 | **Solicitações ao Jurídico** | `#/juridico/pedidos` | todo mundo | **Meus pedidos** (contratos, parcerias e demandas, com o que espera por você) e o botão **Novo pedido** (contrato de garantia, contrato de parceria ou outra atividade) |
-| **Painel do Jurídico** | `#/juridico/painel/<aba>` | Jurídico, diretoria e setor Parceiros | **Para fazer**, **Assinaturas** (contratos · parcerias), **Todos**, **Diretoria** (contratos · parcerias), **Cadastro de parceiros**, **Indicadores** (prazos e SLA · contratos). A Tabela de prazos e a importação ficam em **Configurações → Jurídico** (`#/config/juridico/prazos`, `/importar`), para a administração e a coordenação/supervisão do Jurídico |
+| **Painel do Jurídico** | `#/juridico/painel/<aba>` | Jurídico, diretoria e setor Parceiros | **Minhas demandas**, **Assinaturas** (contratos de garantia, de parceria e demandas juntos: pronto para assinatura · aguardando assinaturas · assinado), **Painel de Desempenho** (todas as atividades · contratos de garantia), **Todos**, **Diretoria** (contratos · parcerias), **Cadastro de parceiros**. A Tabela de prazos e a importação ficam em **Configurações → Jurídico** (`#/config/juridico/prazos`, `/importar`), para a administração e a coordenação/supervisão do Jurídico |
 
 O contrato e a parceria continuam abrindo na tela deles (`#/contratos/<id>`, `#/parcerias/<id>`); a demanda abre em
 `#/juridico/demanda/<id>`. Os endereços antigos (`#/contratos/fila`, `#/acompanhamento-contratos/…`,
@@ -101,7 +101,7 @@ comercial) e `cancelada`. O pedido de ajuste volta a solicitação para `em_elab
   elabora usa **Corrigir condições**, com o motivo obrigatório. O histórico guarda o que mudou (de → para), e o
   executivo e a Implantação (quem conduz, ou a coordenação) são avisados.
 
-## Indicadores dos contratos (Painel do Jurídico → Indicadores → Contratos)
+## Indicadores dos contratos (Painel do Jurídico → Painel de Desempenho → Contratos de garantia)
 
 Item próprio do menu Jurídico, para quem elabora e a diretoria (`GET /api/contratos/painel?ano=&mes=`; mês 0 = ano
 todo, datas em Brasília):
@@ -188,16 +188,27 @@ concluída nem perdida, com o prazo vencido. Ao passar para *Aguardando assinatu
 a entrega fica com a data de hoje. Mudar o prazo de um tipo na Tabela de prazos recalcula só as demandas ainda não
 entregues; as entregues guardam o SLA que tiveram.
 
-**Situações:** Pendente, Em andamento, Aguardando retorno, Aguardando assinaturas, Concluído, Contrato perdido.
+**Situações** (os nomes da planilha): Pendente, Em andamento, Aguardando retorno, Pronto para assinatura, Aguardando assinaturas,
+Concluído, Contrato perdido. Fora do SLA = sem conclusão e com o prazo vencido; Dentro do SLA = concluída até o prazo. Ao passar de
+Aguardando assinaturas para Concluído, a demanda guarda o dia em que voltou assinada (`assinado_em`).
 
 **Canal** (`canal`, só no banco): `portal` para o que é pedido no portal e `planilha` para o que foi importado (a API
 ainda aceita e-mail, WhatsApp, telefone e reunião, mas a tela não pergunta).
 
-**Para fazer** (`vis=fazer`): numa lista só, em cima *Ninguém pegou ainda* (contratos e parcerias na fila e demandas em
-aberto sem responsável, pendentes ou sem entrega; na demanda, **Pegar** passa para quem clicou, em andamento) e embaixo
-*Com você* (tudo o que está em aberto com a pessoa). Nas duas partes, primeiro as atrasadas, depois as que vencem hoje,
-as sem entrega e as que esperam retorno ou assinatura. As visões `fila` e `comigo` continuam na API; os endereços antigos
-`#/juridico/painel/fila` e `/comigo` abrem Para fazer, e `/configurar` leva a Configurações → Jurídico.
+**Minhas demandas** (aba do Painel; `vis=fazer`): numa lista só, em cima *Pendentes · sem responsável* (contratos e parcerias na
+fila e demandas em aberto sem responsável, pendentes ou sem entrega; na demanda, **Assumir** passa para quem clicou, em andamento)
+e embaixo *Em andamento · sob sua responsabilidade* (tudo o que está em aberto com a pessoa). Nas duas partes, primeiro as fora do
+SLA, depois as que vencem hoje, as sem entrega e as que esperam retorno ou assinatura. As visões `fila` e `comigo` continuam na API;
+os endereços antigos `#/juridico/painel/fila` e `/comigo` abrem Minhas demandas, e `/configurar` leva a Configurações → Jurídico.
+
+**Assinaturas** (`GET /api/juridico/assinaturas`, só o Jurídico): contratos de garantia, de parceria e demandas em três blocos —
+*Pronto para assinatura* (etapa `para_assinar` / situação `pronto_assinatura`), *Aguardando assinaturas* (`em_assinatura` /
+`aguardando_assinaturas`) e *Assinado* (assinados no mês e os contratos em `conferencia`, com as condições a registrar). Na demanda,
+os botões mudam a situação; no contrato de garantia, abrem os mesmos passos da tela do contrato; na parceria, abrem a parceria.
+
+**Painel de Desempenho** (`GET /api/juridico/indicadores?ano=&mes=`; `mes=0` é o ano todo): no padrão do Dashboard de contratos —
+cartões do período, comparativo mês a mês (solicitadas, concluídas dentro e fora do SLA), situação agora, % dentro do SLA por
+atividade e mês, e rankings por solicitante (o nome abre Todos filtrado), responsável, atividade, setor e estado.
 
 **Meus pedidos** (`vis=minhas`): as demandas que a pessoa pediu ou lançou, os contratos e as parcerias dela, inclusive os
 rascunhos. "Com você" marca o que espera por ela: demanda aguardando retorno; contrato ou parceria em rascunho, com
