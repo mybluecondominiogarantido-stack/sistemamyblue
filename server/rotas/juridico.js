@@ -28,10 +28,10 @@ const I = require('../juridico/importacao');
 const { lerPlanilha } = require('../planilha');
 const { criarXlsx } = require('../xlsx');
 
-const STATUS = { pendente: 'Pendente', em_andamento: 'Em andamento', aguardando_retorno: 'Aguardando retorno', aguardando_assinaturas: 'Aguardando assinaturas',
+const STATUS = { pendente: 'Pendente', em_andamento: 'Em andamento', aguardando_retorno: 'Aguardando retorno', pronto_assinatura: 'Pronto para assinatura', aguardando_assinaturas: 'Aguardando assinaturas',
   concluido: 'Concluído', contrato_perdido: 'Contrato perdido' };
 const FECHADOS = ['concluido', 'contrato_perdido'];
-const ENTREGA_AO_MUDAR = ['aguardando_assinaturas', 'concluido']; // mudou para estes sem data de entrega: entregue hoje
+const ENTREGA_AO_MUDAR = ['pronto_assinatura', 'aguardando_assinaturas', 'concluido']; // mudou para estes sem data de entrega: entregue hoje
 const AVISA_EMAIL = ['aguardando_retorno', 'concluido']; // situações que pedem algo de quem pediu (ou fecham o pedido)
 const SETOR_JURIDICO = 'Jurídico';
 const PERMISSAO = 'contratos.elaborar';
@@ -45,7 +45,7 @@ const ETAPAS_ESPERA = ['pendencia', 'minuta_enviada', 'em_assinatura'];
 const NOME_ETAPA = { pendencia: 'pendência com você', minuta_enviada: 'minuta com você', em_assinatura: 'em assinatura' };
 // situação da solicitação de contrato, nos termos da planilha
 const ETAPA_STATUS = { fila: 'pendente', em_elaboracao: 'em_andamento', pendencia: 'aguardando_retorno', minuta_enviada: 'aguardando_retorno',
-  para_assinar: 'aguardando_assinaturas', em_assinatura: 'aguardando_assinaturas', conferencia: 'aguardando_assinaturas', assinado: 'concluido', cancelada: 'contrato_perdido' };
+  para_assinar: 'pronto_assinatura', em_assinatura: 'aguardando_assinaturas', conferencia: 'aguardando_assinaturas', assinado: 'concluido', cancelada: 'contrato_perdido' };
 
 const texto = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
 const diaBrasilia = (d = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(d));
@@ -173,7 +173,7 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
     const onde = vis === 'minhas' ? `WHERE (d.solicitante_id = ${v(u.id)} OR d.criado_por = $1)` : vis && vis.id ? `WHERE d.id = ${v(vis.id)}` : '';
     const manuais = (await db.q(`SELECT d.id, d.numero, d.status, d.tipo_id, t.nome AS tipo, d.solicitante_id, d.solicitante_nome, d.setor, d.uf, d.cliente, d.condominio_id,
         d.objeto, d.observacoes, d.responsavel_id, ur.nome AS responsavel_nome, d.solicitada_em::text AS solicitada_em, d.horas, d.prazo::text AS prazo,
-        d.entregue_em::text AS entregue_em, d.importacao_id, d.criado_por, d.criado_em, d.atualizado_em, d.canal
+        d.entregue_em::text AS entregue_em, d.assinado_em::text AS assinado_em, d.status_em::text AS status_em, d.importacao_id, d.criado_por, d.criado_em, d.atualizado_em, d.canal
       FROM juridico_demandas d JOIN juridico_tipos t ON t.id = d.tipo_id LEFT JOIN usuarios ur ON ur.id = d.responsavel_id ${onde}`, args)).rows
       .map((d) => ({ ...d, origem: 'demanda', ref: String(d.numero), espera_voce: d.status === 'aguardando_retorno' }));
     const tipoCt = (await db.um('SELECT id, nome FROM juridico_tipos WHERE contratos ORDER BY id LIMIT 1')) || { id: null, nome: 'Contrato (Solicitação de Contrato)' };
@@ -303,7 +303,7 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
     const entreguesMes = todas.filter((d) => (d.entregue_em || '').startsWith(mes));
     const contadores = {
       pendente: conta((d) => d.status === 'pendente'), em_andamento: conta((d) => d.status === 'em_andamento'),
-      aguardando_retorno: conta((d) => d.status === 'aguardando_retorno'), aguardando_assinaturas: conta((d) => d.status === 'aguardando_assinaturas'),
+      aguardando_retorno: conta((d) => d.status === 'aguardando_retorno'), pronto_assinatura: conta((d) => d.status === 'pronto_assinatura'), aguardando_assinaturas: conta((d) => d.status === 'aguardando_assinaturas'),
       atrasadas: conta((d) => d.atrasada), vence_hoje: conta((d) => d.vence_hoje), entregues_mes: entreguesMes.length,
       sla_mes: pct(entreguesMes.filter((d) => d.sla === 'dentro').length, entreguesMes.length),
     };
@@ -335,18 +335,21 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
     const anoAtual = Number(diaBrasilia().slice(0, 4));
     const anos = [...new Set([anoAtual, ...todas.map((d) => Number((d.entregue_em || d.solicitada_em || '').slice(0, 4))).filter(Boolean)])].sort();
     const ano = anos.includes(Number(req.query.ano)) ? Number(req.query.ano) : anoAtual;
+    // período: o ano todo ou um mês dele (Painel de Desempenho: mensal e anual)
+    const mes = Number(req.query.mes) >= 1 && Number(req.query.mes) <= 12 ? Number(req.query.mes) : 0;
+    const per = mes ? `${ano}-${String(mes).padStart(2, '0')}` : String(ano);
+    const pedida = (d) => (d.solicitada_em || '').startsWith(per);
+    const concluida = (d) => !!d.sla && d.entregue_em.startsWith(per);
+    const aberta = (d) => !FECHADOS.includes(d.status);
     const doAno = todas.filter((d) => d.sla && d.entregue_em.startsWith(String(ano)));
     const celula = (l) => ({ dentro: l.filter((d) => d.sla === 'dentro').length, total: l.length, pct: pct(l.filter((d) => d.sla === 'dentro').length, l.length) });
     const porMes = (l) => Array.from({ length: 12 }, (_, k) => celula(l.filter((d) => Number(d.entregue_em.slice(5, 7)) === k + 1)));
     const ordem = new Map((await tipos()).map((t, k) => [t.nome, k]));
     const nomes = [...new Set(doAno.map((d) => d.tipo))].sort((a, b) => (ordem.has(a) ? ordem.get(a) : 999) - (ordem.has(b) ? ordem.get(b) : 999) || a.localeCompare(b));
-    const setores = [...new Set(todas.map((d) => d.setor || 'Sem setor'))].sort();
-    const solicitadasAno = todas.filter((d) => (d.solicitada_em || '').startsWith(String(ano)));
-    // por pessoa (quem pediu), por quem conduz no Jurídico e por estado: como as colunas da planilha
-    const doAnoOuAberta = (d) => (d.solicitada_em || '').startsWith(String(ano)) || (d.sla && d.entregue_em.startsWith(String(ano))) || !FECHADOS.includes(d.status);
+    // por pessoa (quem pediu), por quem conduz no Jurídico, por setor e por estado: como as colunas da planilha
     const agrupar = (chave) => {
       const g = new Map();
-      for (const d of todas.filter(doAnoOuAberta)) {
+      for (const d of todas.filter((x) => pedida(x) || concluida(x) || aberta(x))) {
         const nome = (chave(d) || '').trim();
         if (!nome) continue;
         const k = nome.toLowerCase();
@@ -355,30 +358,76 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
       }
       return [...g.values()].map(({ nome, lista: l }) => {
         const setores = [...new Set(l.map((d) => d.setor).filter(Boolean))];
-        return { nome, setor: setores.join(', '), solicitadas: l.filter((d) => (d.solicitada_em || '').startsWith(String(ano))).length,
-          sla: celula(l.filter((d) => d.sla && d.entregue_em.startsWith(String(ano)))),
-          abertas: l.filter((d) => !FECHADOS.includes(d.status)).length, atrasadas: l.filter((d) => d.atrasada).length,
+        return { nome, setor: setores.join(', '), solicitadas: l.filter(pedida).length, sla: celula(l.filter(concluida)),
+          abertas: l.filter(aberta).length, atrasadas: l.filter((d) => d.atrasada).length,
           // em aberto, separado: o que está com o Jurídico e o que já foi feito e espera retorno ou assinatura
           no_juridico: l.filter((d) => ['pendente', 'em_andamento'].includes(d.status)).length,
-          esperando: l.filter((d) => ['aguardando_retorno', 'aguardando_assinaturas'].includes(d.status)).length };
-      }).sort((a, b) => b.solicitadas - a.solicitadas || b.abertas - a.abertas || a.nome.localeCompare(b.nome));
+          esperando: l.filter((d) => ['aguardando_retorno', 'pronto_assinatura', 'aguardando_assinaturas'].includes(d.status)).length };
+      }).filter((x) => x.solicitadas || x.sla.total || x.abertas)
+        .sort((a, b) => b.solicitadas - a.solicitadas || b.abertas - a.abertas || a.nome.localeCompare(b.nome));
     };
+    const doPer = todas.filter(concluida);
+    const pedidas = todas.filter(pedida);
     res.json({
-      ano, anos,
+      ano, anos, mes,
+      // comparativo mês a mês: solicitadas, concluídas, dentro e fora do SLA
+      meses: Array.from({ length: 12 }, (_, k) => {
+        const m = `${ano}-${String(k + 1).padStart(2, '0')}`;
+        const c = todas.filter((d) => d.sla && d.entregue_em.startsWith(m));
+        return { mes: k + 1, solicitadas: todas.filter((d) => (d.solicitada_em || '').startsWith(m)).length, concluidas: c.length,
+          dentro: c.filter((d) => d.sla === 'dentro').length, fora: c.filter((d) => d.sla === 'fora').length };
+      }),
       tipos: nomes.map((n) => { const l = doAno.filter((d) => d.tipo === n); return { nome: n, meses: porMes(l), total: celula(l) }; }),
       total: { meses: porMes(doAno), total: celula(doAno) },
-      setores: setores.map((s) => {
-        const l = todas.filter((d) => (d.setor || 'Sem setor') === s);
-        return { nome: s, solicitadas: l.filter((d) => (d.solicitada_em || '').startsWith(String(ano))).length, sla: celula(l.filter((d) => d.sla && d.entregue_em.startsWith(String(ano)))),
-          abertas: l.filter((d) => !FECHADOS.includes(d.status)).length };
-      }).filter((s) => s.solicitadas || s.sla.total || s.abertas),
+      // por atividade no período (ranking)
+      atividades: agrupar((d) => d.tipo),
+      setores: agrupar((d) => d.setor || 'Sem setor'),
       pessoas: agrupar((d) => d.solicitante_nome),
       responsaveis: agrupar((d) => d.responsavel_nome),
       estados: agrupar((d) => d.uf || 'Sem estado'),
-      resumo: { solicitadas: solicitadasAno.length, entregues: doAno.length, dentro: doAno.filter((d) => d.sla === 'dentro').length, pct: celula(doAno).pct,
-        abertas: todas.filter((d) => !FECHADOS.includes(d.status)).length, atrasadas: todas.filter((d) => d.atrasada).length,
-        perdidos: solicitadasAno.filter((d) => d.status === 'contrato_perdido').length },
+      // situação agora (não depende do período)
+      agora: Object.fromEntries([...Object.keys(STATUS).filter((s) => !FECHADOS.includes(s)).map((s) => [s, todas.filter((d) => d.status === s).length]),
+        ['fora_sla', todas.filter((d) => d.atrasada).length], ['vence_hoje', todas.filter((d) => d.vence_hoje).length]]),
+      resumo: { solicitadas: pedidas.length, entregues: doPer.length, dentro: doPer.filter((d) => d.sla === 'dentro').length, fora: doPer.filter((d) => d.sla === 'fora').length,
+        pct: celula(doPer).pct, abertas: todas.filter(aberta).length, atrasadas: todas.filter((d) => d.atrasada).length,
+        perdidos: pedidas.filter((d) => d.status === 'contrato_perdido').length },
     });
+  });
+
+  /* ===================== Assinaturas: contratos de garantia, parcerias e demandas, numa lista só =====================
+     Pronto para assinatura → Aguardando assinaturas → Assinado (no mês, e os contratos assinados com as condições a registrar) */
+  r.get('/api/juridico/assinaturas', async (req, res) => {
+    const p = await perfil(req.usuario);
+    if (!p.juridico) return erro(res, 403, 'As assinaturas são do Jurídico.');
+    const mes = diaBrasilia().slice(0, 7);
+    const dia = (x) => (x ? diaBrasilia(x) : null);
+    const out = { pronto: [], aguardando: [], assinado: [] };
+    const etapaGrupo = { para_assinar: 'pronto', em_assinatura: 'aguardando', conferencia: 'assinado', assinado: 'assinado' };
+    for (const [tabela, origem, nome, link] of [['contratos', 'contrato', 'c.condominio', (id) => `#/contratos/${id}`], ['parcerias', 'parceria', 'c.empresa', (id) => `#/parcerias/${id}`]]) {
+      const tipo = origem === 'contrato' ? 'Contrato (garantia)' : 'Contrato (parceria)';
+      const linhas = (await db.q(`SELECT c.id, c.protocolo, c.etapa, ${nome} AS cliente, c.assinatura_pedida_em, c.em_assinatura_em, c.assinado_em,
+          us.nome AS solicitante_nome, ur.nome AS responsavel_nome
+        FROM ${tabela} c LEFT JOIN usuarios us ON us.id = c.solicitante_id LEFT JOIN usuarios ur ON ur.id = c.responsavel_id
+        WHERE c.etapa IN ('para_assinar','em_assinatura','conferencia') OR (c.etapa = 'assinado' AND to_char(c.assinado_em AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM') = $1)`, [mes])).rows;
+      for (const c of linhas) {
+        out[etapaGrupo[c.etapa]].push({ origem, id: c.id, ref: c.protocolo, tipo, cliente: c.cliente || '', solicitante_nome: c.solicitante_nome || '', responsavel_nome: c.responsavel_nome || '',
+          etapa: c.etapa, link: link(c.id), registrar: c.etapa === 'conferencia',
+          desde: dia(c.etapa === 'para_assinar' ? c.assinatura_pedida_em : c.etapa === 'em_assinatura' ? c.em_assinatura_em : c.assinado_em) });
+      }
+    }
+    const dem = (await db.q(`SELECT d.id, d.numero, d.status, t.nome AS tipo, d.cliente, d.solicitante_nome, ur.nome AS responsavel_nome,
+        COALESCE(d.status_em, d.entregue_em)::text AS desde, d.assinado_em::text AS assinado_em
+      FROM juridico_demandas d JOIN juridico_tipos t ON t.id = d.tipo_id LEFT JOIN usuarios ur ON ur.id = d.responsavel_id
+      WHERE d.status IN ('pronto_assinatura','aguardando_assinaturas') OR (d.status = 'concluido' AND to_char(d.assinado_em, 'YYYY-MM') = $1)`, [mes])).rows;
+    for (const d of dem) {
+      out[d.status === 'pronto_assinatura' ? 'pronto' : d.status === 'aguardando_assinaturas' ? 'aguardando' : 'assinado'].push({ origem: 'demanda', id: d.id, ref: '#' + d.numero, tipo: d.tipo,
+        cliente: d.cliente, solicitante_nome: d.solicitante_nome || '', responsavel_nome: d.responsavel_nome || '', status: d.status, link: linkDemanda(d.id),
+        desde: d.status === 'concluido' ? d.assinado_em : d.desde });
+    }
+    // o mais antigo primeiro (está esperando há mais tempo); nos assinados, o mais recente primeiro
+    for (const k of ['pronto', 'aguardando']) out[k].sort((a, b) => (a.desde || '9').localeCompare(b.desde || '9'));
+    out.assinado.sort((a, b) => Number(b.registrar || 0) - Number(a.registrar || 0) || (b.desde || '').localeCompare(a.desde || ''));
+    res.json(out);
   });
 
   /* ===================== uma demanda ===================== */
@@ -516,6 +565,7 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
       await t.q(`UPDATE juridico_demandas SET tipo_id = $2, status = $3, solicitante_id = $4, solicitante_nome = $5, setor = $6, uf = $7, cliente = $8, objeto = $9,
           observacoes = $10, responsavel_id = $11, solicitada_em = $12, entregue_em = $13, horas = $14, prazo = $15, condominio_id = $16, atualizado_em = now(),
           canal = $17, status_em = CASE WHEN $3 <> status THEN $18::date ELSE status_em END,
+          assinado_em = CASE WHEN status = 'aguardando_assinaturas' AND $3 = 'concluido' THEN $18::date ELSE assinado_em END,
           aviso_vence_em = CASE WHEN $15::date <> prazo THEN NULL ELSE aviso_vence_em END, aviso_atraso_em = CASE WHEN $15::date <> prazo THEN NULL ELSE aviso_atraso_em END
         WHERE id = $1`, [d.id, novo.tipo_id, novo.status, novo.solicitante_id, novo.solicitante_nome, novo.setor, novo.uf, novo.cliente, novo.objeto, novo.observacoes,
         novo.responsavel_id, novo.solicitada_em, novo.entregue_em, novo.horas, novo.prazo, condominio, novo.canal, hoje]);

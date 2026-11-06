@@ -982,6 +982,10 @@ ALTER TABLE condominios ADD COLUMN IF NOT EXISTS sindico_nome TEXT NOT NULL DEFA
 -- Demandas Jurídicas: como o pedido chegou (portal, e-mail, WhatsApp…) e desde quando está na situação atual (aviso semanal)
 ALTER TABLE juridico_demandas ADD COLUMN IF NOT EXISTS canal TEXT NOT NULL DEFAULT '';
 ALTER TABLE juridico_demandas ADD COLUMN IF NOT EXISTS status_em DATE;
+-- Demandas Jurídicas: "Pronto para assinatura" (o cliente aprovou a minuta) antes de "Aguardando assinaturas", e o dia em que voltou assinado
+ALTER TABLE juridico_demandas DROP CONSTRAINT IF EXISTS juridico_demandas_status_check;
+ALTER TABLE juridico_demandas ADD CONSTRAINT juridico_demandas_status_check CHECK (status IN ('pendente','em_andamento','aguardando_retorno','pronto_assinatura','aguardando_assinaturas','concluido','contrato_perdido'));
+ALTER TABLE juridico_demandas ADD COLUMN IF NOT EXISTS assinado_em DATE;
 -- a lista de atividades do Jurídico (a Tabela de Prazos da planilha), só quando a tabela ainda está vazia: depois, quem manda é o portal
 INSERT INTO juridico_tipos (nome, horas, ordem, contratos)
   SELECT v.nome, v.horas, v.ordem, v.contratos FROM (VALUES ('Contrato (garantia)', 8, 0, TRUE), ('Aditivo', 16, 1, FALSE), ('Rescisão', 24, 2, FALSE),

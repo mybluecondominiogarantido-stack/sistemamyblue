@@ -7712,7 +7712,7 @@
   var FECHADA_DJ = ['concluido', 'contrato_perdido'];
   var STATUS_DJ = {
     pendente: ['Pendente', 'cinza'], em_andamento: ['Em andamento', 'azul'], aguardando_retorno: ['Aguardando retorno', 'ambar'],
-    aguardando_assinaturas: ['Aguardando assinaturas', 'azul'], concluido: ['Concluído', 'verde'], contrato_perdido: ['Contrato perdido', 'cinza'],
+    pronto_assinatura: ['Pronto para assinatura', 'ambar'], aguardando_assinaturas: ['Aguardando assinaturas', 'azul'], concluido: ['Concluído', 'verde'], contrato_perdido: ['Contrato perdido', 'cinza'],
   };
   var UFS_DJ = ['AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO'];
   var ROTULO_CAMPO_DJ = { tipo_id: 'atividade', status: 'situação', solicitante_id: 'solicitante', solicitante_nome: 'solicitante', setor: 'setor', uf: 'estado', cliente: 'cliente',
@@ -7741,15 +7741,15 @@
     poe('jur-pedidos', esp, [esp ? esp + ' pedido(s) esperando você' : '']);
     var fila = (dj.pendentes || 0) + (ct.fila || 0) + (cp.fila || 0), com = (ct.minhas || 0) + (cp.minhas || 0);
     var ass = (ct.para_assinar || 0) + (ct.conferencia || 0) + (cp.assinaturas || 0), dir = (ct.diretoria || 0) + (cp.diretoria || 0);
-    poe('jur-painel', fila + com + ass + dir + (cp.parceiros || 0) + (dj.atrasadas || 0), [fila ? fila + ' na fila' : '', com ? com + ' com você' : '',
+    poe('jur-painel', fila + com + ass + dir + (cp.parceiros || 0) + (dj.atrasadas || 0), [fila ? fila + ' pendente(s) sem responsável' : '', com ? com + ' em andamento com você' : '',
       ass ? ass + ' em assinatura ou para registrar' : '', dir ? dir + ' para a diretoria' : '', cp.parceiros ? cp.parceiros + ' parceiro(s) para cadastrar' : '',
-      dj.atrasadas ? dj.atrasadas + ' demanda(s) passaram do prazo' : '']);
+      dj.atrasadas ? dj.atrasadas + ' demanda(s) fora do SLA' : '']);
   }
   // o Painel do Jurídico aparece para o Jurídico, a diretoria e o setor Parceiros (cadastro do parceiro)
   function temPainelJ() { return !!((resumoDj && resumoDj.ve_tudo) || (resumoCt && resumoCt.painel) || (resumoCp && resumoCp.parceiros != null)); }
   function etqDj(d) {
-    if (d.origem === 'contrato' || d.origem === 'parceria') return etqCr(d.origem === 'contrato' ? ETAPA_CT : ETAPA_CP, d.etapa) + (d.atrasada ? ' ' + etq(['atrasada', 'vermelha']) : '');
-    return etqCr(STATUS_DJ, d.status) + (d.atrasada ? ' ' + etq(['atrasada', 'vermelha']) : d.vence_hoje ? ' ' + etq(['vence hoje', 'ambar']) : '');
+    if (d.origem === 'contrato' || d.origem === 'parceria') return etqCr(d.origem === 'contrato' ? ETAPA_CT : ETAPA_CP, d.etapa) + (d.atrasada ? ' ' + etq(['fora do SLA', 'vermelha']) : '');
+    return etqCr(STATUS_DJ, d.status) + (d.atrasada ? ' ' + etq(['fora do SLA', 'vermelha']) : d.vence_hoje ? ' ' + etq(['vence hoje', 'ambar']) : '');
   }
   function slaDj(d) {
     return d.sla === 'dentro' ? etq(['dentro', 'verde']) : d.sla === 'fora' ? etq(['fora', 'vermelha']) : '<span class="sec">—</span>';
@@ -7761,15 +7761,15 @@
   // (Solicitação de Contrato Parceria) e as demais atividades (Demandas Jurídicas, inclusive o que chega por e-mail).
   // Quem pede usa "Solicitações ao Jurídico"; o Jurídico, a diretoria e o setor Parceiros, o "Painel do Jurídico".
   // a Tabela de prazos e a importação da planilha ficam em Configurações → Jurídico
-  var ABAS_PJ = [['fazer', 'Para fazer'], ['assinaturas', 'Assinaturas'], ['todos', 'Todos'], ['diretoria', 'Diretoria'],
-    ['parceiros', 'Cadastro de parceiros'], ['indicadores', 'Indicadores']];
+  var ABAS_PJ = [['fazer', 'Minhas demandas'], ['assinaturas', 'Assinaturas'], ['indicadores', 'Painel de Desempenho'], ['todos', 'Todos'], ['diretoria', 'Diretoria'],
+    ['parceiros', 'Cadastro de parceiros']];
   async function metasJuridico() {
     var r = await Promise.all([carregarMetaDj(true), carregarMetaCt(true).catch(function () { return null; }), carregarMetaCp(true).catch(function () { return null; })]);
     return { dj: r[0], ct: r[1], cp: r[2] };
   }
   function abasPainelJ(M) {
     var dj = M.dj.perfil, ct = M.ct ? M.ct.perfil : {}, cp = M.cp ? M.cp.perfil : {};
-    var pode = { fazer: dj.juridico, assinaturas: ct.elaborador || cp.elaborador, todos: dj.ve_tudo, diretoria: ct.diretoria || cp.diretoria,
+    var pode = { fazer: dj.juridico, assinaturas: dj.juridico || ct.elaborador || cp.elaborador, todos: dj.ve_tudo, diretoria: ct.diretoria || cp.diretoria,
       parceiros: cp.parceiros, indicadores: dj.ve_tudo };
     return ABAS_PJ.filter(function (a) { return pode[a[0]]; });
   }
@@ -7817,16 +7817,16 @@
     var corpo = $('#corpoJ');
     if (lista) { corpo.innerHTML = '<div id="corpoDj"></div>'; return abaListaDj(M.dj, vis, recarregar); }
     var ct = M.ct ? M.ct.perfil : {}, cp = M.cp ? M.cp.perfil : {}, s;
-    if (aba === 'assinaturas' || aba === 'diretoria') {
-      s = subAbasJ(aba, sub, aba === 'assinaturas' ? [['contratos', 'Contratos de garantia', ct.elaborador], ['parcerias', 'Contratos de parceria', cp.elaborador]]
-        : [['contratos', 'Contratos de garantia', ct.diretoria], ['parcerias', 'Contratos de parceria', cp.diretoria]]);
+    if (aba === 'assinaturas') return abaAssinaturasDj(corpo);
+    if (aba === 'diretoria') {
+      s = subAbasJ(aba, sub, [['contratos', 'Contratos de garantia', ct.diretoria], ['parcerias', 'Contratos de parceria', cp.diretoria]]);
       if (s.sub === 'parcerias') { corpo.innerHTML = s.html + '<div id="corpoCp"></div>'; return listaCp(aba); }
       corpo.innerHTML = s.html + '<div id="corpoCt"></div>';
-      return aba === 'assinaturas' ? abaAssinaturasCt() : listaCt('diretoria');
+      return listaCt('diretoria');
     }
     if (aba === 'parceiros') { corpo.innerHTML = '<div id="corpoCp"></div>'; return listaCp('parceiros'); }
     if (aba === 'indicadores') {
-      s = subAbasJ(aba, sub, [['prazos', 'Prazos e SLA', true], ['contratos', 'Contratos (garantia)', ct.elaborador || ct.diretoria]]);
+      s = subAbasJ(aba, sub, [['prazos', 'Todas as atividades', true], ['contratos', 'Contratos de garantia (etapas)', ct.elaborador || ct.diretoria]]);
       if (s.sub === 'contratos') { corpo.innerHTML = s.html + '<div id="corpoCt"></div>'; return abaPainelCt(); }
       corpo.innerHTML = s.html + '<div id="corpoDj"></div>';
       return abaIndicadoresDj();
@@ -7927,12 +7927,12 @@
     var AJUDA = {
       fila: 'O que chegou e ninguém pegou: contratos e parcerias na fila e demandas sem responsável. As atrasadas e as que vencem hoje vêm primeiro.',
       comigo: 'O que está com você, em aberto. Primeiro as atrasadas, as que vencem hoje e as que ainda não foram entregues; depois as que esperam retorno ou assinatura.',
-      fazer: 'Em cima, o que chegou e ninguém pegou ainda (na demanda, clique em Pegar; o contrato abre com Assumir). Embaixo, o que está com você. As atrasadas e as que vencem hoje vêm primeiro.',
+      fazer: 'Em cima, as pendentes sem responsável: clique em Assumir. Embaixo, as que estão em andamento com você. As fora do SLA e as que vencem hoje vêm primeiro.',
     };
     $('#corpoDj').innerHTML = (todas ? '<div id="tilesDj" class="tiles" style="margin-bottom:16px;grid-template-columns:repeat(auto-fill,minmax(140px,1fr))"></div>' : '') +
       (AJUDA[vis] ? '<p class="ajuda" style="margin:0 0 12px">' + AJUDA[vis] + '</p>' : '') + '<div id="esperaDj"></div>' +
       '<div class="painel"><div class="cab-painel" style="flex-wrap:wrap;gap:8px"><input class="campo" id="qDj" type="search" placeholder="Buscar por cliente, solicitante, objeto ou nº" style="max-width:300px" value="' + esc(f.q) + '">' +
-      (todas || minhas ? '<select class="campo" id="fStDj" style="width:auto" aria-label="Situação">' + opcoes([['', 'Todas as situações'], ['abertas', 'Em aberto'], ['atrasada', 'Atrasadas']].concat(Object.keys(STATUS_DJ).map(function (k) { return [k, STATUS_DJ[k][0]]; })), f.status) + '</select>' +
+      (todas || minhas ? '<select class="campo" id="fStDj" style="width:auto" aria-label="Situação">' + opcoes([['', 'Todas as situações'], ['abertas', 'Em aberto'], ['atrasada', 'Fora do SLA (prazo vencido)']].concat(Object.keys(STATUS_DJ).map(function (k) { return [k, STATUS_DJ[k][0]]; })), f.status) + '</select>' +
         '<select class="campo" id="fTpDj" style="width:auto" aria-label="Atividade">' + opcoes([['', 'Todas as atividades']].concat(m.tipos.map(function (t) { return [t.id, t.nome]; })), f.tipo) + '</select>' : '') +
       (todas ? '<select class="campo" id="fSeDj" style="width:auto" aria-label="Setor"></select><select class="campo" id="fOrDj" style="width:auto" aria-label="Origem">' +
         opcoes([['', 'Todas as origens'], ['demanda', 'Demandas'], ['contrato', 'Solicitação de Contrato'], ['parceria', 'Solicitação de Contrato Parceria']], f.origem) + '</select>' +
@@ -7945,7 +7945,7 @@
       if (FECHADA_DJ.indexOf(d.status) >= 0) return '<span class="sec">—</span>';
       if (d.espera_voce) return etq(['com você', 'ambar']);
       if (d.origem !== 'demanda') return d.etapa === 'em_assinatura' ? 'Assinatura' : 'Jurídico' + (d.responsavel_nome ? '<span class="sec">' + esc(d.responsavel_nome) + '</span>' : '');
-      return d.status === 'aguardando_assinaturas' ? 'Assinatura' : 'Jurídico' + (d.responsavel_nome ? '<span class="sec">' + esc(d.responsavel_nome) + '</span>' : '');
+      return ['pronto_assinatura', 'aguardando_assinaturas'].indexOf(d.status) >= 0 ? 'Assinatura' : 'Jurídico' + (d.responsavel_nome ? '<span class="sec">' + esc(d.responsavel_nome) + '</span>' : '');
     };
     var seq = 0;
     async function carregar() {
@@ -7957,23 +7957,24 @@
       var tile = function (rot, n, alerta, filtro) { return '<button class="tile' + (alerta && n ? ' alerta' : '') + '" data-tile="' + filtro + '" style="text-align:left;cursor:pointer"><span class="rot-tile">' + rot + '</span><b>' + (n == null ? '—' : n) + '</b></button>'; };
       if ($('#tilesDj')) {
         $('#tilesDj').innerHTML = tile('Pendentes', k.pendente, false, 'pendente') + tile('Em andamento', k.em_andamento, false, 'em_andamento') +
-          tile('Aguardando retorno', k.aguardando_retorno, false, 'aguardando_retorno') + tile('Aguardando assinaturas', k.aguardando_assinaturas, false, 'aguardando_assinaturas') +
-          tile('Passaram do prazo', k.atrasadas, true, 'atrasada') + tile('Entregues no mês', k.entregues_mes, false, '') +
-          '<div class="tile"><span class="rot-tile">No SLA no mês</span><b>' + (k.sla_mes == null ? '—' : String(k.sla_mes).replace('.', ',') + '%') + '</b></div>';
+          tile('Aguardando retorno', k.aguardando_retorno, false, 'aguardando_retorno') + tile('Pronto para assinatura', k.pronto_assinatura, false, 'pronto_assinatura') +
+          tile('Aguardando assinaturas', k.aguardando_assinaturas, false, 'aguardando_assinaturas') +
+          tile('Fora do SLA', k.atrasadas, true, 'atrasada') + tile('Concluídas no mês', k.entregues_mes, false, '') +
+          '<div class="tile"><span class="rot-tile">Dentro do SLA no mês</span><b>' + (k.sla_mes == null ? '—' : String(k.sla_mes).replace('.', ',') + '%') + '</b></div>';
         $$('#tilesDj [data-tile]').forEach(function (b) { b.onclick = function () { f.status = b.getAttribute('data-tile'); $('#fStDj').value = f.status; carregar(); }; });
       }
       $('#esperaDj').innerHTML = minhas && r.espera_voce ? '<div class="msg aviso" style="margin-bottom:12px">' + r.espera_voce + (r.espera_voce === 1 ? ' pedido espera' : ' pedidos esperam') +
         ' por você (marcados “com você”): responda ao Jurídico, ajuste ou aprove a minuta, ou termine o rascunho.</div>' : '';
       if ($('#fSeDj')) $('#fSeDj').innerHTML = opcoes([['', 'Todos os setores']].concat(r.setores.map(function (s) { return [s, s]; })), f.setor);
       if ($('#fAnoDj')) $('#fAnoDj').innerHTML = opcoes([['', 'Todos os anos']].concat(r.anos.map(function (a) { return [a, a]; })), f.ano);
-      // Para fazer: um título antes de cada parte (ninguém pegou · com você)
+      // Minhas demandas: um título antes de cada parte (pendentes sem responsável · em andamento com a pessoa)
       var conta = { fila: 0, comigo: 0 };
       r.demandas.forEach(function (d) { if (d.grupo) conta[d.grupo]++; });
       var grupoAtual = null;
       var titulo = function (d) {
         if (vis !== 'fazer' || d.grupo === grupoAtual) return '';
         grupoAtual = d.grupo;
-        return '<tr class="auto"><td colspan="9" style="background:var(--surface-2);font-weight:800">' + (d.grupo === 'fila' ? 'Ninguém pegou ainda' : 'Com você') + ' (' + conta[d.grupo] + ')</td></tr>';
+        return '<tr class="auto"><td colspan="9" style="background:var(--surface-2);font-weight:800">' + (d.grupo === 'fila' ? 'Pendentes · sem responsável' : 'Em andamento · sob sua responsabilidade') + ' (' + conta[d.grupo] + ')</td></tr>';
       };
       var pegar = vis === 'fila' || vis === 'fazer';
       $('#tbDj').innerHTML = r.demandas.map(function (d) {
@@ -7986,14 +7987,14 @@
           '<td style="white-space:nowrap">' + dataBr(d.solicitada_em) + '</td><td style="white-space:nowrap">' + (d.prazo ? dataBr(d.prazo) : '<span class="sec">—</span>') + '</td>' +
           '<td style="white-space:nowrap">' + (d.entregue_em ? dataBr(d.entregue_em) : '<span class="sec">—</span>') + '</td>' +
           '<td>' + etqDj(d) + (!minhas && d.responsavel_nome ? '<span class="sec">' + esc(d.responsavel_nome) + '</span>' : '') + '</td>' +
-          '<td>' + (pegar ? (d.origem === 'demanda' && (vis === 'fila' || d.grupo === 'fila') ? '<button class="btn ghost sm" data-pegar="' + d.id + '">Pegar</button>' : '') : slaDj(d)) + '</td></tr>';
+          '<td>' + (pegar ? (d.origem === 'demanda' && (vis === 'fila' || d.grupo === 'fila') ? '<button class="btn ghost sm" data-pegar="' + d.id + '">Assumir</button>' : '') : slaDj(d)) + '</td></tr>';
       }).join('') || '<tr><td colspan="9"><div class="vazio" style="border:0;padding:34px">' + (minhas && !r.total ? 'Você ainda não pediu nada ao Jurídico. Clique em <b>Novo pedido</b>.'
-        : vis === 'fila' ? 'A fila está vazia.' : vis === 'comigo' ? 'Nada com você agora.' : vis === 'fazer' ? 'Nada para fazer agora: ninguém esperando na fila e nada com você.' : 'Nada com esses filtros.') + '</div></td></tr>';
+        : vis === 'fila' ? 'A fila está vazia.' : vis === 'comigo' ? 'Nada com você agora.' : vis === 'fazer' ? 'Nenhuma demanda pendente ou em andamento com você.' : 'Nada com esses filtros.') + '</div></td></tr>';
       $('#rodapeDj').textContent = r.demandas.length + ' de ' + r.total + ' pedido(s).';
       $$('#tbDj [data-pegar]').forEach(function (b) {
         b.onclick = async function (ev) {
           ev.stopPropagation();
-          try { await api('PATCH', '/api/juridico/demandas/' + b.getAttribute('data-pegar'), { responsavel_id: eu.id, status: 'em_andamento' }); toast('Está com você.', 'ok'); carregar(); atualizarDj(); }
+          try { await api('PATCH', '/api/juridico/demandas/' + b.getAttribute('data-pegar'), { responsavel_id: eu.id, status: 'em_andamento' }); toast('Demanda assumida.', 'ok'); carregar(); atualizarDj(); }
           catch (e) { toast(e.message, 'erro'); }
         };
       });
@@ -8058,7 +8059,7 @@
     mostrarPrazo();
     // entregou (vai para assinatura ou concluiu): a entrega fica com hoje, se ainda não tem data
     if ($('#djStatus', raiz)) $('#djStatus', raiz).onchange = function () {
-      if (['aguardando_assinaturas', 'concluido'].indexOf(this.value) >= 0 && !$('#djEntrega', raiz).value) $('#djEntrega', raiz).value = m.hoje;
+      if (['pronto_assinatura', 'aguardando_assinaturas', 'concluido'].indexOf(this.value) >= 0 && !$('#djEntrega', raiz).value) $('#djEntrega', raiz).value = m.hoje;
     };
     if ($('#djSolic', raiz)) $('#djSolic', raiz).onchange = function () {
       var v = this.value;
@@ -8161,70 +8162,206 @@
     };
   }
 
-  /* ---------- indicadores: % dentro do SLA por atividade e mês (como o Resumo SLA da planilha) ---------- */
-  var anoDj = null;
-  async function abaIndicadoresDj() {
+  /* ---------- Assinaturas: contratos de garantia, de parceria e as demais demandas, em três blocos
+     (Pronto para assinatura → Aguardando assinaturas → Assinado no mês) ---------- */
+  async function abaAssinaturasDj(corpo) {
     var r;
-    try { r = await api('GET', '/api/juridico/indicadores' + (anoDj ? '?ano=' + anoDj : '')); } catch (e) { $('#corpoDj').innerHTML = '<div class="vazio">' + esc(e.message) + '</div>'; return; }
-    anoDj = r.ano;
-    var MES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+    try { r = await api('GET', '/api/juridico/assinaturas'); } catch (e) { corpo.innerHTML = '<div class="vazio">' + esc(e.message) + '</div>'; return; }
+    var hojeIso = new Date().toISOString().slice(0, 10);
+    var ha = function (d) {
+      if (!d) return '';
+      var n = Math.round((new Date(hojeIso + 'T12:00:00Z') - new Date(d + 'T12:00:00Z')) / 86400000);
+      return n <= 0 ? 'hoje' : n === 1 ? 'há 1 dia' : 'há ' + n + ' dias';
+    };
+    var BOTAO = { pronto: 'Enviado para assinatura', aguardando: 'Assinado' };
+    var item = function (x, grupo) {
+      var botao = grupo === 'assinado' ? (x.registrar ? '<button class="btn primary sm" data-abrir="' + esc(x.link) + '">Registrar condições</button>' : '')
+        : '<button class="btn primary sm" data-acao="' + grupo + '" data-origem="' + x.origem + '" data-id="' + x.id + '">' + BOTAO[grupo] + '</button>';
+      return '<div class="ass-item" data-link="' + esc(x.link) + '" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;align-items:start;padding:10px 12px;border-top:1px solid var(--line);cursor:pointer">' +
+        '<div style="min-width:0"><b style="display:block;overflow-wrap:anywhere">' + esc(x.cliente || '—') + '</b>' +
+        '<span class="sec" style="display:block">' + esc(x.tipo) + ' · ' + esc(x.ref || '') + '</span>' +
+        (x.solicitante_nome ? '<span class="sec" style="display:block">Solicitante: ' + esc(x.solicitante_nome) + '</span>' : '') + '</div>' +
+        '<div style="text-align:right;display:grid;gap:6px;justify-items:end"><span class="sec" style="white-space:nowrap">' +
+        (grupo === 'assinado' ? (x.registrar ? 'falta registrar' : (x.desde ? dataBr(x.desde) : '')) : ha(x.desde)) + '</span>' + botao + '</div></div>';
+    };
+    var bloco = function (grupo, titulo, ajuda, cor) {
+      var l = r[grupo];
+      return '<section class="painel" style="margin:0;align-self:start"><div class="cab-painel" style="flex-wrap:wrap;gap:6px"><h2 style="margin:0">' + titulo + '</h2><span class="etiqueta ' + cor + '">' + l.length + '</span>' +
+        '<span class="ajuda" style="margin:0;flex-basis:100%">' + ajuda + '</span></div>' +
+        (l.length ? l.map(function (x) { return item(x, grupo); }).join('') : '<div class="corpo"><span class="sec">Nenhum.</span></div>') + '</section>';
+    };
+    corpo.innerHTML = '<p class="ajuda" style="margin:0 0 12px">Contratos de garantia, contratos de parceria, aditivos, rescisões e as demais atividades que precisam de assinatura, juntos. O que espera há mais tempo vem primeiro.</p>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;align-items:start">' +
+      bloco('pronto', 'Pronto para assinatura', 'O cliente aprovou a minuta. Envie para assinar.', 'ambar') +
+      bloco('aguardando', 'Aguardando assinaturas', 'Enviado. Quando voltar assinado, marque Assinado.', 'azul') +
+      bloco('assinado', 'Assinado', 'Assinados neste mês (e os contratos com as condições a registrar).', 'verde') + '</div>';
+    var recarregar = function () { abaAssinaturasDj(corpo); atualizarDj(); if (typeof atualizarCt === 'function') atualizarCt(); };
+    $$('.ass-item', corpo).forEach(function (el) { el.onclick = function (ev) { if (ev.target.closest('button')) return; location.hash = el.getAttribute('data-link'); }; });
+    $$('[data-abrir]', corpo).forEach(function (b) { b.onclick = function () { location.hash = b.getAttribute('data-abrir'); }; });
+    $$('[data-acao]', corpo).forEach(function (b) {
+      b.onclick = async function () {
+        var grupo = b.getAttribute('data-acao'), origem = b.getAttribute('data-origem'), id = Number(b.getAttribute('data-id'));
+        var x = r[grupo].find(function (y) { return y.origem === origem && y.id === id; });
+        if (origem === 'demanda') {
+          b.disabled = true;
+          try {
+            await api('PATCH', '/api/juridico/demandas/' + id, { status: grupo === 'pronto' ? 'aguardando_assinaturas' : 'concluido' });
+            toast(grupo === 'pronto' ? 'Aguardando assinaturas.' : 'Assinado e concluído.', 'ok'); recarregar();
+          } catch (e) { b.disabled = false; toast(e.message, 'erro'); }
+          return;
+        }
+        if (origem === 'contrato' && grupo === 'pronto') return marcarEmAssinaturaCt({ id: id, condominio: x.cliente }, recarregar);
+        if (origem === 'contrato') {
+          try { var d = await api('GET', '/api/contratos/' + id); marcarAssinadoCt(d, function () { paginaContratoDetalhe(id); atualizarCt(); }); } catch (e) { toast(e.message, 'erro'); }
+          return;
+        }
+        location.hash = x.link; // parceria: os botões ficam na página dela (com a via assinada)
+      };
+    });
+  }
+
+  /* ---------- Painel de Desempenho: mês ou ano, no padrão do Dashboard de contratos (cartões, comparativo mês a mês,
+     situação agora, % dentro do SLA por atividade e os rankings por pessoa, atividade, estado e setor) ---------- */
+  var filtroDesDj = null;
+  var SERIES_DES_DJ = [['solicitadas', 'Solicitadas', '#0b76ba'], ['dentro', 'Concluídas dentro do SLA', '#2d8a56'], ['fora', 'Concluídas fora do SLA', '#d8463b']];
+  async function abaIndicadoresDj() {
+    var hoje = new Date();
+    if (!filtroDesDj) filtroDesDj = { ano: hoje.getFullYear(), mes: hoje.getMonth() + 1 };
+    var f = filtroDesDj, r;
+    try { r = await api('GET', '/api/juridico/indicadores?ano=' + f.ano + '&mes=' + f.mes); } catch (e) { $('#corpoDj').innerHTML = '<div class="vazio">' + esc(e.message) + '</div>'; return; }
+    f.ano = r.ano; f.mes = r.mes;
+    var MESES = MESES_LONGO_CT, cap = function (s) { return s.charAt(0).toUpperCase() + s.slice(1); };
+    var nomePer = f.mes ? cap(MESES[f.mes - 1]) + ' de ' + f.ano : 'Ano de ' + f.ano;
+    var P = r.resumo, A = r.agora;
+    var pctTxt = function (v) { return v == null ? '—' : String(v).replace('.', ',') + '%'; };
+    var corPct = function (v) { return v == null ? 'var(--muted, #5b7083)' : v >= 90 ? 'var(--green)' : v >= 70 ? '#b07613' : 'var(--red)'; };
+    var kpi = function (rot, val, sub, cls, barra) {
+      return '<div class="kpi-ct' + (cls ? ' ' + cls : '') + '"><div class="lab">' + rot + '</div><div class="val">' + (val == null ? '—' : val) + '</div>' +
+        (sub ? '<div class="sub">' + sub + '</div>' : '') + (barra != null ? '<div class="barra-ct"><i style="width:' + Math.min(100, barra).toFixed(1) + '%"></i></div>' : '') + '</div>';
+    };
+
+    // comparativo mês a mês (o mesmo gráfico do Dashboard de contratos)
+    var SERIES = SERIES_DES_DJ;
+    var maxv = Math.max(1, Math.max.apply(null, r.meses.map(function (m) { return Math.max.apply(null, SERIES.map(function (x) { return m[x[0]]; })); })));
+    var passo = maxv <= 5 ? 1 : maxv <= 10 ? 2 : maxv <= 25 ? 5 : maxv <= 50 ? 10 : 20;
+    var topo = Math.ceil(maxv / passo) * passo;
+    var W = 1040, H = 300, L = 40, R = 10, Tp = 22, Bm = 34, pw = (W - L - R) / 12, bw = Math.min(18, (pw - 20) / SERIES.length - 2), grupo = SERIES.length * (bw + 2) - 2;
+    var y = function (v) { return Tp + (H - Tp - Bm) * (1 - v / topo); };
+    var svg = '';
+    for (var g = 0; g <= topo; g += passo) svg += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y(g).toFixed(1) + '" y2="' + y(g).toFixed(1) + '" class="' + (g ? 'grade-ct' : 'base-ct') + '"/>' +
+      '<text x="' + (L - 10) + '" y="' + (y(g) + 4).toFixed(1) + '" text-anchor="end" class="eixo-ct">' + g + '</text>';
+    var barra = function (x, v, cor) {
+      if (!v) return '';
+      var y0 = y(v), h = y(0) - y0, rr = Math.min(4, h);
+      return '<path fill="' + cor + '" d="M' + x.toFixed(1) + ' ' + y(0).toFixed(1) + 'V' + (y0 + rr).toFixed(1) + 'Q' + x.toFixed(1) + ' ' + y0.toFixed(1) + ' ' + (x + rr).toFixed(1) + ' ' + y0.toFixed(1) +
+        'H' + (x + bw - rr).toFixed(1) + 'Q' + (x + bw).toFixed(1) + ' ' + y0.toFixed(1) + ' ' + (x + bw).toFixed(1) + ' ' + (y0 + rr).toFixed(1) + 'V' + y(0).toFixed(1) + 'Z"/>';
+    };
+    r.meses.forEach(function (m, k) {
+      var cx = L + pw * k + pw / 2, tem = SERIES.some(function (x) { return m[x[0]]; });
+      if (f.mes === m.mes) svg += '<rect x="' + (L + pw * k + 2).toFixed(1) + '" y="' + Tp + '" width="' + (pw - 4).toFixed(1) + '" height="' + (H - Tp - Bm) + '" rx="8" class="sel-mes-ct"/>';
+      SERIES.forEach(function (x, i) { svg += barra(cx - grupo / 2 + i * (bw + 2), m[x[0]], x[2]); });
+      svg += '<text x="' + cx.toFixed(1) + '" y="' + (H - 12) + '" text-anchor="middle" class="mes-txt-ct' + (tem ? ' tem' : '') + (f.mes === m.mes ? ' sel' : '') + '">' + cap(MESES_CT[k]) + '</text>';
+      svg += '<rect x="' + (L + pw * k).toFixed(1) + '" y="' + Tp + '" width="' + pw.toFixed(1) + '" height="' + (H - Tp - Bm + 10) + '" fill="transparent" data-i="' + k + '" class="alvo-ct"/>';
+    });
+    var mesesTab = r.meses.filter(function (m) { return f.ano < hoje.getFullYear() || (f.ano === hoje.getFullYear() && m.mes <= hoje.getMonth() + 1); });
+
+    // % dentro do SLA por atividade e mês (o Resumo SLA da planilha)
     var celula = function (c, forte) {
       if (!c.total) return '<td style="text-align:center"><span class="sec">-</span></td>';
-      var cor = c.pct >= 90 ? 'var(--green)' : c.pct >= 70 ? '#9a6512' : 'var(--red)';
-      return '<td style="text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums" title="' + c.dentro + ' de ' + c.total + ' entregue(s) no prazo">' +
-        '<b style="color:' + cor + (forte ? ';font-size:14px' : '') + '">' + String(c.pct).replace('.', ',') + '%</b><span class="sec">' + c.dentro + '/' + c.total + '</span></td>';
+      return '<td style="text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums" title="' + c.dentro + ' de ' + c.total + ' concluída(s) dentro do SLA">' +
+        '<b style="color:' + corPct(c.pct) + (forte ? ';font-size:14px' : '') + '">' + pctTxt(c.pct) + '</b><span class="sec">' + c.dentro + '/' + c.total + '</span></td>';
     };
-    var R = r.resumo;
-    var tile = function (rot, v, sub, alerta) { return '<div class="tile' + (alerta && v ? ' alerta' : '') + '"><span class="rot-tile">' + rot + '</span><b>' + (v == null ? '—' : v) + '</b>' + (sub ? '<span class="sec">' + sub + '</span>' : '') + '</div>'; };
-    $('#corpoDj').innerHTML = '<div class="filtros-ct" style="margin-bottom:14px"><span class="lbl">Ano</span>' + r.anos.map(function (a) { return '<button class="pill-ct' + (a === r.ano ? ' on' : '') + '" data-ano="' + a + '">' + a + '</button>'; }).join('') + '</div>' +
-      '<div class="tiles" style="margin-bottom:16px;grid-template-columns:repeat(auto-fill,minmax(170px,1fr))">' +
-        tile('Solicitadas em ' + r.ano, R.solicitadas) + tile('Entregues em ' + r.ano, R.entregues, R.dentro + ' no prazo') +
-        tile('No SLA em ' + r.ano, R.pct == null ? null : String(R.pct).replace('.', ',') + '%', 'entregues até o prazo') +
-        tile('Em aberto agora', R.abertas) + tile('Passaram do prazo', R.atrasadas, 'sem entrega, prazo vencido', true) + tile('Contratos perdidos', R.perdidos, 'solicitados em ' + r.ano) + '</div>' +
-      '<section class="painel"><div class="cab-painel"><h2>% dentro do SLA por atividade — ' + r.ano + '</h2></div>' +
-      '<div class="corpo" style="padding-top:0"><p class="ajuda" style="margin:0 0 8px">Pela data da entrega; só as demandas entregues. Embaixo de cada % , quantas foram no prazo do total entregue.</p></div>' +
-      '<div class="tabela-wrap"><table style="min-width:980px"><thead><tr><th>Atividade</th>' + MES.map(function (x) { return '<th style="text-align:center">' + x + '</th>'; }).join('') + '<th style="text-align:center">Ano</th></tr></thead><tbody>' +
+    var tabelaSla = '<div class="tabela-wrap"><table style="min-width:980px"><thead><tr><th>Atividade</th>' + MESES_CT.map(function (x) { return '<th style="text-align:center">' + x + '</th>'; }).join('') +
+      '<th style="text-align:center">Ano</th></tr></thead><tbody>' +
       (r.tipos.map(function (t) { return '<tr><td><b>' + esc(t.nome) + '</b></td>' + t.meses.map(function (c) { return celula(c); }).join('') + celula(t.total, true) + '</tr>'; }).join('') ||
-        '<tr><td colspan="14"><div class="vazio" style="border:0;padding:24px">Nenhuma entrega em ' + r.ano + '.</div></td></tr>') +
-      (r.tipos.length ? '<tr class="sel-ct"><td><b>Total</b></td>' + r.total.meses.map(function (c) { return celula(c); }).join('') + celula(r.total.total, true) + '</tr>' : '') +
-      '</tbody></table></div></section>' +
-      '<section class="painel" style="margin-top:16px"><div class="cab-painel"><h2>Por setor — ' + r.ano + '</h2></div><div class="tabela-wrap"><table><thead><tr><th>Setor</th><th style="text-align:right">Solicitadas</th>' +
-      '<th style="text-align:right">Entregues</th><th style="text-align:center">No SLA</th><th style="text-align:right">Em aberto agora</th></tr></thead><tbody>' +
-      (r.setores.map(function (s) {
-        return '<tr><td><b>' + esc(s.nome) + '</b></td><td style="text-align:right">' + s.solicitadas + '</td><td style="text-align:right">' + s.sla.total + '</td>' + celula(s.sla) + '<td style="text-align:right">' + s.abertas + '</td></tr>';
-      }).join('') || '<tr><td colspan="5"><span class="sec">Nada no ano.</span></td></tr>') + '</tbody></table></div></section>' +
-      grupoPessoasDj('Por pessoa — quem pediu', 'Pessoa', 'Cada pessoa que pediu ao Jurídico (como a coluna Solicitante da planilha). Clique no nome para ver os pedidos dela.', r.pessoas, true) +
-      (r.responsaveis.length ? grupoPessoasDj('Por quem conduz no Jurídico', 'Responsável', 'Quem do Jurídico pegou as demandas.', r.responsaveis, false) : '') +
-      grupoPessoasDj('Por estado', 'Estado', 'Pelo estado de cada pedido (coluna Estado da planilha).', r.estados, false);
-    $$('#corpoDj [data-ano]').forEach(function (b) { b.onclick = function () { anoDj = Number(b.getAttribute('data-ano')); abaIndicadoresDj(); }; });
-    // nome da pessoa: abre Todos já filtrado pelos pedidos dela no ano
+        '<tr><td colspan="14"><span class="sec">Nada concluído em ' + r.ano + '.</span></td></tr>') +
+      (r.tipos.length ? '<tr class="sel-ct"><td><b>Total</b></td>' + r.total.meses.map(function (c) { return celula(c); }).join('') + celula(r.total.total, true) + '</tr>' : '') + '</tbody></table></div>';
+
+    // rankings no padrão do Dashboard de contratos: barra pelo nº de solicitações e, ao lado, o % dentro do SLA
+    var rank = function (lista, clicavel) {
+      var l = lista.filter(function (x) { return x.solicitadas || x.sla.total; }).slice(0, 10);
+      if (!l.length) return '<div class="vazio-ct">Nada no período.</div>';
+      var mx = Math.max.apply(null, l.map(function (x) { return x.solicitadas; })) || 1;
+      return '<div class="rank-ct">' + l.map(function (x, k) {
+        var nome = clicavel ? '<button data-pessoa="' + esc(x.nome) + '" title="Ver as solicitações de ' + esc(x.nome) + '" style="font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-decoration:underline;text-align:left">' + esc(x.nome) + '</button>' : esc(x.nome);
+        return '<div class="rk-ct"><span class="n">' + (k + 1) + '</span><span class="nm" title="' + esc(x.nome) + '">' + nome + '</span><span class="tr"><span class="bf" style="width:' + Math.max(2, (x.solicitadas / mx) * 35).toFixed(1) + '%"></span>' +
+          '<span class="vv" title="' + x.solicitadas + ' solicitada(s); ' + (x.sla.total ? x.sla.dentro + ' de ' + x.sla.total + ' concluída(s) dentro do SLA' : 'nenhuma concluída') + '">' + x.solicitadas +
+          '<span class="mini"> · ' + (x.sla.total ? '<b style="color:' + corPct(x.sla.pct) + '">' + pctTxt(x.sla.pct) + '</b> dentro do SLA' : 'nenhuma concluída') +
+          (x.atrasadas ? ' · <b style="color:var(--red)">' + x.atrasadas + ' fora</b>' : '') + '</span></span></span></div>';
+      }).join('') + '</div>';
+    };
+    // a mesma lista em tabela, com o que está com o Jurídico e o que aguarda retorno ou assinatura
+    var tabelaGrupo = function (rotulo, lista) {
+      var num = function (n, alerta) { return '<td style="text-align:right;font-variant-numeric:tabular-nums">' + (n ? (alerta ? '<b style="color:var(--red)">' + n + '</b>' : n) : '<span class="sec">0</span>') + '</td>'; };
+      return '<details class="tab-ct"><summary>Ver em tabela</summary><div class="tabela-wrap"><table style="min-width:720px"><thead><tr><th>' + rotulo + '</th><th style="text-align:right">Solicitadas</th>' +
+        '<th style="text-align:center">Dentro do SLA</th><th style="text-align:right">Pendente / em andamento</th><th style="text-align:right">Aguardando retorno ou assinatura</th><th style="text-align:right">Fora do SLA agora</th></tr></thead><tbody>' +
+        (lista.map(function (x) {
+          return '<tr><td><b>' + esc(x.nome) + '</b>' + (x.setor && rotulo === 'Solicitante' ? '<span class="sec">' + esc(x.setor) + '</span>' : '') + '</td>' + num(x.solicitadas) + celula(x.sla) + num(x.no_juridico) + num(x.esperando) + num(x.atrasadas, true) + '</tr>';
+        }).join('') || '<tr><td colspan="6"><span class="sec">Nada no período.</span></td></tr>') + '</tbody></table></div></details>';
+    };
+    var sit = function (rot, n, sub, alerta) { return '<div class="c' + (alerta && n ? ' alerta' : '') + '"><div class="k">' + rot + '</div><div class="v">' + (n == null ? '—' : n) + '</div>' + (sub ? '<div class="s">' + sub + '</div>' : '') + '</div>'; };
+    var bloco = function (titulo, sub, lista, rotulo, clicavel) {
+      return '<section class="panel-ct"><h2>' + titulo + '</h2><div class="h-sub">' + sub + ' · barra: nº de solicitações</div>' + rank(lista, clicavel) + tabelaGrupo(rotulo, lista) + '</section>';
+    };
+
+    $('#corpoDj').innerHTML = '<div class="painel-ct">' +
+      '<div class="filtros-ct"><span class="lbl">Ano</span>' + r.anos.slice().sort().map(function (a) { return '<button class="pill-ct' + (a === f.ano ? ' on' : '') + '" data-ano="' + a + '">' + a + '</button>'; }).join('') +
+        '<span class="lbl" style="margin-left:8px">Mês</span><select class="campo" id="pMesDj"><option value="0">Ano todo</option>' +
+        MESES.map(function (n, k) { return '<option value="' + (k + 1) + '"' + (f.mes === k + 1 ? ' selected' : '') + '>' + cap(n) + '</option>'; }).join('') + '</select></div>' +
+      '<div class="kpis-ct">' +
+        kpi('Solicitadas · ' + esc(nomePer), P.solicitadas, P.perdidos ? P.perdidos + ' contrato(s) perdido(s)' : 'pedidas ao Jurídico no período', 'destaque') +
+        kpi('Concluídas', P.entregues, 'entregues no período') +
+        kpi('Dentro do SLA', pctTxt(P.pct), P.dentro + ' de ' + P.entregues + ' concluídas até o prazo', '', P.pct) +
+        kpi('Concluídas fora do SLA', P.fora, 'entregues depois do prazo') +
+        kpi('Em aberto agora', P.abertas, P.atrasadas ? P.atrasadas + ' fora do SLA (prazo vencido)' : 'nenhuma fora do SLA') + '</div>' +
+      '<section class="panel-ct"><div class="h-row-ct"><div><h2>Comparativo mês a mês — ' + f.ano + '</h2><div class="h-sub">Solicitadas e concluídas (dentro e fora do SLA) em cada mês. Clique num mês para ver os números dele.</div></div>' +
+        '<div class="legenda-ct">' + SERIES.map(function (x) { return '<span><i style="background:' + x[2] + '"></i>' + x[1] + '</span>'; }).join('') + '</div></div>' +
+        '<div class="chart-ct"><svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Comparativo mês a mês em ' + f.ano + '">' + svg + '</svg></div>' +
+        '<details class="tab-ct"><summary>Ver em tabela</summary><div class="tabela-wrap"><table><thead><tr><th>Mês</th>' + SERIES.map(function (x) { return '<th style="text-align:right">' + x[1] + '</th>'; }).join('') + '<th style="text-align:right">Dentro do SLA</th></tr></thead><tbody>' +
+        (mesesTab.map(function (m) {
+          var c = m.dentro + m.fora;
+          return '<tr' + (f.mes === m.mes ? ' class="sel-ct"' : '') + '><td>' + MESES[m.mes - 1] + '</td>' + SERIES.map(function (x) { return '<td style="text-align:right;font-variant-numeric:tabular-nums"><b>' + m[x[0]] + '</b></td>'; }).join('') +
+            '<td style="text-align:right"><b style="color:' + corPct(c ? Math.round(m.dentro / c * 1000) / 10 : null) + '">' + (c ? pctTxt(Math.round(m.dentro / c * 1000) / 10) : '—') + '</b></td></tr>';
+        }).join('') || '<tr><td colspan="5"><span class="sec">Nada no ano.</span></td></tr>') + '</tbody></table></div></details></section>' +
+      '<section class="panel-ct"><h2>Situação agora</h2><div class="h-sub">Onde estão as solicitações em aberto neste momento (todas as atividades)</div><div class="sit-ct">' +
+        sit('Pendente', A.pendente, 'sem responsável ou não iniciada') + sit('Em andamento', A.em_andamento) + sit('Aguardando retorno', A.aguardando_retorno, 'falta algo de quem pediu') +
+        sit('Pronto para assinatura', A.pronto_assinatura, 'minuta aprovada') + sit('Aguardando assinaturas', A.aguardando_assinaturas, 'enviado para assinar') +
+        sit('Vencem hoje', A.vence_hoje) + sit('Fora do SLA', A.fora_sla, 'prazo vencido, sem conclusão', true) + '</div></section>' +
+      '<section class="panel-ct"><h2>% dentro do SLA por atividade — ' + f.ano + '</h2><div class="h-sub">Pela data de conclusão. Embaixo de cada %, quantas foram concluídas dentro do SLA do total concluído.</div>' + tabelaSla + '</section>' +
+      '<div class="dois-ct">' +
+        bloco('Por solicitante', esc(nomePer) + ' · quem pediu ao Jurídico. Clique no nome para ver as solicitações.', r.pessoas, 'Solicitante', true) +
+        (r.responsaveis.length ? bloco('Por responsável no Jurídico', esc(nomePer) + ' · quem conduziu', r.responsaveis, 'Responsável', false)
+          : bloco('Por atividade', esc(nomePer), r.atividades, 'Atividade', false)) + '</div>' +
+      '<div class="dois-ct">' +
+        (r.responsaveis.length ? bloco('Por atividade', esc(nomePer), r.atividades, 'Atividade', false) : bloco('Por setor', esc(nomePer), r.setores, 'Setor', false)) +
+        bloco('Por estado', esc(nomePer), r.estados, 'Estado', false) + '</div>' +
+      (r.responsaveis.length ? '<div class="dois-ct">' + bloco('Por setor', esc(nomePer), r.setores, 'Setor', false) + '<div></div></div>' : '') +
+      '</div>';
+
+    $('#pMesDj').onchange = function () { filtroDesDj.mes = Number(this.value); abaIndicadoresDj(); };
+    $$('#corpoDj [data-ano]').forEach(function (b) { b.onclick = function () { filtroDesDj.ano = Number(b.getAttribute('data-ano')); abaIndicadoresDj(); }; });
+    // nome de quem pediu: abre Todos já filtrado pelas solicitações dela no ano
     $$('#corpoDj [data-pessoa]').forEach(function (b) {
       b.onclick = function () {
-        filtrosDj.todas = { q: b.getAttribute('data-pessoa'), status: '', tipo: '', setor: '', origem: '', ano: String(r.ano) };
+        filtrosDj.todas = { q: b.getAttribute('data-pessoa'), status: '', tipo: '', setor: '', origem: '', ano: String(f.ano) };
         location.hash = '#/juridico/painel/todos';
       };
     });
-    // uma tabela por pessoa (ou estado), com a barra do % no prazo para ver de longe quem está bem e quem não está
-    function grupoPessoasDj(titulo, rotulo, ajuda, lista, clicavel) {
-      var barra = function (c) {
-        if (!c.total) return '<td><span class="sec">nenhuma concluída no ano</span></td>';
-        var cor = c.pct >= 90 ? 'var(--green)' : c.pct >= 70 ? '#c98a1b' : 'var(--red)';
-        return '<td style="min-width:200px" title="' + c.dentro + ' de ' + c.total + ' concluída(s) no prazo"><div style="display:flex;align-items:center;gap:8px">' +
-          '<div style="flex:1;height:10px;border-radius:5px;background:#e5e7eb;overflow:hidden"><div style="height:100%;width:' + c.pct + '%;background:' + cor + '"></div></div>' +
-          '<b style="color:' + cor + ';min-width:44px;text-align:right;font-variant-numeric:tabular-nums">' + String(c.pct).replace('.', ',') + '%</b></div>' +
-          '<span class="sec">' + c.dentro + ' de ' + c.total + ' no prazo</span></td>';
+    var tip = $('#tipCt');
+    if (!tip) { tip = document.createElement('div'); tip.id = 'tipCt'; tip.className = 'tip-ct'; document.body.appendChild(tip); }
+    $$('.alvo-ct', $('#corpoDj')).forEach(function (el) {
+      var m = r.meses[Number(el.getAttribute('data-i'))];
+      el.onclick = function () { tip.style.opacity = 0; filtroDesDj.mes = m.mes; abaIndicadoresDj(); };
+      el.onmousemove = function (ev) {
+        tip.innerHTML = '<b>' + cap(MESES[m.mes - 1]) + ' de ' + f.ano + '</b>' +
+          SERIES.map(function (x) { return '<div class="l"><i style="background:' + x[2] + '"></i>' + x[1] + ': <b>' + m[x[0]] + '</b></div>'; }).join('');
+        tip.style.opacity = 1;
+        var x = ev.clientX + 14;
+        if (x + 260 > window.innerWidth) x = ev.clientX - 270;
+        tip.style.left = x + 'px'; tip.style.top = (ev.clientY + 14) + 'px';
       };
-      var num = function (n, alerta) { return '<td style="text-align:right;font-variant-numeric:tabular-nums">' + (n ? (alerta ? '<b style="color:var(--red)">' + n + '</b>' : n) : '<span class="sec">0</span>') + '</td>'; };
-      return '<section class="painel" style="margin-top:16px"><div class="cab-painel"><h2>' + titulo + ' — ' + r.ano + '</h2></div>' +
-        '<div class="corpo" style="padding-top:0"><p class="ajuda" style="margin:0 0 8px">' + ajuda + '</p></div>' +
-        '<div class="tabela-wrap"><table style="min-width:760px"><thead><tr><th>' + rotulo + '</th><th style="text-align:right">Pedidos no ano</th><th>Concluídas no prazo</th>' +
-        '<th style="text-align:right" title="Pendentes ou em andamento">Com o Jurídico</th><th style="text-align:right" title="O Jurídico já fez; espera retorno ou assinatura">Esperando retorno ou assinatura</th>' +
-        '<th style="text-align:right" title="Sem conclusão e com o prazo vencido">Atrasadas</th></tr></thead><tbody>' +
-        (lista.map(function (x) {
-          var nome = clicavel ? '<button data-pessoa="' + esc(x.nome) + '" style="font:inherit;font-weight:700;padding:0;border:0;background:none;cursor:pointer;text-align:left;color:inherit;text-decoration:underline">' + esc(x.nome) + '</button>' : '<b>' + esc(x.nome) + '</b>';
-          return '<tr><td>' + nome + (x.setor && rotulo !== 'Estado' ? '<span class="sec">' + esc(x.setor) + '</span>' : '') + '</td>' + num(x.solicitadas) + barra(x.sla) + num(x.no_juridico) + num(x.esperando) + num(x.atrasadas, true) + '</tr>';
-        }).join('') || '<tr><td colspan="6"><span class="sec">Nada no ano.</span></td></tr>') + '</tbody></table></div></section>';
-    }
+      el.onmouseleave = function () { tip.style.opacity = 0; };
+    });
   }
 
   /* ---------- Tabela de prazos: o Jurídico edita; o prazo novo vale para as não entregues ---------- */
