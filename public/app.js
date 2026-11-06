@@ -228,7 +228,8 @@
 
   function desenharMenu() {
     var termo = normal($('#busca').value);
-    var lista = modulos.filter(function (m) { return !termo || normal(m.nome + ' ' + m.setor + ' ' + m.descricao).indexOf(termo) >= 0; });
+    // ferramenta desativada não aparece no menu (nem para a administração, que reativa em Configurações → Ferramentas)
+    var lista = modulos.filter(function (m) { return m.ativo && (!termo || normal(m.nome + ' ' + m.setor + ' ' + m.descricao).indexOf(termo) >= 0); });
     var rota = location.hash || '#/';
     var html = termo ? '' : '<a href="#/" class="' + (rota === '#/' ? 'on' : '') + '">' + IC.inicio + esc(rot('inicio', 'Início')) + '</a>' +
       '<a href="#/links" class="' + (rota.indexOf('#/links') === 0 ? 'on' : '') + '">' + IC.link + esc(rot('links', 'Central de Links')) + '</a>' +
@@ -251,7 +252,7 @@
         (resumoImp && resumoImp.acesso ? '<div class="grupo">' + esc(rot('grupo_implantacao', 'Implantação')) + '</div><a href="#/implantacao" class="' + (rota.indexOf('#/implantacao') === 0 ? 'on' : '') + '">' + IC.casa +
           '<span>' + esc(rot('implantacao', 'Painel de implantação')) + '</span><i data-contador="implantacao" class="contador" hidden></i></a>' : '');
       // Comissões: a ferramenta (só para quem tem acesso) e os demonstrativos de cada pessoa
-      var modCom = modulos.find(function (m) { return m.slug === MOD_COMISSAO; });
+      var modCom = modulos.find(function (m) { return m.slug === MOD_COMISSAO && m.ativo; });
       var pendC = resumoComissao ? resumoComissao.pendentes + (resumoComissao.planilhas || 0) : 0;
       html += '<div class="grupo">' + esc(rot('grupo_premiacoes', 'Premiações')) + '</div>' +
         (modCom ? '<a href="#/m/' + MOD_COMISSAO + '" data-slug="' + MOD_COMISSAO + '" class="' + (atual === MOD_COMISSAO && rota.indexOf('#/m/') === 0 ? 'on ' : '') + (modCom.ativo ? '' : 'inativo') + '">' +
@@ -454,7 +455,7 @@
       '<span class="sec" style="display:block;color:var(--muted);font-weight:600;font-size:13px" id="iniTickets">' +
       (rt && souEquipe() ? rt.minha_fila + ' na sua fila' + (rt.minha_fila_atrasados ? ' · ⚠ ' + rt.minha_fila_atrasados + ' atrasado(s)' : '') + ' · ' + rt.sem_responsavel + ' sem responsável nos seus setores' : 'Precisa de algo de outro setor? Abra um ticket.') +
       '</span></div><a class="btn ghost sm" href="#/tickets">Ver tickets</a><button class="btn primary sm" id="btIniNovoT">' + IC.mais + 'Novo ticket</button></div>';
-    var rec = recentes.map(function (s) { return modulos.find(function (m) { return m.slug === s; }); }).filter(Boolean);
+    var rec = recentes.map(function (s) { return modulos.find(function (m) { return m.slug === s && m.ativo; }); }).filter(Boolean);
     if (rec.length) {
       html += '<div class="grupo" style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--faint);font-weight:800;margin-bottom:8px">Usadas recentemente</div><div class="recentes">' +
         rec.map(function (m) { return '<a class="chip" href="#/m/' + esc(m.slug) + '">' + (IC[m.icone] || IC.app) + esc(m.nome) + '</a>'; }).join('') + '</div>';
