@@ -58,7 +58,7 @@ async function arquivos(navegador) {
   const comp = REPASSES.filter((r) => r[5] && r[7] === 'Efetuado').map(([, i, , , , fav, valor], k) => `
     <section style="page-break-after:always;font:13px Arial,sans-serif;color:#222;padding:18mm 20mm">
       <p style="font-size:10px;color:#888">EXEMPLO FICTÍCIO PARA TUTORIAL</p>
-      <h2 style="font-size:18px;margin:6px 0 18px">Comprovante de transferência — TED</h2>
+      <h2 style="font-size:18px;margin:6px 0 18px">Comprovante de transferência - TED</h2>
       <p>Banco: Itaú · Agência/conta de origem: 0001 / 12345-6 · MYBLUE EXEMPLO LTDA</p>
       <p style="margin-top:14px">Nome do favorecido: ${fav}</p>
       <p>CPF/CNPJ: ${CNPJ(i)}</p>
@@ -171,7 +171,7 @@ const roteiro = {
     await t.mostrar(f.locator('#pages .pg').first(), 2600, { dy: 0.4 });
     await t.legenda('A <b>conferência</b> mostra os repasses sem comprovante e os comprovantes fora da planilha.', { etapa: V, ms: 300 });
     await t.mostrar(f.locator('#cardConf'), 2800, { dy: 0.3 });
-    await t.legenda('<b>Baixar ZIP</b>: uma pasta por responsável, um PDF por condomínio — ou o botão de cada assistente.', { etapa: V, ms: 300 });
+    await t.legenda('<b>Baixar ZIP</b>: uma pasta por responsável, um PDF por condomínio, ou o botão de cada assistente.', { etapa: V, ms: 300 });
     await t.clicar(f.locator('#btnZip'), { depois: 2400 });
   },
   resumo: ['<b>Conciliação</b>: planilha do dia × banco (ou Protheus) → <b>Registrar</b>', '<b>Divergências</b>: tratativa com histórico e <b>✓ Ajuste feito</b>',

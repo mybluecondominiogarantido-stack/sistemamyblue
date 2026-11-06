@@ -60,7 +60,7 @@ function documentos(ids) {
     unidade('101', 'CLARA MENDONÇA REIS', '127.904.556-18', 'EXCLUIR', '1', '3 no Vouch e 2 na base anterior.', 3, 2),
     unidade('402', 'WALTER SIQUEIRA NETO', '640.215.937-55', 'PREVENTIVO', '5', 'Contrato recente (4 meses) e 1 cobrança(s).', 1, 0)]);
   const r3 = rodada(`AE-${ANO}-0003`, 'avulso', 3, 'Cond. Vila Rica', d3, [
-    unidade('B - 12', 'NAIR GONÇALVES PRADO', '731.442.890-26', 'PREVENTIVO', '4', '1 cobrança(s) no Vouch com BI positivo — em acompanhamento.', 1, 0)], { analista: 'Marcos Lima', bi: { valor: 2140, sinal: '+' } });
+    unidade('B - 12', 'NAIR GONÇALVES PRADO', '731.442.890-26', 'PREVENTIVO', '4', '1 cobrança(s) no Vouch com BI positivo - em acompanhamento.', 1, 0)], { analista: 'Marcos Lima', bi: { valor: 2140, sinal: '+' } });
   const docs = {
     ['perfis/' + lia]: { id: lia, nome: 'Lia Souza', papeis: ['gestao'], nomeCarteira: '' },
     ['perfis/' + otto]: { id: otto, nome: 'Otto Reis', papeis: ['implantacao'], nomeCarteira: '' },
@@ -145,7 +145,7 @@ async function arquivos(navegador) {
 }
 
 /* Bibliotecas do cdnjs (pdf.js e SheetJS). Na ferramenta isolada o portal troca o endereço por /t/<chave>/cdn/cdnjs/…
-   e, sem internet, redireciona para o cdnjs — o redirecionamento escapa da rota do gravador. Aqui a cópia local
+   e, sem internet, redireciona para o cdnjs - o redirecionamento escapa da rota do gravador. Aqui a cópia local
    (BIBLIOTECAS) é entregue já no endereço do portal; depois a página é recarregada.
    O html2pdf (ficha em PDF) fica de fora de propósito: isolada (sandbox sem allow-same-origin), a cópia da página que
    ele monta num iframe é bloqueada ("Blocked a frame with origin null") e a conclusão mostra um erro. Sem ele, a
@@ -240,7 +240,7 @@ const roteiro = {
     const R = '6 · Reanálise';
     await t.legenda('Quem segue em acompanhamento entra na <b>Fila de acompanhamento</b>, com reanálise a cada 90 dias.', { etapa: R, ms: 300 });
     await t.clicar(aba('lote'), { depois: 1600 });
-    await t.legenda('<b>Selecionar vencidos</b> e <b>Reanalisar</b>: anexe o PDF do Vouch de cada um — o condomínio é reconhecido pelo cabeçalho.', { etapa: R, ms: 300 });
+    await t.legenda('<b>Selecionar vencidos</b> e <b>Reanalisar</b>: anexe o PDF do Vouch de cada um, o condomínio é reconhecido pelo cabeçalho.', { etapa: R, ms: 300 });
     await t.clicar(f.locator('#btnSelVencidos'), { depois: 900 });
     const escolha = t.p.waitForEvent('filechooser', { timeout: 10000 });
     await t.clicar(f.locator('#btnReanalisarSel'), { depois: 300 });

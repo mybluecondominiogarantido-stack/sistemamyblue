@@ -15,12 +15,12 @@ const { cliente } = require('./gravador');
 const SENHA = 'Nova12345';
 const EXTRAS = {
   'comissoes-de-novos-condominios': ['Comissões de Novos Condomínios', 'Comercial', 'aperto'],
-  'partnerchip-resultados': ['PartnerChip — Resultados', 'Comercial', 'grafico'],
+  'partnerchip-resultados': ['PartnerChip: Resultados', 'Comercial', 'grafico'],
   'central-patrocinio': ['Central de Patrocínio', 'Administrativa/Financeira', 'documento'],
   'gestao-de-viagens': ['Gestão de Viagens', 'Administrativa/Financeira', 'app'],
   'repasses': ['Controle de Repasses', 'Crédito', 'app'],
-  'central-de-ferramentas-gestao-credito': ['Central de Ferramentas — Gestão Crédito', 'Crédito', 'calculadora'],
-  'biblioteca-de-hsm-credito-implantacao': ['Biblioteca de HSM — Crédito e Implantação', 'Crédito', 'carteira'],
+  'central-de-ferramentas-gestao-credito': ['Central de Ferramentas: Gestão Crédito', 'Crédito', 'calculadora'],
+  'biblioteca-de-hsm-credito-implantacao': ['Biblioteca de HSM: Crédito e Implantação', 'Crédito', 'carteira'],
   'acompanhamento-de-resultados': ['Acompanhamento de Resultados', 'Cobrança', 'aperto'],
   'ajuste-de-mailing': ['Ajuste de Mailing', 'Cobrança', 'caixa'],
   'analise-de-espolio': ['Análise de Espólio', 'Cobrança', 'app'],
@@ -40,7 +40,7 @@ function recursos() {
     '-draw', 'circle 250,950 250,1250', '-fill', 'rgba(255,255,255,0.08)', '-draw', 'circle 900,560 900,760', '-quality', '85', r.fundo]);
   execFileSync('convert', ['-size', '320x320', 'xc:#cfe9ef', '-fill', '#e8b48f', '-draw', 'circle 160,128 160,62', '-fill', '#147f90', '-draw', 'ellipse 160,330 118,112 180,360', r.foto]);
   execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=0x199cb1:s=320x180:d=1', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', r.video]);
-  fs.writeFileSync(r.html, exemplo('Ferramenta de exemplo — versão nova'));
+  fs.writeFileSync(r.html, exemplo('Ferramenta de exemplo: versão nova'));
   return r;
 }
 
@@ -51,8 +51,8 @@ async function montarCenario(base, { ferramentas = {} } = {}) {
   const eq = await a('GET', '/api/admin/equipes');
   const S = (n) => eq.setores.find((s) => s.nome === n).id;
 
-  const titulos = { credito: 'Central de Ferramentas — Crédito', cobranca: 'Central de Ferramentas — Cobrança', renegociacoes: 'Controle de Renegociações',
-    suprimentos: 'Controle de Pedidos', parceiros: 'Prestação de Contas — Parceiros', boletos: 'Controle de Emissão de Boletos',
+  const titulos = { credito: 'Central de Ferramentas: Crédito', cobranca: 'Central de Ferramentas: Cobrança', renegociacoes: 'Controle de Renegociações',
+    suprimentos: 'Controle de Pedidos', parceiros: 'Prestação de Contas: Parceiros', boletos: 'Controle de Emissão de Boletos',
     premiacoes: 'Gestão de Premiações' };
   for (const [slug, t] of Object.entries(titulos)) {
     await a('PUT', `/api/admin/modulos/${slug}/arquivo`, ferramentas[slug] ? fs.readFileSync(ferramentas[slug]) : exemplo(t));
@@ -75,7 +75,7 @@ async function montarCenario(base, { ferramentas = {} } = {}) {
   for (const [i, [nome, uf]] of conds.entries()) {
     cond[nome] = (await a('POST', '/api/carteira', { codigo: String(301 + i), inicio_contrato: `2026-0${4 + i}-01`, executivo: i % 2 ? 'Bruna Reis' : 'Davi Rocha', nome, comarca: uf, situacao: i === 5 ? 'DISTRATADO' : 'ATIVO', vencimento: 'Dia 10', administradora: i % 2 ? 'Própria' : 'Adm. Exemplo',
       analista_cobranca: i < 4 ? 'MARCOS LIMA - 4701' : 'ANA COSTA - 4702', assistente_credito: i % 2 ? 'DAVI ROCHA - 4711' : 'BRUNA REIS - 4710',
-      analista_extrajudicial: i % 2 ? 'APOIOCOB — ANA' : '', razao_social: nome.toUpperCase(), cnpj: `12.345.678/000${i + 1}-9${i}`,
+      analista_extrajudicial: i % 2 ? 'APOIOCOB - ANA' : '', razao_social: nome.toUpperCase(), cnpj: `12.345.678/000${i + 1}-9${i}`,
       sindico_nome: sindicos[i][0], sindico_telefone: sindicos[i][1], sindico_email: sindicos[i][0] ? `sindico${i + 1}@exemplo.com.br` : '' })).id;
   }
 
@@ -132,8 +132,8 @@ async function montarCenario(base, { ferramentas = {} } = {}) {
 
   // tickets já em andamento
   const { sara, lia, marcos } = sessao;
-  const t1 = await sara('POST', '/api/tickets', { condominio_id: cond['Cond. Jardim Azul'], titulo: '2ª via do boleto — apto 302', descricao: 'Síndico pediu a 2ª via do boleto de outubro.\nVencimento original: 05/10.', setor_id: S('Cobrança'), categoria_id: cat['2ª via de boleto'] });
-  const t2 = await sara('POST', '/api/tickets', { interno: true, titulo: 'Acordo para unidade 104 — Ed. Solar', descricao: 'Condômino quer parcelar 3 meses em atraso.', setor_id: S('Cobrança'), prioridade: 'urgente' });
+  const t1 = await sara('POST', '/api/tickets', { condominio_id: cond['Cond. Jardim Azul'], titulo: '2ª via do boleto - apto 302', descricao: 'Síndico pediu a 2ª via do boleto de outubro.\nVencimento original: 05/10.', setor_id: S('Cobrança'), categoria_id: cat['2ª via de boleto'] });
+  const t2 = await sara('POST', '/api/tickets', { interno: true, titulo: 'Acordo para unidade 104 - Ed. Solar', descricao: 'Condômino quer parcelar 3 meses em atraso.', setor_id: S('Cobrança'), prioridade: 'urgente' });
   const t3 = await sara('POST', '/api/tickets', { interno: true, titulo: 'Revisar régua de cobrança do Res. Primavera', setor_id: S('Cobrança'), prioridade: 'baixa' });
   await sara('POST', '/api/tickets', { condominio_id: cond['Cond. Vila Rica'], titulo: 'Balancete de setembro', setor_id: S('Crédito'), prioridade: 'media' });
   await lia('POST', '/api/tickets', { interno: true, titulo: 'Contrato do Res. Bela Vista para renovação', setor_id: S('CS'), prioridade: 'alta' });
