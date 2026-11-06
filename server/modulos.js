@@ -6,6 +6,7 @@ const { trocarCdns } = require('./rotas/cdn');
 
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,40}$/;
 const BRIDGE_JS = fs.readFileSync(path.join(__dirname, 'bridge.js'), 'utf8');
+const RENOMEAR_JS = fs.readFileSync(path.join(__dirname, 'renomear.js'), 'utf8');
 
 /* JSON seguro para colocar dentro de <script> */
 const jsonEmScript = (v) => JSON.stringify(v).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
@@ -148,6 +149,8 @@ function criarServicoModulos(db, cfg) {
       isolada: !!chave,
       chave,
       avisos,
+      // nomes trocados em Configurações → Nomes e abas (abas, botões, títulos da ferramenta)
+      textos: m.config.textos || {},
     };
     if (m.armazenamento !== 'navegador') {
       const escopo = m.armazenamento === 'compartilhado' ? '*' : `u:${usuario.id}`;
@@ -157,7 +160,7 @@ function criarServicoModulos(db, cfg) {
       if (sob && sob.tipo === 'armazenamento' && escopo === '*') conf.dados[sob.chave] = sob.valor; // administração: todos os papéis
       conf.versoes = Object.fromEntries(rows.map((r) => [r.chave, Number(r.versao)]));
     }
-    const injecao = `<script>window.__MYBLUE__=${jsonEmScript(conf)};\n${BRIDGE_JS}</script>`;
+    const injecao = `<script>window.__MYBLUE__=${jsonEmScript(conf)};\n${BRIDGE_JS}\n${Object.keys(conf.textos).length ? RENOMEAR_JS : ''}</script>`;
 
     // injeta logo no início do <head> (antes de qualquer script da ferramenta)
     const head = /<head(\s[^>]*)?>/i.exec(html);
@@ -178,7 +181,29 @@ function criarServicoModulos(db, cfg) {
     return null;
   }
 
-  return { SLUG_RE, obter, listar, validarHtml, salvarVersao, restaurarVersao, recusarVersao, listarVersoes, lerHtml, cabecalhoDoHtml, montarHtml, reconhecer };
+  return { SLUG_RE, textosDoHtml, obter, listar, validarHtml, salvarVersao, restaurarVersao, recusarVersao, listarVersoes, lerHtml, cabecalhoDoHtml, montarHtml, reconhecer };
 }
 
-module.exports = { criarServicoModulos, SLUG_RE };
+/* Textos curtos de abas e botões do HTML (para sugerir em "texto que aparece"): o conteúdo de <button>, de role="tab"
+   e de elementos com classe de aba (tab, aba). É só uma ajuda: o que a ferramenta desenha por script pode não aparecer. */
+function textosDoHtml(html) {
+  const fonte = String(html || '');
+  const vistos = new Set();
+  const abre = /<(button|a|li|div|span|label)\b([^>]*)>/gi;
+  const ehAba = (tag, attrs) => tag === 'button' || /role\s*=\s*["']?tab\b/i.test(attrs) || /class\s*=\s*["'][^"']*\b(tab|tabs|aba|abas)\b/i.test(attrs);
+  let r;
+  while ((r = abre.exec(fonte)) && vistos.size < 120) {
+    const tag = r[1].toLowerCase();
+    if (!ehAba(tag, r[2])) continue;
+    const fim = fonte.toLowerCase().indexOf('</' + tag + '>', abre.lastIndex);
+    if (fim < 0) continue;
+    const dentro = fonte.slice(abre.lastIndex, fim);
+    if (/<(button|a|li|div)\b/i.test(dentro)) continue; // é o contêiner das abas: as abas de dentro entram uma a uma
+    const t = dentro.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\$\{[^}]*\}/g, ' ')
+      .replace(/\s+/g, ' ').trim().replace(/^[^A-Za-zÀ-ú0-9]+/, '').trim();
+    if (t.length >= 2 && t.length <= 40 && /[A-Za-zÀ-ú]/.test(t) && !/[<>{}=;'"`]/.test(t)) vistos.add(t);
+  }
+  return [...vistos].sort((x, y) => x.localeCompare(y, 'pt-BR'));
+}
+
+module.exports = { criarServicoModulos, SLUG_RE, textosDoHtml };

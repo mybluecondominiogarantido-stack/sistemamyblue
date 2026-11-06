@@ -78,6 +78,7 @@ Resumo por perfil:
 | Pessoas (cadastro) | — | usuários comuns dos setores dele | todos, todos os perfis |
 | Acessos (quem abre cada ferramenta, papéis, Base de Clientes) | — | ferramentas e permissões dos setores dele | tudo, mais Análise de Crédito, Solicitação de Contrato e marcações |
 | Ferramentas (HTML e versões) | — | setores dele (toda versão nova vai para a aprovação da administração, com o que mudou) | todas, com onde ficam os dados, aprovação e tutoriais |
+| Nomes e abas (nome dos itens e grupos do menu e das abas de dentro das ferramentas) | — | abas das ferramentas dos setores dele | o menu inteiro e as abas de todas as ferramentas |
 | Setores e equipes (líderes e tipos de demanda) | — | líderes e tipos dos setores dele | todos os setores, e cria e renomeia setores |
 | Tickets | os do setor dele e os que abriu | todos os setores (a Supervisão da Central de Tickets vem com o perfil) | todos |
 | Carteira | consulta + o que estiver liberado em *Configurações → Acessos → Base de Clientes* | idem, e libera pessoas nas permissões do setor dele | tudo |

@@ -2,7 +2,7 @@
 const express = require('express');
 const zlib = require('zlib');
 const { hashSenha, validarNovaSenha, senhaAleatoria, veTodosOsTickets } = require('../seguranca');
-const { SLUG_RE } = require('../modulos');
+const { SLUG_RE, textosDoHtml } = require('../modulos');
 const { criarZip } = require('../zip');
 const { MODULO: MODULO_BOLETOS } = require('../boletos-carteira');
 const { gerarBackup } = require('../backup');
@@ -20,8 +20,8 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
   // Coordenador e supervisor gerenciam o(s) setor(es) do cadastro deles: usuários, ferramentas (HTML, quem abre e com
   // qual papel, inclusive pessoas de outros setores; ferramenta nova aguarda a aprovação da administração), equipe e
   // tipos de demanda (rotas da Central de Tickets). O resto da administração é só do administrador.
-  const FERRAMENTA_SETOR = /^\/modulos\/([a-z0-9][a-z0-9-]{1,40})\/(arquivo|versoes|versoes\/\d+\/usar|versoes\/\d+\/arquivo|acesso|carteira)$/;
-  const metodosDe = (acao) => (acao === 'arquivo' ? ['PUT'] : acao === 'acesso' ? ['GET', 'PUT'] : acao === 'carteira' ? ['GET', 'POST'] : acao === 'versoes' || acao.endsWith('/arquivo') ? ['GET'] : ['POST']);
+  const FERRAMENTA_SETOR = /^\/modulos\/([a-z0-9][a-z0-9-]{1,40})\/(arquivo|versoes|versoes\/\d+\/usar|versoes\/\d+\/arquivo|acesso|carteira|textos)$/;
+  const metodosDe = (acao) => (acao === 'arquivo' ? ['PUT'] : acao === 'acesso' || acao === 'textos' ? ['GET', 'PUT'] : acao === 'carteira' ? ['GET', 'POST'] : acao === 'versoes' || acao.endsWith('/arquivo') ? ['GET'] : ['POST']);
   r.use('/api/admin', seg.exigirLogin, async (req, res, next) => {
     try {
       if (req.usuario.papel === 'admin') return next();
@@ -581,6 +581,54 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     await db.q('UPDATE permissoes SET papeis = ARRAY(SELECT x FROM unnest(papeis) x WHERE x = ANY($2::text[])) WHERE modulo_slug = $1', [m.slug, lista.map((p) => p.id)]);
     await seg.auditar(req, 'modulo_papeis', m.slug, { papeis: lista.map((p) => p.id) });
     res.json({ ok: true, papeis: lista });
+  });
+
+  /* ===================== nomes trocados (Configurações → Nomes e abas) ===================== */
+  // abas, botões e títulos da ferramenta: "texto que aparece" → "novo nome" (a troca roda dentro da ferramenta, em renomear.js)
+  r.get('/api/admin/modulos/:slug/textos', async (req, res) => {
+    const m = await modulos.obter(req.params.slug);
+    if (!m) return erro(res, 404, 'Módulo não encontrado.');
+    res.json({ textos: m.config.textos || {}, sugestoes: textosDoHtml(await modulos.lerHtml(m)) });
+  });
+  r.put('/api/admin/modulos/:slug/textos', json, async (req, res) => {
+    const m = await modulos.obter(req.params.slug);
+    if (!m) return erro(res, 404, 'Módulo não encontrado.');
+    const pedido = req.body && typeof req.body.textos === 'object' && req.body.textos ? req.body.textos : {};
+    const textos = {};
+    for (const [o, n] of Object.entries(pedido)) {
+      const original = String(o).replace(/\s+/g, ' ').trim(), novo = String(n || '').replace(/\s+/g, ' ').trim();
+      if (!original || !novo || original === novo) continue;
+      if (original.length > 80 || novo.length > 80) return erro(res, 400, `Use até 80 caracteres ("${original.slice(0, 30)}…").`);
+      textos[original] = novo;
+    }
+    if (Object.keys(textos).length > 60) return erro(res, 400, 'No máximo 60 nomes trocados por ferramenta.');
+    await db.q("UPDATE modulos SET config = jsonb_set(config, '{textos}', $2::jsonb), atualizado_em = now() WHERE slug = $1", [m.slug, JSON.stringify(textos)]);
+    await seg.auditar(req, 'modulo_textos', m.slug, { textos });
+    res.json({ ok: true, textos });
+  });
+
+  // itens e grupos do menu do portal (as telas fixas; ferramentas e setores mudam pelo próprio nome)
+  const CHAVE_ROTULO = /^[a-z][a-z0-9_]{1,40}$/;
+  r.put('/api/admin/rotulos', json, async (req, res) => {
+    const pedido = req.body && typeof req.body.rotulos === 'object' && req.body.rotulos ? req.body.rotulos : {};
+    const entradas = Object.entries(pedido);
+    if (entradas.length > 80) return erro(res, 400, 'Nomes demais de uma vez.');
+    for (const [chave, nome] of entradas) {
+      if (!CHAVE_ROTULO.test(chave)) return erro(res, 400, 'Item do menu inválido.');
+      if (String(nome || '').trim().length > 60) return erro(res, 400, 'Use até 60 caracteres em cada nome.');
+    }
+    await db.tx(async (t) => {
+      for (const [chave, nome] of entradas) {
+        const n = String(nome || '').replace(/\s+/g, ' ').trim();
+        // vazio = volta ao nome padrão do portal
+        if (!n) await t.q('DELETE FROM rotulos_menu WHERE chave = $1', [chave]);
+        else await t.q(`INSERT INTO rotulos_menu (chave, nome, atualizado_por) VALUES ($1, $2, $3)
+          ON CONFLICT (chave) DO UPDATE SET nome = EXCLUDED.nome, atualizado_em = now(), atualizado_por = EXCLUDED.atualizado_por`, [chave, n, req.usuario.id]);
+      }
+    });
+    await seg.auditar(req, 'rotulos_menu', null, { rotulos: pedido });
+    const { rows } = await db.q('SELECT chave, nome FROM rotulos_menu');
+    res.json({ ok: true, rotulos: Object.fromEntries(rows.map((x) => [x.chave, x.nome])) });
   });
 
   /* ===================== Base de Clientes: quem edita o quê ===================== */
