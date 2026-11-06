@@ -8228,34 +8228,17 @@
     var P = r.resumo, A = r.agora;
     var pctTxt = function (v) { return v == null ? '—' : String(v).replace('.', ',') + '%'; };
     var corPct = function (v) { return v == null ? 'var(--muted, #5b7083)' : v >= 90 ? 'var(--green)' : v >= 70 ? '#b07613' : 'var(--red)'; };
-    var kpi = function (rot, val, sub, cls, barra) {
-      return '<div class="kpi-ct' + (cls ? ' ' + cls : '') + '"><div class="lab">' + rot + '</div><div class="val">' + (val == null ? '—' : val) + '</div>' +
-        (sub ? '<div class="sub">' + sub + '</div>' : '') + (barra != null ? '<div class="barra-ct"><i style="width:' + Math.min(100, barra).toFixed(1) + '%"></i></div>' : '') + '</div>';
-    };
 
-    // comparativo mês a mês (o mesmo gráfico do Dashboard de contratos)
+    // comparativo mês a mês no desenho do Painel de implantação: solicitadas (azul) e concluídas (laranja), com o % dentro
+    // do SLA embaixo de cada mês; a dica ao passar o mouse traz as três séries e clicar no mês filtra os cartões
     var SERIES = SERIES_DES_DJ;
-    var maxv = Math.max(1, Math.max.apply(null, r.meses.map(function (m) { return Math.max.apply(null, SERIES.map(function (x) { return m[x[0]]; })); })));
-    var passo = maxv <= 5 ? 1 : maxv <= 10 ? 2 : maxv <= 25 ? 5 : maxv <= 50 ? 10 : 20;
-    var topo = Math.ceil(maxv / passo) * passo;
-    var W = 1040, H = 300, L = 40, R = 10, Tp = 22, Bm = 34, pw = (W - L - R) / 12, bw = Math.min(18, (pw - 20) / SERIES.length - 2), grupo = SERIES.length * (bw + 2) - 2;
-    var y = function (v) { return Tp + (H - Tp - Bm) * (1 - v / topo); };
-    var svg = '';
-    for (var g = 0; g <= topo; g += passo) svg += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y(g).toFixed(1) + '" y2="' + y(g).toFixed(1) + '" class="' + (g ? 'grade-ct' : 'base-ct') + '"/>' +
-      '<text x="' + (L - 10) + '" y="' + (y(g) + 4).toFixed(1) + '" text-anchor="end" class="eixo-ct">' + g + '</text>';
-    var barra = function (x, v, cor) {
-      if (!v) return '';
-      var y0 = y(v), h = y(0) - y0, rr = Math.min(4, h);
-      return '<path fill="' + cor + '" d="M' + x.toFixed(1) + ' ' + y(0).toFixed(1) + 'V' + (y0 + rr).toFixed(1) + 'Q' + x.toFixed(1) + ' ' + y0.toFixed(1) + ' ' + (x + rr).toFixed(1) + ' ' + y0.toFixed(1) +
-        'H' + (x + bw - rr).toFixed(1) + 'Q' + (x + bw).toFixed(1) + ' ' + y0.toFixed(1) + ' ' + (x + bw).toFixed(1) + ' ' + (y0 + rr).toFixed(1) + 'V' + y(0).toFixed(1) + 'Z"/>';
-    };
-    r.meses.forEach(function (m, k) {
-      var cx = L + pw * k + pw / 2, tem = SERIES.some(function (x) { return m[x[0]]; });
-      if (f.mes === m.mes) svg += '<rect x="' + (L + pw * k + 2).toFixed(1) + '" y="' + Tp + '" width="' + (pw - 4).toFixed(1) + '" height="' + (H - Tp - Bm) + '" rx="8" class="sel-mes-ct"/>';
-      SERIES.forEach(function (x, i) { svg += barra(cx - grupo / 2 + i * (bw + 2), m[x[0]], x[2]); });
-      svg += '<text x="' + cx.toFixed(1) + '" y="' + (H - 12) + '" text-anchor="middle" class="mes-txt-ct' + (tem ? ' tem' : '') + (f.mes === m.mes ? ' sel' : '') + '">' + cap(MESES_CT[k]) + '</text>';
-      svg += '<rect x="' + (L + pw * k).toFixed(1) + '" y="' + Tp + '" width="' + pw.toFixed(1) + '" height="' + (H - Tp - Bm + 10) + '" fill="transparent" data-i="' + k + '" class="alvo-ct"/>';
-    });
+    var maxv = Math.max(1, Math.max.apply(null, r.meses.map(function (m) { return Math.max(m.solicitadas, m.dentro + m.fora); })));
+    var hDj = function (v) { return Math.round((v || 0) * 180 / maxv); };
+    var grafico = r.meses.map(function (m, k) {
+      var c = m.dentro + m.fora;
+      return '<div class="mes-acomp alvo-ct' + (f.mes === m.mes ? ' sel' : '') + '" data-i="' + k + '"><div class="bs"><i style="height:' + hDj(m.solicitadas) + 'px;background:#0b76ba"></i><i style="height:' + hDj(c) + 'px;background:#d98a1b"></i></div>' +
+        '<span class="m">' + MESES_CT[k] + '</span><span class="v">' + (c ? pctTxt(Math.round(m.dentro / c * 1000) / 10) : (m.solicitadas ? '0 concl.' : '—')) + '</span></div>';
+    }).join('');
     var mesesTab = r.meses.filter(function (m) { return f.ano < hoje.getFullYear() || (f.ano === hoje.getFullYear() && m.mes <= hoje.getMonth() + 1); });
 
     // % dentro do SLA por atividade e mês (o Resumo SLA da planilha)
@@ -8301,16 +8284,17 @@
       '<div class="filtros-ct"><span class="lbl">Ano</span>' + r.anos.slice().sort().map(function (a) { return '<button class="pill-ct' + (a === f.ano ? ' on' : '') + '" data-ano="' + a + '">' + a + '</button>'; }).join('') +
         '<span class="lbl" style="margin-left:8px">Mês</span><select class="campo" id="pMesDj"><option value="0">Ano todo</option>' +
         MESES.map(function (n, k) { return '<option value="' + (k + 1) + '"' + (f.mes === k + 1 ? ' selected' : '') + '>' + cap(n) + '</option>'; }).join('') + '</select></div>' +
-      '<div class="kpis-ct">' +
-        kpi('Solicitadas · ' + esc(nomePer), P.solicitadas, P.perdidos ? P.perdidos + ' contrato(s) perdido(s)' : 'pedidas ao Jurídico no período', 'destaque') +
-        kpi('Concluídas', P.entregues, 'entregues no período') +
-        kpi('Dentro do SLA', pctTxt(P.pct), P.dentro + ' de ' + P.entregues + ' concluídas até o prazo', '', P.pct) +
-        kpi('Concluídas fora do SLA', P.fora, 'entregues depois do prazo') +
-        kpi('Em aberto agora', P.abertas, P.atrasadas ? P.atrasadas + ' fora do SLA (prazo vencido)' : 'nenhuma fora do SLA') + '</div>' +
-      '<section class="panel-ct"><div class="h-row-ct"><div><h2>Comparativo mês a mês — ' + f.ano + '</h2><div class="h-sub">Solicitadas e concluídas (dentro e fora do SLA) em cada mês. Clique num mês para ver os números dele.</div></div>' +
-        '<div class="legenda-ct">' + SERIES.map(function (x) { return '<span><i style="background:' + x[2] + '"></i>' + x[1] + '</span>'; }).join('') + '</div></div>' +
-        '<div class="chart-ct"><svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Comparativo mês a mês em ' + f.ano + '">' + svg + '</svg></div>' +
-        '<details class="tab-ct"><summary>Ver em tabela</summary><div class="tabela-wrap"><table><thead><tr><th>Mês</th>' + SERIES.map(function (x) { return '<th style="text-align:right">' + x[1] + '</th>'; }).join('') + '<th style="text-align:right">Dentro do SLA</th></tr></thead><tbody>' +
+      '<div class="cards-acomp">' +
+        tileAcomp('Solicitadas · ' + nomePer, P.solicitadas, P.perdidos ? P.perdidos + ' contrato(s) perdido(s)' : 'pedidas ao Jurídico no período') +
+        tileAcomp('Concluídas', P.entregues, 'entregues no período') +
+        tileAcomp('Dentro do SLA', pctTxt(P.pct), P.dentro + ' de ' + P.entregues + ' concluídas até o prazo', P.pct == null ? null : { barra: P.pct }) +
+        tileAcomp('Concluídas fora do SLA', P.fora, 'entregues depois do prazo', P.fora ? { cor: 'red' } : null) +
+        tileAcomp('Em aberto agora', P.abertas, P.atrasadas ? '<b style="color:var(--red)">' + P.atrasadas + ' fora do SLA (prazo vencido)</b>' : 'nenhuma fora do SLA') + '</div>' +
+      '<section class="painel" style="margin-bottom:16px"><div class="cab-painel"><h2>Solicitadas e concluídas por mês · ' + f.ano + '</h2><span class="espaco"></span>' +
+        '<span class="legenda-acomp"><i style="background:#0b76ba"></i>Solicitadas</span><span class="legenda-acomp"><i style="background:#d98a1b"></i>Concluídas</span></div>' +
+        '<div class="grafico-acomp" role="img" aria-label="Solicitadas e concluídas por mês em ' + f.ano + '">' + grafico + '</div>' +
+        '<p class="ajuda" style="margin:0;padding:8px 16px 4px">Embaixo de cada mês: % concluído dentro do SLA. Passe o mouse para ver solicitadas, dentro e fora do SLA; clique num mês para ver os números dele.</p>' +
+        '<details class="tab-ct" style="padding:0 16px 14px"><summary>Ver em tabela</summary><div class="tabela-wrap"><table><thead><tr><th>Mês</th>' + SERIES.map(function (x) { return '<th style="text-align:right">' + x[1] + '</th>'; }).join('') + '<th style="text-align:right">Dentro do SLA</th></tr></thead><tbody>' +
         (mesesTab.map(function (m) {
           var c = m.dentro + m.fora;
           return '<tr' + (f.mes === m.mes ? ' class="sel-ct"' : '') + '><td>' + MESES[m.mes - 1] + '</td>' + SERIES.map(function (x) { return '<td style="text-align:right;font-variant-numeric:tabular-nums"><b>' + m[x[0]] + '</b></td>'; }).join('') +
