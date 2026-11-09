@@ -26,8 +26,9 @@ const PRAZO_PADRAO_HORAS = { urgente: 4, alta: 9, media: 27, baixa: 45 };
 const texto = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
 // administração e quem tem a marcação Supervisão da Central de Tickets (não é o perfil Supervisor): todos os setores
 const ehGestor = (u) => u.papel === 'admin' || !!u.supervisor_tickets;
-// coordenador e supervisor têm, no setor deles, os poderes do líder
-const gestorDeSetor = (u) => u.papel === 'coordenador' || u.papel === 'supervisor';
+// gerente, coordenador e supervisor têm, no setor deles, os poderes do líder
+const { GESTORES_DE_SETOR } = require('../seguranca');
+const gestorDeSetor = (u) => GESTORES_DE_SETOR.includes(u.papel);
 
 function rotasTickets({ db, seg, cfg, avisos, expediente }) {
   const r = express.Router();

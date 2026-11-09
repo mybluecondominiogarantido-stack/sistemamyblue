@@ -75,7 +75,7 @@ function rotasCarteira({ db, seg, regras, boletosCarteira, documentos }) {
 
   /* O que o portal identificou sobre quem pode o quê na carteira (mostrado na própria tela):
      o que quem está vendo pode, com o motivo, e quem tem cada permissão hoje. */
-  const NIVEL = { admin: 'Administrador', coordenador: 'Coordenação', supervisor: 'Supervisão', usuario: 'Usuário' };
+  const NIVEL = { admin: 'Administrador', gerente: 'Gerência', coordenador: 'Coordenação', supervisor: 'Supervisão', usuario: 'Usuário' };
   async function quadroDeAcesso(u) {
     const meusSetores = (await db.q('SELECT s.nome FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id WHERE sm.usuario_id = $1 ORDER BY s.ordem, s.nome', [u.id])).rows.map((x) => x.nome);
     const minhas = await regras.permissoesDe(u);

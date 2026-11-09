@@ -11,7 +11,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ICONES = ['app', 'calculadora', 'grafico', 'aperto', 'caixa', 'carteira', 'documento', 'pessoas', 'ticket', 'casa', 'calendario', 'escudo'];
 const ehDuplicado = (e) => e && (e.code === '23505' || /duplicate key|unique/i.test(String(e.message)));
 
-function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, boletosCarteira, avisos, cfg }) {
+function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, nativas, boletosCarteira, avisos, cfg }) {
   const ehDocs = (m) => m && m.adaptador === 'claude-db';
   const r = express.Router();
   const json = express.json({ limit: '2mb' });
@@ -31,6 +31,7 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
       if (/^\/(equipes|categorias)(\/|$)/.test(req.path) && req.path !== '/equipes/email-teste') return next(); // o escopo é conferido lá
       if (req.path === '/modulos' && (req.method === 'GET' || req.method === 'POST')) return next(); // o setor da ferramenta nova é conferido lá
       if (/^\/carteira\/acessos(\/|$)/.test(req.path)) return next(); // cada permissão é conferida lá
+      if (/^\/nativas(\/|$)/.test(req.path)) return next(); // telas do portal: cada papel é conferido lá
       const x = FERRAMENTA_SETOR.exec(req.path);
       if (x && metodosDe(x[2]).includes(req.method)) {
         const m = await modulos.obter(x[1]);
@@ -53,7 +54,7 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
   }
 
   /* ===================== usuários ===================== */
-  const PAPEIS = ['admin', 'coordenador', 'supervisor', 'usuario'];
+  const PAPEIS = ['admin', 'gerente', 'coordenador', 'supervisor', 'usuario'];
 
   /* O que quem está logado pode fazer com usuários. Administrador: tudo (null).
      Coordenador e supervisor: usuários comuns dos setores dele (ou que ele criou), com as ferramentas e os setores dele. */
@@ -115,9 +116,9 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     const existentes = new Set((await db.q('SELECT slug FROM modulos')).rows.map((m) => m.slug));
     const setoresValidos = new Set((await db.q('SELECT id FROM setores')).rows.map((x) => x.id));
     const setores = Array.isArray(body.setores) ? [...new Set(body.setores.map(Number))].filter((x) => setoresValidos.has(x)) : null;
-    if (setores && ['coordenador', 'supervisor'].includes(papel) && !setores.length) return { erro: 'Escolha o setor que esta pessoa coordena ou supervisiona.' };
+    if (setores && seg.GESTORES_DE_SETOR.includes(papel) && !setores.length) return { erro: 'Escolha o setor que esta pessoa gerencia, coordena ou supervisiona.' };
     // Coordenador e Supervisor já têm a Supervisão da Central de Tickets pelo perfil: a marcação fica só para os outros
-    return { nome, email, papel, data_nascimento: nascimento, data_admissao: admissao, supervisor_tickets: !!body.supervisor_tickets && !['coordenador', 'supervisor'].includes(papel), editor_links: !!body.editor_links, modulos: lista.filter((s) => existentes.has(s)), setores };
+    return { nome, email, papel, data_nascimento: nascimento, data_admissao: admissao, supervisor_tickets: !!body.supervisor_tickets && !seg.GESTORES_DE_SETOR.includes(papel), editor_links: !!body.editor_links, modulos: lista.filter((s) => existentes.has(s)), setores };
   }
   /* data do cadastro (AAAA-MM-DD) ou null */
   function dataCadastro(v) {
@@ -145,7 +146,7 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     if (d.erro) return erro(res, 400, d.erro);
     if (esc) {
       // coordenador e supervisor criam só usuário comum, sem permissões extras, nos setores e com as ferramentas deles
-      if (d.papel !== 'usuario') return erro(res, 403, 'Coordenador e supervisor criam apenas usuários comuns. Coordenadores, supervisores e administradores são criados pela administração.');
+      if (d.papel !== 'usuario') return erro(res, 403, 'Gerente, coordenador e supervisor criam apenas usuários comuns. Gerentes, coordenadores, supervisores e administradores são criados pela administração.');
       const setores = (d.setores || []).filter((x) => esc.setores.has(x));
       if (!setores.length) return erro(res, 400, 'Escolha o setor da pessoa.');
       Object.assign(d, { supervisor_tickets: false, editor_links: false, setores, modulos: d.modulos.filter((s) => esc.modulos.has(s)) });
@@ -227,7 +228,7 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
       if (!a.abre) continue;
       const { lista } = await acessos.papeisDaFerramenta(m);
       ferramentas.push({ slug: m.slug, nome: m.nome, setor: m.setor_nome || '', ativo: m.ativo, pendente: m.pendente,
-        motivo: u.papel === 'admin' ? 'administração' : gestor && meusSetores.has(m.setor_id) ? (u.papel === 'supervisor' ? 'supervisão do setor' : 'coordenação do setor') : 'liberada',
+        motivo: u.papel === 'admin' ? 'administração' : gestor && meusSetores.has(m.setor_id) ? ({ gerente: 'gerência do setor', supervisor: 'supervisão do setor' }[u.papel] || 'coordenação do setor') : 'liberada',
         somente_leitura: a.somente_leitura, papeis: a.papeis.map((p) => (lista.find((x) => x.id === p) || { nome: p }).nome) });
     }
     const perms = u.papel === 'admin' ? null : await regras.permissoesDe(u);
@@ -242,6 +243,7 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
         lider_em: setores.filter((x) => x.lider || gestor).map((x) => x.nome) },
       carteira,
       ferramentas,
+      telas: await nativas.daPessoa(u),
     });
   });
 
@@ -629,6 +631,21 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     await seg.auditar(req, 'rotulos_menu', null, { rotulos: pedido });
     const { rows } = await db.q('SELECT chave, nome FROM rotulos_menu');
     res.json({ ok: true, rotulos: Object.fromEntries(rows.map((x) => [x.chave, x.nome])) });
+  });
+
+  /* ===================== Telas do portal: papéis (Acessos → Ferramentas, grupo "Telas do portal") ===================== */
+  // quem configura (administração e gestão de setor) vê todas, com quem tem cada papel; muda só os papéis que são dele
+  r.get('/api/admin/nativas', async (req, res) => res.json({ nativas: nativas.listar() }));
+  r.get('/api/admin/nativas/:slug/acesso', async (req, res) => {
+    const q = await nativas.quadro(req.params.slug, req.usuario);
+    if (!q) return erro(res, 404, 'Tela não encontrada.');
+    res.json(q);
+  });
+  r.put('/api/admin/nativas/:slug/acesso', json, async (req, res) => {
+    const r0 = await nativas.salvar(req.params.slug, (req.body || {}).mudancas, req.usuario);
+    if (r0.erro) return erro(res, r0.status, r0.erro);
+    if (r0.feitas.length) await seg.auditar(req, 'tela_papeis', null, { tela: req.params.slug, mudancas: r0.feitas });
+    res.json({ ok: true, mudancas: r0.feitas.length });
   });
 
   /* ===================== Base de Clientes: quem edita o quê ===================== */

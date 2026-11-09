@@ -320,7 +320,8 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     return {
       admin, equipe, executivo,
       coordenacao: admin || (equipe && (meus.get(SETOR) || gestorPapel)),
-      diretoria: admin || (await regras.pode(u, 'credito.diretoria')),
+      // diretoria (qualquer chancela) e Gestão do Comercial: veem todas as implantações, só consulta
+      diretoria: admin || (await regras.ehDiretoria(u)) || (await regras.pode(u, 'comercial.gestao')),
     };
   }
 

@@ -540,9 +540,10 @@
     return j;
   }
 
-  var PAPEL = { admin: 'Administrador', coordenador: 'Coordenador', supervisor: 'Supervisor', usuario: 'Usuário' };
-  /* coordenador e supervisor gerenciam os setores do cadastro deles */
-  function gestorSetor() { return eu && (eu.papel === 'coordenador' || eu.papel === 'supervisor'); }
+  var PAPEL = { admin: 'Administrador', gerente: 'Gerente', coordenador: 'Coordenador', supervisor: 'Supervisor', usuario: 'Usuário' };
+  /* gerente, coordenador e supervisor gerenciam os setores do cadastro deles */
+  function perfilGestor(papel) { return papel === 'gerente' || papel === 'coordenador' || papel === 'supervisor'; }
+  function gestorSetor() { return !!eu && perfilGestor(eu.papel); }
   function podeConfigurar() { return !!eu && (eu.papel === 'admin' || gestorSetor()); }
 
   function seletorModulos(listaMods, marcados, nomeCampo) {
@@ -629,7 +630,7 @@
     if (atual) {
       var resumo = atual.papel === 'admin' ? 'Administração: abre todas as ferramentas, com todos os papéis.' :
         (atual.modulos.length ? atual.modulos.length + (atual.modulos.length === 1 ? ' ferramenta liberada' : ' ferramentas liberadas') : 'Nenhuma ferramenta liberada') +
-        (atual.papel === 'coordenador' || atual.papel === 'supervisor' ? ', além das dos setores que coordena.' : '.') +
+        (perfilGestor(atual.papel) ? ', além das dos setores que gerencia.' : '.') +
         (atual.supervisor_tickets ? ' Supervisão da Central de Tickets.' : '') + (atual.editor_links ? ' Central de Links.' : '');
       $('#detPesAcessos').innerHTML = '<div class="painel"><div class="cab-painel"><div style="min-width:0;flex:1"><h2 style="font-family:var(--display);font-size:16px;margin:0">O que ' + esc(atual.nome.split(' ')[0]) + ' acessa</h2>' +
         '<p class="ajuda" style="margin:2px 0 0">' + esc(resumo) + '</p></div><a class="btn ghost" href="#/config/acessos/pessoa/' + atual.id + '">' + IC.cadeado + 'Ver e alterar em Acessos</a></div></div>';
@@ -641,7 +642,7 @@
       var setoresU = u.setores || [];
       var blocoSetores = '<div><label class="rot">Setor' + (dados.setores.length > 1 ? '(es)' : '') + '</label><div class="caixa-opcoes" style="max-height:170px">' +
         dados.setores.map(function (x) { return '<label><input type="checkbox" name="uSetor" value="' + x.id + '"' + (setoresU.indexOf(x.id) >= 0 ? ' checked' : '') + '><span>' + esc(x.nome) + '</span></label>'; }).join('') + '</div>' +
-        '<div class="ajuda">' + (coord ? 'A pessoa entra na equipe do setor na Central de Tickets.' : 'É o setor da pessoa: forma a equipe do setor na Central de Tickets e, para coordenador e supervisor, define o que eles gerenciam.') + '</div></div>';
+        '<div class="ajuda">' + (coord ? 'A pessoa entra na equipe do setor na Central de Tickets.' : 'É o setor da pessoa: forma a equipe do setor na Central de Tickets e, para gerente, coordenador e supervisor, define o que eles gerenciam.') + '</div></div>';
       var m = painelOuModal($('#detPes'), {
         titulo: novo ? 'Nova pessoa' : u.nome, subtitulo: novo ? 'Depois de criar, o portal leva você para escolher o que ela acessa.' : 'Último acesso: ' + (u.ultimo_login ? esc(quando(u.ultimo_login)) : 'ainda não entrou'),
         corpo: '<form id="fU" class="pilha" novalidate><div class="grade-2">' +
@@ -651,7 +652,7 @@
           '<div><label class="rot" for="uAdm">Data de admissão</label><input class="campo" id="uAdm" type="date" value="' + esc(u.data_admissao || '') + '" required></div></div>' +
           (!novo && (!u.data_nascimento || !u.data_admissao) ? '<div class="msg aviso" style="margin:0">Complete a data de nascimento e a de admissão: são obrigatórias para salvar.</div>' : '') +
           (coord ? '' :
-          '<div><label class="rot" for="uPapel">Perfil</label><select class="campo" id="uPapel">' + ['usuario', 'coordenador', 'supervisor', 'admin'].map(function (p) {
+          '<div><label class="rot" for="uPapel">Perfil</label><select class="campo" id="uPapel">' + ['usuario', 'supervisor', 'coordenador', 'gerente', 'admin'].map(function (p) {
             return '<option value="' + p + '"' + ((u.papel === p || (p === 'usuario' && !PAPEL[u.papel])) ? ' selected' : '') + '>' + PAPEL[p] + '</option>';
           }).join('') + '</select><div class="ajuda" id="uPapelAjuda"></div></div>') +
           blocoSetores +
@@ -664,7 +665,8 @@
       });
       var AJUDA_PERFIL = { usuario: 'Abre só as ferramentas liberadas para ele em Acessos.', admin: 'Acessa tudo e cuida de todas as Configurações.',
         coordenador: 'Gerencia os setores dele: pessoas, ferramentas, equipe, tipos de demanda e o que for do setor em Acessos. Vê e direciona os tickets de todos os setores.',
-        supervisor: 'Os mesmos poderes do coordenador, nos setores dele.' };
+        supervisor: 'Os mesmos poderes do coordenador, nos setores dele.',
+        gerente: 'Os mesmos poderes do coordenador nos setores dele, um nível acima. No Comercial, recebe também a Gestão do Comercial (vê as análises, contratos e implantações de todos os executivos).' };
       if ($('#uPapel', m)) { $('#uPapel', m).onchange = function () { $('#uPapelAjuda', m).textContent = AJUDA_PERFIL[this.value]; }; $('#uPapel', m).onchange(); }
       if ($('#uAtivo', m)) $('#uAtivo', m).onchange = function () { $('#uAtivoTxt', m).textContent = this.checked ? 'Ativa: consegue entrar no portal' : 'Desativada: não consegue entrar'; };
       $('#btSalvarU', m).onclick = async function () {
@@ -727,7 +729,11 @@
         return linha('<b>' + esc(f.nome) + '</b> <span class="sec" style="display:inline">' + esc(f.setor) + ' · ' + esc(f.motivo) + '</span>' + (f.ativo ? '' : ' <span class="etiqueta cinza">desativada</span>') + (f.pendente ? ' <span class="etiqueta ambar">aguardando aprovação</span>' : ''),
           (f.somente_leitura ? '<span class="etiqueta cinza">só consulta</span>' : '<span class="etiqueta verde">edita</span>') + (f.papeis.length ? ' <span class="etiqueta azul">' + esc(f.papeis.join(', ')) + '</span>' : ''));
       }).join('') : '<div class="ajuda" style="padding:8px 12px;margin:0">Nenhuma.</div>') + '</div>' +
-      '<div class="ajuda">Ferramentas: o portal confere quem abre, se edita ou só consulta e os papéis. O que cada papel faz dentro da ferramenta é definido pelo HTML dela.</div>';
+      '<div class="ajuda">Ferramentas: o portal confere quem abre, se edita ou só consulta e os papéis. O que cada papel faz dentro da ferramenta é definido pelo HTML dela.</div>' +
+      sec('Telas do portal (' + (j.telas || []).length + ')') + '<div class="caixa-opcoes" style="max-height:none">' +
+      ((j.telas || []).length ? j.telas.map(function (t) {
+        return linha('<a href="#/config/acessos/ferramentas/' + esc(t.slug) + '"><b>' + esc(t.nome) + '</b></a>', '<span class="etiqueta azul">' + esc(t.papeis.join(', ')) + '</span>');
+      }).join('') : '<div class="ajuda" style="padding:8px 12px;margin:0">Nenhum papel nas telas do portal (Análise de Crédito, Contrato, Implantação, Jurídico).</div>') + '</div>';
     return html;
   }
 
@@ -1003,11 +1009,21 @@
   }
 
   async function acessosFerramentas(cont, slug) {
-    var mods;
-    try { mods = (await api('GET', '/api/admin/modulos')).modulos; } catch (e) { cont.innerHTML = '<div class="msg erro">' + esc(e.message) + '</div>'; return; }
-    if (!mods.length) { cont.innerHTML = '<div class="vazio">Nenhuma ferramenta nos seus setores. Peça à administração para conferir o setor no seu cadastro.</div>'; return; }
+    var mods, telas;
+    try { mods = (await api('GET', '/api/admin/modulos')).modulos; telas = (await api('GET', '/api/admin/nativas')).nativas; } catch (e) { cont.innerHTML = '<div class="msg erro">' + esc(e.message) + '</div>'; return; }
+    // telas do portal (Análise de Crédito, Contrato, Implantação, Jurídico): papéis na mesma tela das ferramentas
+    var tela = telas.find(function (x) { return x.slug === slug; });
+    var grupoTelas = { nome: 'Telas do portal', itens: telas.map(function (x) { return { id: x.slug, nome: x.nome, busca: 'tela portal papel', extra: '<span class="etiqueta azul">portal</span>' }; }) };
+    if (tela || !mods.length) {
+      tela = tela || telas[0];
+      cont.innerHTML = '<div class="dividido">' + listaSelecao('buscaFerrAc', 'ferramenta', [grupoTelas].concat(gruposFerramentas(mods)), function (x) { return '#/config/acessos/ferramentas/' + encodeURIComponent(x.id); }, tela.slug) +
+        '<div style="min-width:0"><div class="painel"><div class="cab-painel"><div style="min-width:0"><h2>' + esc(tela.nome) + '</h2><span class="ajuda" style="margin:0" id="setorTela">Tela do portal</span></div>' +
+        '<span class="espaco"></span><a class="btn ghost sm" href="' + esc(tela.link) + '">' + IC.novaAba + 'Abrir a tela</a></div><div class="corpo" id="edAcessosAc"></div></div></div></div>';
+      ligarListaSelecao('buscaFerrAc');
+      return editorNativa($('#edAcessosAc'), tela.slug);
+    }
     var mod = mods.find(function (x) { return x.slug === slug; }) || mods[0];
-    var grupos = gruposFerramentas(mods);
+    var grupos = [grupoTelas].concat(gruposFerramentas(mods));
     cont.innerHTML = '<div class="dividido">' + listaSelecao('buscaFerrAc', 'ferramenta', grupos, function (x) { return '#/config/acessos/ferramentas/' + encodeURIComponent(x.id); }, mod.slug) +
       '<div style="min-width:0"><div class="painel"><div class="cab-painel"><div style="min-width:0"><h2>' + esc(mod.nome) + '</h2><span class="ajuda" style="margin:0">Setor dono: ' + esc(mod.setor_nome || 'sem setor') + '</span></div>' +
       '<span class="espaco"></span><a class="btn ghost sm" href="#/m/' + esc(mod.slug) + '">' + IC.novaAba + 'Abrir a ferramenta</a></div><div class="corpo" id="edAcessosAc"></div></div>' +
@@ -1043,7 +1059,7 @@
     if (!pessoas.length) { cont.innerHTML = '<div class="vazio">Ninguém para mostrar ainda.</div>'; return; }
     var u = pessoas.find(function (x) { return x.id === id; }) || pessoas[0];
     var grupos = [{ nome: coord ? 'Pessoas que você gerencia' : 'Pessoas', itens: pessoas.map(function (x) { return { id: x.id, nome: x.nome, busca: x.email, extra: '<small>' + esc(PAPEL[x.papel] || 'Usuário') + '</small>' }; }) }];
-    var gestor = u.papel === 'coordenador' || u.papel === 'supervisor';
+    var gestor = perfilGestor(u.papel);
     cont.innerHTML = '<div class="dividido">' + listaSelecao('buscaPesAc', 'pessoa', grupos, function (x) { return '#/config/acessos/pessoa/' + x.id; }, u.id) +
       '<div class="pilha" style="min-width:0">' +
       (u.papel === 'admin' ? '' : '<div class="painel"><div class="cab-painel"><h2>Ferramentas que ' + esc(u.nome) + ' abre</h2></div><div class="corpo">' +
@@ -1074,7 +1090,7 @@
     var pessoas = dados.usuarios.filter(function (u) { return u.ativo; });
     function celula(u, campo) {
       if (u.papel === 'admin') return '<span class="etiqueta azul">administração</span>';
-      if (campo === 'supervisor_tickets' && (u.papel === 'coordenador' || u.papel === 'supervisor')) return '<span class="etiqueta azul" title="Já vem com o perfil">pelo perfil</span>';
+      if (campo === 'supervisor_tickets' && perfilGestor(u.papel)) return '<span class="etiqueta azul" title="Já vem com o perfil">pelo perfil</span>';
       return '<input type="checkbox" data-marc="' + campo + '" data-u="' + u.id + '"' + (u[campo] ? ' checked' : '') + ' aria-label="' + esc(u.nome) + '">';
     }
     cont.innerHTML = '<div class="painel"><div class="cab-painel"><h2>Marcações</h2><input class="campo" id="qMarc" type="search" placeholder="Buscar pessoa" style="max-width:260px;margin-left:auto"></div>' +
@@ -1364,6 +1380,83 @@
         secaoCarteiraBoletos(cont, slug);
       } catch (e) { bt.disabled = false; toast(e.message, 'erro'); }
     };
+  }
+
+  /* Papéis de uma tela do portal: cada papel vem de um lugar (cadastro de executivo, setor ou permissão) e o portal
+     grava lá mesmo. Marcado à mão: dá para tirar aqui; automático (pelo perfil ou setor): o cadeado diz de onde vem. */
+  async function editorNativa(cont, slug) {
+    cont.innerHTML = '<div class="ajuda">Carregando quem tem cada papel…</div>';
+    var q;
+    try { q = await api('GET', '/api/admin/nativas/' + slug + '/acesso'); } catch (e) { cont.innerHTML = '<div class="msg erro">' + esc(e.message) + '</div>'; return; }
+    if ($('#setorTela')) $('#setorTela').textContent = 'Tela do portal · setor dono: ' + q.setor_nome;
+    var estado = {}, original = {};
+    q.pessoas.forEach(function (p) { estado[p.id] = p.papeis.slice(); original[p.id] = p.papeis.slice().sort().join(','); });
+    var filtro = lembrar('acessos.filtroTela', 'com');
+    var termo = '';
+    var editaveis = q.papeis.filter(function (x) { return x.editavel; });
+    function mudou(id) { return estado[id].slice().sort().join(',') !== original[id]; }
+    function temAlgo(p) { return p.todos_papeis || estado[p.id].length || Object.keys(p.automaticos).length; }
+    function chip(p, x) {
+      if (p.todos_papeis) return '';
+      var auto = p.automaticos[x.id];
+      if (auto) return '<span class="papel-chip" title="Automático: ' + esc(auto) + '" style="opacity:.85">' + IC.cadeado + esc(x.nome) + '</span>';
+      var on = estado[p.id].indexOf(x.id) >= 0;
+      if (!x.editavel) return on ? '<span class="papel-chip" title="Quem muda: a administração ou a gestão do setor do papel">' + esc(x.nome) + '</span>' : '';
+      return '<label class="papel-chip" title="' + esc(x.descricao) + '"><input type="checkbox" data-papel="' + esc(x.id) + '" data-u="' + p.id + '"' + (on ? ' checked' : '') + '>' + esc(x.nome) + '</label>';
+    }
+    function linha(p) {
+      var chips = p.todos_papeis ? '<span class="etiqueta azul">todos os papéis · administração</span>' : q.papeis.map(function (x) { return chip(p, x); }).join('');
+      return '<tr class="' + (p.todos_papeis ? 'auto' : '') + (mudou(p.id) ? ' mudou' : '') + '"><td style="min-width:150px"><b>' + esc(p.nome) + '</b><span class="sec">' + esc(PAPEL[p.papel] || 'Usuário') + ' · ' + esc((p.setores || []).join(', ') || 'sem setor') + '</span></td>' +
+        '<td><div class="papeis">' + (chips || '<span class="ajuda" style="margin:0">—</span>') + '</div></td></tr>';
+    }
+    function visivel(p) {
+      if (termo && !termo.split(/\s+/).every(function (x) { return normal([p.nome, p.email, (p.setores || []).join(' ')].join(' ')).indexOf(x) >= 0; })) return false;
+      return filtro === 'todas' || temAlgo(p) || mudou(p.id);
+    }
+    function desenhar() {
+      var lista = q.pessoas.filter(visivel).sort(function (a, b) { return (temAlgo(b) ? 1 : 0) - (temAlgo(a) ? 1 : 0) || a.nome.localeCompare(b.nome); });
+      var n = q.pessoas.filter(function (p) { return mudou(p.id); }).length;
+      cont.innerHTML = '<div class="msg info" style="margin-bottom:10px"><span>Esta tela é do próprio portal (não é HTML). Quem a usa é decidido pelos <b>papéis</b> abaixo; cada papel vale na hora e, se aparecer em outras telas, muda nelas também.</span></div>' +
+        '<details open style="margin-bottom:12px"><summary style="cursor:pointer;font-weight:800">O que cada papel faz</summary><div class="caixa-opcoes" style="max-height:none;margin-top:8px">' + q.papeis.map(function (x) {
+          return '<div style="padding:8px 12px;border-bottom:1px solid var(--border)"><div class="linha" style="gap:8px"><b>' + esc(x.nome) + '</b>' +
+            (x.editavel ? '<span class="etiqueta verde">você muda</span>' : '<span class="etiqueta cinza">' + (/^chancela/.test(x.id) ? 'só a administração muda' : 'administração ou gestão do setor') + '</span>') +
+            '<span class="sec" style="display:inline">vem de: ' + esc(x.fonte) + (x.outras_telas.length ? ' · vale também em ' + esc(x.outras_telas.join(', ')) : '') + '</span></div>' +
+            '<div class="ajuda" style="margin:2px 0 0">' + esc(x.descricao) + '</div></div>';
+        }).join('') + '</div></details>' +
+        '<div class="linha" style="margin:0 0 10px;gap:10px"><div class="segmento" role="group" aria-label="Mostrar">' +
+        [['com', 'Quem tem papel'], ['todas', 'Todas as pessoas']].map(function (f) { return '<button type="button" class="' + (filtro === f[0] ? 'on' : '') + '" data-filtro="' + f[0] + '">' + f[1] + '</button>'; }).join('') + '</div>' +
+        '<input class="campo" type="search" id="buscaAcesso" placeholder="Buscar pessoa ou setor…" value="' + esc(termo) + '" style="max-width:240px;margin-left:auto"></div>' +
+        '<div class="tabela-wrap"><table><thead><tr><th>Pessoa</th><th>Papéis nesta tela</th></tr></thead><tbody>' +
+        (lista.map(linha).join('') || '<tr><td colspan="2" style="text-align:center;color:var(--muted);padding:20px">Ninguém aqui. Use <b>Todas as pessoas</b> para dar um papel a alguém.</td></tr>') + '</tbody></table></div>' +
+        '<p class="ajuda">' + IC.cadeado + ' = automático (pelo perfil ou setor): para tirar, mude o perfil ou a regra da permissão. A administração tem todos os papéis sem marcar.' + (editaveis.length ? '' : ' Nenhum papel desta tela é do seu setor: aqui você só consulta.') + '</p>' +
+        (n ? '<div class="barra-salvar"><span>' + n + (n === 1 ? ' pessoa com alteração não salva' : ' pessoas com alterações não salvas') + '</span><span class="espaco"></span>' +
+          '<button class="btn ghost sm" type="button" id="btDescartarAcessos">Descartar</button><button class="btn primary sm" type="button" id="btSalvarAcessos">Salvar papéis</button></div>' : '');
+      var busca = $('#buscaAcesso', cont);
+      busca.oninput = function () { termo = normal(busca.value).trim(); var pos = busca.selectionStart; desenhar(); var nb = $('#buscaAcesso', cont); nb.focus(); nb.setSelectionRange(pos, pos); };
+      $$('[data-filtro]', cont).forEach(function (b) { b.onclick = function () { filtro = b.getAttribute('data-filtro'); guardar('acessos.filtroTela', filtro); desenhar(); }; });
+      $$('[data-papel]', cont).forEach(function (c) {
+        c.onchange = function () {
+          var uid = Number(c.getAttribute('data-u')), id = c.getAttribute('data-papel');
+          estado[uid] = estado[uid].filter(function (x) { return x !== id; });
+          if (c.checked) estado[uid].push(id);
+          desenhar();
+        };
+      });
+      if ($('#btDescartarAcessos', cont)) $('#btDescartarAcessos', cont).onclick = function () { editorNativa(cont, slug); };
+      if ($('#btSalvarAcessos', cont)) $('#btSalvarAcessos', cont).onclick = async function () {
+        var mudancas = [];
+        q.pessoas.forEach(function (p) {
+          if (!mudou(p.id)) return;
+          var antes = original[p.id] ? original[p.id].split(',') : [];
+          editaveis.forEach(function (x) {
+            var tem = estado[p.id].indexOf(x.id) >= 0;
+            if (tem !== (antes.indexOf(x.id) >= 0)) mudancas.push({ usuario_id: p.id, papel: x.id, tem: tem });
+          });
+        });
+        try { await api('PUT', '/api/admin/nativas/' + slug + '/acesso', { mudancas: mudancas }); metaCredito = null; toast('Papéis salvos. Já valem.', 'ok'); editorNativa(cont, slug); } catch (e) { toast(e.message, 'erro'); }
+      };
+    }
+    desenhar();
   }
 
   async function editorAcessos(cont, slug) {
@@ -3386,6 +3479,7 @@
 
   /* ======================= admin: auditoria ======================= */
   var ROTULO_ACAO = {
+    tela_papeis: 'Mudou papéis numa tela do portal',
     login: 'Entrou no portal', login_falha: 'Tentativa de login falhou', logout: 'Saiu', senha_alterada: 'Trocou a senha', senha_redefinida: 'Redefiniu senha de usuário',
     modulo_aberto: 'Abriu ferramenta', dados_gravados: 'Salvou dados (automático)', usuario_criado: 'Criou usuário', usuario_editado: 'Editou usuário',
     modulo_criado: 'Criou módulo', modulo_editado: 'Editou módulo', modulo_removido: 'Removeu módulo', arquivo_enviado: 'Enviou HTML', arquivo_aguardando: 'Enviou HTML (aguarda aprovação)', versao_aprovada: 'Aprovou versão nova', versao_recusada: 'Recusou versão nova', papeis_recusados: 'Tentou mudar papéis sem permissão', backup_restaurado: 'Restaurou backup', versao_restaurada: 'Restaurou versão',
@@ -3396,7 +3490,7 @@
     ticket_status: 'Mudou situação de ticket', equipe_editada: 'Editou equipe do setor', categoria_criada: 'Criou tipo de demanda', categoria_editada: 'Editou tipo de demanda', categoria_removida: 'Removeu tipo de demanda',
     links_pagina: 'Editou a Central de Links', link_criado: 'Incluiu link', link_editado: 'Editou link', link_removido: 'Removeu link',
     campanha_criada: 'Criou campanha (Central de Links)', campanha_editada: 'Editou campanha (Central de Links)', campanha_removida: 'Removeu campanha (Central de Links)', campanha_fundo: 'Trocou fundo de campanha', links_importados: 'Colou lista de links',
-    modulo_acesso: 'Alterou quem abre a ferramenta', modulo_papeis: 'Alterou os papéis da ferramenta', modulo_aprovado: 'Aprovou ferramenta nova', regra_acesso: 'Alterou quem edita na Base de Clientes', versao_baixada: 'Baixou uma versão do HTML',
+    modulo_acesso: 'Alterou quem abre a ferramenta', modulo_papeis: 'Alterou os papéis da ferramenta', modulo_aprovado: 'Aprovou ferramenta nova', regra_acesso: 'Alterou uma permissão de acesso', versao_baixada: 'Baixou uma versão do HTML',
     modulo_textos: 'Trocou nomes de abas da ferramenta', rotulos_menu: 'Trocou nomes do menu',
   };
 
@@ -3796,7 +3890,7 @@
     var m;
     try { m = await carregarMetaCredito(true); } catch (e) { $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">' + esc(e.message) + '</div></div>'; return; }
     var p = m.perfil;
-    var pode = { minhas: !!p.executivo || p.analista, fila: p.analista, diretoria: p.diretoria, todas: p.analista || p.diretoria, politica: p.analista || p.diretoria };
+    var pode = { minhas: !!p.executivo || p.analista, fila: p.analista, diretoria: p.diretoria, todas: p.analista || p.diretoria || p.gestao, politica: p.analista || p.diretoria };
     var abas = ABAS_CR.filter(function (a) { return pode[a[0]]; });
     if (!abas.length && p.admin) { location.replace('#/config/acessos/credito'); return; } // sem papel no Crédito: a administração cuida das pessoas e papéis em Acessos
     if (!abas.length) {
@@ -3805,7 +3899,7 @@
     }
     // Pessoas e papéis mudou para Configurações → Acessos (endereços antigos incluídos)
     if (['pessoas', 'executivos', 'chancela'].indexOf(aba) >= 0 && eu.papel === 'admin') { location.replace('#/config/acessos/credito'); return; }
-    if (!abas.some(function (a) { return a[0] === aba; })) aba = p.analista ? 'fila' : p.diretoria && !p.executivo ? 'diretoria' : abas[0][0];
+    if (!abas.some(function (a) { return a[0] === aba; })) aba = p.analista ? 'fila' : p.diretoria && !p.executivo ? 'diretoria' : p.gestao && !p.executivo ? 'todas' : abas[0][0];
     definirBarra('<span class="setor">Análise de Crédito</span><span class="sep">/</span><span class="nome">' + esc(abas.find(function (a) { return a[0] === aba; })[1]) + '</span>');
     var novo = (p.executivo || p.analista) && ['minhas', 'fila'].indexOf(aba) >= 0;
     $('#conteudo').innerHTML = '<div class="pagina"><div class="linha" style="align-items:flex-end;margin-bottom:6px"><div style="flex:1 1 420px"><h1>Análise de Crédito</h1>' +
@@ -4462,8 +4556,8 @@
       '<input class="campo" id="qPes" type="search" placeholder="Buscar pessoa" style="max-width:280px;margin-left:auto">' +
       '<label class="linha" style="font-weight:700;font-size:13px;color:var(--muted)"><input type="checkbox" id="soPapel"> só quem tem papel</label></div>' +
       '<div class="corpo" style="padding-top:12px;padding-bottom:4px"><p class="ajuda" style="margin:0">Marque o papel de cada pessoa na Análise de Crédito; vale na hora. <b>Executivo</b>: pede análises e acompanha as suas (boleto vazio segue a política: R$ 2,00; Maranhão R$ 5,50). ' +
-      '<b>Analista</b>: entra no setor ' + esc(j.setor_analistas) + ' e analisa. <b>Diretoria</b>: chancela as análises com inadimplência entre 35% e 40% ou sem o custo atual do boleto.</p></div>' +
-      '<div class="tabela-wrap"><table style="min-width:900px"><thead><tr><th>Pessoa</th><th style="text-align:center">Executivo</th><th>UF</th><th>Região</th><th>Boleto próprio (R$)</th><th style="text-align:center">Analista de crédito</th><th style="text-align:center">Diretoria</th></tr></thead>' +
+      '<b>Analista</b>: entra no setor ' + esc(j.setor_analistas) + ' e analisa. <b>Chancela de crédito</b> (diretoria): chancela as análises com inadimplência entre 35% e 40% ou sem o custo atual do boleto. A chancela comercial, a Gestão do Comercial e todos os papéis também estão em <a href="#/config/acessos/ferramentas/tela-credito">Ferramentas → Telas do portal</a>.</p></div>' +
+      '<div class="tabela-wrap"><table style="min-width:900px"><thead><tr><th>Pessoa</th><th style="text-align:center">Executivo</th><th>UF</th><th>Região</th><th>Boleto próprio (R$)</th><th style="text-align:center">Analista de crédito</th><th style="text-align:center">Chancela de crédito</th></tr></thead>' +
       '<tbody id="tbPes">' + j.pessoas.map(linha).join('') + '</tbody></table></div></div>' +
       '<div class="painel" style="margin-top:16px"><div class="cab-painel"><h2>Executivos sem acesso ao portal</h2><span class="ajuda" style="margin:0">quem não entra no portal; o analista pede a análise em nome dele</span><span class="espaco"></span><button class="btn ghost sm" id="btNovoEx">' + IC.mais + 'Novo executivo</button></div>' +
       '<div class="tabela-wrap"><table><thead><tr><th>Nome</th><th>UF / região</th><th>Boleto próprio</th><th>Situação</th></tr></thead><tbody>' +

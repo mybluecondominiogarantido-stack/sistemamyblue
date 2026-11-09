@@ -73,9 +73,11 @@ function hostsDoPortal(req) {
   return hosts;
 }
 
-/* Supervisão da Central de Tickets (ver e direcionar os tickets de todos os setores): vem com os perfis Coordenador e
-   Supervisor; para os demais, é a marcação no cadastro. Decidido aqui, num lugar só. */
-const GESTORES_DE_SETOR = ['coordenador', 'supervisor'];
+/* Perfis que gerenciam os setores do cadastro: Gerente (acima da coordenação), Coordenador e Supervisor têm, nos setores
+   deles, os mesmos poderes de gestão (pessoas, ferramentas, equipe, acessos do setor). O que só a gerência tem a mais
+   vem das permissões (ex.: Gestão do Comercial). Supervisão da Central de Tickets (ver e direcionar os tickets de todos
+   os setores): vem com esses perfis; para os demais, é a marcação no cadastro. Decidido aqui, num lugar só. */
+const GESTORES_DE_SETOR = ['gerente', 'coordenador', 'supervisor'];
 const veTodosOsTickets = (papel, marcado) => !!marcado || GESTORES_DE_SETOR.includes(papel);
 
 function criarSeguranca(db, cfg) {
@@ -176,7 +178,7 @@ function criarSeguranca(db, cfg) {
     }
   }
 
-  /* Setores que a pessoa gerencia: o administrador, todos (null); coordenador e supervisor, os setores do cadastro dele;
+  /* Setores que a pessoa gerencia: o administrador, todos (null); gerente, coordenador e supervisor, os setores do cadastro dele;
      os demais, nenhum. O setor de cada pessoa fica em setor_membros (é também a equipe dela na Central de Tickets). */
   async function setoresGeridos(usuario) {
     if (!usuario) return new Set();
@@ -307,4 +309,4 @@ function criarSeguranca(db, cfg) {
   };
 }
 
-module.exports = { criarSeguranca, veTodosOsTickets, hostsDoPortal, hashSenha, conferirSenha, validarNovaSenha, senhaAleatoria, HASH_FALSO, sha256, COOKIE };
+module.exports = { criarSeguranca, GESTORES_DE_SETOR, veTodosOsTickets, hostsDoPortal, hashSenha, conferirSenha, validarNovaSenha, senhaAleatoria, HASH_FALSO, sha256, COOKIE };

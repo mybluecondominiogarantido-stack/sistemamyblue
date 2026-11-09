@@ -5,14 +5,14 @@
  * Configurações → Acessos → Base de Clientes (a administração muda tudo; a coordenação/supervisão libera pessoas nas permissões
  * do setor dela). A administração pode tudo, sempre.
  *
- *  - niveis: perfis que recebem a permissão ('coordenador', 'supervisor', 'usuario');
+ *  - niveis: perfis que recebem a permissão ('gerente', 'coordenador', 'supervisor', 'usuario');
  *  - setores: se tiver algum, o perfil só vale para quem é desses setores (vazio = qualquer setor);
  *  - pessoas: liberadas uma a uma, qualquer perfil.
  *
  * Enquanto a administração não mexe, vale o padrão de cada permissão (as regras que o portal já usava).
  */
 
-const NIVEIS = { coordenador: 'Coordenação', supervisor: 'Supervisão', usuario: 'Usuário' };
+const NIVEIS = { gerente: 'Gerência', coordenador: 'Coordenação', supervisor: 'Supervisão', usuario: 'Usuário' };
 
 const PERMISSOES = [
   { chave: 'carteira.dados', grupo: 'Base de Clientes', rotulo: 'Editar os dados do condomínio',
@@ -20,30 +20,37 @@ const PERMISSOES = [
     padrao: { niveis: [], setores: [] } },
   { chave: 'carteira.analista_cobranca', grupo: 'Base de Clientes', rotulo: 'Editar e transferir o Analista de cobrança',
     descricao: 'Quem cuida de cada condomínio na Cobrança (os tickets da Cobrança sobre o condomínio vão para essa pessoa).',
-    padrao: { niveis: ['coordenador', 'supervisor'], setores: ['Cobrança'] } },
+    padrao: { niveis: ['gerente', 'coordenador', 'supervisor'], setores: ['Cobrança'] } },
   { chave: 'carteira.analista_extrajudicial', grupo: 'Base de Clientes', rotulo: 'Editar e transferir o Analista extrajudicial (ApoioCob)',
     descricao: 'Quem cuida da cobrança extrajudicial de cada condomínio.',
     padrao: { niveis: [], setores: [] } },
   { chave: 'carteira.assistente_credito', grupo: 'Base de Clientes', rotulo: 'Editar e transferir o Assistente de crédito',
     descricao: 'Quem cuida de cada condomínio no Crédito (os tickets do Crédito sobre o condomínio vão para essa pessoa).',
-    padrao: { niveis: ['coordenador', 'supervisor'], setores: ['Crédito'] } },
+    padrao: { niveis: ['gerente', 'coordenador', 'supervisor'], setores: ['Crédito'] } },
   { chave: 'carteira.adicionar', grupo: 'Base de Clientes', rotulo: 'Adicionar condomínios novos pela planilha de implantação',
     descricao: 'Aba "Adicionar novos": lê a planilha de implantação e cadastra os condomínios da vigência escolhida.',
-    padrao: { niveis: ['coordenador', 'supervisor'], setores: [] } },
+    padrao: { niveis: ['gerente', 'coordenador', 'supervisor'], setores: [] } },
   { chave: 'carteira.cadastro', grupo: 'Base de Clientes', rotulo: 'Cadastrar e excluir condomínios, mudar o ID e importar a planilha',
     descricao: 'Botão "Novo condomínio", "Remover", o ID Vouch e a importação da planilha inteira.',
     padrao: { niveis: [], setores: [] } },
   { chave: 'carteira.marketing', grupo: 'Base de Clientes', rotulo: 'Baixar a Lista do Marketing (síndicos)',
     descricao: 'Botão "Lista do Marketing": planilha com condomínio, UF, síndico, telefone e e-mail dos condomínios ativos.',
-    padrao: { niveis: ['coordenador', 'supervisor'], setores: ['Marketing'] } },
-  { chave: 'credito.diretoria', grupo: 'Análise de Crédito', rotulo: 'Chancelar análises de crédito (diretoria)',
-    descricao: 'Análises com inadimplência acima de 35% só vão ao executivo depois da chancela (CEO e Diretor Comercial).',
+    padrao: { niveis: ['gerente', 'coordenador', 'supervisor'], setores: ['Marketing'] } },
+  { chave: 'credito.diretoria', grupo: 'Análise de Crédito', rotulo: 'Chancela de crédito (diretoria)',
+    descricao: 'Chancela as análises com inadimplência entre 35% e 40% ou sem o custo atual do boleto (só vão ao executivo depois dela). Vê todas as análises, contratos e implantações.',
     padrao: { niveis: [], setores: [] } },
+  { chave: 'contratos.diretoria', grupo: 'Solicitação de Contrato', rotulo: 'Chancela comercial (diretoria)',
+    descricao: 'Decide os itens comerciais reservados à diretoria nos contratos (taxa administrativa abaixo de 2%, boleto abaixo de R$ 1,50, cobertura de taxa extra acima de 60%, cláusulas fora do padrão, taxa e boleto do condomínio de entrega) e o percentual fora do padrão nas parcerias. Enquanto ninguém for marcado, quem tem a chancela de crédito decide.',
+    padrao: { niveis: [], setores: [] } },
+  { chave: 'comercial.gestao', grupo: 'Comercial', rotulo: 'Gestão do Comercial',
+    descricao: 'Acompanha o funil de todos os executivos: vê (só consulta) todas as análises de crédito, solicitações de contrato e implantações, com os painéis.',
+    padrao: { niveis: ['gerente'], setores: ['Comercial'] }, distribui: ['gerente'] },
   { chave: 'contratos.elaborar', grupo: 'Solicitação de Contrato', rotulo: 'Elaborar as minutas de contrato (Jurídico)',
     descricao: 'Recebe as solicitações de contrato do comercial, assume, redige a minuta em até 72h úteis, responde aos ajustes e registra as condições fechadas.',
     padrao: { niveis: [], setores: [] } },
 ];
 const porChave = new Map(PERMISSOES.map((p) => [p.chave, p]));
+const GESTORES = ['gerente', 'coordenador', 'supervisor'];
 
 function criarRegras(db) {
   const nomesDeSetores = async () => new Map((await db.q('SELECT id, nome FROM setores')).rows.map((s) => [s.nome, s.id]));
@@ -102,6 +109,16 @@ function criarRegras(db) {
     return saida;
   }
 
+  /* quem tem a permissão hoje, com o motivo (pessoas ativas, sem a administração): [{ id, motivo }] */
+  async function quemPodeIds(chave) {
+    const r = (await regras()).get(chave);
+    const { rows } = await db.q(`SELECT u.id, u.papel, COALESCE(array_agg(sm.setor_id) FILTER (WHERE sm.setor_id IS NOT NULL), '{}') AS setores
+      FROM usuarios u LEFT JOIN setor_membros sm ON sm.usuario_id = u.id WHERE u.ativo AND u.papel <> 'admin' GROUP BY u.id ORDER BY u.nome`);
+    const nomes = new Map((await db.q('SELECT id, nome FROM setores')).rows.map((s) => [s.id, s.nome]));
+    return rows.map((u) => ({ id: u.id, motivo: motivo(u, r, u.setores, (id) => nomes.get(id) || '?') })).filter((x) => x.motivo)
+      .map((x) => ({ id: x.id, motivo: x.motivo === 'liberado para você' ? 'liberado individualmente' : x.motivo }));
+  }
+
   /* ids de quem tem a permissão hoje (pessoas ativas, sem a administração) */
   async function pessoasCom(chave) {
     const r = (await regras()).get(chave);
@@ -125,17 +142,35 @@ function criarRegras(db) {
 
   const voltarAoPadrao = (chave) => db.q('DELETE FROM regras_acesso WHERE chave = $1', [chave]);
 
+  /* Chancelas por assunto: a de crédito (credito.diretoria) e a comercial (contratos.diretoria). Enquanto ninguém tiver a
+     comercial, quem tem a de crédito decide os itens comerciais (nada fica parado esperando). */
+  async function chancelaComercialVazia() { return !(await pessoasCom('contratos.diretoria')).length; }
+  async function podeChancelaComercial(u) {
+    if (!u) return false;
+    if (u.papel === 'admin' || (await pode(u, 'contratos.diretoria'))) return true;
+    return (await chancelaComercialVazia()) && pode(u, 'credito.diretoria');
+  }
+  /* quem é avisado da chancela comercial (sem ninguém, os da chancela de crédito; o chamador cai na administração) */
+  async function pessoasDaChancelaComercial() {
+    const ids = await pessoasCom('contratos.diretoria');
+    return ids.length ? ids : pessoasCom('credito.diretoria');
+  }
+  /* diretoria para ver (painéis, listas completas): qualquer uma das duas chancelas */
+  async function ehDiretoria(u) { return !!u && (u.papel === 'admin' || (await pode(u, 'credito.diretoria')) || (await pode(u, 'contratos.diretoria'))); }
+
   /* permissões que a pessoa configura: a administração, todas; coordenação e supervisão, as que pertencem a um
      setor delas (ex.: Crédito → Assistente de crédito), liberando ou tirando pessoas. */
   async function gerenciaveis(u) {
     if (u.papel === 'admin') return new Set(PERMISSOES.map((p) => p.chave));
-    if (!['coordenador', 'supervisor'].includes(u.papel)) return new Set();
+    if (!GESTORES.includes(u.papel)) return new Set();
     const meus = await setoresDe(u.id);
     const r = await regras();
-    return new Set(PERMISSOES.filter((p) => r.get(p.chave).setores.some((x) => meus.includes(x))).map((p) => p.chave));
+    // distribui: perfis do setor que liberam pessoas nesta permissão (ex.: Gestão do Comercial, só a gerência); sem ele, toda a gestão do setor
+    return new Set(PERMISSOES.filter((p) => (!p.distribui || p.distribui.includes(u.papel)) && r.get(p.chave).setores.some((x) => meus.includes(x))).map((p) => p.chave));
   }
 
-  return { PERMISSOES, NIVEIS, porChave, regras, permissoesDe, pode, quemPode, pessoasCom, salvar, voltarAoPadrao, gerenciaveis };
+  return { PERMISSOES, NIVEIS, porChave, regras, permissoesDe, pode, quemPode, quemPodeIds, pessoasCom, salvar, voltarAoPadrao, gerenciaveis,
+    podeChancelaComercial, pessoasDaChancelaComercial, ehDiretoria };
 }
 
 module.exports = { criarRegras, PERMISSOES, NIVEIS };
