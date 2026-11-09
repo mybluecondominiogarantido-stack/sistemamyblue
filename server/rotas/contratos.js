@@ -227,7 +227,7 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
     let niveis = atual.niveis, setores = atual.setores;
     if (req.usuario.papel === 'admin' && b.todo_setor !== undefined) {
       const setor = await db.um('SELECT id FROM setores WHERE nome = $1', [SETOR_JURIDICO]);
-      niveis = b.todo_setor && setor ? ['gerente', 'coordenador', 'supervisor', 'usuario'] : [];
+      niveis = b.todo_setor && setor ? ['diretor', 'gerente', 'coordenador', 'supervisor', 'usuario'] : [];
       setores = b.todo_setor && setor ? [setor.id] : [];
     }
     const salva = await regras.salvar(PERMISSAO, { niveis, setores, pessoas: Array.isArray(b.pessoas) ? b.pessoas : atual.pessoas }, req.usuario);
@@ -903,7 +903,7 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
       await db.q('INSERT INTO implantacao_eventos (implantacao_id, usuario_id, tipo, detalhe) VALUES ($1, $2, $3, $4::jsonb)', [imp.id, req.usuario.id, 'contrato_corrigido', JSON.stringify({ protocolo: c.protocolo, motivo })]);
       // quem conduz (ou a coordenação da Implantação, se ninguém conduz) confere a implantação
       const para = imp.responsavel_id ? [imp.responsavel_id] : (await db.q(`SELECT u.id FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id JOIN usuarios u ON u.id = sm.usuario_id
-        WHERE s.nome = 'Implantação' AND u.ativo AND (sm.lider OR u.papel IN ('gerente','coordenador','supervisor'))`)).rows.map((r) => r.id);
+        WHERE s.nome = 'Implantação' AND u.ativo AND (sm.lider OR u.papel IN ('diretor','gerente','coordenador','supervisor'))`)).rows.map((r) => r.id);
       if (!['rascunho', 'cancelada'].includes(imp.etapa)) {
         await avisos.notificar(para, { link: `#/implantacao/${imp.id}`, autor_id: req.usuario.id, tipo: 'implantacao', email: true,
           titulo: `Contrato corrigido · ${imp.protocolo} · ${c.condominio}`, texto: `${req.usuario.nome} corrigiu as condições fechadas do contrato ${c.protocolo}. Motivo: ${motivo}\n\n${resumo}` });

@@ -74,10 +74,10 @@ function hostsDoPortal(req) {
 }
 
 /* Perfis que gerenciam os setores do cadastro: Gerente (acima da coordenação), Coordenador e Supervisor têm, nos setores
-   deles, os mesmos poderes de gestão (pessoas, ferramentas, equipe, acessos do setor). O que só a gerência tem a mais
+   deles, os mesmos poderes de gestão (o Diretor fica acima do Gerente) (pessoas, ferramentas, equipe, acessos do setor). O que só a gerência tem a mais
    vem das permissões (ex.: Gestão do Comercial). Supervisão da Central de Tickets (ver e direcionar os tickets de todos
    os setores): vem com esses perfis; para os demais, é a marcação no cadastro. Decidido aqui, num lugar só. */
-const GESTORES_DE_SETOR = ['gerente', 'coordenador', 'supervisor'];
+const GESTORES_DE_SETOR = ['diretor', 'gerente', 'coordenador', 'supervisor'];
 const veTodosOsTickets = (papel, marcado) => !!marcado || GESTORES_DE_SETOR.includes(papel);
 
 function criarSeguranca(db, cfg) {

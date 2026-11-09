@@ -144,3 +144,14 @@ test('papéis de setor: só a gestão do setor dono muda (e a pessoa entra no se
   const hist = await ctx.db.um("SELECT COUNT(*)::int AS n FROM auditoria WHERE acao = 'tela_papeis'");
   assert.ok(hist.n >= 5, 'cada mudança fica no Histórico');
 });
+
+test('perfil Diretor: acima da gerência, recebe a Gestão do Comercial e a distribui; chancela continua à parte', async () => {
+  const com = await S('Comercial');
+  const dir = await pessoa('Dalva Diretora', 'dalva@teste.com', { papel: 'diretor', setores: [com] });
+  const q = await tela(dir, 'tela-credito');
+  assert.match(daPessoa(q, 'dalva@teste.com').automaticos.gestao_comercial, /Diretoria/);
+  assert.ok(!daPessoa(q, 'dalva@teste.com').automaticos.chancela_comercial, 'a chancela não vem com o perfil');
+  assert.equal((await mudar(dir, 'tela-credito', 'coord@teste.com', 'gestao_comercial')).status, 200);
+  assert.equal((await mudar(dir, 'tela-contratos', 'dalva@teste.com', 'chancela_comercial')).status, 403);
+  assert.equal((await dir('GET', '/api/credito/meta')).json.perfil.gestao, true);
+});

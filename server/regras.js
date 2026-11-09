@@ -5,14 +5,14 @@
  * Configurações → Acessos → Base de Clientes (a administração muda tudo; a coordenação/supervisão libera pessoas nas permissões
  * do setor dela). A administração pode tudo, sempre.
  *
- *  - niveis: perfis que recebem a permissão ('gerente', 'coordenador', 'supervisor', 'usuario');
+ *  - niveis: perfis que recebem a permissão ('diretor', 'gerente', 'coordenador', 'supervisor', 'usuario');
  *  - setores: se tiver algum, o perfil só vale para quem é desses setores (vazio = qualquer setor);
  *  - pessoas: liberadas uma a uma, qualquer perfil.
  *
  * Enquanto a administração não mexe, vale o padrão de cada permissão (as regras que o portal já usava).
  */
 
-const NIVEIS = { gerente: 'Gerência', coordenador: 'Coordenação', supervisor: 'Supervisão', usuario: 'Usuário' };
+const NIVEIS = { diretor: 'Diretoria', gerente: 'Gerência', coordenador: 'Coordenação', supervisor: 'Supervisão', usuario: 'Usuário' };
 
 const PERMISSOES = [
   { chave: 'carteira.dados', grupo: 'Base de Clientes', rotulo: 'Editar os dados do condomínio',
@@ -20,22 +20,22 @@ const PERMISSOES = [
     padrao: { niveis: [], setores: [] } },
   { chave: 'carteira.analista_cobranca', grupo: 'Base de Clientes', rotulo: 'Editar e transferir o Analista de cobrança',
     descricao: 'Quem cuida de cada condomínio na Cobrança (os tickets da Cobrança sobre o condomínio vão para essa pessoa).',
-    padrao: { niveis: ['gerente', 'coordenador', 'supervisor'], setores: ['Cobrança'] } },
+    padrao: { niveis: ['diretor', 'gerente', 'coordenador', 'supervisor'], setores: ['Cobrança'] } },
   { chave: 'carteira.analista_extrajudicial', grupo: 'Base de Clientes', rotulo: 'Editar e transferir o Analista extrajudicial (ApoioCob)',
     descricao: 'Quem cuida da cobrança extrajudicial de cada condomínio.',
     padrao: { niveis: [], setores: [] } },
   { chave: 'carteira.assistente_credito', grupo: 'Base de Clientes', rotulo: 'Editar e transferir o Assistente de crédito',
     descricao: 'Quem cuida de cada condomínio no Crédito (os tickets do Crédito sobre o condomínio vão para essa pessoa).',
-    padrao: { niveis: ['gerente', 'coordenador', 'supervisor'], setores: ['Crédito'] } },
+    padrao: { niveis: ['diretor', 'gerente', 'coordenador', 'supervisor'], setores: ['Crédito'] } },
   { chave: 'carteira.adicionar', grupo: 'Base de Clientes', rotulo: 'Adicionar condomínios novos pela planilha de implantação',
     descricao: 'Aba "Adicionar novos": lê a planilha de implantação e cadastra os condomínios da vigência escolhida.',
-    padrao: { niveis: ['gerente', 'coordenador', 'supervisor'], setores: [] } },
+    padrao: { niveis: ['diretor', 'gerente', 'coordenador', 'supervisor'], setores: [] } },
   { chave: 'carteira.cadastro', grupo: 'Base de Clientes', rotulo: 'Cadastrar e excluir condomínios, mudar o ID e importar a planilha',
     descricao: 'Botão "Novo condomínio", "Remover", o ID Vouch e a importação da planilha inteira.',
     padrao: { niveis: [], setores: [] } },
   { chave: 'carteira.marketing', grupo: 'Base de Clientes', rotulo: 'Baixar a Lista do Marketing (síndicos)',
     descricao: 'Botão "Lista do Marketing": planilha com condomínio, UF, síndico, telefone e e-mail dos condomínios ativos.',
-    padrao: { niveis: ['gerente', 'coordenador', 'supervisor'], setores: ['Marketing'] } },
+    padrao: { niveis: ['diretor', 'gerente', 'coordenador', 'supervisor'], setores: ['Marketing'] } },
   { chave: 'credito.diretoria', grupo: 'Análise de Crédito', rotulo: 'Chancela de crédito (diretoria)',
     descricao: 'Chancela as análises com inadimplência entre 35% e 40% ou sem o custo atual do boleto (só vão ao executivo depois dela). Vê todas as análises, contratos e implantações.',
     padrao: { niveis: [], setores: [] } },
@@ -44,13 +44,13 @@ const PERMISSOES = [
     padrao: { niveis: [], setores: [] } },
   { chave: 'comercial.gestao', grupo: 'Comercial', rotulo: 'Gestão do Comercial',
     descricao: 'Acompanha o funil de todos os executivos: vê (só consulta) todas as análises de crédito, solicitações de contrato e implantações, com os painéis.',
-    padrao: { niveis: ['gerente'], setores: ['Comercial'] }, distribui: ['gerente'] },
+    padrao: { niveis: ['diretor', 'gerente'], setores: ['Comercial'] }, distribui: ['diretor', 'gerente'] },
   { chave: 'contratos.elaborar', grupo: 'Solicitação de Contrato', rotulo: 'Elaborar as minutas de contrato (Jurídico)',
     descricao: 'Recebe as solicitações de contrato do comercial, assume, redige a minuta em até 72h úteis, responde aos ajustes e registra as condições fechadas.',
     padrao: { niveis: [], setores: [] } },
 ];
 const porChave = new Map(PERMISSOES.map((p) => [p.chave, p]));
-const GESTORES = ['gerente', 'coordenador', 'supervisor'];
+const GESTORES = ['diretor', 'gerente', 'coordenador', 'supervisor'];
 
 function criarRegras(db) {
   const nomesDeSetores = async () => new Map((await db.q('SELECT id, nome FROM setores')).rows.map((s) => [s.nome, s.id]));

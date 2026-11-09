@@ -29,7 +29,7 @@ const PAPEIS = {
   elaborar: { nome: 'Elabora contratos', fonte: 'regra:contratos.elaborar',
     descricao: 'Recebe as solicitações de contrato, assume, redige a minuta, responde aos ajustes e registra as condições fechadas.' },
   gestao_comercial: { nome: 'Gestão do Comercial', fonte: 'regra:comercial.gestao',
-    descricao: 'Vê (só consulta) as análises, contratos e implantações de todos os executivos, com os painéis. Vem com o perfil Gerente no setor Comercial.' },
+    descricao: 'Vê (só consulta) as análises, contratos e implantações de todos os executivos, com os painéis. Vem com os perfis Diretor e Gerente no setor Comercial.' },
   chancela_credito: { nome: 'Chancela de crédito', fonte: 'regra:credito.diretoria',
     descricao: 'Diretoria: chancela as análises com inadimplência entre 35% e 40% ou sem o custo atual do boleto. Vê todas as análises, contratos e implantações.' },
   chancela_comercial: { nome: 'Chancela comercial', fonte: 'regra:contratos.diretoria',
