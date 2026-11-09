@@ -182,7 +182,7 @@ test('quem edita o quê na carteira: o portal diz o que identificou e a configur
   assert.ok(!cfg.permissoes.find((x) => x.chave === 'carteira.dados').pode_configurar);
   assert.equal((await cida.c('PUT', '/api/admin/carteira/acessos/carteira.assistente_credito', { pessoas: [ivo.id], niveis: ['usuario'] })).status, 200);
   const regra = (await admin('GET', '/api/admin/carteira/acessos')).json.permissoes.find((x) => x.chave === 'carteira.assistente_credito').regra;
-  assert.deepEqual(regra.niveis, ['gerente', 'coordenador', 'supervisor'], 'níveis ficam com a administração');
+  assert.deepEqual(regra.niveis, ['diretor', 'gerente', 'coordenador', 'supervisor'], 'níveis ficam com a administração');
   assert.deepEqual(regra.pessoas, [ivo.id]);
   assert.equal((await ivo.c('PATCH', `/api/carteira/${cond}`, { assistente_credito: 'ivo - 2' })).status, 200);
   assert.equal((await cida.c('PUT', '/api/admin/carteira/acessos/carteira.dados', { pessoas: [cida.id] })).status, 403);

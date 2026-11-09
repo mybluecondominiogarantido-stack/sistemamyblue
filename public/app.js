@@ -540,9 +540,9 @@
     return j;
   }
 
-  var PAPEL = { admin: 'Administrador', gerente: 'Gerente', coordenador: 'Coordenador', supervisor: 'Supervisor', usuario: 'Usuário' };
+  var PAPEL = { admin: 'Administrador', diretor: 'Diretor(a)', gerente: 'Gerente', coordenador: 'Coordenador', supervisor: 'Supervisor', usuario: 'Usuário' };
   /* gerente, coordenador e supervisor gerenciam os setores do cadastro deles */
-  function perfilGestor(papel) { return papel === 'gerente' || papel === 'coordenador' || papel === 'supervisor'; }
+  function perfilGestor(papel) { return papel === 'diretor' || papel === 'gerente' || papel === 'coordenador' || papel === 'supervisor'; }
   function gestorSetor() { return !!eu && perfilGestor(eu.papel); }
   function podeConfigurar() { return !!eu && (eu.papel === 'admin' || gestorSetor()); }
 
@@ -652,7 +652,7 @@
           '<div><label class="rot" for="uAdm">Data de admissão</label><input class="campo" id="uAdm" type="date" value="' + esc(u.data_admissao || '') + '" required></div></div>' +
           (!novo && (!u.data_nascimento || !u.data_admissao) ? '<div class="msg aviso" style="margin:0">Complete a data de nascimento e a de admissão: são obrigatórias para salvar.</div>' : '') +
           (coord ? '' :
-          '<div><label class="rot" for="uPapel">Perfil</label><select class="campo" id="uPapel">' + ['usuario', 'supervisor', 'coordenador', 'gerente', 'admin'].map(function (p) {
+          '<div><label class="rot" for="uPapel">Perfil</label><select class="campo" id="uPapel">' + ['usuario', 'supervisor', 'coordenador', 'gerente', 'diretor', 'admin'].map(function (p) {
             return '<option value="' + p + '"' + ((u.papel === p || (p === 'usuario' && !PAPEL[u.papel])) ? ' selected' : '') + '>' + PAPEL[p] + '</option>';
           }).join('') + '</select><div class="ajuda" id="uPapelAjuda"></div></div>') +
           blocoSetores +
@@ -666,6 +666,7 @@
       var AJUDA_PERFIL = { usuario: 'Abre só as ferramentas liberadas para ele em Acessos.', admin: 'Acessa tudo e cuida de todas as Configurações.',
         coordenador: 'Gerencia os setores dele: pessoas, ferramentas, equipe, tipos de demanda e o que for do setor em Acessos. Vê e direciona os tickets de todos os setores.',
         supervisor: 'Os mesmos poderes do coordenador, nos setores dele.',
+        diretor: 'Diretoria do setor: os mesmos poderes de gestão, acima da gerência. No Comercial, recebe também a Gestão do Comercial. As chancelas (aprovações da diretoria) são dadas à parte, em Acessos → Ferramentas → Telas do portal.',
         gerente: 'Os mesmos poderes do coordenador nos setores dele, um nível acima. No Comercial, recebe também a Gestão do Comercial (vê as análises, contratos e implantações de todos os executivos).' };
       if ($('#uPapel', m)) { $('#uPapel', m).onchange = function () { $('#uPapelAjuda', m).textContent = AJUDA_PERFIL[this.value]; }; $('#uPapel', m).onchange(); }
       if ($('#uAtivo', m)) $('#uAtivo', m).onchange = function () { $('#uAtivoTxt', m).textContent = this.checked ? 'Ativa: consegue entrar no portal' : 'Desativada: não consegue entrar'; };

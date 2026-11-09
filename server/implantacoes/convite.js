@@ -18,7 +18,7 @@ const dataBr = (d) => d.split('-').reverse().join('/');
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 /* quem recebe: assistente que conduz, quem faz (se outra pessoa), setor CS (sem a liderança) e o síndico */
-async function participantes(db, i, onboarding, gestores = ['gerente', 'coordenador', 'supervisor']) {
+async function participantes(db, i, onboarding, gestores = ['diretor', 'gerente', 'coordenador', 'supervisor']) {
   const ids = [...new Set([i.responsavel_id, onboarding.por].filter(Boolean))];
   const gente = ids.length ? (await db.q('SELECT nome, email FROM usuarios WHERE id = ANY($1::int[]) AND ativo', [ids])).rows : [];
   const cs = (await db.q(`SELECT u.nome, u.email, u.papel, sm.lider FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id JOIN usuarios u ON u.id = sm.usuario_id

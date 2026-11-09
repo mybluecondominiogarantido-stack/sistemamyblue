@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   nome TEXT NOT NULL,
   email TEXT NOT NULL UNIQUE,
   senha_hash TEXT NOT NULL,
-  papel TEXT NOT NULL DEFAULT 'usuario' CHECK (papel IN ('admin','gerente','coordenador','supervisor','usuario')),
+  papel TEXT NOT NULL DEFAULT 'usuario' CHECK (papel IN ('admin','diretor','gerente','coordenador','supervisor','usuario')),
   ativo BOOLEAN NOT NULL DEFAULT TRUE,
   trocar_senha BOOLEAN NOT NULL DEFAULT FALSE,
   criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -1001,10 +1001,13 @@ ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto BYTEA;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto_tipo TEXT;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto_em TIMESTAMPTZ;
 ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_papel_check;
-ALTER TABLE usuarios ADD CONSTRAINT usuarios_papel_check CHECK (papel IN ('admin','gerente','coordenador','supervisor','usuario'));
+ALTER TABLE usuarios ADD CONSTRAINT usuarios_papel_check CHECK (papel IN ('admin','diretor','gerente','coordenador','supervisor','usuario'));
 -- perfil Gerente (acima da coordenação): as regras gravadas que davam a permissão à coordenação passam a dar também à gerência
 UPDATE regras_acesso SET regra = jsonb_set(regra, '{niveis}', (regra->'niveis') || '["gerente"]'::jsonb)
   WHERE regra->'niveis' ? 'coordenador' AND NOT (regra->'niveis' ? 'gerente');
+-- perfil Diretor (acima da gerência): onde a gerência tem a permissão, a diretoria também tem
+UPDATE regras_acesso SET regra = jsonb_set(regra, '{niveis}', (regra->'niveis') || '["diretor"]'::jsonb)
+  WHERE regra->'niveis' ? 'gerente' AND NOT (regra->'niveis' ? 'diretor');
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS criado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL;
 -- avisos que não são de ticket (ex.: demonstrativo de comissão) levam o endereço da tela no portal
 ALTER TABLE notificacoes ADD COLUMN IF NOT EXISTS link TEXT;

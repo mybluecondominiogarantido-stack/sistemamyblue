@@ -40,7 +40,7 @@ function criarAvisosViagens({ db, documentos, avisos }) {
       if (rows.length) return rows.map((x) => x.usuario_id);
     }
     const coord = (await db.q(`SELECT sm.usuario_id FROM setor_membros sm JOIN usuarios u ON u.id = sm.usuario_id
-      WHERE sm.setor_id = $1 AND u.ativo AND u.papel IN ('gerente', 'coordenador', 'supervisor')`, [m.setor_id])).rows.map((x) => x.usuario_id);
+      WHERE sm.setor_id = $1 AND u.ativo AND u.papel IN ('diretor', 'gerente', 'coordenador', 'supervisor')`, [m.setor_id])).rows.map((x) => x.usuario_id);
     if (coord.length) return coord;
     return (await db.q("SELECT id FROM usuarios WHERE papel = 'admin' AND ativo")).rows.map((x) => x.id);
   }

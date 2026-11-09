@@ -54,7 +54,7 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
   }
 
   /* ===================== usuários ===================== */
-  const PAPEIS = ['admin', 'gerente', 'coordenador', 'supervisor', 'usuario'];
+  const PAPEIS = ['admin', 'diretor', 'gerente', 'coordenador', 'supervisor', 'usuario'];
 
   /* O que quem está logado pode fazer com usuários. Administrador: tudo (null).
      Coordenador e supervisor: usuários comuns dos setores dele (ou que ele criou), com as ferramentas e os setores dele. */
@@ -146,7 +146,7 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
     if (d.erro) return erro(res, 400, d.erro);
     if (esc) {
       // coordenador e supervisor criam só usuário comum, sem permissões extras, nos setores e com as ferramentas deles
-      if (d.papel !== 'usuario') return erro(res, 403, 'Gerente, coordenador e supervisor criam apenas usuários comuns. Gerentes, coordenadores, supervisores e administradores são criados pela administração.');
+      if (d.papel !== 'usuario') return erro(res, 403, 'Diretor, gerente, coordenador e supervisor criam apenas usuários comuns. Os demais perfis são criados pela administração.');
       const setores = (d.setores || []).filter((x) => esc.setores.has(x));
       if (!setores.length) return erro(res, 400, 'Escolha o setor da pessoa.');
       Object.assign(d, { supervisor_tickets: false, editor_links: false, setores, modulos: d.modulos.filter((s) => esc.modulos.has(s)) });
@@ -228,7 +228,7 @@ function rotasAdmin({ db, seg, modulos, registros, documentos, acessos, regras, 
       if (!a.abre) continue;
       const { lista } = await acessos.papeisDaFerramenta(m);
       ferramentas.push({ slug: m.slug, nome: m.nome, setor: m.setor_nome || '', ativo: m.ativo, pendente: m.pendente,
-        motivo: u.papel === 'admin' ? 'administração' : gestor && meusSetores.has(m.setor_id) ? ({ gerente: 'gerência do setor', supervisor: 'supervisão do setor' }[u.papel] || 'coordenação do setor') : 'liberada',
+        motivo: u.papel === 'admin' ? 'administração' : gestor && meusSetores.has(m.setor_id) ? ({ diretor: 'diretoria do setor', gerente: 'gerência do setor', supervisor: 'supervisão do setor' }[u.papel] || 'coordenação do setor') : 'liberada',
         somente_leitura: a.somente_leitura, papeis: a.papeis.map((p) => (lista.find((x) => x.id === p) || { nome: p }).nome) });
     }
     const perms = u.papel === 'admin' ? null : await regras.permissoesDe(u);
