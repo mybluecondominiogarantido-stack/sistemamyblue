@@ -12,7 +12,8 @@
  *               inicio_contrato (AAAA-MM-DD), honorarios (%), garantias [], garantia_outra, taxas_extras [{descricao, valor_por_uh, inicio, fim}]
  *   parceria    parceria (sim|nao), parceiros [{id, nome}] — o percentual é do setor Parceiros
  *   cashback    cashback (nao|5|10|outro), cashback_pct, cashback_receitas []
- *   antecipação antecipacao (sim|nao), antecipacao_valor, antecipacao_data, antecipacao_prazo
+ *   antecipação antecipacao (sim|nao), antecipacao_valor, antecipacao_data, antecipacao_prazo (preenchidos conforme o contrato:
+ *               não travam o envio; enquanto faltarem, viram alerta ao executivo)
  *   contatos    administradora, administracao_interna, consultor_nome, consultor_telefone, consultor_email,
  *               contatos [{nome, funcao, telefone, email}], observacoes
  */
@@ -111,11 +112,6 @@ function faltas(f, { docs = new Set(), origem, executivoId, referencia = {}, ass
   if (f.cashback === 'outro') exige(num(f.cashback_pct) > 0, 'Informar o percentual do cashback.');
   if (['5', '10', 'outro'].includes(String(f.cashback))) exige((f.cashback_receitas || []).length, 'Marcar sobre quais receitas incide o cashback.');
   exige(['sim', 'nao'].includes(f.antecipacao), 'Dizer se foi negociada antecipação de valores.');
-  if (f.antecipacao === 'sim') {
-    exige(num(f.antecipacao_valor) > 0, 'Informar o valor da antecipação.');
-    exige(/^\d{4}-\d{2}-\d{2}$/.test(texto(f.antecipacao_data)), 'Informar a data da antecipação.');
-    exige(texto(f.antecipacao_prazo), 'Dizer se a antecipação é permanente ou até quando.');
-  }
   exige(texto(f.administradora), f.administracao_interna ? 'Informar quem administra o condomínio (administração interna).' : 'Informar a administradora.');
   exige(texto(f.consultor_nome), 'Informar o consultor do condomínio.');
   exige(digitos(f.consultor_telefone).length >= 10 || emailOk(f.consultor_email), 'Informar o telefone ou o e-mail do consultor.');
@@ -126,11 +122,16 @@ function faltas(f, { docs = new Set(), origem, executivoId, referencia = {}, ass
   return l;
 }
 
+/* antecipação negociada sem os dados do contrato (valor, data e prazo) */
+const antecipacaoIncompleta = (f) => f.antecipacao === 'sim'
+  && !(num(f.antecipacao_valor) > 0 && /^\d{4}-\d{2}-\d{2}$/.test(texto(f.antecipacao_data)) && texto(f.antecipacao_prazo));
+
 /* o que pode chegar depois do envio: vira alerta ao executivo até chegar */
 function pendencias(f, docs = new Set(), origem = '') {
   const tipos = Object.keys(DOCUMENTOS).filter((t) => DOCUMENTOS[t].pendente || (origem === 'entrega' && DOCUMENTOS[t].obrigatorio));
   const l = tipos.filter((t) => !docs.has(t)).map((t) => DOCUMENTOS[t].nome);
   if (f.sem_cnpj) l.unshift('CNPJ do condomínio');
+  if (antecipacaoIncompleta(f)) l.push('Dados da antecipação (valor, data e prazo, conforme o contrato)');
   return l;
 }
 

@@ -78,11 +78,15 @@ ao analista (não trava a análise): se o relatório de fato não cobre esses me
 pedindo o relatório desde o primeiro mês-base; se só não há débito neles, apaga o campo (o mês sem débito já sai da
 média). A caixa da skill não preenche esse campo: ele vinha com o primeiro mês com débito e deixava análises pendentes.
 
-## Condomínio ainda sem CNPJ
+## CNPJ, água + gás e custo atual do boleto
 
-No formulário, **Ainda não tem CNPJ** (ex.: entrega de construtora) dispensa o CNPJ no envio. O cálculo gera o alerta
-"regularizar em até 90 dias da primeira arrecadação; até lá, o repasse vai para a conta da administradora" (a mesma regra
-do contrato), o retorno mostra "Ainda não tem (em constituição)" no lugar do CNPJ e põe o prazo nos próximos passos.
+- **CNPJ** é obrigatório para enviar (a opção "Ainda não tem CNPJ" saiu do formulário em nov/2026). Análises antigas
+  marcadas sem CNPJ continuam com o alerta dos 90 dias no cálculo e no retorno.
+- **Água + gás:** o executivo escolhe primeiro se informa **por unidade** ou o **valor total (média mensal)**; o campo
+  aparece depois da escolha (`agua_gas.modo`).
+- **Custo atual do boleto** é obrigatório. Quem não sabe marca **Não sei** (`custo_boleto_nao_sabe`): o comparativo usa o
+  custo de mercado da política (`custo_boleto_mercado`) e a análise vai para a **chancela da diretoria** antes de liberar
+  (o resultado traz `diretoria_motivos`).
 
 ## Relatórios grandes
 
@@ -108,6 +112,7 @@ Todas ficam como parâmetro da política (tabela `parametros_politica`), sem nad
 | Ponto | Decisão |
 |---|---|
 | Reprovação por inadimplência | acima de **40%** (35% a 40% = ressalvas + chancela da diretoria) |
+| Custo atual do boleto | obrigatório; "Não sei" = chancela da diretoria |
 | Mês-base sem inadimplência | sai da média e não aparece na memória de cálculo: com débito em 2 dos 3 meses, a média é a soma ÷ 2 e o retorno diz "2 meses considerados"; em 1 mês, "1 mês considerado"; em nenhum, 0%. Parâmetro em Política e faixas (`media_sem_meses_zerados`) |
 | Regra dos 10 dias | a competência entra se, na emissão do relatório, passaram **mais de 10 dias** do vencimento |
 | Boleto | **R$ 2,00** fixo; Maranhão **R$ 5,50**. Executivo com boleto próprio: no cadastro dele (tabela `executivos`) |

@@ -8,7 +8,8 @@
  *   condomínio  nome, cnpj, sem_cnpj, sem_cnpj_ciente, uf, cidade, administradora
  *   síndico     sindico_nome, sindico_cpf, sindico_email, sindico_telefone
  *   condições   taxa_adm, boleto, desconto_tipo (nenhum|percentual|valor), desconto_valor,
- *               garantias [], garantia_outra, taxa_ordinaria, taxa_extra (R$ por unidade, somadas)
+ *               garantias [], garantia_outra, taxa_ordinaria, taxa_extra (R$ por unidade, somadas),
+ *               limite_extra (% da ordinária que a taxa extra cobre: padrão 40; acima de 60, só com a diretoria)
  *   cashback    cashback (nao|5|10|outro), cashback_pct, cashback_receitas [], cashback_receita_outra
  *   vigência    inicio_contrato (AAAA-MM-DD, início do contrato: o executivo informa, a advogada confirma o que foi fechado)
  *   vencimento  primeiro_vencimento (AAAA-MM-DD, o executivo informa; o dia dele é o dia_vencimento dos boletos), periodo_minimo (meses),
@@ -19,7 +20,7 @@
  * Condições fechadas (contratos.fechado), registradas pela advogada com o contrato assinado; vão para a Implantação:
  *   taxa_adm, boleto, desconto_tipo, desconto_valor, desconto_inicio, garantias [], garantia_outra, limite_extra (% da
  *   ordinária coberto), cashback, cashback_pct, cashback_receitas [], inicio_contrato, dia_vencimento, periodo_minimo,
- *   fidelizacao, foro, prazo_contestacao (dias), clausulas [{ chave, clausula, pedido, resultado (aceito|parcial|recusado), redacao }],
+ *   fidelizacao, foro, prazo_contestacao (dias), isencao_cartorio, isencao_custas (isenção de despesas cartorárias e de custas judiciais), clausulas [{ chave, clausula, pedido, resultado (aceito|parcial|recusado), redacao }],
  *   observacoes
  */
 const I = require('../implantacoes/formulario');
@@ -49,6 +50,10 @@ const AVISO_CONVENCAO_JURIDICO = 'A convenção do condomínio não foi enviada:
 const GARANTIAS = ['Taxa ordinária', 'Taxa extraordinária', 'Água', 'Gás', 'Fundo de reserva', 'Fundo de obras', 'Locação de ambientes a condôminos'];
 const RECEITAS_CASHBACK = I.RECEITAS_CASHBACK;
 const LIMITE_EXTRA = 40; // % da ordinária coberto pela taxa administrativa normal (Cláusula 1ª, §2º)
+const LIMITE_EXTRA_SEM_DIRETORIA = 60; // o executivo pode pedir cobertura maior; acima disto, a diretoria aprova antes do Jurídico
+const OPCOES_LIMITE_EXTRA = [40, 60, 80, 100];
+const TAXA_ADM_MINIMA = 2; // abaixo disto, a diretoria comercial decide
+const BOLETO_MINIMO = 1.5; // abaixo disto, a diretoria decide
 const UF_FIDELIZACAO = ['PB'];
 
 const texto = (v) => String(v == null ? '' : v).trim();
@@ -82,6 +87,8 @@ function doPdf(r) {
 
 const temCashback = (f) => ['5', '10', 'outro'].includes(String(f.cashback || ''));
 const comFidelizacao = (f) => UF_FIDELIZACAO.includes(texto(f.uf).toUpperCase()) || !!f.fidelizacao;
+/* cobertura de taxa extra pedida: a escolhida no pedido; sem escolha, o padrão */
+const limiteExtra = (f) => (num(f.limite_extra) > 0 ? num(f.limite_extra) : LIMITE_EXTRA);
 const pctExtra = (f) => (num(f.taxa_extra) > 0 && num(f.taxa_ordinaria) > 0 ? (num(f.taxa_extra) / num(f.taxa_ordinaria)) * 100 : null);
 
 /* o que falta para enviar ao Jurídico (bloqueia o envio), com o campo de cada falta para a tela marcar em vermelho */
@@ -134,9 +141,10 @@ function completarPedido(f) {
 function itensDiretoria(f, origem) {
   const l = [];
   if (origem === 'entrega') l.push(`Condomínio de entrega, sem análise de crédito: ${fmt(num(f.taxa_adm) || 0)}% de taxa administrativa e boleto de R$ ${fmt(num(f.boleto) || 0)}.`);
-  const p = pctExtra(f);
-  if ((f.garantias || []).includes('Taxa extraordinária') && p != null && p > LIMITE_EXTRA) {
-    l.push(`Taxa extra de R$ ${fmt(f.taxa_extra)} por unidade, ${fmt(p)}% da ordinária: acima de ${LIMITE_EXTRA}% exige aditivo com taxa própria.`);
+  if (num(f.taxa_adm) > 0 && num(f.taxa_adm) < TAXA_ADM_MINIMA) l.push(`Taxa administrativa de ${fmt(num(f.taxa_adm))}%: abaixo de ${fmt(TAXA_ADM_MINIMA)}% é decisão da diretoria comercial.`);
+  if (num(f.boleto) > 0 && num(f.boleto) < BOLETO_MINIMO) l.push(`Boleto de R$ ${fmt(num(f.boleto))}: abaixo de R$ ${fmt(BOLETO_MINIMO)} é decisão da diretoria.`);
+  if ((f.garantias || []).includes('Taxa extraordinária') && limiteExtra(f) > LIMITE_EXTRA_SEM_DIRETORIA) {
+    l.push(`Cobertura de taxa extra até ${fmt(limiteExtra(f))}% da ordinária: acima de ${LIMITE_EXTRA_SEM_DIRETORIA}% é decisão da diretoria (o padrão é ${LIMITE_EXTRA}%).`);
   }
   for (const k of f.pedidos || []) {
     const c = C.porChave.get(k);
@@ -154,8 +162,9 @@ function avisos(f, { origem, diasAnalise, validadeProposta, semConvencao } = {})
   if (g.includes('Fundo de obras')) l.push({ nivel: 'atencao', texto: 'Fundo de obras não consta no contrato-modelo: confirme com o Jurídico antes de prometer ao síndico.' });
   if (texto(f.garantia_outra)) l.push({ nivel: 'atencao', texto: `"${texto(f.garantia_outra)}" está fora da lista do contrato: o Jurídico confirma se dá para garantir.` });
   if (g.includes('Taxa extraordinária') && p != null) {
-    l.push(p > LIMITE_EXTRA ? { nivel: 'atencao', texto: `Taxa extra de ${fmt(p)}% da ordinária: acima de ${LIMITE_EXTRA}% não é cobertura automática; precisa de análise específica e aditivo (decisão da diretoria).` }
-      : { nivel: 'info', texto: `Taxa extra de ${fmt(p)}% da ordinária: dentro dos ${LIMITE_EXTRA}% cobertos pela taxa administrativa normal.` });
+    const lim = limiteExtra(f);
+    l.push(p > lim ? { nivel: 'atencao', texto: `Taxa extra de ${fmt(p)}% da ordinária: passa da cobertura pedida (até ${fmt(lim)}%). Aumente a cobertura (acima de ${LIMITE_EXTRA_SEM_DIRETORIA}%, a diretoria decide) ou confirme com o síndico o que fica de fora.` }
+      : { nivel: 'info', texto: `Taxa extra de ${fmt(p)}% da ordinária: dentro da cobertura pedida (até ${fmt(lim)}%).` });
   }
   if (g.length) l.push({ nivel: 'info', texto: 'Só é garantido o que está na convenção e no regimento e foi aprovado em assembleia. Multas por descumprimento do regimento e locação de ambientes a quem não é condômino não entram.' });
   if (f.desconto_tipo === 'nenhum') {
@@ -193,7 +202,9 @@ function fechadoInicial(c) {
   return {
     taxa_adm: num(f.taxa_adm), boleto: num(f.boleto), desconto_tipo: f.desconto_tipo || 'nenhum', desconto_valor: num(f.desconto_valor),
     desconto_inicio: texto((f.pedidos_detalhe || {}).pontualidade_adiar), garantias: lista(f.garantias), garantia_outra: texto(f.garantia_outra),
-    limite_extra: pedidos.includes('taxa_extra_ampliar') && !negou ? num(String((f.pedidos_detalhe || {}).taxa_extra_ampliar || '').replace(/[^\d,.]/g, '').replace(',', '.')) || LIMITE_EXTRA : LIMITE_EXTRA,
+    // a cobertura escolhida no pedido (acima de 60%, só se a diretoria aprovou); pedidos antigos vinham como objeção da Cláusula 1ª
+    limite_extra: num(f.limite_extra) > 0 ? (num(f.limite_extra) > LIMITE_EXTRA_SEM_DIRETORIA && negou ? LIMITE_EXTRA_SEM_DIRETORIA : num(f.limite_extra))
+      : pedidos.includes('taxa_extra_ampliar') && !negou ? num(String((f.pedidos_detalhe || {}).taxa_extra_ampliar || '').replace(/[^\d,.]/g, '').replace(',', '.')) || LIMITE_EXTRA : LIMITE_EXTRA,
     cashback: String(f.cashback || 'nao'), cashback_pct: num(f.cashback_pct), cashback_receitas: lista(f.cashback_receitas),
     // a vigência vem do pedido (a advogada confirma o que foi fechado); o primeiro vencimento é do executivo
     inicio_contrato: texto(f.inicio_contrato), primeiro_vencimento: texto(f.primeiro_vencimento), dia_vencimento: diaDe(f.primeiro_vencimento) || num(f.dia_vencimento),
@@ -218,6 +229,7 @@ function normalizarFechado(b) {
     limite_extra: num(b.limite_extra), cashback: ['nao', '5', '10', 'outro'].includes(String(b.cashback)) ? String(b.cashback) : '', cashback_pct: num(b.cashback_pct),
     cashback_receitas: lista(b.cashback_receitas), inicio_contrato: texto(b.inicio_contrato).slice(0, 10), primeiro_vencimento: texto(b.primeiro_vencimento).slice(0, 10), dia_vencimento: num(b.dia_vencimento),
     periodo_minimo: num(b.periodo_minimo), fidelizacao: !!b.fidelizacao, honorarios: num(b.honorarios), foro: texto(b.foro).slice(0, 120), prazo_contestacao: num(b.prazo_contestacao),
+    isencao_cartorio: !!b.isencao_cartorio, isencao_custas: !!b.isencao_custas,
     clausulas: (Array.isArray(b.clausulas) ? b.clausulas : []).slice(0, 40).map((x) => ({ chave: texto(x && x.chave).slice(0, 60), clausula: texto(x && x.clausula).slice(0, 60),
       pedido: texto(x && x.pedido).slice(0, 300), resultado: RESULTADO[x && x.resultado] ? x.resultado : '', redacao: texto(x && x.redacao).slice(0, 2000) }))
       .filter((x) => x.clausula || x.pedido || x.redacao),
@@ -282,6 +294,7 @@ function resumoFechado(x) {
     'Período mínimo': num(x.periodo_minimo) ? `${num(x.periodo_minimo)} meses` : 'padrão', Fidelização: x.fidelizacao ? 'com' : 'sem',
     'Honorários de cobrança extrajudicial': num(x.honorarios) ? `${fmt(num(x.honorarios))}%` : '',
     Foro: texto(x.foro), 'Prazo de contestação': num(x.prazo_contestacao) ? `${num(x.prazo_contestacao)} dias` : '',
+    'Isenção de despesas cartorárias': x.isencao_cartorio ? 'sim' : 'não', 'Isenção de custas judiciais': x.isencao_custas ? 'sim' : 'não',
     ...Object.fromEntries((x.clausulas || []).map((k) => [`${k.clausula} ${k.pedido}`.trim(), `${RESULTADO[k.resultado] || '—'}${texto(k.redacao) ? `: ${texto(k.redacao)}` : ''}`])),
     'Observações': texto(x.observacoes),
   };
@@ -327,7 +340,9 @@ function paraImplantacao(c) {
   const outras = [...garantias.filter((x) => !I.GARANTIAS.includes(x)), texto(f.garantia_outra)].filter(Boolean);
   if (outras.length) out.garantia_outra = outras.join(', ');
   if (temCashback(f)) out.cashback_receitas = (f.cashback_receitas || []).filter((x) => RECEITAS_CASHBACK.includes(x));
-  const notas = [texto(f.minucias) ? `Outras solicitações: ${texto(f.minucias)}` : '', fechado && texto(fechado.observacoes) ? `Condições fechadas: ${texto(fechado.observacoes)}` : ''].filter(Boolean);
+  const isencoes = fechado ? [fechado.isencao_cartorio ? 'despesas cartorárias' : '', fechado.isencao_custas ? 'custas judiciais' : ''].filter(Boolean) : [];
+  const notas = [texto(f.minucias) ? `Outras solicitações: ${texto(f.minucias)}` : '', isencoes.length ? `Isenção de ${isencoes.join(' e de ')}.` : '',
+    fechado && texto(fechado.observacoes) ? `Condições fechadas: ${texto(fechado.observacoes)}` : ''].filter(Boolean);
   if (notas.length) out.observacoes = `Contrato ${c.protocolo || ''}. ${notas.join(' ')}`.slice(0, 4000);
   return out;
 }
@@ -378,7 +393,8 @@ function montarPdf(c, { executivo, responsavel, documentos = [], usuario, origem
       ['Desconto de pontualidade', DESCONTO[x.desconto_tipo || 'nenhum'] + (['percentual', 'valor'].includes(x.desconto_tipo) ? ` ${x.desconto_tipo === 'percentual' ? pct(x.desconto_valor) : reais(x.desconto_valor)}` : '') + (x.desconto_inicio ? ` · a partir de ${x.desconto_inicio}` : '')],
       ['Garantias', [...(x.garantias || []), x.garantia_outra].filter(Boolean).join(', ')], ['Taxa extra coberta', x.limite_extra ? `até ${fmt(x.limite_extra)}% da ordinária` : ''],
       ['Cashback', x.cashback === 'outro' ? `Sim, ${pct(x.cashback_pct)}` : CASHBACK[x.cashback] || ''], ['Vigência (início)', dataBr(x.inicio_contrato)], ['Primeiro vencimento', dataBr(x.primeiro_vencimento) + (x.dia_vencimento ? ` (dia ${x.dia_vencimento})` : '')],
-      ['Período mínimo', x.periodo_minimo ? `${x.periodo_minimo} meses` : 'padrão'], ['Fidelização', x.fidelizacao ? 'com' : 'sem'], ['Foro', x.foro], ['Contestação', x.prazo_contestacao ? `${x.prazo_contestacao} dias` : '']],
+      ['Período mínimo', x.periodo_minimo ? `${x.periodo_minimo} meses` : 'padrão'], ['Fidelização', x.fidelizacao ? 'com' : 'sem'], ['Foro', x.foro], ['Contestação', x.prazo_contestacao ? `${x.prazo_contestacao} dias` : ''],
+      ['Isenção de despesas cartorárias', x.isencao_cartorio ? 'Sim' : 'Não'], ['Isenção de custas judiciais', x.isencao_custas ? 'Sim' : 'Não']],
       tabela: (x.clausulas || []).length ? { titulo: 'Cláusulas negociadas', cab: ['Cláusula', 'Pedido', 'Resultado', 'Redação'], larguras: [0.15, 0.3, 0.13, 0.42],
         linhas: x.clausulas.map((k) => [k.clausula, k.pedido, RESULTADO[k.resultado] || '', k.redacao]) } : null,
       texto_titulo: x.observacoes ? 'Observações da advogada' : '', texto: x.observacoes || '' });
@@ -413,5 +429,5 @@ function montarPdf(c, { executivo, responsavel, documentos = [], usuario, origem
   };
 }
 
-module.exports = { CAMPOS_FECHADOS_IMPLANTACAO, DOCUMENTOS, GARANTIAS, RECEITAS_CASHBACK, LIMITE_EXTRA, DOC_IMPLANTACAO, RESULTADO, CAPITAIS, FORO_PADRAO, daAnalise, doPdf, faltas, faltasCampos, itensDiretoria, avisos,
+module.exports = { CAMPOS_FECHADOS_IMPLANTACAO, DOCUMENTOS, GARANTIAS, RECEITAS_CASHBACK, LIMITE_EXTRA, LIMITE_EXTRA_SEM_DIRETORIA, OPCOES_LIMITE_EXTRA, TAXA_ADM_MINIMA, BOLETO_MINIMO, DOC_IMPLANTACAO, RESULTADO, CAPITAIS, FORO_PADRAO, daAnalise, doPdf, faltas, faltasCampos, itensDiretoria, avisos,
   AVISO_CONVENCAO, AVISO_CONVENCAO_JURIDICO, diferencas, fechadoInicial, normalizarFechado, comPedido, completarPedido, faltasFechado, diferencasFechado, mudancasFechado, implantacaoDiferente, paraImplantacao, comFidelizacao, montarPdf, cpfValido: I.cpfValido, cnpjOk: I.cnpjOk };

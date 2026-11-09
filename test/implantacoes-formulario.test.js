@@ -73,3 +73,11 @@ test('da análise: formulário preenchido e referência para o comparativo', () 
   assert.deepEqual(dif.map((x) => x.campo), ['taxa_adm', 'desconto']);
   assert.equal(dif[0].analise, 3);
 });
+
+test('antecipação: os dados vêm do contrato, não travam o envio e ficam como pendência até completar', () => {
+  const sim = { ...COMPLETO, antecipacao: 'sim', antecipacao_valor: null, antecipacao_data: '', antecipacao_prazo: '' };
+  assert.ok(!F.faltas(sim, { docs: TODOS_DOCS, executivoId: 1 }).some((x) => /antecipação/i.test(x)));
+  assert.ok(F.pendencias(sim, TODOS_DOCS).some((x) => /Dados da antecipação/.test(x)));
+  const completa = { ...sim, antecipacao_valor: 1000, antecipacao_data: '2026-12-01', antecipacao_prazo: 'permanente' };
+  assert.ok(!F.pendencias(completa, TODOS_DOCS).some((x) => /antecipação/i.test(x)));
+});
