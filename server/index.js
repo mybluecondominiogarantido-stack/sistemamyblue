@@ -13,6 +13,7 @@ const { criarAvisosViagens } = require('./viagens');
 const { criarRenegociacoes } = require('./renegociacoes');
 const { criarAcessos } = require('./acessos');
 const { criarRegras } = require('./regras');
+const { criarNativas } = require('./nativas');
 const { criarNotificador } = require('./notificacoes');
 const { criarExpediente, lerExpediente } = require('./expediente');
 const { rotasAuth } = require('./rotas/auth');
@@ -94,6 +95,8 @@ async function criarApp(cfg) {
   const expediente = criarExpediente(lerExpediente());
   const acessos = criarAcessos({ db, seg, modulos, documentos });
   const regras = criarRegras(db);
+  // telas do portal (Análise de Crédito, Contrato, Implantação, Jurídico) na tela de acessos das ferramentas
+  const nativas = criarNativas({ db, seg, regras });
   // Controle de Emissão de Boletos: o cadastro acompanha a carteira de condomínios
   const boletosCarteira = criarBoletosCarteira({ db, documentos, espera: cfg.esperaCarteiraMs ?? 3000 });
   // Gestão de Viagens: avisos (sino e e-mail) quando o status de uma viagem muda
@@ -108,7 +111,7 @@ async function criarApp(cfg) {
   const rotinasParcerias = criarRotinasParcerias({ db, avisos, regras, expediente });
   // Demandas Jurídicas: vence hoje e passou do prazo
   const rotinasJuridico = criarRotinasJuridico({ db, avisos, regras, expediente });
-  const ctx = { db, seg, modulos, registros, documentos, avisos, expediente, acessos, regras, boletosCarteira, avisosViagens, renegociacoes, rotinasImplantacao, rotinasContratos, rotinasParcerias, rotinasJuridico, cfg };
+  const ctx = { db, seg, modulos, registros, documentos, avisos, expediente, acessos, regras, nativas, boletosCarteira, avisosViagens, renegociacoes, rotinasImplantacao, rotinasContratos, rotinasParcerias, rotinasJuridico, cfg };
 
   const app = express();
   app.disable('x-powered-by');

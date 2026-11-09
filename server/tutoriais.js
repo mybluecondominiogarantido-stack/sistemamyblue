@@ -158,8 +158,8 @@ async function visibilidade(db, seg, u) {
   // Análise de Crédito: analistas (setor da política), diretoria (regra de acesso) e executivos cadastrados
   const pol = await db.um('SELECT parametros->>\'setor_analistas\' AS setor FROM parametros_politica WHERE ativa');
   const analista = !!(await db.um('SELECT 1 FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id WHERE sm.usuario_id = $1 AND s.nome = $2', [u.id, pol ? pol.setor : 'Análise de Crédito']));
-  const dir = await db.um("SELECT regra->'pessoas' AS p FROM regras_acesso WHERE chave = 'credito.diretoria'");
-  const diretoria = !!(dir && Array.isArray(dir.p) && dir.p.includes(u.id));
+  const dir = (await db.q("SELECT regra->'pessoas' AS p FROM regras_acesso WHERE chave IN ('credito.diretoria', 'contratos.diretoria')")).rows;
+  const diretoria = dir.some((x) => Array.isArray(x.p) && x.p.includes(u.id)); // qualquer uma das chancelas
   const executivo = !!(await db.um('SELECT 1 FROM executivos WHERE usuario_id = $1 AND ativo', [u.id]));
   const setorImplantacao = !!(await db.um("SELECT 1 FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id WHERE sm.usuario_id = $1 AND s.nome = 'Implantação'", [u.id]));
   // Solicitação de Contrato: quem elabora (pessoas marcadas na regra "Elaborar as minutas de contrato")

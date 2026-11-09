@@ -13,11 +13,36 @@ setores (e onde é líder nos tickets), o que gerencia, marcações, Central de 
 ferramenta que abre (por quê, se edita ou só consulta e com quais papéis). A administração vê de todos; a coordenação e
 a supervisão, das pessoas que gerenciam.
 
+## Telas do portal: papéis no mesmo lugar das ferramentas
+
+Análise de Crédito, Solicitação de Contrato, Implantação e Jurídico são telas do próprio portal (não são HTML). Os papéis
+delas ficam em **Configurações → Acessos → Ferramentas**, no grupo **Telas do portal**, com a mesma lógica das
+ferramentas: escolhe a tela, vê o que cada papel faz, de onde vem e quem pode mudar, e marca as pessoas. Cada papel é
+gravado onde a tela já confere (cadastro de executivo, setor ou permissão), então as telas não mudam de comportamento;
+um papel que aparece em mais de uma tela (ex.: Executivo, Gestão do Comercial) muda em todas.
+
+| Papel | O que faz | Vem de | Quem muda |
+|---|---|---|---|
+| Executivo de negócios | pede análise, contrato e implantação dos condomínios dele | cadastro de executivo (UF, região e boleto em *Acessos → Análise de Crédito*) | administração e gestão do Comercial |
+| Analista de crédito | analisa e libera o retorno | setor Análise de Crédito | administração e gestão desse setor |
+| Equipe de implantação | conduz as implantações | setor Implantação | administração e gestão desse setor |
+| Jurídico | recebe as demandas jurídicas | setor Jurídico | administração e gestão desse setor |
+| Elabora contratos | redige as minutas | permissão *Elaborar as minutas de contrato* | administração e gestão do Jurídico |
+| **Gestão do Comercial** | vê (só consulta) as análises, contratos e implantações de **todos** os executivos, com os painéis | permissão *Gestão do Comercial* (vem com o perfil **Gerente** no setor Comercial) | administração e **gerência** do Comercial |
+| **Chancela de crédito** | diretoria: chancela as análises com inadimplência entre 35% e 40% ou sem o custo atual do boleto | permissão *Chancela de crédito* | só a administração |
+| **Chancela comercial** | diretoria: decide os itens comerciais do contrato (taxa administrativa abaixo de 2%, boleto abaixo de R$ 1,50, cobertura de taxa extra acima de 60%, cláusulas fora do padrão, taxa e boleto do condomínio de entrega) e o percentual fora do padrão nas parcerias | permissão *Chancela comercial* | só a administração |
+
+- O cadeado marca o papel **automático** (pelo perfil ou setor): para tirar, muda-se o perfil ou a regra da permissão.
+- **Chancelas por assunto**: cada diretor decide só o seu assunto, e os dois veem tudo (consulta). Enquanto ninguém tiver
+  a chancela comercial, quem tem a de crédito decide os itens comerciais (nada fica parado).
+- *Acessos → Por pessoa* mostra também os papéis da pessoa nas telas do portal. Cada mudança fica no Histórico.
+- Código: `server/nativas.js` (papéis e de onde vêm) e as permissões em `server/regras.js`.
+
 ## Onde cada acesso é definido
 
 | O quê | Onde se define | Quem define |
 |---|---|---|
-| **Perfil** (Administrador, Coordenador, Supervisor, Usuário) | *Configurações → Pessoas* (cadastro da pessoa) | só a administração |
+| **Perfil** (Administrador, Gerente, Coordenador, Supervisor, Usuário) | *Configurações → Pessoas* (cadastro da pessoa) | só a administração |
 | **Setores** da pessoa (formam a equipe do setor nos tickets e o que coordenação/supervisão gerenciam) | *Configurações → Pessoas* (cadastro); *Configurações → Setores e equipes* | administração; coordenação/supervisão nos setores delas |
 | **Líder** do setor nos tickets (distribui) | *Configurações → Setores e equipes* | administração; coordenação/supervisão nos setores delas. Coordenação e supervisão do setor já são líderes |
 | **Marcações**: *Supervisão da Central de Tickets* (já vem com Coordenador e Supervisor) e *Marketing — Central de Links* | *Configurações → Acessos → Marcações* | só a administração |
@@ -38,6 +63,7 @@ a supervisão, das pessoas que gerenciam.
 |---|---|---|
 | **Perfil** | Administrador, Coordenador, Supervisor ou Usuário (cadastro da pessoa) | **papel** dentro de uma ferramenta |
 | **Papel** | função dentro de uma ferramenta (ex.: Gestão, Financeiro), dado em *Configurações → Acessos → Ferramentas* | perfil do portal |
+| **Gerente** (perfil) | um nível acima do coordenador: gerencia os setores dele com os mesmos poderes; no Comercial, recebe também a **Gestão do Comercial** e é quem a distribui | — |
 | **Supervisor** (perfil) | gerencia os setores dele, com os mesmos poderes do coordenador (inclusive a Supervisão da Central de Tickets) | — |
 | **Supervisão da Central de Tickets** | vê e direciona os tickets de **todos** os setores; não dá acesso à administração. Vem com os perfis Coordenador e Supervisor (sai junto se o perfil mudar); para usuário comum (ex.: Gerência), é marcada no cadastro | o perfil Supervisor |
 | **Coordenação do setor** | coordenadores e supervisores daquele setor | a administração |
@@ -52,7 +78,7 @@ a supervisão, das pessoas que gerenciam.
 - **Administrador**: abre todas as ferramentas, sempre editando e **com todos os papéis de cada uma** (não precisa ser
   marcado; na janela de acessos aparece "todos os papéis"). Pode mudar tudo. É o único que **aprova ferramenta nova**
   e que **cria os papéis** de uma ferramenta.
-- **Coordenador e Supervisor** (mesmos poderes aqui): abrem todas as ferramentas do(s) setor(es) deles, sempre editando,
+- **Gerente, Coordenador e Supervisor** (mesmos poderes aqui; o gerente tem a mais o que as permissões dão a ele, como a Gestão do Comercial): abrem todas as ferramentas do(s) setor(es) deles, sempre editando,
   inclusive as que aguardam aprovação. Nessas ferramentas podem: enviar HTML novo (veja *HTML novo da coordenação*) e
   voltar a uma versão aprovada; **liberar qualquer pessoa do portal, de qualquer setor**; escolher se ela edita ou só
   consulta; dar o papel dela; e **cadastrar ferramenta nova** no setor (fica aguardando aprovação). Não mexem em
@@ -153,7 +179,8 @@ Tela própria do portal (menu **Análise de Crédito**), não é uma ferramenta 
 |---|---|---|
 | **Executivo de negócios** | marcado em *Configurações → Acessos → Análise de Crédito* (com UF, região e boleto próprio) | pedir análise, anexar documentos, responder pendências, ver o retorno das suas e pedir reanálise; não vê as anotações nem o cálculo antes do retorno |
 | **Analista** | marcado em *Acessos → Análise de Crédito*, o que o coloca no setor **Análise de Crédito** (diferente do setor Crédito; o nome do setor é parâmetro da política) | ver todas, assumir, lançar dados, calcular, devolver com pendência, enviar à diretoria e liberar o retorno (assinado por ele) |
-| **Diretoria** | marcada em *Acessos → Análise de Crédito* (permissão *Chancelar análises de crédito*) | chancelar ou não as análises com inadimplência entre 35% e 40%; ver o histórico |
+| **Diretoria — chancela de crédito** | papel *Chancela de crédito* (Telas do portal ou *Acessos → Análise de Crédito*) | chancelar ou não as análises com inadimplência entre 35% e 40%; ver o histórico |
+| **Gestão do Comercial e chancela comercial** | papéis nas Telas do portal | ver todas as análises (só consulta, sem as anotações do analista) |
 | **Administração** | perfil | tudo, inclusive pessoas e papéis, executivos sem acesso ao portal e versões da política |
 
 Os avisos (sino e e-mail) vão para o setor Análise de Crédito quando a documentação fica completa, para o executivo
@@ -187,7 +214,8 @@ Tela própria do portal (menu **Jurídico → Solicitações ao Jurídico** para
 |---|---|---|
 | **Comercial** (executivo de negócios) | o mesmo cadastro de executivo da Análise de Crédito | pedir o contrato a partir das suas análises liberadas (ou do PDF, ou de condomínio de entrega), anexar a convenção (se a análise não trouxe), pedir ajuste na minuta ou a assinatura (síndico aprovou), ver o controle das suas e, com o contrato concluído, solicitar a implantação |
 | **Quem elabora** (Jurídico) | marcado pela administração em *Configurações → Acessos → Solicitação de Contrato* (sem ninguém marcado, a administração recebe) | ver a fila, as assinaturas, o Dashboard Jurídico, todas as solicitações e o controle; assumir e passar para outra pessoa; quem assumiu devolve com pendência e envia a minuta; marcar *Enviado para assinatura* e *Assinado* (com a via assinada); registrar e corrigir as condições fechadas (não solicita a implantação: é o executivo) |
-| **Diretoria** | permissão *Chancelar análises de crédito* | decidir os itens que o Manual do Contrato reserva à diretoria antes da minuta; ver o Painel de Desempenho do Painel do Jurídico e o controle |
+| **Diretoria — chancela comercial** | papel *Chancela comercial* (sem ninguém marcado, quem tem a chancela de crédito) | decidir os itens que o Manual do Contrato reserva à diretoria antes da minuta |
+| **Diretoria (qualquer chancela) e Gestão do Comercial** | papéis nas Telas do portal | ver o Painel de Desempenho do Painel do Jurídico, todas as solicitações e o controle (só consulta) |
 | **Administração** | perfil | tudo, inclusive escolher quem elabora |
 
 Detalhes em `docs/contratos/LEIAME.md`.

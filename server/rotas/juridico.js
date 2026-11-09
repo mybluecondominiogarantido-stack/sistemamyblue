@@ -149,9 +149,10 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
     const admin = u.papel === 'admin';
     const doSetor = !!(await db.um(`SELECT 1 AS ok FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id WHERE s.nome = $1 AND sm.usuario_id = $2`, [SETOR_JURIDICO, u.id]));
     const juridico = admin || doSetor || (await regras.pode(u, PERMISSAO));
-    const diretoria = admin || (await regras.pode(u, 'credito.diretoria'));
-    const gerencia = admin || (doSetor && ['coordenador', 'supervisor'].includes(u.papel)) || (await regras.gerenciaveis(u)).has(PERMISSAO);
-    return { admin, juridico, diretoria, gerencia, ve_tudo: juridico || diretoria };
+    const diretoria = admin || (await regras.ehDiretoria(u));
+    const gestao = await regras.pode(u, 'comercial.gestao');
+    const gerencia = admin || (doSetor && seg.GESTORES_DE_SETOR.includes(u.papel)) || (await regras.gerenciaveis(u)).has(PERMISSAO);
+    return { admin, juridico, diretoria, gerencia, ve_tudo: juridico || diretoria || gestao };
   }
   const setorDe = async (uid) => (uid ? ((await db.um(`SELECT s.nome FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id
     WHERE sm.usuario_id = $1 ORDER BY sm.lider DESC, s.ordem, s.nome LIMIT 1`, [uid])) || {}).nome || '' : '');

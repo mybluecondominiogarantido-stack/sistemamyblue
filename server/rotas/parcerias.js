@@ -47,8 +47,9 @@ async function elaboradores(db, regras) {
   const ids = await regras.pessoasCom(PERMISSAO);
   return ids.length ? ids : administradores(db);
 }
+/* quem decide o percentual fora do padrão: a chancela comercial (sem ninguém, a de crédito; depois, a administração) */
 async function diretores(db, regras) {
-  const ids = (await regras.regras()).get('credito.diretoria').pessoas;
+  const ids = await regras.pessoasDaChancelaComercial();
   return ids.length ? ids : administradores(db);
 }
 async function membrosDe(db, nome) {
@@ -113,22 +114,24 @@ function rotasParcerias({ db, seg, cfg, avisos, regras, expediente, registros })
     const setores = (await db.q('SELECT s.nome FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id WHERE sm.usuario_id = $1', [u.id])).rows.map((x) => x.nome);
     const executivo = await db.um('SELECT id, nome, uf FROM executivos WHERE usuario_id = $1 AND ativo', [u.id]);
     const elaborador = admin || (await regras.pode(u, PERMISSAO));
-    const diretoria = admin || (await regras.pode(u, 'credito.diretoria'));
+    // diretoria: decide o percentual fora do padrão (chancela comercial); diretoria_ve: qualquer chancela (vê todas)
+    const diretoria = admin || (await regras.podeChancelaComercial(u));
+    const diretoriaVe = admin || (await regras.ehDiretoria(u));
     const parceiros = admin || setores.includes(SETOR_PARCEIROS);
-    const solicita = admin || !!executivo || diretoria || setores.some((s) => SETORES_PEDEM.includes(s));
-    return { admin, executivo, elaborador, diretoria, parceiros, solicita };
+    const solicita = admin || !!executivo || diretoria || diretoriaVe || setores.some((s) => SETORES_PEDEM.includes(s));
+    return { admin, executivo, elaborador, diretoria, diretoria_ve: diretoriaVe, parceiros, solicita };
   }
 
   function pode(p, c, u) {
     const dono = c.solicitante_id === u.id;
-    const interno = p.admin || p.elaborador || p.diretoria || p.parceiros;
+    const interno = p.admin || p.elaborador || p.diretoria || p.diretoria_ve || p.parceiros;
     const editavel = ['rascunho', 'pendencia'].includes(c.etapa);
     const aberta = !['assinado', 'cancelada'].includes(c.etapa);
     const conduz = c.etapa === 'em_elaboracao' && p.elaborador && (c.responsavel_id === u.id || p.admin);
     const aguardaDiretoria = precisaDiretoria(c) && !diretoriaDecidiu(c);
     return {
       ver: dono || interno,
-      interno: p.admin || p.elaborador || p.diretoria,
+      interno: p.admin || p.elaborador || p.diretoria || p.diretoria_ve,
       editar: editavel && (dono || p.admin),
       enviar: editavel && (dono || p.admin),
       documentos: aberta && (dono || p.elaborador || p.admin),

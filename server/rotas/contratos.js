@@ -51,8 +51,9 @@ async function elaboradores(db, regras) {
   const ids = await regras.pessoasCom(PERMISSAO);
   return ids.length ? ids : administradores(db);
 }
+/* quem decide os itens comerciais reservados à diretoria: a chancela comercial (sem ninguém, a de crédito; depois, a administração) */
 async function diretores(db, regras) {
-  const ids = (await regras.regras()).get('credito.diretoria').pessoas;
+  const ids = await regras.pessoasDaChancelaComercial();
   return ids.length ? ids : administradores(db);
 }
 /* quem é dono da solicitação: quem pediu e o executivo */
@@ -97,19 +98,24 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
   async function perfil(u) {
     const admin = u.papel === 'admin';
     const executivo = await db.um('SELECT id, nome, uf FROM executivos WHERE usuario_id = $1 AND ativo', [u.id]);
+    // diretoria: decide os itens comerciais (chancela comercial); diretoria_ve: qualquer chancela (painéis e listas completas);
+    // gestao: Gestão do Comercial (vê as solicitações de todos os executivos, só consulta)
+    const diretoriaVe = admin || (await regras.ehDiretoria(u));
+    const gestao = admin || (await regras.pode(u, 'comercial.gestao'));
     return { admin, executivo, politica: await politicaAtiva(db),
-      elaborador: admin || (await regras.pode(u, PERMISSAO)), diretoria: admin || (await regras.pode(u, 'credito.diretoria')) };
+      elaborador: admin || (await regras.pode(u, PERMISSAO)), diretoria: admin || (await regras.podeChancelaComercial(u)),
+      diretoria_ve: diretoriaVe, gestao, ve_tudo: diretoriaVe || gestao };
   }
 
   function pode(p, c, u) {
     const dono = c.solicitante_id === u.id || !!(p.executivo && c.executivo_id === p.executivo.id);
-    const interno = p.admin || p.elaborador || p.diretoria;
+    const interno = p.admin || p.elaborador || p.diretoria || p.diretoria_ve;
     const editavel = ['rascunho', 'pendencia'].includes(c.etapa);
     const aberta = !['assinado', 'cancelada'].includes(c.etapa);
     const conduz = c.etapa === 'em_elaboracao' && p.elaborador && (c.responsavel_id === u.id || p.admin);
     const aguardaDiretoria = precisaDiretoria(c) && !diretoriaDecidiu(c);
     return {
-      ver: dono || interno,
+      ver: dono || interno || (p.gestao && c.etapa !== 'rascunho'),
       interno,
       editar: editavel && (dono || p.admin),
       enviar: editavel && (dono || p.admin),
@@ -170,7 +176,7 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
     const p = await perfil(req.usuario);
     const ids = p.elaborador ? await regras.pessoasCom(PERMISSAO) : [];
     res.json({
-      perfil: { admin: p.admin, elaborador: p.elaborador, diretoria: p.diretoria, executivo: p.executivo, gerencia_equipe: (await regras.gerenciaveis(req.usuario)).has(PERMISSAO) },
+      perfil: { admin: p.admin, elaborador: p.elaborador, diretoria: p.diretoria, ve_tudo: p.ve_tudo, gestao: p.gestao, executivo: p.executivo, gerencia_equipe: (await regras.gerenciaveis(req.usuario)).has(PERMISSAO) },
       resultados: F.RESULTADO, foro_padrao: F.FORO_PADRAO,
       executivos: p.admin ? (await db.q('SELECT id, nome, uf FROM executivos WHERE ativo ORDER BY nome')).rows : p.executivo ? [p.executivo] : [],
       documentos: Object.entries(F.DOCUMENTOS).map(([tipo, d]) => ({ tipo, ...d })),
@@ -182,7 +188,7 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
 
   r.get('/api/contratos/resumo', async (req, res) => {
     const p = await perfil(req.usuario);
-    const out = { acesso: !!(p.executivo || p.elaborador || p.diretoria), painel: !!(p.elaborador || p.diretoria) };
+    const out = { acesso: !!(p.executivo || p.elaborador || p.diretoria || p.ve_tudo), painel: !!(p.elaborador || p.diretoria || p.ve_tudo) };
     if (!out.acesso) return res.json(out);
     if (p.elaborador) {
       Object.assign(out, await db.um(`SELECT COUNT(*) FILTER (WHERE etapa = 'fila')::int AS fila,
@@ -221,7 +227,7 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
     let niveis = atual.niveis, setores = atual.setores;
     if (req.usuario.papel === 'admin' && b.todo_setor !== undefined) {
       const setor = await db.um('SELECT id FROM setores WHERE nome = $1', [SETOR_JURIDICO]);
-      niveis = b.todo_setor && setor ? ['coordenador', 'supervisor', 'usuario'] : [];
+      niveis = b.todo_setor && setor ? ['gerente', 'coordenador', 'supervisor', 'usuario'] : [];
       setores = b.todo_setor && setor ? [setor.id] : [];
     }
     const salva = await regras.salvar(PERMISSAO, { niveis, setores, pessoas: Array.isArray(b.pessoas) ? b.pessoas : atual.pessoas }, req.usuario);
@@ -233,7 +239,7 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
   // período: ano inteiro (mes = 0) ou um mês, pelo dia em Brasília; "agora" é a situação de hoje, sem período
   r.get('/api/contratos/painel', async (req, res) => {
     const p = await perfil(req.usuario);
-    if (!p.elaborador && !p.diretoria) return erro(res, 403, 'O Dashboard Jurídico é de quem elabora os contratos e da diretoria.');
+    if (!p.elaborador && !p.diretoria && !p.ve_tudo) return erro(res, 403, 'O Dashboard Jurídico é de quem elabora os contratos, da diretoria e da Gestão do Comercial.');
     const agora = new Date();
     const ano = Number(req.query.ano) || Number(diaBrasilia(agora).slice(0, 4));
     const mes = Math.min(12, Math.max(0, Number(req.query.mes) || 0));
@@ -323,14 +329,14 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
     else if (vis === 'controle') {
       // controle: tudo o que já foi enviado (quem não elabora nem é diretoria vê só as suas)
       where.push("c.etapa <> 'rascunho'");
-      if (!p.elaborador && !p.diretoria) where.push(`(c.solicitante_id = ${v(u.id)} OR c.executivo_id = ${v(p.executivo ? p.executivo.id : 0)})`);
+      if (!p.elaborador && !p.diretoria && !p.ve_tudo) where.push(`(c.solicitante_id = ${v(u.id)} OR c.executivo_id = ${v(p.executivo ? p.executivo.id : 0)})`);
       if (ETAPAS.includes(String(req.query.etapa))) where.push(`c.etapa = ${v(String(req.query.etapa))}`);
       if (req.query.executivo) where.push(`c.executivo_id = ${v(Number(req.query.executivo) || 0)}`);
     }
     else if (vis === 'diretoria') {
       if (!p.diretoria) return erro(res, 403, 'Só a diretoria.');
       where.push("c.etapa IN ('fila','em_elaboracao','pendencia') AND jsonb_array_length(COALESCE(c.diretoria->'itens', '[]'::jsonb)) > 0 AND c.diretoria->>'decidido_em' IS NULL");
-    } else if (vis === 'todas') { if (!p.elaborador && !p.diretoria) return erro(res, 403, 'O histórico é de quem elabora e da diretoria.'); where.push("c.etapa <> 'rascunho'"); }
+    } else if (vis === 'todas') { if (!p.elaborador && !p.diretoria && !p.ve_tudo) return erro(res, 403, 'O histórico é de quem elabora, da diretoria e da Gestão do Comercial.'); where.push("c.etapa <> 'rascunho'"); }
     else return erro(res, 400, 'Visão inválida.');
     const busca = texto(req.query.q, 100);
     if (busca) where.push(`(c.condominio ILIKE ${v('%' + busca + '%')} OR c.protocolo ILIKE $${args.length} OR c.cnpj ILIKE $${args.length})`);
@@ -897,7 +903,7 @@ function rotasContratos({ db, seg, cfg, avisos, regras, expediente }) {
       await db.q('INSERT INTO implantacao_eventos (implantacao_id, usuario_id, tipo, detalhe) VALUES ($1, $2, $3, $4::jsonb)', [imp.id, req.usuario.id, 'contrato_corrigido', JSON.stringify({ protocolo: c.protocolo, motivo })]);
       // quem conduz (ou a coordenação da Implantação, se ninguém conduz) confere a implantação
       const para = imp.responsavel_id ? [imp.responsavel_id] : (await db.q(`SELECT u.id FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id JOIN usuarios u ON u.id = sm.usuario_id
-        WHERE s.nome = 'Implantação' AND u.ativo AND (sm.lider OR u.papel IN ('coordenador','supervisor'))`)).rows.map((r) => r.id);
+        WHERE s.nome = 'Implantação' AND u.ativo AND (sm.lider OR u.papel IN ('gerente','coordenador','supervisor'))`)).rows.map((r) => r.id);
       if (!['rascunho', 'cancelada'].includes(imp.etapa)) {
         await avisos.notificar(para, { link: `#/implantacao/${imp.id}`, autor_id: req.usuario.id, tipo: 'implantacao', email: true,
           titulo: `Contrato corrigido · ${imp.protocolo} · ${c.condominio}`, texto: `${req.usuario.nome} corrigiu as condições fechadas do contrato ${c.protocolo}. Motivo: ${motivo}\n\n${resumo}` });

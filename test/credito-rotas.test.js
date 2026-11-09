@@ -108,7 +108,7 @@ before(async () => {
 after(async () => { servidor.close(); await ctx.db.fechar(); });
 
 test('perfis: executivo, analista (setor Análise de Crédito), diretoria e quem não tem acesso', async () => {
-  assert.deepEqual((await exec('GET', '/api/credito/meta')).json.perfil, { admin: false, analista: false, diretoria: false, executivo: { id: ids.executivo, nome: 'Executiva Fictícia', uf: 'CE', regiao: 'Ceará', boleto: null } });
+  assert.deepEqual((await exec('GET', '/api/credito/meta')).json.perfil, { admin: false, analista: false, diretoria: false, gestao: false, executivo: { id: ids.executivo, nome: 'Executiva Fictícia', uf: 'CE', regiao: 'Ceará', boleto: null } });
   const a = (await analista('GET', '/api/credito/meta')).json.perfil;
   assert.equal(a.analista, true);
   assert.equal(a.diretoria, false);

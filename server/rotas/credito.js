@@ -81,7 +81,9 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
     const admin = u.papel === 'admin';
     const membro = setor ? !!(await db.um('SELECT 1 FROM setor_membros WHERE setor_id = $1 AND usuario_id = $2', [setor.id, u.id])) : false;
     const executivo = await db.um('SELECT id, nome, uf, regiao, boleto FROM executivos WHERE usuario_id = $1 AND ativo', [u.id]);
-    return { admin, analista: admin || membro, diretoria: admin || (await regras.pode(u, 'credito.diretoria')), executivo, setorAnalistas: setor ? setor.id : null, politica };
+    // diretoria: chancela de crédito; gestao: vê todas, só consulta (Gestão do Comercial e a chancela comercial)
+    const gestao = admin || (await regras.pode(u, 'comercial.gestao')) || (await regras.pode(u, 'contratos.diretoria'));
+    return { admin, analista: admin || membro, diretoria: admin || (await regras.pode(u, 'credito.diretoria')), gestao, executivo, setorAnalistas: setor ? setor.id : null, politica };
   }
 
   function pode(p, a, u) {
@@ -90,7 +92,7 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
     const responsavel = a.analista_id === u.id || p.admin;
     const emAnalise = ['em_analise', 'validada'].includes(a.etapa);
     return {
-      ver: dono || p.analista || p.diretoria,
+      ver: dono || p.analista || p.diretoria || (p.gestao && a.etapa !== 'rascunho'),
       interno: p.analista || p.diretoria, // dados do analista, cálculo, alertas
       editar: editavel && (dono || p.analista),
       documentos: (editavel && (dono || p.analista)) || (p.analista && responsavel && emAnalise),
@@ -244,9 +246,9 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
   /* ===================== perfil e contadores ===================== */
   r.get('/api/credito/meta', async (req, res) => {
     const p = await perfil(req.usuario);
-    const executivos = p.analista || p.diretoria ? (await db.q('SELECT id, nome, uf, regiao, boleto FROM executivos WHERE ativo ORDER BY nome')).rows : p.executivo ? [p.executivo] : [];
+    const executivos = p.analista || p.diretoria || p.gestao ? (await db.q('SELECT id, nome, uf, regiao, boleto FROM executivos WHERE ativo ORDER BY nome')).rows : p.executivo ? [p.executivo] : [];
     res.json({
-      perfil: { admin: p.admin, analista: p.analista, diretoria: p.diretoria, executivo: p.executivo },
+      perfil: { admin: p.admin, analista: p.analista, diretoria: p.diretoria, gestao: p.gestao, executivo: p.executivo },
       executivos, politica: { versao: p.politica.versao, setor_analistas: p.politica.setor_analistas, sla_horas: p.politica.sla_horas, sla_horas_diretoria: p.politica.sla_horas_diretoria, corte: p.politica.prazo_analista_corte },
       tipos_documento: TIPOS_DOC.map((t) => ({ tipo: t, nome: NOME_DOC[t] })),
       ia: extrator.ativo,
@@ -255,7 +257,7 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
 
   r.get('/api/credito/resumo', async (req, res) => {
     const p = await perfil(req.usuario);
-    const out = { acesso: p.analista || p.diretoria || !!p.executivo };
+    const out = { acesso: p.analista || p.diretoria || p.gestao || !!p.executivo };
     if (p.analista) {
       Object.assign(out, await db.um(`SELECT COUNT(*) FILTER (WHERE etapa = 'fila')::int AS fila,
         COUNT(*) FILTER (WHERE etapa IN ('em_analise','validada') AND analista_id = $1)::int AS minhas,
@@ -277,7 +279,7 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
     if (vis === 'minhas') where.push(`(a.solicitante_id = ${v(u.id)} OR a.executivo_id = ${v(p.executivo ? p.executivo.id : 0)})`);
     else if (vis === 'fila') { if (!p.analista) return erro(res, 403, 'A fila é do setor Análise de Crédito.'); where.push(`a.etapa IN ('pendencia',${EM_ANDAMENTO.slice(1, -1)})`); }
     else if (vis === 'diretoria') { if (!p.diretoria) return erro(res, 403, 'Só a diretoria chancela análises.'); where.push("a.etapa = 'diretoria'"); }
-    else if (vis === 'todas') { if (!p.analista && !p.diretoria) return erro(res, 403, 'O histórico é do setor Análise de Crédito e da diretoria.'); where.push("a.etapa <> 'rascunho'"); }
+    else if (vis === 'todas') { if (!p.analista && !p.diretoria && !p.gestao) return erro(res, 403, 'O histórico é do setor Análise de Crédito, da diretoria e da Gestão do Comercial.'); where.push("a.etapa <> 'rascunho'"); }
     else return erro(res, 400, 'Visão inválida.');
     const busca = texto(req.query.q, 100);
     if (busca) where.push(`(a.condominio ILIKE ${v('%' + busca + '%')} OR a.protocolo ILIKE $${args.length} OR a.cnpj ILIKE $${args.length})`);
