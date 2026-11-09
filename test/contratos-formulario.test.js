@@ -30,9 +30,20 @@ test('faltas: o mínimo do antigo formulário, e o condomínio sem CNPJ pede ci�
   assert.deepEqual(F.faltas({ ...FORM, cnpj: '', sem_cnpj: true, sem_cnpj_ciente: true }, { executivoId: 1, docs: new Set(['ata_ago']) }), []);
 });
 
-test('diretoria: taxa extra acima de 40% da ordinária, pedidos marcados e condomínio de entrega', () => {
+test('diretoria: cobertura de taxa extra acima de 60%, taxa adm. abaixo de 2%, boleto abaixo de R$ 1,50, pedidos marcados e condomínio de entrega', () => {
   assert.deepEqual(F.itensDiretoria(FORM, 'analise'), []);
-  assert.match(F.itensDiretoria({ ...FORM, taxa_extra: 450 }, 'analise')[0], /45,00% da ordinária/);
+  // a taxa extra vigente acima de 40% não vai mais à diretoria: o que decide é a cobertura pedida
+  assert.deepEqual(F.itensDiretoria({ ...FORM, taxa_extra: 450 }, 'analise'), []);
+  assert.deepEqual(F.itensDiretoria({ ...FORM, limite_extra: 60 }, 'analise'), []);
+  assert.match(F.itensDiretoria({ ...FORM, limite_extra: 80 }, 'analise')[0], /Cobertura de taxa extra até 80,00% da ordinária: acima de 60%/);
+  assert.deepEqual(F.itensDiretoria({ ...FORM, limite_extra: 100, garantias: ['Taxa ordinária'] }, 'analise'), []); // sem garantir a extra, não importa
+  assert.match(F.itensDiretoria({ ...FORM, taxa_adm: 1.9 }, 'analise')[0], /abaixo de 2,00% é decisão da diretoria comercial/);
+  assert.deepEqual(F.itensDiretoria({ ...FORM, taxa_adm: 2 }, 'analise'), []);
+  assert.match(F.itensDiretoria({ ...FORM, boleto: 1.49 }, 'analise')[0], /abaixo de R\$ 1,50 é decisão da diretoria/);
+  assert.deepEqual(F.itensDiretoria({ ...FORM, boleto: 1.5 }, 'analise'), []);
+  // acima de 60% negado pela diretoria: as condições fechadas começam em 60%
+  assert.equal(F.fechadoInicial({ formulario: { ...FORM, limite_extra: 80 }, diretoria: { itens: ['x'], decidido_em: '2026-10-01', aprovado: false } }).limite_extra, 60);
+  assert.equal(F.fechadoInicial({ formulario: { ...FORM, limite_extra: 80 }, diretoria: { itens: ['x'], decidido_em: '2026-10-01', aprovado: true } }).limite_extra, 80);
   const l = F.itensDiretoria({ ...FORM, pedidos: ['foro_capital', 'reembolso_limitar'], pedidos_detalhe: { reembolso_limitar: 'teto de R$ 50' } }, 'analise');
   assert.deepEqual(l, ['Cláusula 2ª, §4º: Excluir ou limitar as despesas reembolsáveis (certidão de matrícula, impressão) (teto de R$ 50).']);
   assert.match(F.itensDiretoria(FORM, 'entrega')[0], /Condomínio de entrega/);
@@ -46,9 +57,20 @@ test('avisos do manual: fundo de obras, sem pontualidade, sem CNPJ, fidelizaçã
   assert.match(t({ ...FORM, uf: 'PB' }), /com fidelização \(contratos da Paraíba\)/);
   assert.match(t(FORM), /sem fidelização/);
   assert.match(t(FORM, { diasAnalise: 45, validadeProposta: 30 }), /vale 30 dias/);
-  assert.match(t(FORM), /30,00% da ordinária: dentro dos 40%/);
+  assert.match(t(FORM), /30,00% da ordinária: dentro da cobertura pedida \(até 40,00%\)/);
+  assert.match(t({ ...FORM, taxa_extra: 500 }), /50,00% da ordinária: passa da cobertura pedida \(até 40,00%\)/);
+  assert.match(t({ ...FORM, taxa_extra: 500, limite_extra: 60 }), /dentro da cobertura pedida \(até 60,00%\)/);
   assert.match(t(FORM, { semConvencao: true }), /não pode ser assinado sem ela/);
   assert.doesNotMatch(t(FORM), /Procuração/);
+});
+
+test('condições fechadas: isenção de despesas cartorárias e de custas judiciais seguem para a Implantação', () => {
+  const x = F.normalizarFechado({ isencao_cartorio: true, isencao_custas: 'sim' });
+  assert.deepEqual([x.isencao_cartorio, x.isencao_custas], [true, true]);
+  assert.deepEqual([F.normalizarFechado({}).isencao_cartorio, F.normalizarFechado({}).isencao_custas], [false, false]);
+  const c = { protocolo: 'CT-1', formulario: FORM, fechado_em: '2026-11-01', fechado: { ...F.fechadoInicial({ formulario: FORM, diretoria: {} }), isencao_cartorio: true } };
+  assert.match(F.paraImplantacao(c).observacoes, /Isenção de despesas cartorárias\./);
+  assert.deepEqual(F.mudancasFechado(c.fechado, { ...c.fechado, isencao_custas: true }).map((m) => [m.rotulo, m.antes, m.depois]), [['Isenção de custas judiciais', 'não', 'sim']]);
 });
 
 test('condições fechadas: partem do pedido (foro na capital, 30 dias), exigem o resultado de cada cláusula e mostram o que mudou', () => {

@@ -14,7 +14,7 @@
 const NEGOCIAVEIS = [
   { chave: 'taxa_extra_ampliar', clausula: 'Cláusula 1ª, §2º', pedido: 'Ampliar a cobertura de taxa extraordinária além de 40% da ordinária',
     resposta: 'O padrão é 40%; pode chegar a 100% com aprovação; acima disso, só com aditivo e taxa própria. Não prometa percentual sem a diretoria.',
-    diretoria: true, detalhe: 'Até quantos % da ordinária?' },
+    diretoria: true, detalhe: 'Até quantos % da ordinária?', antigo: true }, // virou o campo "Taxa extra coberta até" nas condições negociadas
   { chave: 'pontualidade_retirar', clausula: 'Cláusula 2ª, §2º', pedido: 'Retirar a política de pontualidade (10% ou +1 ponto na taxa administrativa)',
     resposta: 'Retirar a sanção, não: retirada só com o Jurídico e a diretoria. O que se aceita é adiar o início.', diretoria: true },
   { chave: 'pontualidade_adiar', clausula: 'Cláusula 2ª, §2º', pedido: 'Adiar a política de pontualidade',

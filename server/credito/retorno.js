@@ -50,9 +50,11 @@ const nomeProprio = (t) => String(t || '').replace(/\b[A-ZÀ-Ý][A-ZÀ-Ý´'.]+(
 
 function textoDecisao(r) {
   const preco = r.precificacao ? `taxa administrativa de ${fmtPct(r.precificacao.taxa_adm)} e boleto de ${fmtBRL(r.precificacao.boleto)}` : '';
+  const motivos = r.diretoria_motivos && r.diretoria_motivos.length ? r.diretoria_motivos : ['inadimplência acima de 35%'];
+  const dir = r.diretoria ? ` ${esc(motivos.join(' e ').replace(/^./, (c) => c.toUpperCase()))}: exige a chancela da diretoria (CEO e Diretor Comercial).` : '';
   switch (r.status.codigo) {
-    case 'aprovada': return `O condomínio foi <b>aprovado</b>, com ${preco}.`;
-    case 'ressalvas': return `O condomínio foi <b>aprovado com ressalvas</b>, com ${preco}.${r.diretoria ? ' A inadimplência acima de 35% exige a chancela da diretoria (CEO e Diretor Comercial).' : ''} ${r.ressalvas.filter((x) => x.codigo !== 'diretoria').map((x) => esc(frase(x.texto))).join(' ')}`.trim();
+    case 'aprovada': return `O condomínio foi <b>aprovado</b>, com ${preco}.${dir}`;
+    case 'ressalvas': return `O condomínio foi <b>aprovado com ressalvas</b>, com ${preco}.${dir} ${r.ressalvas.filter((x) => x.codigo !== 'diretoria').map((x) => esc(frase(x.texto))).join(' ')}`.trim();
     case 'reprovada': return `O condomínio <b>não foi aprovado</b>: ${r.reprovacoes.map((x) => esc(x.texto.replace(/\.$/, ''))).join('; ')}.`;
     default: return `A análise está <b>pendente</b>: ${r.pendencias.map((x) => esc(x.mensagem.replace(/\.$/, ''))).join('; ')}.`;
   }
@@ -141,7 +143,7 @@ function proximosPassos(r, ctx) {
   const cod = new Set(r.ressalvas.map((x) => x.codigo));
   if (cod.has('convencao_ausente')) passos.push('Entregar a convenção do condomínio antes da assinatura do contrato.');
   if (cod.has('convencao_sem_registro_ri')) passos.push('Regularizar o registro da convenção no Cartório de Registro de Imóveis em até 90 dias.');
-  if (f.custo_boleto_atual === undefined || f.custo_boleto_atual === null || f.custo_boleto_atual === '') passos.push('Confirmar o custo de boleto praticado hoje pelo condomínio (o comparativo considerou R$ 2,50 por unidade).');
+  if (f.custo_boleto_atual === undefined || f.custo_boleto_atual === null || f.custo_boleto_atual === '') passos.push(`Confirmar o custo de boleto praticado hoje pelo condomínio (o comparativo considerou ${fmtBRL((r.comparativo && r.comparativo.sem_myblue.custo_boleto) || 2.5)} por unidade).`);
   for (const x of f.taxas_extras || []) if (x.fim) passos.push(`Confirmar a permanência da taxa extra "${x.descricao || 'sem descrição'}" após ${String(x.fim).split('-').reverse().join('/')}.`);
   if (f.sem_cnpj) passos.push('Regularizar o CNPJ do condomínio em até 90 dias da primeira arrecadação; até lá, o repasse vai para a conta da administradora.');
   if (f.tipo_contratacao === 'portabilidade') passos.push('Alinhar com a garantidora atual a data de desligamento e as ações jurídicas em curso.');

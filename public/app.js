@@ -3886,12 +3886,12 @@
     var s = f.sindico || {};
     var outros = (f.outros_isentos || [])[0] || null;
     var ag = f.agua_gas || {};
+    var agModo = ag.modo || (ag.por_unidade != null ? 'unidade' : ag.total_mensal != null ? 'total' : '');
     var d = f.desconto_pontualidade || {};
     var execSel = m.perfil.analista && !dis ? selCr('fExec', 'Executivo de negócios', a.executivo_id, m.executivos.map(function (e) { return [e.id, e.nome + (e.uf ? ' — ' + e.uf : '')]; }))
       : campoCr('fExecV', 'Executivo de negócios', a.executivo_nome ? a.executivo_nome + (a.executivo_uf ? ' — ' + a.executivo_uf : '') : '—', { dis: true });
     return '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">1</span>Identificação do condomínio</h2></div><div class="corpo pilha">' +
-      '<div class="grade-3">' + campoCr('fRs', 'Razão social', f.razao_social, { span: 2 }) + '<div><label class="rot" for="fCnpj">CNPJ</label><input class="campo" id="fCnpj" value="' + esc(f.sem_cnpj ? '' : f.cnpj || '') + '" placeholder="00.000.000/0000-00"' + (f.sem_cnpj ? ' disabled' : '') + '>' +
-        '<label class="linha" style="font-weight:700;font-size:13px;margin-top:6px"><input type="checkbox" id="fSemCnpj"' + (f.sem_cnpj ? ' checked' : '') + '> Ainda não tem CNPJ</label></div>' +
+      '<div class="grade-3">' + campoCr('fRs', 'Razão social', f.razao_social, { span: 2 }) + campoCr('fCnpj', 'CNPJ', f.cnpj, { ph: '00.000.000/0000-00' }) +
       campoCr('fUf', 'UF', f.uf, { ph: 'CE' }) + campoCr('fCid', 'Cidade', f.cidade) + campoCr('fAdm', 'Administradora', f.administradora) +
       campoCr('fSis', 'Sistema de gestão condominial', f.sistema_gestao, { ph: 'Superlógica, Gestart, ClasseCon…' }) + campoCr('fGar', 'Garantidora atual (se houver)', f.garantidora_atual) +
       campoCr('fVig', 'Vigência do contrato atual', f.vigencia_atual) + execSel + '</div>' +
@@ -3902,9 +3902,14 @@
       '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">2</span>Características da operação</h2></div><div class="corpo pilha">' +
       '<div class="grade-4">' + campoCr('fUh', 'Unidades (UH)', f.uh_total) + campoCr('fOrd', 'Taxa ordinária (R$)', fmtNumCr(f.taxa_ordinaria), { ph: '0,00' }) + campoCr('fVenc', 'Dia do vencimento', f.dia_vencimento, { ph: '1 a 31' }) +
       selCr('fDescT', 'Desconto de pontualidade', d.tipo || 'nenhum', [['nenhum', 'Não possui'], ['percentual', 'Percentual (%)'], ['valor', 'Valor por unidade (R$)']]) +
-      campoCr('fDescV', 'Desconto (% ou R$)', fmtNumCr(d.valor), { ph: 'só se houver' }) + campoCr('fAgT', 'Água + gás — média mensal total (R$)', fmtNumCr(ag.total_mensal)) +
-      campoCr('fAgU', 'Água + gás — por unidade (R$)', fmtNumCr(ag.por_unidade)) + selCr('fAgB', 'Água + gás no boleto?', ag.compoe_boleto ? 'sim' : 'nao', [['nao', 'Não compõe o boleto'], ['sim', 'Compõe o boleto']]) +
-      campoCr('fBol', 'Custo atual do boleto (R$/UH)', fmtNumCr(f.custo_boleto_atual), { ph: 'opcional', ajuda: 'Sem informação, o comparativo usa R$ 2,50.' }) + '</div>' +
+      campoCr('fDescV', 'Desconto (% ou R$)', fmtNumCr(d.valor), { ph: 'só se houver' }) +
+      selCr('fAgM', 'Água + gás — como informar', agModo, [['', 'Escolha'], ['unidade', 'Por unidade (R$)'], ['total', 'Valor total — média mensal (R$)']]) +
+      '<div id="fAgVal"' + (agModo ? '' : ' hidden') + '><label class="rot" for="fAgV" id="fAgRot">' + (agModo === 'total' ? 'Água + gás — média mensal total (R$)' : 'Água + gás — por unidade (R$)') + '</label>' +
+        '<input class="campo" id="fAgV" value="' + esc(fmtNumCr(agModo === 'total' ? ag.total_mensal : ag.por_unidade)) + '" placeholder="0,00"></div>' +
+      selCr('fAgB', 'Água + gás no boleto?', ag.compoe_boleto ? 'sim' : 'nao', [['nao', 'Não compõe o boleto'], ['sim', 'Compõe o boleto']]) +
+      '<div><label class="rot" for="fBol">Custo atual do boleto (R$/UH)</label><input class="campo" id="fBol" value="' + esc(f.custo_boleto_nao_sabe ? '' : fmtNumCr(f.custo_boleto_atual)) + '" placeholder="0,00"' + (f.custo_boleto_nao_sabe ? ' disabled' : '') + '>' +
+        '<label class="linha" style="font-weight:700;font-size:13px;margin-top:6px"><input type="checkbox" id="fBolNs"' + (f.custo_boleto_nao_sabe ? ' checked' : '') + '> Não sei</label>' +
+        '<div class="ajuda">Sem o custo atual, a análise vai para a chancela da diretoria.</div></div></div>' +
       '<div><div class="linha" style="margin-bottom:8px"><span class="rot" style="margin:0">Taxas extras vigentes</span><span class="espaco"></span><button type="button" class="btn ghost sm" id="btExtra">' + IC.mais + 'Adicionar taxa extra</button></div>' +
       '<div class="painel tabela-wrap" style="box-shadow:none"><table style="min-width:720px"><thead><tr><th>Descrição</th><th>Valor por UH</th><th>Início</th><th>Fim</th><th>Ata</th><th></th></tr></thead>' +
       '<tbody id="tbExtras">' + (f.taxas_extras || []).map(linhaExtraCr).join('') + '</tbody></table></div>' +
@@ -3922,12 +3927,13 @@
     var tipo = $('input[name=fTipo]:checked');
     var outrosP = numCr(v('fOutP'));
     return {
-      razao_social: v('fRs'), cnpj: $('#fSemCnpj') && $('#fSemCnpj').checked ? '' : v('fCnpj'), sem_cnpj: !!($('#fSemCnpj') && $('#fSemCnpj').checked), uf: v('fUf').toUpperCase(), cidade: v('fCid'), administradora: v('fAdm'), sistema_gestao: v('fSis'),
+      razao_social: v('fRs'), cnpj: v('fCnpj'), sem_cnpj: false, uf: v('fUf').toUpperCase(), cidade: v('fCid'), administradora: v('fAdm'), sistema_gestao: v('fSis'),
       garantidora_atual: v('fGar'), vigencia_atual: v('fVig'), tipo_contratacao: tipo ? tipo.value : '',
       uh_total: numCr(v('fUh')), taxa_ordinaria: numCr(v('fOrd')), dia_vencimento: numCr(v('fVenc')),
       desconto_pontualidade: { tipo: v('fDescT'), valor: numCr(v('fDescV')) },
-      agua_gas: { total_mensal: numCr(v('fAgT')), por_unidade: numCr(v('fAgU')), compoe_boleto: v('fAgB') === 'sim' },
-      custo_boleto_atual: numCr(v('fBol')),
+      agua_gas: { modo: v('fAgM'), total_mensal: v('fAgM') === 'total' ? numCr(v('fAgV')) : null, por_unidade: v('fAgM') === 'unidade' ? numCr(v('fAgV')) : null, compoe_boleto: v('fAgB') === 'sim' },
+      custo_boleto_nao_sabe: !!($('#fBolNs') && $('#fBolNs').checked),
+      custo_boleto_atual: $('#fBolNs') && $('#fBolNs').checked ? null : numCr(v('fBol')),
       taxas_extras: $$('#tbExtras tr').map(function (tr) {
         var g = function (k) { return $('[data-x=' + k + ']', tr); };
         return { descricao: g('descricao').value.trim(), valor_por_uh: numCr(g('valor_por_uh').value), inicio: g('inicio').value, fim: g('fim').value, ata: g('ata').checked };
@@ -3955,12 +3961,13 @@
   function faltasCr(f, temExec, docs) {
     var l = [];
     if (!f.razao_social) l.push('Informar a razão social do condomínio.');
-    if (!f.sem_cnpj && !cnpjValidoCr(f.cnpj)) l.push('Informar um CNPJ válido, ou marcar que o condomínio ainda não tem CNPJ.');
+    if (!cnpjValidoCr(f.cnpj)) l.push('Informar um CNPJ válido.');
     if (!f.uf) l.push('Informar a UF do condomínio.');
     if (['nova', 'portabilidade'].indexOf(f.tipo_contratacao) < 0) l.push('Escolher o tipo de contratação.');
     if (!(f.uh_total > 0)) l.push('Informar a quantidade de unidades.');
     if (!(f.taxa_ordinaria > 0)) l.push('Informar o valor da taxa ordinária.');
     if (!(f.dia_vencimento >= 1 && f.dia_vencimento <= 31)) l.push('Informar o dia do vencimento (1 a 31).');
+    if (!(f.custo_boleto_atual > 0) && !f.custo_boleto_nao_sabe) l.push('Informar o custo atual do boleto (ou marcar "Não sei": a análise vai para a chancela da diretoria).');
     if (['profissional', 'condomino'].indexOf(f.sindico.tipo) < 0) l.push('Informar o tipo de síndico.');
     if (!temExec) l.push('Escolher o executivo de negócios.');
     if (!docs.relatorio) l.push('Anexar o relatório de contas a receber / inadimplência detalhado por competência.');
@@ -4249,8 +4256,14 @@
     if (!pd.editar && !pd.analisar) ligarDocsCredito(a, recarregar);
     if ($('#formExecCr') && !pd.analisar) $$('#formExecCr input, #formExecCr select, #formExecCr button').forEach(function (el) { el.disabled = true; });
     var ligarTirar = function () { $$('#tbExtras [data-tirar]').forEach(function (b) { b.onclick = function () { b.closest('tr').remove(); $('#conteudo .pagina').dispatchEvent(new Event('change')); }; }); };
-    // condomínio ainda sem CNPJ (ex.: entrega de construtora): o campo fica vazio e travado
-    if ($('#fSemCnpj')) $('#fSemCnpj').addEventListener('change', function () { $('#fCnpj').disabled = this.checked; if (this.checked) $('#fCnpj').value = ''; });
+    // água + gás: escolhe primeiro se informa por unidade ou o total mensal; o campo aparece depois
+    if ($('#fAgM')) $('#fAgM').addEventListener('change', function () {
+      $('#fAgVal').hidden = !this.value;
+      $('#fAgRot').textContent = this.value === 'total' ? 'Água + gás — média mensal total (R$)' : 'Água + gás — por unidade (R$)';
+      $('#fAgV').value = '';
+    });
+    // custo atual do boleto: "Não sei" trava o campo (a análise vai para a chancela da diretoria)
+    if ($('#fBolNs')) $('#fBolNs').addEventListener('change', function () { $('#fBol').disabled = this.checked; if (this.checked) $('#fBol').value = ''; });
     if ($('#btExtra') && (pd.editar || pd.analisar)) { $('#btExtra').onclick = function () { $('#tbExtras').insertAdjacentHTML('beforeend', linhaExtraCr()); ligarTirar(); }; ligarTirar(); }
 
     if (pd.editar) {
@@ -4449,7 +4462,7 @@
       '<input class="campo" id="qPes" type="search" placeholder="Buscar pessoa" style="max-width:280px;margin-left:auto">' +
       '<label class="linha" style="font-weight:700;font-size:13px;color:var(--muted)"><input type="checkbox" id="soPapel"> só quem tem papel</label></div>' +
       '<div class="corpo" style="padding-top:12px;padding-bottom:4px"><p class="ajuda" style="margin:0">Marque o papel de cada pessoa na Análise de Crédito; vale na hora. <b>Executivo</b>: pede análises e acompanha as suas (boleto vazio segue a política: R$ 2,00; Maranhão R$ 5,50). ' +
-      '<b>Analista</b>: entra no setor ' + esc(j.setor_analistas) + ' e analisa. <b>Diretoria</b>: chancela as análises com inadimplência entre 35% e 40%.</p></div>' +
+      '<b>Analista</b>: entra no setor ' + esc(j.setor_analistas) + ' e analisa. <b>Diretoria</b>: chancela as análises com inadimplência entre 35% e 40% ou sem o custo atual do boleto.</p></div>' +
       '<div class="tabela-wrap"><table style="min-width:900px"><thead><tr><th>Pessoa</th><th style="text-align:center">Executivo</th><th>UF</th><th>Região</th><th>Boleto próprio (R$)</th><th style="text-align:center">Analista de crédito</th><th style="text-align:center">Diretoria</th></tr></thead>' +
       '<tbody id="tbPes">' + j.pessoas.map(linha).join('') + '</tbody></table></div></div>' +
       '<div class="painel" style="margin-top:16px"><div class="cab-painel"><h2>Executivos sem acesso ao portal</h2><span class="ajuda" style="margin:0">quem não entra no portal; o analista pede a análise em nome dele</span><span class="espaco"></span><button class="btn ghost sm" id="btNovoEx">' + IC.mais + 'Novo executivo</button></div>' +
@@ -5155,7 +5168,8 @@
         { extra: '<input class="campo" id="i_cashback_pct" data-se="cashback:outro" style="width:110px" placeholder="%" value="' + esc(fmtNumCr(f.cashback_pct)) + '" aria-label="Percentual do cashback">' }) +
       marcasImp('cashback_receitas', 'Sobre quais receitas incide o cashback', f.cashback_receitas, m.receitas_cashback, { se: 'cashback:5,10,outro' }) +
       radiosImp('antecipacao', 'Foi negociada antecipação de valores?', f.antecipacao || '', sim) +
-      campoImp('antecipacao_valor', 'Valor da antecipação (R$)', fmtNumCr(f.antecipacao_valor), { se: 'antecipacao:sim' }) +
+      '<div class="ajuda" style="grid-column:1/-1;margin:0" data-se="antecipacao:sim">Preencha conforme o contrato. Se o contrato ainda não tiver esses dados, pode enviar assim mesmo: fica como pendência até completar.</div>' +
+      campoImp('antecipacao_valor', 'Valor da antecipação (R$)', fmtNumCr(f.antecipacao_valor), { se: 'antecipacao:sim', ph: 'conforme o contrato' }) +
       campoImp('antecipacao_data', 'Data da antecipação', f.antecipacao_data, { tipo: 'date', se: 'antecipacao:sim' }) +
       campoImp('antecipacao_prazo', 'Permanente ou até quando', f.antecipacao_prazo, { se: 'antecipacao:sim', ph: 'Permanente / até mm/aaaa' }) + '</div></section>' +
 
@@ -5363,7 +5377,8 @@
       '<dl class="info-ticket" style="margin:0">' + par('Vigência (início do contrato)', dataBr(x.inicio_contrato)) + par('Primeiro vencimento', x.primeiro_vencimento ? dataBr(x.primeiro_vencimento) + (x.dia_vencimento ? ' (dia ' + x.dia_vencimento + ')' : '') : x.dia_vencimento ? 'dia ' + x.dia_vencimento : '') +
       par('Período mínimo', x.periodo_minimo ? x.periodo_minimo + ' meses' : 'padrão') + par('Cláusula 12ª', x.fidelizacao ? 'com fidelização' : 'sem fidelização') +
       (x.honorarios ? par('Honorários de cobrança extrajudicial', pctCr(x.honorarios)) : '') +
-      par('Foro', esc(x.foro)) + par('Contestação da prestação de contas', x.prazo_contestacao ? x.prazo_contestacao + ' dias' : '') + '</dl></div>' +
+      par('Foro', esc(x.foro)) + par('Contestação da prestação de contas', x.prazo_contestacao ? x.prazo_contestacao + ' dias' : '') +
+      par('Isenção de despesas cartorárias', x.isencao_cartorio ? 'sim' : 'não') + par('Isenção de custas judiciais', x.isencao_custas ? 'sim' : 'não') + '</dl></div>' +
       ((x.clausulas || []).length ? '<div class="pilha" style="gap:6px;margin-top:12px;font-size:13px;font-weight:600;color:var(--ink-2)">' + x.clausulas.map(function (k) {
         return '<div><b style="color:var(--ink)">' + esc(k.clausula) + '</b> ' + esc(k.pedido) + ': <b>' + esc(RES[k.resultado] || '—') + '</b>' + (k.redacao ? '. ' + esc(k.redacao) : '') + '</div>';
       }).join('') + '</div>' : '') +
@@ -7080,8 +7095,8 @@
       campoCt('sindico_telefone', 'Telefone do síndico', f.sindico_telefone, { ph: '(00) 00000-0000' }) + '</div></section>' +
 
       '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">2</span>Condições negociadas</h2></div><div class="corpo grade-3">' +
-      campoCt('taxa_adm', 'Taxa administrativa negociada (%)', fmtNumCr(f.taxa_adm), { ref: r(pctCr(ref.taxa_adm)), dif: difs.taxa_adm }) +
-      campoCt('boleto', 'Valor do boleto negociado (R$)', fmtNumCr(f.boleto), { ref: r(reais(ref.boleto)), dif: difs.boleto, ajuda: 'Pode ser reajustado uma vez por ano, com comprovação do custo bancário.' }) +
+      campoCt('taxa_adm', 'Taxa administrativa negociada (%)', fmtNumCr(f.taxa_adm), { ref: r(pctCr(ref.taxa_adm)), dif: difs.taxa_adm, ajuda: '<span id="avTaxaCt"></span>' }) +
+      campoCt('boleto', 'Valor do boleto negociado (R$)', fmtNumCr(f.boleto), { ref: r(reais(ref.boleto)), dif: difs.boleto, ajuda: 'Pode ser reajustado uma vez por ano, com comprovação do custo bancário. <span id="avBolCt"></span>' }) +
       selCt('desconto_tipo', 'Desconto de pontualidade', f.desconto_tipo || 'nenhum', [['nenhum', 'Não possui'], ['percentual', 'Percentual (%)'], ['valor', 'Valor por unidade (R$)']],
         { ref: temRef && ref.desconto_tipo ? DESC_CT[ref.desconto_tipo] + (ref.desconto_valor ? ' ' + fmtNumCr(ref.desconto_valor) : '') : null, dif: difs.desconto }) +
       campoCt('desconto_valor', 'Desconto (% ou R$)', fmtNumCr(f.desconto_valor), { se: 'desconto_tipo:percentual,valor' }) +
@@ -7089,6 +7104,8 @@
         ajuda: 'Só é garantido o que está na convenção e no regimento e foi aprovado em assembleia. Multas por descumprimento do regimento e locação de ambientes a quem não é condômino não entram.' }) +
       campoCt('taxa_ordinaria', 'Taxa ordinária (R$)', fmtNumCr(f.taxa_ordinaria), { ref: temRef && ref.taxa_ordinaria != null ? reais(ref.taxa_ordinaria) : null }) +
       campoCt('taxa_extra', 'Taxa extra vigente por unidade (R$)', fmtNumCr(f.taxa_extra), { ajuda: '<span id="pctExtraCt"></span>' }) +
+      '<div id="limExtraCt">' + selCt('limite_extra', 'Taxa extra coberta até (% da ordinária)', String(f.limite_extra || 40), [['40', '40% (padrão)'], ['60', '60%'], ['80', '80% (diretoria aprova)'], ['100', '100% (diretoria aprova)']],
+        { ajuda: '<span id="avLimCt"></span>' }) + '</div>' +
       radiosCt('cashback', 'Foi concedido o benefício do cashback?', cb, [['nao', 'Não'], ['5', 'Sim, 5%'], ['10', 'Sim, 10%'], ['outro', 'Outro']],
         { extra: '<input class="campo" id="c_cashback_pct" data-se="cashback:outro" style="width:110px" placeholder="%" value="' + esc(fmtNumCr(f.cashback_pct)) + '" aria-label="Percentual do cashback">' }) +
       marcasCt('cashback_receitas', 'Sobre quais receitas incide o cashback', f.cashback_receitas, m.receitas_cashback, { se: 'cashback:5,10,outro',
@@ -7126,6 +7143,7 @@
       administradora: v('administradora'), sindico_nome: v('sindico_nome'), sindico_cpf: v('sindico_cpf'), sindico_email: v('sindico_email'), sindico_telefone: v('sindico_telefone'),
       taxa_adm: numCr(v('taxa_adm')), boleto: numCr(v('boleto')), desconto_tipo: v('desconto_tipo'), desconto_valor: numCr(v('desconto_valor')),
       garantias: marcas('garantias'), garantia_outra: $('#c_garantia_outra', raiz).value.trim(), taxa_ordinaria: numCr(v('taxa_ordinaria')), taxa_extra: numCr(v('taxa_extra')),
+      limite_extra: Number(v('limite_extra')) || 40,
       cashback: v('cashback'), cashback_pct: numCr($('#c_cashback_pct', raiz).value), cashback_receitas: marcas('cashback_receitas'), cashback_receita_outra: $('#c_cashback_receita_outra', raiz).value.trim(),
       inicio_contrato: v('inicio_contrato'), primeiro_vencimento: v('primeiro_vencimento'), periodo_minimo: numCr(v('periodo_minimo')), fidelizacao: $('#c_fidelizacao', raiz).checked,
       pedidos: $$('[data-pedido]:checked', raiz).map(function (x) { return x.getAttribute('data-pedido'); }), pedidos_detalhe: det, minucias: $('#c_minucias', raiz).value.trim(),
@@ -7145,12 +7163,26 @@
         $$('[data-pedido-resp="' + k + '"], [data-pedido-det-rot="' + k + '"]', raiz).forEach(function (x) { x.hidden = !cx.checked; });
       });
       var ord = numCr(valCt('taxa_ordinaria', raiz)), ext = numCr(valCt('taxa_extra', raiz));
+      var temExtra = $$('[data-marca-ct=garantias]:checked', raiz).some(function (x) { return x.value === 'Taxa extraordinária'; });
+      var lim = Number(valCt('limite_extra', raiz)) || 40;
+      if ($('#limExtraCt', raiz)) $('#limExtraCt', raiz).hidden = !temExtra;
+      var avLim = $('#avLimCt', raiz);
+      if (avLim) {
+        avLim.textContent = lim > 60 ? 'Acima de 60%: vai para a aprovação da diretoria e depois para o Jurídico.' : lim > 40 ? 'Até 60%, segue direto para o Jurídico.' : 'O padrão é 40%. Até 60%, segue direto; acima, a diretoria aprova.';
+        avLim.parentNode.className = 'ajuda' + (lim > 60 ? ' diferente' : '');
+      }
       var alvo = $('#pctExtraCt', raiz);
       if (alvo) {
         var pc = ord > 0 && ext > 0 ? ext / ord * 100 : null;
-        alvo.textContent = pc == null ? 'Some as taxas extras vigentes (R$ por unidade).' : fmtNumCr(Math.round(pc * 100) / 100) + '% da ordinária' + (pc > 40 ? ': acima de 40% precisa de aditivo, a diretoria decide.' : ' (limite: 40%).');
-        alvo.parentNode.className = 'ajuda' + (pc > 40 ? ' diferente' : '');
+        var passa = temExtra && pc != null && pc > lim;
+        alvo.textContent = pc == null ? 'Some as taxas extras vigentes (R$ por unidade).' : fmtNumCr(Math.round(pc * 100) / 100) + '% da ordinária' + (passa ? ': passa da cobertura pedida (até ' + lim + '%). Aumente a cobertura ou confirme com o síndico.' : ' (cobertura pedida: até ' + lim + '%).');
+        alvo.parentNode.className = 'ajuda' + (passa ? ' diferente' : '');
       }
+      // abaixo do mínimo, a diretoria decide antes do Jurídico
+      var tx = numCr(valCt('taxa_adm', raiz)), bol = numCr(valCt('boleto', raiz));
+      var avTx = $('#avTaxaCt', raiz), avBol = $('#avBolCt', raiz);
+      if (avTx) { var baixaTx = tx > 0 && tx < 2; avTx.textContent = baixaTx ? 'Abaixo de 2%: vai para a decisão da diretoria comercial.' : ''; avTx.style.color = baixaTx ? '#8a5a10' : ''; }
+      if (avBol) { var baixoBol = bol > 0 && bol < 1.5; avBol.textContent = baixoBol ? 'Abaixo de R$ 1,50: vai para a decisão da diretoria.' : ''; avBol.style.color = baixoBol ? '#8a5a10' : ''; }
       var cpf = $('#c_sindico_cpf', raiz);
       var d = cpf.value.replace(/\D/g, '');
       var aj = cpf.parentNode.querySelector('.ajuda-cpf') || cpf.parentNode.appendChild(document.createElement('div'));
@@ -7158,7 +7190,7 @@
       aj.textContent = cpfValidoImp(d) ? 'CPF válido.' : '';
     }
     raiz.addEventListener('change', aplicar);
-    raiz.addEventListener('input', function (e) { if (['c_sindico_cpf', 'c_taxa_ordinaria', 'c_taxa_extra'].indexOf(e.target.id) >= 0) aplicar(); });
+    raiz.addEventListener('input', function (e) { if (['c_sindico_cpf', 'c_taxa_ordinaria', 'c_taxa_extra', 'c_taxa_adm', 'c_boleto'].indexOf(e.target.id) >= 0) aplicar(); });
     aplicar();
   }
 
@@ -7275,11 +7307,14 @@
       selCt('f_desconto_tipo', 'Desconto de pontualidade', x.desconto_tipo || 'nenhum', [['nenhum', 'Não possui'], ['percentual', 'Percentual (%)'], ['valor', 'Valor por unidade (R$)']]) +
       campoCt('f_desconto_valor', 'Desconto (% ou R$)', fmtNumCr(x.desconto_valor), { se: 'f_desconto_tipo:percentual,valor' }) +
       campoCt('f_desconto_inicio', 'Desconto vale a partir de', x.desconto_inicio, { se: 'f_desconto_tipo:percentual,valor', ph: 'Ex.: janeiro/2027 (vazio = assinatura)' }) +
-      ((x.garantias || []).indexOf('Taxa extraordinária') >= 0 ? campoCt('f_limite_extra', 'Taxa extra coberta até (% da ordinária)', fmtNumCr(x.limite_extra), { ajuda: 'O padrão é 40%.' }) : '') +
+      ((x.garantias || []).indexOf('Taxa extraordinária') >= 0 ? campoCt('f_limite_extra', 'Taxa extra coberta até (% da ordinária)', fmtNumCr(x.limite_extra), { ajuda: 'O padrão é 40%. Acima de 60%, só com a aprovação da diretoria.' }) : '') +
       campoCt('f_inicio_contrato', 'Vigência (início do contrato)', x.inicio_contrato, { tipo: 'date',
         ajuda: x.primeiro_vencimento ? 'Primeiro vencimento informado pelo executivo: ' + dataBr(x.primeiro_vencimento) + (x.dia_vencimento ? ' (boletos no dia ' + x.dia_vencimento + ')' : '') + '.' : '' }) +
       radiosCt('f_honorarios_op', 'Honorários de cobrança extrajudicial', honOp, [['10', '10%'], ['12', '12%'], ['15', '15%'], ['17.5', '17,50%'], ['outro', 'Outro']],
         { extra: '<input class="campo" id="c_f_honorarios_outro" data-se="f_honorarios_op:outro" style="width:110px" placeholder="%" value="' + esc(honOp === 'outro' ? fmtNumCr(x.honorarios) : '') + '" aria-label="Outro percentual de honorários">' }) +
+      '<fieldset style="grid-column:1/-1;border:0;padding:0;margin:0"><legend class="rot">Isenções</legend><div class="marcas">' +
+        '<label class="marca"><input type="checkbox" id="c_f_isencao_cartorio"' + (x.isencao_cartorio ? ' checked' : '') + '> Isenção de Despesas Cartorárias</label>' +
+        '<label class="marca"><input type="checkbox" id="c_f_isencao_custas"' + (x.isencao_custas ? ' checked' : '') + '> Isenção de Custas Judiciais</label></div></fieldset>' +
       campoCt('f_periodo_minimo', 'Período mínimo (meses)', x.periodo_minimo, { ph: 'vazio = padrão' }) +
       selCt('f_fidelizacao', 'Cláusula 12ª', x.fidelizacao ? 'sim' : 'nao', [['nao', 'Sem fidelização'], ['sim', 'Com fidelização']]) +
       campoCt('f_foro', 'Foro', x.foro, { ph: m.foro_padrao }) + campoCt('f_prazo_contestacao', 'Prazo para contestar a prestação de contas (dias)', x.prazo_contestacao) + '</div>' +
@@ -7310,6 +7345,7 @@
       honorarios: v('f_honorarios_op') === 'outro' ? numCr($('#c_f_honorarios_outro', raiz).value) : Number(v('f_honorarios_op')) || null,
       inicio_contrato: v('f_inicio_contrato'), periodo_minimo: numCr(v('f_periodo_minimo')), fidelizacao: v('f_fidelizacao') === 'sim',
       foro: v('f_foro'), prazo_contestacao: numCr(v('f_prazo_contestacao')), observacoes: $('#c_f_observacoes', raiz).value.trim(),
+      isencao_cartorio: !!($('#c_f_isencao_cartorio', raiz) && $('#c_f_isencao_cartorio', raiz).checked), isencao_custas: !!($('#c_f_isencao_custas', raiz) && $('#c_f_isencao_custas', raiz).checked),
       clausulas: $$('[data-clausula]', raiz).map(function (el) {
         var k = metaFechadoCt[Number(el.getAttribute('data-clausula'))] || {};
         return { chave: k.chave, clausula: k.clausula, pedido: k.pedido, resultado: $('[data-k=resultado]', el).value, redacao: $('[data-k=redacao]', el).value.trim() };

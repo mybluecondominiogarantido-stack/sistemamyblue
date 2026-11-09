@@ -152,6 +152,9 @@ Depois de assumir e de emitir os boletos, a Assistente de Implantação (quem co
 
 ## Antecipação → Controle de Repasses
 
+Os dados da antecipação (valor, data e prazo) são preenchidos conforme o contrato e não travam o envio do formulário:
+enquanto faltarem, ficam como pendência do executivo.
+
 Em Depois da conclusão → Antecipações, a equipe marca e envia a antecipação negociada no formulário (valor, data, dia,
 prazo e o mês final). No Controle de Repasses (ferramenta `repasses`), quem tem o papel **Gestor** cadastra a regra (com
 ajuste ou não) ou devolve com o motivo; a situação volta para a implantação. Se o formulário mudar depois do cadastro,

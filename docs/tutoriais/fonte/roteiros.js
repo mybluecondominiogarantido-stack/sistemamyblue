@@ -1341,7 +1341,7 @@ module.exports = [
       await t.mostrar('#c_taxa_adm', 2400);
       await t.legenda('Marque o que vamos garantir. <b>Fundo de obras</b> não está no contrato-modelo: o portal avisa para confirmar com o Jurídico.', { etapa: B, ms: 400 });
       await t.clicar('[data-marca-ct=garantias][value="Taxa ordinária"]', { depois: 500 });
-      await t.legenda('A taxa extra aparece em % da ordinária: acima de 40%, a diretoria decide antes da minuta.', { etapa: B, ms: 400 });
+      await t.legenda('A taxa extra aparece em % da ordinária. A cobertura padrão é 40%; acima de 60%, a diretoria decide antes da minuta.', { etapa: B, ms: 400 });
       await t.mostrar('#c_taxa_extra', 2600);
       await t.clicar('input[name=c_cashback][value=nao]', { depois: 500 });
       await t.preencherCampo('#c_inicio_contrato', dia1());

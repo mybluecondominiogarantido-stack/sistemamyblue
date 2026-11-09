@@ -66,7 +66,7 @@ const anexar = (c, id, tipo, nome = `${tipo}.pdf`) => c('POST', `/api/credito/an
 
 const FORM = {
   razao_social: 'Condomínio Residencial Fictício', cnpj: '11.222.333/0001-81', uf: 'CE', cidade: 'Fortaleza', tipo_contratacao: 'nova',
-  uh_total: 24, taxa_ordinaria: 1840, dia_vencimento: 10, desconto_pontualidade: { tipo: 'nenhum' },
+  uh_total: 24, taxa_ordinaria: 1840, dia_vencimento: 10, desconto_pontualidade: { tipo: 'nenhum' }, custo_boleto_atual: 2.8,
   taxas_extras: [{ descricao: 'Reforma da fachada', valor_por_uh: 700, inicio: '2026-01', fim: '2026-12', ata: true }], sindico: { tipo: 'condomino', isencao: 'integral' },
 };
 /* relatório colado: competências dos 3 meses fechados antes do mês de hoje, emitido hoje */
@@ -431,21 +431,27 @@ test('consulta Assertiva: o analista registra cada unidade; espólio sai da gara
   assert.equal((await analista('POST', `/api/credito/analises/${id}/liberar`, {})).status, 200);
 });
 
-test('condomínio ainda sem CNPJ: envia sem o CNPJ e o cálculo avisa dos 90 dias para regularizar', async () => {
-  const r = await exec('POST', '/api/credito/analises', { formulario: { ...FORM, cnpj: '', sem_cnpj: false } });
+test('CNPJ e custo atual do boleto são obrigatórios; "Não sei" no custo do boleto leva à chancela da diretoria', async () => {
+  const { custo_boleto_atual, ...semCusto } = FORM;
+  const r = await exec('POST', '/api/credito/analises', { formulario: { ...semCusto, cnpj: '', sem_cnpj: true } });
   const id = r.json.id;
   await anexar(exec, id, 'relatorio');
   await anexar(exec, id, 'convencao');
   const sem = await exec('POST', `/api/credito/analises/${id}/enviar`, {});
-  assert.ok(sem.json.faltas.some((f) => /CNPJ/.test(f)));
-  assert.equal((await exec('PATCH', `/api/credito/analises/${id}`, { formulario: { ...FORM, cnpj: '11.222.333/0001-81', sem_cnpj: true } })).status, 200);
-  const det = (await exec('GET', `/api/credito/analises/${id}`)).json;
-  assert.equal(det.analise.cnpj, ''); // marcado sem CNPJ, o número não fica
+  assert.ok(sem.json.faltas.some((f) => /CNPJ/.test(f))); // marcar "sem CNPJ" não dispensa mais o CNPJ
+  assert.ok(sem.json.faltas.some((f) => /custo atual do boleto/.test(f)));
+  assert.equal((await exec('PATCH', `/api/credito/analises/${id}`, { formulario: { ...semCusto, custo_boleto_nao_sabe: true } })).status, 200);
   const env = await exec('POST', `/api/credito/analises/${id}/enviar`, {});
   assert.equal(env.status, 200, env.texto);
   await analista('POST', `/api/credito/analises/${id}/assumir`, {});
   const unidades = (await analista('POST', `/api/credito/analises/${id}/relatorio-colado`, { texto: planilha('2.800,00') })).json.unidades;
   await analista('PATCH', `/api/credito/analises/${id}`, { dados_analista: { convencao: { registro: 'RI', uh: 24 }, relatorio: { data_emissao: hojeIso(), unidades } } });
-  const calc = await analista('POST', `/api/credito/analises/${id}/calcular`, {});
-  assert.ok(calc.json.resultado.alertas.some((x) => x.codigo === 'sem_cnpj'));
+  const res = (await analista('POST', `/api/credito/analises/${id}/calcular`, {})).json.resultado;
+  assert.equal(res.diretoria, true);
+  assert.deepEqual(res.diretoria_motivos, ['custo atual do boleto não informado']);
+  assert.ok(res.alertas.some((x) => x.codigo === 'diretoria_boleto'));
+  const lib = await analista('POST', `/api/credito/analises/${id}/liberar`, {});
+  assert.equal(lib.status, 400);
+  assert.match(lib.json.erro, /custo atual do boleto/);
+  assert.equal((await analista('POST', `/api/credito/analises/${id}/diretoria`, {})).status, 200);
 });

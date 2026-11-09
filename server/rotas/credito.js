@@ -138,12 +138,13 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
     const lista = [];
     const cnpj = String(f.cnpj || '').replace(/\D/g, '');
     if (!texto(f.razao_social, 200)) lista.push('Informar a razão social do condomínio.');
-    if (!f.sem_cnpj && (!cnpjValido(cnpj.padStart(14, '0')) || cnpj.length < 11)) lista.push('Informar um CNPJ válido, ou marcar que o condomínio ainda não tem CNPJ.');
+    if (!cnpjValido(cnpj.padStart(14, '0')) || cnpj.length < 11) lista.push('Informar um CNPJ válido.');
     if (!texto(f.uf, 2)) lista.push('Informar a UF do condomínio.');
     if (!['nova', 'portabilidade'].includes(f.tipo_contratacao)) lista.push('Escolher o tipo de contratação.');
     if (!(Number(f.uh_total) > 0)) lista.push('Informar a quantidade de unidades.');
     if (!(Number(f.taxa_ordinaria) > 0)) lista.push('Informar o valor da taxa ordinária.');
     if (!(Number(f.dia_vencimento) >= 1 && Number(f.dia_vencimento) <= 31)) lista.push('Informar o dia do vencimento (1 a 31).');
+    if (!(Number(f.custo_boleto_atual) > 0) && !f.custo_boleto_nao_sabe) lista.push('Informar o custo atual do boleto (ou marcar "Não sei": a análise vai para a chancela da diretoria).');
     if (!f.sindico || !['profissional', 'condomino'].includes(f.sindico.tipo)) lista.push('Informar o tipo de síndico.');
     if (!a.executivo_id) lista.push('Escolher o executivo de negócios.');
     const docs = new Set((await db.q('SELECT DISTINCT tipo FROM analise_documentos WHERE analise_id = $1 AND substituido_em IS NULL', [a.id])).rows.map((x) => x.tipo));
@@ -585,14 +586,14 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
     if (!pd.analisar || a.etapa !== 'em_analise') return erro(res, 409, 'Esta análise não pode ir à diretoria agora.');
     const resultado = await calcular(a, req.usuario).catch((e) => { if (e.status) return e; throw e; });
     if (resultado instanceof Error) return erro(res, resultado.status, resultado.message);
-    if (!resultado.diretoria) return erro(res, 400, 'Só análises com inadimplência entre 35% e 40% vão à diretoria.');
+    if (!resultado.diretoria) return erro(res, 400, 'Só vão à diretoria as análises com inadimplência entre 35% e 40% ou sem o custo atual do boleto.');
     const pz = prazos(new Date(a.documentacao_completa_em), p.politica, true);
     await db.tx(async (t) => {
       await t.q("UPDATE analises SET etapa = 'diretoria', prazo_executivo = $2, atualizado_em = now() WHERE id = $1", [a.id, pz.executivo]);
       await evento(t, a.id, req.usuario.id, 'diretoria', { observacao: texto(req.body && req.body.observacao, 2000) });
     });
     await avisos.notificar(await diretores(), { link: link(a.id), autor_id: req.usuario.id, tipo: 'credito', email: true, titulo: `Chancela da diretoria · ${a.protocolo} · ${a.condominio}`,
-      texto: `${req.usuario.nome} enviou à diretoria a análise de ${a.condominio}: inadimplência de ${resultado.inad_media.toFixed(2).replace('.', ',')}%, ${resultado.status.rotulo}.` });
+      texto: `${req.usuario.nome} enviou à diretoria a análise de ${a.condominio}: ${(resultado.diretoria_motivos || []).join('; ') || `inadimplência de ${Number(resultado.inad_media).toFixed(2).replace('.', ',')}%`}, ${resultado.status.rotulo}.` });
     res.json({ ok: true });
   });
 
@@ -626,7 +627,7 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
       return erro(res, 400, `Não dá para liberar: a análise está pendente. ${resultado.pendencias.map((x) => x.mensagem).join(' ')} Corrija os dados ou devolva ao executivo com pendência.`);
     }
     if (resultado.assertiva && resultado.assertiva.pendentes && resultado.assertiva.pendentes.length) return erro(res, 400, `Registre o resultado da consulta Assertiva antes de liberar: ${resultado.assertiva.pendentes.length === 1 ? 'falta a unidade' : `faltam ${resultado.assertiva.pendentes.length} unidades:`} ${resultado.assertiva.pendentes.join(', ')}.`);
-    if (resultado.diretoria && !a.chancela_em) return erro(res, 400, 'Inadimplência acima de 35%: envie à diretoria antes de liberar.');
+    if (resultado.diretoria && !a.chancela_em) return erro(res, 400, `${(resultado.diretoria_motivos || []).join('; ') || 'Exige a chancela da diretoria'}: envie à diretoria antes de liberar.`);
     const atual = await db.um('SELECT * FROM analises WHERE id = $1', [a.id]);
     const ctx = await ctxRetorno(atual, req.usuario.nome);
     const { pdf, condensado } = await retorno.gerarPdf(retorno.montarDados(resultado, ctx));

@@ -61,7 +61,7 @@ comercial) e `cancelada`. O pedido de ajuste volta a solicitação para `em_elab
   a solicitação abre com um aviso para conferir as condições.
 - **Formulário:** os 17 campos do Forms (o solicitante é quem está no portal). Vem preenchido com a análise, e o que
   mudar (taxa administrativa, boleto, vencimento, desconto) aparece como diferença. Mais o estado, a administradora,
-  a taxa ordinária e a taxa extra (para o limite de 40%), o período mínimo, o pedido de fidelização, as **Objeções e
+  a taxa ordinária, a taxa extra vigente e a **Taxa extra coberta até** (40% padrão; 60%, 80% ou 100%), o período mínimo, o pedido de fidelização, as **Objeções e
   Solicitações de modificação de contrato** (ao marcar uma, aparece a pergunta, quando há: pontualidade em *retirar*
   ou *adiar*, "para quando?" em texto livre; o prazo de contestação pedido pelo cliente, em dias; o foro, "Para qual
   foro?", que o comercial escreve, só capital do estado de origem do contrato) e as **Outras solicitações**
@@ -80,8 +80,10 @@ comercial) e `cancelada`. O pedido de ajuste volta a solicitação para `em_elab
 - **Envio:** protocolo **CT-AAAA-MM-DD-NN** (sequencial por dia, Brasília). Prazo da minuta: **72h úteis = 3 dias de
   expediente** (`server/expediente.js`, pulando fim de semana e feriado), contado do envio; recomeça a cada ajuste e no
   reenvio depois de pendência. Passou do prazo, avisa (uma vez) quem assumiu, ou quem elabora se ninguém assumiu.
-- **Diretoria:** taxa extra acima de 40% da ordinária, pedidos marcados como decisão da diretoria (ampliar a cobertura
-  da taxa extra, limitar despesas reembolsáveis) e condomínio de entrega (taxa e boleto). A diretoria é avisada no envio;
+- **Diretoria:** taxa administrativa abaixo de **2%** (diretoria comercial), boleto abaixo de **R$ 1,50**, cobertura de taxa
+  extra acima de **60%** da ordinária (o padrão é 40%; até 60% segue direto para o Jurídico), pedidos marcados como decisão
+  da diretoria (limitar despesas reembolsáveis) e condomínio de entrega (taxa e boleto). A taxa extra vigente acima da
+  cobertura pedida só gera aviso. O antigo pedido "Ampliar a cobertura de taxa extraordinária" virou o campo da cobertura. A diretoria é avisada no envio;
   a minuta só sai depois da decisão. Não aprovado, a minuta segue o contrato padrão nesses pontos.
 - **Minuta:** quem assumiu anexa e envia ao comercial; cada versão fica no histórico. Depois de um ajuste, só vai a
   minuta anexada depois do pedido.
@@ -91,7 +93,7 @@ comercial) e `cancelada`. O pedido de ajuste volta a solicitação para `em_elab
   *Assinado*, anexando ali mesmo o contrato assinado, e registra as condições fechadas (a procuração não é pedida). O comercial é avisado em cada passo.
 - **Condições fechadas:** vêm do pedido (foro na capital do estado se pedido, o prazo de contestação pedido pelo
   cliente, a decisão da diretoria) e a advogada corrige o que mudou: taxa, boleto, desconto, limite da taxa
-  extra, a **vigência** que foi fechada (vem a do pedido), período mínimo, fidelização, **honorários de cobrança extrajudicial**, foro, prazo de contestação e o
+  extra, a **vigência** que foi fechada (vem a do pedido), período mínimo, fidelização, **honorários de cobrança extrajudicial**, as **isenções** (despesas cartorárias e custas judiciais, que seguem nas observações da Implantação), foro, prazo de contestação e o
   resultado de cada cláusula pedida (aceito, em parte ou recusado, com a redação). Garantias, cashback e o primeiro
   vencimento são do executivo: valem sempre os do pedido (`comPedido`), e a advogada não os altera. Concluir leva a `assinado` e avisa o executivo para
   **solicitar a implantação** (veja abaixo). O Jurídico não abre a implantação.

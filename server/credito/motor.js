@@ -461,8 +461,17 @@ function analisar(entrada, politica = POLITICA_PADRAO, opcoes = {}) {
   }
   if (String(an.condicao_estrutural || '').trim()) reprovacoes.push({ codigo: 'estrutural', texto: String(an.condicao_estrutural).trim() });
 
-  const diretoria = inadMedia !== null && inadMedia > P.inad_diretoria + EPS && inadMedia <= P.inad_reprovacao + EPS;
-  if (diretoria) {
+  const diretoriaInad = inadMedia !== null && inadMedia > P.inad_diretoria + EPS && inadMedia <= P.inad_reprovacao + EPS;
+  // o executivo não soube o custo atual do boleto: o comparativo usa o valor de mercado e a diretoria chancela
+  const diretoriaBoleto = !!f.custo_boleto_nao_sabe;
+  const diretoria = diretoriaInad || diretoriaBoleto;
+  const diretoriaMotivos = [];
+  if (diretoriaInad) diretoriaMotivos.push(`inadimplência de ${fmtPct(inadMedia)}, acima de ${fmtPct(P.inad_diretoria)}`);
+  if (diretoriaBoleto) {
+    diretoriaMotivos.push('custo atual do boleto não informado');
+    alerta('diretoria_boleto', 'critico', `Custo atual do boleto não informado (o comparativo usa ${fmtBRL(P.custo_boleto_mercado)}): enviar à diretoria antes de liberar o retorno.`);
+  }
+  if (diretoriaInad) {
     ressalvas.unshift({ codigo: 'diretoria', texto: `Inadimplência de ${fmtPct(inadMedia)}, entre ${fmtPct(P.inad_diretoria)} e ${fmtPct(P.inad_reprovacao)}: exige chancela da diretoria (CEO e Diretor Comercial).` });
     alerta('diretoria', 'critico', 'Inadimplência acima de 35%: enviar à diretoria antes de liberar o retorno.');
   }
@@ -559,6 +568,7 @@ function analisar(entrada, politica = POLITICA_PADRAO, opcoes = {}) {
     assertiva,
     sensibilidade_taxa: sensibilidadeTaxa,
     diretoria,
+    diretoria_motivos: diretoriaMotivos,
     prazo_horas: diretoria ? P.sla_horas_diretoria : P.sla_horas,
     validade_ate: somarDias(hoje, P.validade_dias),
   };
