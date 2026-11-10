@@ -18,6 +18,7 @@ const EXTRAS = {
   'partnerchip-resultados': ['PartnerChip: Resultados', 'Comercial', 'grafico'],
   'central-patrocinio': ['Central de Patrocínio', 'Administrativa/Financeira', 'documento'],
   'gestao-de-viagens': ['Gestão de Viagens', 'Administrativa/Financeira', 'app'],
+  'rotinas-adm': ['Controle de Rotinas', 'Administrativa/Financeira', 'calendario'],
   'repasses': ['Controle de Repasses', 'Crédito', 'app'],
   'central-de-ferramentas-gestao-credito': ['Central de Ferramentas: Gestão Crédito', 'Crédito', 'calculadora'],
   'biblioteca-de-hsm-credito-implantacao': ['Biblioteca de HSM: Crédito e Implantação', 'Crédito', 'carteira'],

@@ -191,7 +191,7 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, bo
       }
       // Gestão de Viagens: guarda o status de antes para avisar (sino e e-mail) quem precisa agir
       const viagensAntes = m.slug === MODULO_VIAGENS && avisosViagens ? await avisosViagens.antes(ops) : null;
-      // Calendário de Rotinas: guarda o status de cada dia para avisar a gestora (e quem marcou, quando ela responde)
+      // Controle de Rotinas: guarda o status de cada dia (e a conferência dos pedidos) para avisar quem precisa agir
       const rotinasAntes = m.slug === MODULO_ROTINAS && avisosRotinas ? await avisosRotinas.antes(ops) : null;
       const r2 = await documentos.gravar(m.slug, ops, pessoaDe(req.usuario), req.usuario.id);
       if (viagensAntes) avisosViagens.depois(viagensAntes, req.usuario).catch((e) => console.error('[viagens]', e.message));
@@ -246,6 +246,14 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, bo
       FROM usuarios u LEFT JOIN setor_membros sm ON sm.usuario_id = u.id LEFT JOIN setores s ON s.id = sm.setor_id
       WHERE u.ativo GROUP BY u.id, u.nome, u.data_nascimento, u.data_admissao ORDER BY u.nome`);
     res.json({ pessoas: rows.map((u) => ({ id: `mb-${u.id}`, nome: u.nome, setores: u.setores || [], data_nascimento: u.data_nascimento, data_admissao: u.data_admissao })) });
+  });
+
+  /* Controle de Rotinas: o que vem do portal (Análise de Crédito para a Supervisão e a Coordenação; tickets de estorno) */
+  r.get(`/api/db/${MODULO_ROTINAS}/painel`, seg.exigirLogin, async (req, res) => {
+    req.params.slug = MODULO_ROTINAS;
+    const m = await moduloComDocumentos(req, res);
+    if (!m || !avisosRotinas) return m ? res.json({ credito: null, estornos: [] }) : undefined;
+    res.json(await avisosRotinas.painel(req.usuario, req.query.mes));
   });
 
   /* ---------- endpoint compatível com o Apps Script (substitui a planilha Google) ---------- */

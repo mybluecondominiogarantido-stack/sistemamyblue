@@ -102,8 +102,8 @@ async function criarApp(cfg) {
   const boletosCarteira = criarBoletosCarteira({ db, documentos, espera: cfg.esperaCarteiraMs ?? 3000 });
   // Gestão de Viagens: avisos (sino e e-mail) quando o status de uma viagem muda
   const avisosViagens = criarAvisosViagens({ db, documentos, avisos });
-  // Calendário de Rotinas (Adm/Financeiro): avisos quando uma rotina passa a aguardar a gestora ou é respondida
-  const avisosRotinas = criarAvisosRotinas({ db, documentos, avisos });
+  // Controle de Rotinas (Adm/Financeiro): avisos (aguardando Supervisão/Coordenação, respondida, pedido devolvido) e painel
+  const avisosRotinas = criarAvisosRotinas({ db, documentos, avisos, acessos });
   // Controle de Renegociações: renegociação salva como Fechado vira ticket para a assistente de crédito
   const renegociacoes = criarRenegociacoes({ db, seg, modulos, registros, avisos, expediente, cfg });
   // Implantação: lembretes (fila sem designação, prazo para iniciar, documentos pendentes); o intervalo é ligado em iniciar()
