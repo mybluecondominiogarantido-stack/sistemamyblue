@@ -3997,7 +3997,8 @@
       '<section class="painel"><div class="cab-painel"><h2 class="titulo-passo"><span class="passo">2</span>Características da operação</h2></div><div class="corpo pilha">' +
       '<div class="grade-4">' + campoCr('fUh', 'Unidades (UH)', f.uh_total) + campoCr('fOrd', 'Taxa ordinária (R$)', fmtNumCr(f.taxa_ordinaria), { ph: '0,00' }) + campoCr('fVenc', 'Dia do vencimento', f.dia_vencimento, { ph: '1 a 31' }) +
       selCr('fDescT', 'Desconto de pontualidade', d.tipo || 'nenhum', [['nenhum', 'Não possui'], ['percentual', 'Percentual (%)'], ['valor', 'Valor por unidade (R$)']]) +
-      campoCr('fDescV', 'Desconto (% ou R$)', fmtNumCr(d.valor), { ph: 'só se houver' }) +
+      '<div id="fDescCx"' + (['percentual', 'valor'].indexOf(d.tipo) >= 0 ? '' : ' hidden') + '><label class="rot" for="fDescV" id="fDescRot">' + (d.tipo === 'valor' ? 'Desconto por unidade (R$)' : 'Desconto (%)') + '</label>' +
+        '<input class="campo" id="fDescV" value="' + esc(fmtNumCr(d.valor)) + '" placeholder="' + (d.tipo === 'valor' ? '0,00' : 'ex.: 10') + '"></div>' +
       selCr('fAgM', 'Água + gás — como informar', agModo, [['', 'Escolha'], ['unidade', 'Por unidade (R$)'], ['total', 'Valor total — média mensal (R$)']]) +
       '<div id="fAgVal"' + (agModo ? '' : ' hidden') + '><label class="rot" for="fAgV" id="fAgRot">' + (agModo === 'total' ? 'Água + gás — média mensal total (R$)' : 'Água + gás — por unidade (R$)') + '</label>' +
         '<input class="campo" id="fAgV" value="' + esc(fmtNumCr(agModo === 'total' ? ag.total_mensal : ag.por_unidade)) + '" placeholder="0,00"></div>' +
@@ -4025,7 +4026,7 @@
       razao_social: v('fRs'), cnpj: v('fCnpj'), sem_cnpj: false, uf: v('fUf').toUpperCase(), cidade: v('fCid'), administradora: v('fAdm'), sistema_gestao: v('fSis'),
       garantidora_atual: v('fGar'), vigencia_atual: v('fVig'), tipo_contratacao: tipo ? tipo.value : '',
       uh_total: numCr(v('fUh')), taxa_ordinaria: numCr(v('fOrd')), dia_vencimento: numCr(v('fVenc')),
-      desconto_pontualidade: { tipo: v('fDescT'), valor: numCr(v('fDescV')) },
+      desconto_pontualidade: { tipo: v('fDescT'), valor: ['percentual', 'valor'].indexOf(v('fDescT')) >= 0 ? numCr(v('fDescV')) : null },
       agua_gas: { modo: v('fAgM'), total_mensal: v('fAgM') === 'total' ? numCr(v('fAgV')) : null, por_unidade: v('fAgM') === 'unidade' ? numCr(v('fAgV')) : null, compoe_boleto: v('fAgB') === 'sim' },
       custo_boleto_nao_sabe: !!($('#fBolNs') && $('#fBolNs').checked),
       custo_boleto_atual: $('#fBolNs') && $('#fBolNs').checked ? null : numCr(v('fBol')),
@@ -4351,6 +4352,14 @@
     if (!pd.editar && !pd.analisar) ligarDocsCredito(a, recarregar);
     if ($('#formExecCr') && !pd.analisar) $$('#formExecCr input, #formExecCr select, #formExecCr button').forEach(function (el) { el.disabled = true; });
     var ligarTirar = function () { $$('#tbExtras [data-tirar]').forEach(function (b) { b.onclick = function () { b.closest('tr').remove(); $('#conteudo .pagina').dispatchEvent(new Event('change')); }; }); };
+    // desconto de pontualidade: o valor só aparece quando há desconto (em % ou em R$ por unidade)
+    if ($('#fDescT')) $('#fDescT').addEventListener('change', function () {
+      var tem = this.value === 'percentual' || this.value === 'valor';
+      $('#fDescCx').hidden = !tem;
+      $('#fDescRot').textContent = this.value === 'valor' ? 'Desconto por unidade (R$)' : 'Desconto (%)';
+      $('#fDescV').placeholder = this.value === 'valor' ? '0,00' : 'ex.: 10';
+      if (!tem) $('#fDescV').value = '';
+    });
     // água + gás: escolhe primeiro se informa por unidade ou o total mensal; o campo aparece depois
     if ($('#fAgM')) $('#fAgM').addEventListener('change', function () {
       $('#fAgVal').hidden = !this.value;
