@@ -9,9 +9,15 @@
  *
  * Quem vê um ticket: quem abriu, o responsável, as pessoas do setor dele e a administração.
  * Notas internas e anexos internos: só o setor, o responsável e a administração.
+ *
+ * Jurídico: o tipo de demanda é a atividade da Tabela de prazos do Jurídico. Ao abrir, o portal cria a demanda nas Demandas
+ * Jurídicas (protocolo JUR-AAAA-MM-DD-NN, prazo da atividade) ligada ao ticket; o Jurídico conduz pela demanda e o ticket
+ * acompanha a situação, o responsável e o prazo (server/juridico/demandas.js).
  */
 const express = require('express');
 const carteira = require('../carteira');
+const JD = require('../juridico/demandas');
+const SETOR_JURIDICO = 'Jurídico';
 
 const PRIORIDADES = ['baixa', 'media', 'alta', 'urgente'];
 const STATUS = ['novo', 'em_andamento', 'aguardando', 'resolvido', 'cancelado'];
@@ -87,6 +93,15 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
 
   const ehMembro = async (setorId, usuarioId) => !!(await db.um('SELECT 1 FROM setor_membros WHERE setor_id = $1 AND usuario_id = $2', [setorId, usuarioId]));
 
+  /* as atividades da Tabela de prazos do Jurídico (sem as que têm tela própria: contrato de garantia e de parceria) */
+  async function tiposJuridico() {
+    const setor = await db.um('SELECT id FROM setores WHERE nome = $1', [SETOR_JURIDICO]);
+    if (!setor) return null;
+    const hoje = JD.diaBrasilia();
+    const tipos = (await db.q('SELECT id, nome, horas, contratos FROM juridico_tipos WHERE ativo ORDER BY ordem, nome')).rows.filter((t) => !JD.pedidoProprio(t));
+    return { setor_id: setor.id, tipos: tipos.map((t) => ({ id: t.id, nome: t.nome, horas: t.horas, prazo: JD.prazoDe(hoje, t.horas, expediente.ehDiaUtil) })) };
+  }
+
   /* ===================== dados para os formulários ===================== */
   r.get('/api/tickets/meta', async (req, res) => {
     const equipes = await equipesDe(req.usuario);
@@ -123,6 +138,7 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
       })),
       prazo_padrao_horas: PRAZO_PADRAO_HORAS,
       expediente: expediente.config,
+      juridico: await tiposJuridico(),
     });
   });
 
@@ -198,7 +214,11 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
     const setor = await db.um('SELECT id, nome FROM setores WHERE id = $1', [Number(b.setor_id) || 0]);
     if (!setor) return erro(res, 400, 'Escolha o setor que vai atender.');
     let cat = null;
-    if (b.categoria_id) {
+    let tipoJ = null;
+    if (setor.nome === SETOR_JURIDICO) {
+      tipoJ = await db.um('SELECT id, nome, horas, contratos FROM juridico_tipos WHERE id = $1 AND ativo', [Number(b.juridico_tipo_id) || 0]);
+      if (!tipoJ || JD.pedidoProprio(tipoJ)) return erro(res, 400, 'Escolha a atividade jurídica (o contrato de garantia e o de parceria têm pedido próprio, em Solicitações ao Jurídico).');
+    } else if (b.categoria_id) {
       cat = await db.um('SELECT * FROM ticket_categorias WHERE id = $1 AND setor_id = $2 AND ativo', [Number(b.categoria_id), setor.id]);
       if (!cat) return erro(res, 400, 'Tipo de demanda inválido para este setor.');
     }
@@ -215,11 +235,13 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
     // condomínio: a pessoa da carteira no setor (analista de cobrança, assistente de crédito) já fica responsável
     const r0 = cond ? await carteira.responsavelDoCondominio(db, cond.id, setor.id) : null;
     const auto = r0 && r0.id ? r0 : null;
+    let demandaJ = null;
     const id = await db.tx(async (t) => {
       const { id: novo } = await t.um(`INSERT INTO tickets (titulo, descricao, setor_id, categoria_id, prioridade, solicitante_id, prazo, condominio_id, demanda_interna, responsavel_id)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
       [titulo, descricao, setor.id, cat ? cat.id : null, prioridade, req.usuario.id, prazo, cond ? cond.id : null, interna, auto ? auto.id : null]);
       await registrar(t, novo, req.usuario.id, 'criado', null, false, { setor: setor.nome, prioridade, condominio: cond ? cond.nome : null, interna });
+      if (tipoJ) demandaJ = await criarDemandaJuridica(t, novo, tipoJ, { titulo, descricao, cond, u: req.usuario });
       if (auto) await registrar(t, novo, null, 'atribuicao', null, false, { para: auto.nome, para_id: auto.id, automatico: true });
       else if (r0) await registrar(t, novo, null, 'carteira_sem_cadastro', null, true, { carteira: r0.carteira });
       return novo;
@@ -234,11 +256,30 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
     } else {
       await avisos.notificar(await avisos.triagemDoSetor(setor.id), {
         ticket_id: id, autor_id: req.usuario.id, tipo: 'novo', email: true,
-        titulo: `Novo ticket para ${setor.nome}`, texto: `${req.usuario.nome} abriu o ticket #${id} para ${setor.nome}${sobre}: ${titulo}`,
+        titulo: demandaJ ? `Nova demanda para o Jurídico · ${demandaJ.protocolo} · ${tipoJ.nome}` : `Novo ticket para ${setor.nome}`,
+        texto: `${req.usuario.nome} abriu o ticket #${id} para ${setor.nome}${sobre}: ${titulo}${demandaJ ? `. Atividade: ${tipoJ.nome}. Prazo de entrega: ${demandaJ.prazo.split('-').reverse().join('/')}.` : ''}`,
       });
     }
-    res.status(201).json({ id, responsavel: auto ? { id: auto.id, nome: auto.nome } : null });
+    res.status(201).json({ id, responsavel: auto ? { id: auto.id, nome: auto.nome } : null, demanda: demandaJ });
   });
+
+  /* pedido ao Jurídico: a demanda nas Demandas Jurídicas, ligada ao ticket, com o prazo da atividade (o ticket fica com o mesmo prazo) */
+  async function criarDemandaJuridica(t, ticketId, tipo, { titulo, descricao, cond, u }) {
+    const hoje = JD.diaBrasilia();
+    const prazo = JD.prazoDe(hoje, tipo.horas, expediente.ehDiaUtil);
+    const setor = await t.um(`SELECT s.nome FROM setor_membros sm JOIN setores s ON s.id = sm.setor_id WHERE sm.usuario_id = $1 ORDER BY sm.lider DESC, s.ordem, s.nome LIMIT 1`, [u.id]);
+    const ex = await t.um('SELECT uf FROM executivos WHERE usuario_id = $1 AND ativo', [u.id]);
+    const d = await JD.inserir(t, { ticket_id: ticketId, tipo_id: tipo.id, status: 'pendente', solicitante_id: u.id, solicitante_nome: u.nome, setor: setor ? setor.nome : '',
+      uf: ex ? ex.uf || '' : '', cliente: cond ? cond.nome : titulo, condominio_id: cond ? cond.id : null, objeto: [titulo, descricao].filter(Boolean).join('\n\n').slice(0, 2000),
+      observacoes: '', responsavel_id: null, solicitada_em: hoje, horas: tipo.horas, prazo, entregue_em: null, criado_por: u.id, aviso_vence_em: null, canal: 'ticket', status_em: hoje });
+    await t.q('INSERT INTO juridico_eventos (demanda_id, usuario_id, tipo, detalhe) VALUES ($1, $2, $3, $4::jsonb)',
+      [d.id, u.id, 'criada', JSON.stringify({ status: 'pendente', tipo: tipo.nome, canal: 'ticket', protocolo: d.protocolo, ticket: ticketId })]);
+    // o prazo para resposta nunca passa do prazo de entrega da atividade
+    await t.q('UPDATE tickets SET prazo_conclusao = $2, prazo = LEAST(prazo, $2) WHERE id = $1', [ticketId, JD.fimDoDia(prazo)]);
+    await registrar(t, ticketId, null, 'juridico', `Demanda ${d.protocolo} criada nas Demandas Jurídicas · ${tipo.nome} · prazo de entrega ${prazo.split('-').reverse().join('/')}.`, false,
+      { demanda: d.id, protocolo: d.protocolo, prazo });
+    return { id: d.id, protocolo: d.protocolo, prazo, tipo: tipo.nome };
+  }
 
   /* ===================== detalhe ===================== */
   r.get('/api/tickets/:id', async (req, res) => {
@@ -258,7 +299,10 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
     const agora = new Date();
     const emAberto = ['novo', 'em_andamento', 'aguardando'].includes(t.status);
     const atrasado = emAberto && ((!t.primeira_resposta_em && t.prazo && new Date(t.prazo) < agora) || (t.prazo_conclusao && new Date(t.prazo_conclusao) < agora));
-    res.json({ ticket: { ...t, ...info, atrasado }, eventos, anexos, pode: p });
+    // pedido ao Jurídico: a demanda ligada (o Jurídico conduz por ela; a situação aparece aqui)
+    const demanda = await db.um(`SELECT d.id, d.protocolo, d.status, d.prazo::text AS prazo, d.entregue_em::text AS entregue_em, jt.nome AS tipo, ur.nome AS responsavel_nome
+      FROM juridico_demandas d JOIN juridico_tipos jt ON jt.id = d.tipo_id LEFT JOIN usuarios ur ON ur.id = d.responsavel_id WHERE d.ticket_id = $1 ORDER BY d.id LIMIT 1`, [t.id]);
+    res.json({ ticket: { ...t, ...info, atrasado }, eventos, anexos, pode: p, demanda_juridica: demanda || null });
   });
 
   /* ===================== comentário / nota interna ===================== */

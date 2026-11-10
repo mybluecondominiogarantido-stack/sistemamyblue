@@ -877,6 +877,12 @@ CREATE TABLE IF NOT EXISTS juridico_importacoes (
   desfeita_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
 );
 
+-- protocolo das demandas abertas no portal (JUR-AAAA-MM-DD-NN, sequencial por dia em Brasília)
+CREATE TABLE IF NOT EXISTS juridico_protocolos (
+  dia DATE PRIMARY KEY,
+  ultimo INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS juridico_demandas (
   id SERIAL PRIMARY KEY,
   numero INTEGER NOT NULL UNIQUE,
@@ -955,7 +961,7 @@ const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 
   'implantacao_protocolos', 'implantacoes', 'implantacao_documentos', 'implantacao_eventos', 'implantacao_liberacoes', 'implantacao_parametros',
   'implantacao_autorizacoes', 'implantacao_pausas', 'implantacao_fichas', 'implantacao_ficha_versoes', 'implantacao_antecipacoes', 'implantacao_importacoes',
   'contrato_protocolos', 'contratos', 'contrato_documentos', 'contrato_eventos', 'parceria_protocolos', 'parcerias', 'parceria_documentos', 'parceria_eventos', 'renegociacao_tickets', 'renegociacao_relatorios',
-  'juridico_tipos', 'juridico_importacoes', 'juridico_demandas', 'juridico_eventos', 'juridico_lembretes'];
+  'juridico_tipos', 'juridico_importacoes', 'juridico_protocolos', 'juridico_demandas', 'juridico_eventos', 'juridico_lembretes'];
 const RLS = TABELAS.map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`).join(';\n');
 
 /* Ajustes em bancos já existentes (rodam a cada início e não fazem nada se já estiverem aplicados). */
@@ -988,6 +994,11 @@ ALTER TABLE juridico_demandas ADD COLUMN IF NOT EXISTS status_em DATE;
 ALTER TABLE juridico_demandas DROP CONSTRAINT IF EXISTS juridico_demandas_status_check;
 ALTER TABLE juridico_demandas ADD CONSTRAINT juridico_demandas_status_check CHECK (status IN ('pendente','em_andamento','aguardando_retorno','pronto_assinatura','aguardando_assinaturas','concluido','contrato_perdido'));
 ALTER TABLE juridico_demandas ADD COLUMN IF NOT EXISTS assinado_em DATE;
+-- pedido ao Jurídico aberto pela Central de Tickets: o ticket é o canal de quem pediu e a demanda tem o protocolo JUR-AAAA-MM-DD-NN
+ALTER TABLE juridico_demandas ADD COLUMN IF NOT EXISTS protocolo TEXT;
+ALTER TABLE juridico_demandas ADD COLUMN IF NOT EXISTS ticket_id INTEGER REFERENCES tickets(id) ON DELETE SET NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_juridico_demandas_protocolo ON juridico_demandas(protocolo);
+CREATE INDEX IF NOT EXISTS idx_juridico_demandas_ticket ON juridico_demandas(ticket_id);
 -- a lista de atividades do Jurídico (a Tabela de Prazos da planilha), só quando a tabela ainda está vazia: depois, quem manda é o portal
 INSERT INTO juridico_tipos (nome, horas, ordem, contratos)
   SELECT v.nome, v.horas, v.ordem, v.contratos FROM (VALUES ('Contrato (garantia)', 8, 0, TRUE), ('Aditivo', 16, 1, FALSE), ('Rescisão', 24, 2, FALSE),

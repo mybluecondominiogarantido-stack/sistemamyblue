@@ -169,6 +169,7 @@ test('pedir ao Jurídico: qualquer pessoa abre, o prazo sai do tipo em dias úte
   assert.equal(r.status, 201, r.texto);
   idD = r.json.id;
   assert.equal(r.json.numero, 4); // depois do que ficou da importação
+  assert.match(r.json.protocolo, /^JUR-\d{4}-\d{2}-\d{2}-01$/); // pedido novo no portal: protocolo do dia
   assert.equal(r.json.prazo, I.somarDiasUteis(diaBr(), 2, util));
   const d = (await comercial('GET', `/api/juridico/demandas/${idD}`)).json.demanda;
   assert.deepEqual([d.solicitante_id, d.solicitada_em, d.setor, d.uf, d.status], [ids['exec@teste.com'], diaBr(), 'Comercial', 'CE', 'pendente']);
@@ -176,7 +177,7 @@ test('pedir ao Jurídico: qualquer pessoa abre, o prazo sai do tipo em dias úte
   assert.ok(emails.some((m) => m.para.email === 'adv@teste.com'));
   // quem pediu vê as suas; a lista completa é do Jurídico e da diretoria
   // quem pediu vê as suas (a nova e a da planilha que ficou), mesmo as lançadas pelo Jurídico
-  assert.deepEqual((await comercial('GET', '/api/juridico/demandas?vis=minhas')).json.demandas.map((x) => x.ref).sort(), ['3', '4']);
+  assert.deepEqual((await comercial('GET', '/api/juridico/demandas?vis=minhas')).json.demandas.map((x) => x.ref).sort(), ['3', r.json.protocolo]);
   assert.equal((await comercial('GET', '/api/juridico/demandas?vis=todas')).status, 403);
   assert.equal((await outro('GET', `/api/juridico/demandas/${idD}`)).status, 404);
   assert.equal((await diretor('GET', '/api/juridico/demandas?vis=todas')).status, 200);
@@ -189,11 +190,11 @@ test('o Jurídico conduz: responsável, aguardando retorno, comentário de quem 
   assert.equal(r.status, 400); // responsável precisa ser do Jurídico
   r = await adv('PATCH', `/api/juridico/demandas/${idD}`, { responsavel_id: ids['adv@teste.com'], status: 'aguardando_retorno', observacoes: 'Falta a ata.' });
   assert.equal(r.status, 200, r.texto);
-  assert.ok((await avisosDe('exec@teste.com')).some((a) => /^Aguardando retorno · demanda #4/.test(a.titulo) && /Falta a ata/.test(a.texto)));
+  assert.ok((await avisosDe('exec@teste.com')).some((a) => /^Aguardando retorno · demanda JUR-/.test(a.titulo) && /Falta a ata/.test(a.texto)));
   assert.equal((await comercial('GET', '/api/juridico/resumo')).json.retorno, 1);
   assert.equal((await comercial('PATCH', `/api/juridico/demandas/${idD}`, { status: 'concluido' })).status, 403);
   assert.equal((await comercial('POST', `/api/juridico/demandas/${idD}/comentario`, { texto: 'Ata enviada por e-mail.' })).status, 201);
-  assert.ok((await avisosDe('adv@teste.com')).some((a) => /Comentário na demanda #4/.test(a.titulo) && /Ata enviada/.test(a.texto)));
+  assert.ok((await avisosDe('adv@teste.com')).some((a) => /Comentário na demanda JUR-/.test(a.titulo) && /Ata enviada/.test(a.texto)));
   r = await adv('PATCH', `/api/juridico/demandas/${idD}`, { status: 'concluido' });
   assert.equal(r.json.entregue_em, diaBr());
   const x = (await adv('GET', `/api/juridico/demandas/${idD}`)).json;

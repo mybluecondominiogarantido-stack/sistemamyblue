@@ -182,6 +182,15 @@ o Jurídico muda, depois, na demanda.
 | Testes (dados fictícios) | `test/juridico.test.js` |
 | Tutoriais | `juridico-demandas-pedir` e `juridico-demandas-conduzir` (`server/tutoriais.js`, `docs/tutoriais/fonte/roteiros.js`) |
 
+**Pedido pela Central de Tickets.** As atividades que não têm tela própria (aditivo, rescisão, análise de contrato,
+parecer…) são pedidas por ticket ao setor Jurídico: em *Novo pedido → Outra atividade jurídica* (ou direto em Tickets →
+Jurídico), o tipo de demanda é a atividade da Tabela de prazos. Ao abrir o ticket, o portal cria a demanda com o protocolo
+**JUR-AAAA-MM-DD-NN**, o prazo da atividade e `canal = 'ticket'`, ligada ao ticket (`juridico_demandas.ticket_id`; o ticket fica
+com o mesmo prazo de conclusão). Quem pediu acompanha só pelo ticket (conversa e anexos): esses pedidos não aparecem em
+*Solicitações ao Jurídico*. O Jurídico conduz pela demanda no Painel do Jurídico, e a situação e o responsável passam para o
+ticket (em andamento, aguardando retorno → aguardando, concluído → resolvido, contrato perdido → cancelado). Regras em
+`server/juridico/demandas.js`; testes em `test/juridico-tickets.test.js`.
+
 **Prazo e SLA (as regras da planilha).** Cada tipo de atividade tem o prazo em horas úteis; cada 8h é um dia útil
 (arredondado para cima), contado a partir do dia seguinte à solicitação, sem fins de semana e sem os `FERIADOS` do
 expediente (como o `DIATRABALHO` do Excel). SLA: entregue até o prazo = dentro; depois = fora. Os indicadores contam pela
