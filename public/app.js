@@ -5406,11 +5406,13 @@
       depois.map(linha).join('') +
       (doSetor.length ? '<div class="sub-doc">A equipe de Implantação providencia e anexa</div>' + doSetor.map(linha).join('') : '') + outro.map(linha).join('') + '</section>';
   }
-  function ligarDocsImp(i, recarregar) {
+  /* antes: salva o que já foi preenchido no formulário, porque anexar recarrega a página */
+  function ligarDocsImp(i, recarregar, antes) {
+    antes = antes || function () { return Promise.resolve(); };
     $$('input[data-doc-imp]').forEach(function (inp) {
       inp.onchange = async function () {
         if (!inp.files[0]) return;
-        try { await enviarDocImp(i.id, inp.getAttribute('data-doc-imp'), inp.files[0]); toast('Documento anexado.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+        try { await antes(); await enviarDocImp(i.id, inp.getAttribute('data-doc-imp'), inp.files[0]); toast('Documento anexado.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
       };
     });
     $$('[data-marcar-doc-imp]').forEach(function (b) {
@@ -5428,13 +5430,13 @@
     $$('[data-desfazer-doc-imp]').forEach(function (b) {
       b.onclick = async function () {
         if (!(await confirmar('Desfazer recebido', 'O documento volta a ficar pendente.', 'Desfazer', true))) return;
-        try { await api('POST', '/api/implantacoes/' + i.id + '/documentos/' + b.getAttribute('data-desfazer-doc-imp') + '/desfazer', {}); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+        try { await antes(); await api('POST', '/api/implantacoes/' + i.id + '/documentos/' + b.getAttribute('data-desfazer-doc-imp') + '/desfazer', {}); recarregar(); } catch (e) { toast(e.message, 'erro'); }
       };
     });
     $$('[data-tirar-doc-imp]').forEach(function (b) {
       b.onclick = async function () {
         if (!(await confirmar('Remover documento', 'O arquivo sai desta implantação.', 'Remover', true))) return;
-        try { await api('DELETE', '/api/implantacoes/' + i.id + '/documentos/' + b.getAttribute('data-tirar-doc-imp')); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+        try { await antes(); await api('DELETE', '/api/implantacoes/' + i.id + '/documentos/' + b.getAttribute('data-tirar-doc-imp')); recarregar(); } catch (e) { toast(e.message, 'erro'); }
       };
     });
   }
@@ -6868,7 +6870,8 @@
     $('#conteudo').innerHTML = html;
     var raiz = $('#formImp');
     ligarCondicoesImp(raiz);
-    ligarDocsImp(i, recarregar);
+    // anexar recarrega a página: salva antes o que já foi preenchido (o "salvar" só existe quando o formulário é editável)
+    ligarDocsImp(i, recarregar, function () { return typeof salvar === 'function' ? salvar() : Promise.resolve(); });
     ligarDiaADiaImp(d, m, recarregar);
     if ($('#btCancImp')) $('#btCancImp').onclick = async function () {
       if (!(await confirmar('Cancelar implantação', 'A implantação fica no histórico como cancelada' + (i.analise_id ? ' e a análise volta a ficar disponível' : '') + '.', 'Cancelar implantação', true))) return;
@@ -7375,17 +7378,19 @@
     html += linha('outro') + '</section>';
     return html;
   }
-  function ligarDocsCt(c, recarregar) {
+  /* antes: salva o que já foi preenchido no formulário, porque anexar recarrega a página */
+  function ligarDocsCt(c, recarregar, antes) {
+    antes = antes || function () { return Promise.resolve(); };
     $$('input[data-doc-ct]').forEach(function (inp) {
       inp.onchange = async function () {
         if (!inp.files[0]) return;
-        try { await enviarDocCt(c.id, inp.getAttribute('data-doc-ct'), inp.files[0]); toast('Documento anexado.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+        try { await antes(); await enviarDocCt(c.id, inp.getAttribute('data-doc-ct'), inp.files[0]); toast('Documento anexado.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
       };
     });
     $$('[data-tirar-doc-ct]').forEach(function (b) {
       b.onclick = async function () {
         if (!(await confirmar('Remover documento', 'O arquivo sai desta solicitação.', 'Remover', true))) return;
-        try { await api('DELETE', '/api/contratos/' + c.id + '/documentos/' + b.getAttribute('data-tirar-doc-ct')); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+        try { await antes(); await api('DELETE', '/api/contratos/' + c.id + '/documentos/' + b.getAttribute('data-tirar-doc-ct')); recarregar(); } catch (e) { toast(e.message, 'erro'); }
       };
     });
   }
@@ -7725,7 +7730,8 @@
     $('#conteudo').innerHTML = html;
     var raiz = $('#formCt');
     ligarFormCt(raiz);
-    ligarDocsCt(c, recarregar);
+    // anexar recarrega a página: salva antes o que já foi preenchido (o "salvar" só existe quando o formulário é editável)
+    ligarDocsCt(c, recarregar, function () { return typeof salvar === 'function' ? salvar() : Promise.resolve(); });
     var post = async function (rota, corpo, msg) { try { await api('POST', '/api/contratos/' + c.id + '/' + rota, corpo || {}); toast(msg, 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
     var pedirTexto = function (titulo, rotulo, ph, botao, rota, chave, msg, ajuda, lista) {
       var mo = modal({ titulo: titulo, corpo: '<label class="rot" for="mTxtCt">' + esc(rotulo) + '</label><textarea class="campo" id="mTxtCt" rows="5" placeholder="' + esc(ph) + '"></textarea>' + (ajuda ? '<div class="ajuda">' + ajuda + '</div>' : ''),
@@ -8910,16 +8916,18 @@
 
     var raiz = $('#formCp');
     ligarSeCp(raiz);
+    // anexar recarrega a página: salva antes o que já foi preenchido (o "salvar" só existe quando o formulário é editável)
+    var salvarAntesCp = function () { return typeof salvar === 'function' ? salvar() : Promise.resolve(); };
     $$('input[data-doc-cp]').forEach(function (inp) {
       inp.onchange = async function () {
         if (!inp.files[0]) return;
-        try { await enviarDocCp(c.id, inp.getAttribute('data-doc-cp'), inp.files[0]); toast('Documento anexado.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+        try { await salvarAntesCp(); await enviarDocCp(c.id, inp.getAttribute('data-doc-cp'), inp.files[0]); toast('Documento anexado.', 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); }
       };
     });
     $$('[data-tirar-doc-cp]').forEach(function (b) {
       b.onclick = async function () {
         if (!(await confirmar('Remover documento', 'O arquivo sai desta solicitação.', 'Remover', true))) return;
-        try { await api('DELETE', '/api/parcerias/' + c.id + '/documentos/' + b.getAttribute('data-tirar-doc-cp')); recarregar(); } catch (e) { toast(e.message, 'erro'); }
+        try { await salvarAntesCp(); await api('DELETE', '/api/parcerias/' + c.id + '/documentos/' + b.getAttribute('data-tirar-doc-cp')); recarregar(); } catch (e) { toast(e.message, 'erro'); }
       };
     });
     var post = async function (rota, corpo, msg) { try { await api('POST', '/api/parcerias/' + c.id + '/' + rota, corpo || {}); toast(msg, 'ok'); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
