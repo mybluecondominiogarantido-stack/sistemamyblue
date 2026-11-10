@@ -259,16 +259,19 @@ const FERRAMENTAS = {
   },
   rotinas: {
     video: true,
-    nome: 'Calendário de Rotinas',
-    descricao: 'As rotinas do Administrativo/Financeiro num calendário: o que é feito em cada dia do mês, quem é o responsável e em que pé está (feito, em execução, aguardando a gestora, pausado ou pendente).',
-    dados: 'As rotinas, os status de cada dia e as folgas ficam no banco do portal e são compartilhados pela equipe, ao vivo.',
+    nome: 'Controle de Rotinas',
+    descricao: 'As rotinas do Administrativo/Financeiro por função (Assistente Financeiro, Supervisão e Coordenação): o que cada um faz em cada dia do mês, em que pé está, o que aguarda retorno, os pedidos com prazo por tipo e as metas do Assistente.',
+    dados: 'As rotinas, os status de cada dia, os pedidos, os registros dos estornos, as folgas e os fechamentos ficam no banco do portal, compartilhados pela equipe. A Análise de Crédito e os tickets de estorno vêm do próprio portal, sem digitar.',
     abas: [
-      ['Calendário', 'Indicadores do mês (concluídas, em execução, aguardando a gestora e atrasadas) e a grade do mês. Clique no dia: o painel lista as rotinas previstas para marcar o status e escrever uma observação. Os dias úteis descontam fins de semana e feriados (nacionais, do Ceará, de Fortaleza e as folgas cadastradas); rotina de dia fixo que cai sem expediente passa para o próximo dia útil.'],
-      ['Por atividade', 'Cada rotina com o responsável, quando é feita (todo dia útil, dias fixos, enésimo dia útil ou dia da semana) e os dias do mês coloridos pelo status. A gestora cadastra, edita e exclui rotinas.'],
-      ['Aguardando gestora', 'Tudo o que espera o retorno da gestora, de todos os meses, do mais antigo para o mais novo, com há quantos dias está parado e a observação. A gestora responde ali mesmo (Feito, Em execução ou Pendente).'],
-      ['Feriados e folgas', 'Os dias sem expediente além dos feriados fixos (ex.: ponto facultativo), cadastrados pela gestora.'],
+      ['Hoje / Minhas rotinas', 'As rotinas do dia de quem abre, para marcar o status (Feito, Em execução, Aguardando supervisão, Aguardando coordenação, Pausado, Pendente) e escrever uma observação. Nas rotinas de pedidos, o lançamento de cada pedido. O Assistente vê ao lado a prévia das metas do mês.'],
+      ['Aguardando', 'O que espera retorno, de todos os meses, com há quantos dias. A Supervisão responde ou encaminha à Coordenação o que passa da alçada dela; a Coordenação aprova ou devolve. Quem marcou é avisado.'],
+      ['Pedidos e Conferir pedidos', 'Cada pedido com nº do Protheus, tipo e prazos calculados: inclusão em 1 dia útil; PA e PAG, pagamento em 7 dias corridos depois da inclusão; NENHUM, fiscal em 2 dias úteis e pagamento em 7 dias corridos depois do fiscal (o atraso do fiscal não conta contra o Assistente). A Supervisão confere ou devolve com o motivo.'],
+      ['Estornos', 'Os tickets do tipo "Estorno a cliente": o Assistente registra o nº do pedido e o pagamento; inclusão em 1 dia útil e pagamento em 7 dias corridos. CPF e dados bancários ficam só no ticket.'],
+      ['Controle da Supervisão e Controle do Assistente', 'Para a Coordenação (e a Supervisão, no do Assistente): rotinas no prazo, atrasadas, o que está parado, o tempo de resposta da Supervisão, a Análise de Crédito e as metas do Assistente com o que derrubou cada uma.'],
+      ['Fechamento', 'A Coordenação fecha o mês: o resultado das metas fica guardado e o mês trava; "Copiar resultado" leva para a Gestão de Premiações.'],
+      ['Calendário e Rotinas', 'A grade do mês por função e o cadastro das rotinas (quem faz, quando, o que registrar e se conta na meta) e das folgas. Rotina de dia fixo que cai sem expediente vai para o próximo dia útil ou é antecipada, conforme o cadastro.'],
     ],
-    obs: 'O papel <b>Gestora administrativa</b> (identificador <code>gestora</code>), dado no portal em <b>Quem abre e com qual papel</b>, cadastra rotinas e folgas e recebe os avisos. Ao marcar uma rotina como <b>Aguardando gestora</b>, quem tem o papel recebe o aviso no sino e por e-mail; quando ela responde, quem marcou é avisado. Sem ninguém no papel, o aviso vai à coordenação do setor. Com acesso só de consulta, a pessoa vê tudo sem os botões de gravar.',
+    obs: 'Papéis dados no portal em <b>Quem abre e com qual papel</b>: <b>Supervisão</b> (<code>supervisao</code>) e <b>Coordenação</b> (<code>coordenacao</code>); quem abre sem papel tem a tela do Assistente. A Coordenação cadastra todas as rotinas e as folgas; a Supervisão, as do Assistente. Avisos no sino e por e-mail: rotina aguardando a Supervisão ou a Coordenação, rotina respondida ou encaminhada e pedido devolvido. Com acesso só de consulta, a pessoa vê tudo sem os botões de gravar.',
   },
   // as regras e os percentuais ficam só na ferramenta (fora do repositório) e no banco do portal: aqui, nada de valores
   premiacoes: {
