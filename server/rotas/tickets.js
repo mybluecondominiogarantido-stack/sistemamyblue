@@ -91,7 +91,7 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
   r.get('/api/tickets/meta', async (req, res) => {
     const equipes = await equipesDe(req.usuario);
     const setores = (await db.q('SELECT id, nome, ordem FROM setores ORDER BY ordem, nome')).rows;
-    const cats = (await db.q('SELECT id, setor_id, nome, prazo_horas, prioridade FROM ticket_categorias WHERE ativo ORDER BY nome')).rows;
+    const cats = (await db.q('SELECT id, setor_id, nome, prazo_horas, prioridade, modelo FROM ticket_categorias WHERE ativo ORDER BY nome')).rows;
     const membros = (await db.q(`SELECT sm.setor_id, sm.lider, u.id, u.nome FROM setor_membros sm JOIN usuarios u ON u.id = sm.usuario_id
       WHERE u.ativo ORDER BY u.nome`)).rows;
     const admin = ehGestor(req.usuario);
@@ -613,7 +613,9 @@ function rotasAdminTickets({ db, seg, avisos }) {
     if (!nome) return { erro: 'Informe o nome do tipo de demanda.' };
     const prazo = b.prazo_horas === '' || b.prazo_horas == null ? null : Number(b.prazo_horas);
     if (prazo !== null && (!Number.isInteger(prazo) || prazo < 1 || prazo > 24 * 365)) return { erro: 'Prazo em horas inválido.' };
-    return { nome, prazo_horas: prazo, prioridade: PRIORIDADES.includes(b.prioridade) ? b.prioridade : 'media' };
+    // modelo da descrição: mantém as quebras de linha (é um formulário para preencher)
+    const modelo = String(b.modelo == null ? '' : b.modelo).replace(/\r\n?/g, '\n').replace(/[^\S\n]+$/gm, '').trim().slice(0, 3000);
+    return { nome, prazo_horas: prazo, prioridade: PRIORIDADES.includes(b.prioridade) ? b.prioridade : 'media', modelo };
   }
 
   r.post('/api/admin/equipes/:setor/categorias', json, async (req, res) => {
@@ -622,9 +624,9 @@ function rotasAdminTickets({ db, seg, avisos }) {
     const d = dadosCategoria(req.body || {});
     if (d.erro) return erro(res, 400, d.erro);
     try {
-      const { id } = await db.um('INSERT INTO ticket_categorias (setor_id, nome, prazo_horas, prioridade) VALUES ($1, $2, $3, $4) RETURNING id',
-        [setor.id, d.nome, d.prazo_horas, d.prioridade]);
-      await seg.auditar(req, 'categoria_criada', null, { setor: setor.nome, ...d });
+      const { id } = await db.um('INSERT INTO ticket_categorias (setor_id, nome, prazo_horas, prioridade, modelo) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+        [setor.id, d.nome, d.prazo_horas, d.prioridade, d.modelo]);
+      await seg.auditar(req, 'categoria_criada', null, { setor: setor.nome, nome: d.nome, prazo_horas: d.prazo_horas, prioridade: d.prioridade, modelo: !!d.modelo });
       res.status(201).json({ id });
     } catch (e) {
       if (ehDuplicado(e)) return erro(res, 409, 'Este setor já tem um tipo de demanda com esse nome.');
@@ -639,12 +641,12 @@ function rotasAdminTickets({ db, seg, avisos }) {
     if (d.erro) return erro(res, 400, d.erro);
     const ativo = req.body.ativo === undefined ? atual.ativo : !!req.body.ativo;
     try {
-      await db.q('UPDATE ticket_categorias SET nome = $1, prazo_horas = $2, prioridade = $3, ativo = $4 WHERE id = $5', [d.nome, d.prazo_horas, d.prioridade, ativo, atual.id]);
+      await db.q('UPDATE ticket_categorias SET nome = $1, prazo_horas = $2, prioridade = $3, ativo = $4, modelo = $5 WHERE id = $6', [d.nome, d.prazo_horas, d.prioridade, ativo, d.modelo, atual.id]);
     } catch (e) {
       if (ehDuplicado(e)) return erro(res, 409, 'Este setor já tem um tipo de demanda com esse nome.');
       throw e;
     }
-    await seg.auditar(req, 'categoria_editada', null, { id: atual.id, ...d, ativo });
+    await seg.auditar(req, 'categoria_editada', null, { id: atual.id, nome: d.nome, prazo_horas: d.prazo_horas, prioridade: d.prioridade, ativo, modelo: d.modelo !== (atual.modelo || '') ? 'alterado' : 'igual' });
     res.json({ ok: true });
   });
 

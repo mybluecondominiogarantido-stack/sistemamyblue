@@ -257,6 +257,19 @@ const FERRAMENTAS = {
       ['Configurações', 'Diária da ajuda de custo por região, como contar os dias e a lista de setores.'],
     ],
   },
+  rotinas: {
+    video: true,
+    nome: 'Calendário de Rotinas',
+    descricao: 'As rotinas do Administrativo/Financeiro num calendário: o que é feito em cada dia do mês, quem é o responsável e em que pé está (feito, em execução, aguardando a gestora, pausado ou pendente).',
+    dados: 'As rotinas, os status de cada dia e as folgas ficam no banco do portal e são compartilhados pela equipe, ao vivo.',
+    abas: [
+      ['Calendário', 'Indicadores do mês (concluídas, em execução, aguardando a gestora e atrasadas) e a grade do mês. Clique no dia: o painel lista as rotinas previstas para marcar o status e escrever uma observação. Os dias úteis descontam fins de semana e feriados (nacionais, do Ceará, de Fortaleza e as folgas cadastradas); rotina de dia fixo que cai sem expediente passa para o próximo dia útil.'],
+      ['Por atividade', 'Cada rotina com o responsável, quando é feita (todo dia útil, dias fixos, enésimo dia útil ou dia da semana) e os dias do mês coloridos pelo status. A gestora cadastra, edita e exclui rotinas.'],
+      ['Aguardando gestora', 'Tudo o que espera o retorno da gestora, de todos os meses, do mais antigo para o mais novo, com há quantos dias está parado e a observação. A gestora responde ali mesmo (Feito, Em execução ou Pendente).'],
+      ['Feriados e folgas', 'Os dias sem expediente além dos feriados fixos (ex.: ponto facultativo), cadastrados pela gestora.'],
+    ],
+    obs: 'O papel <b>Gestora administrativa</b> (identificador <code>gestora</code>), dado no portal em <b>Quem abre e com qual papel</b>, cadastra rotinas e folgas e recebe os avisos. Ao marcar uma rotina como <b>Aguardando gestora</b>, quem tem o papel recebe o aviso no sino e por e-mail; quando ela responde, quem marcou é avisado. Sem ninguém no papel, o aviso vai à coordenação do setor. Com acesso só de consulta, a pessoa vê tudo sem os botões de gravar.',
+  },
   // as regras e os percentuais ficam só na ferramenta (fora do repositório) e no banco do portal: aqui, nada de valores
   premiacoes: {
     video: true,
@@ -442,7 +455,7 @@ const SETORES = [
   {
     nome: 'Administrativa/Financeira', arquivo: 'administrativa-financeira',
     papel: 'Cuida das rotinas administrativas e financeiras da MyBlue: pagamentos, notas fiscais, reembolsos, contas da empresa, patrocínios de eventos dos condomínios e viagens a trabalho. É responsável também por Suprimentos, Parceiros e Comissões de Novos Condomínios.',
-    ferramentas: ['patrocinio', 'viagens', 'premiacoes'],
+    ferramentas: ['patrocinio', 'viagens', 'premiacoes', 'rotinas'],
     // subáreas sob a responsabilidade da Administrativa/Financeira (no portal, Suprimentos e Parceiros recebem tickets como setores próprios)
     subareas: [
       {

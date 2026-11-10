@@ -2119,7 +2119,8 @@
         '<datalist id="tCondLista">' + conds.map(function (c) { return '<option value="' + esc(c.rotulo) + '"></option>'; }).join('') + '</datalist></div>' +
         '<div class="ajuda" id="tDestino" hidden></div>' +
         '<div><label class="rot" for="tTitulo">Assunto</label><input class="campo" id="tTitulo" maxlength="160" placeholder="Resumo da demanda em uma linha"></div>' +
-        '<div><label class="rot" for="tDesc">Descrição</label><textarea class="campo" id="tDesc" rows="6" maxlength="10000" placeholder="O que precisa ser feito, unidade, valores, datas… Quanto mais detalhe, mais rápido o atendimento."></textarea></div>' +
+        '<div><label class="rot" for="tDesc">Descrição</label><textarea class="campo" id="tDesc" rows="6" maxlength="10000" placeholder="O que precisa ser feito, unidade, valores, datas… Quanto mais detalhe, mais rápido o atendimento."></textarea>' +
+        '<div class="ajuda" id="tModelo" hidden>Este tipo de demanda tem um modelo: preencha cada item da descrição.</div></div>' +
         '<div class="grade-2"><div><label class="rot" for="tPrio">Prioridade</label><select class="campo" id="tPrio">' +
         ['baixa', 'media', 'alta', 'urgente'].map(function (p) { return '<option value="' + p + '"' + (p === 'media' ? ' selected' : '') + '>' + PRIO[p][0] + '</option>'; }).join('') + '</select>' +
         '<div class="ajuda" id="tPrazo"></div></div>' +
@@ -2162,10 +2163,15 @@
         '<option value="">Outro / não sei</option>' + s.categorias.map(function (c) { return '<option value="' + c.id + '">' + esc(c.nome) + '</option>'; }).join('');
       prazoAjuda();
     };
+    var modeloUsado = '';
     $('#tCat', m).onchange = function () {
       var s = setor();
       var c = s && s.categorias.find(function (x) { return String(x.id) === $('#tCat', m).value; });
       if (c) $('#tPrio', m).value = c.prioridade;
+      // modelo do tipo de demanda: entra na descrição se ela está vazia ou ainda é o modelo de outro tipo
+      var d = $('#tDesc', m), atual = d.value.trim();
+      if (!atual || atual === modeloUsado) { d.value = c && c.modelo ? c.modelo : ''; modeloUsado = d.value.trim(); }
+      $('#tModelo', m).hidden = !(c && c.modelo);
       prazoAjuda();
     };
     $('#tPrio', m).onchange = prazoAjuda;
@@ -3152,12 +3158,14 @@
               '<input class="campo" style="width:110px" type="number" min="1" data-campo="prazo_horas" value="' + (c.prazo_horas || '') + '" placeholder="h úteis" title="Prazo em horas de expediente">' +
               '<select class="campo" style="width:120px" data-campo="prioridade">' + ['baixa', 'media', 'alta', 'urgente'].map(function (p) { return '<option value="' + p + '"' + (p === c.prioridade ? ' selected' : '') + '>' + PRIO[p][0] + '</option>'; }).join('') + '</select>' +
               '<label class="linha" style="font-size:12.5px;font-weight:700;color:var(--muted)"><input type="checkbox" data-campo="ativo"' + (c.ativo ? ' checked' : '') + '> ativo</label>' +
-              '<button class="btn icon danger" data-apagar-cat="' + c.id + '" title="' + (c.tickets ? 'Já usado em ' + c.tickets + ' ticket(s): desative em vez de remover' : 'Remover tipo') + '"' + (c.tickets ? ' disabled' : '') + '>' + IC.fechar + '</button></div>';
+              '<button class="btn icon danger" data-apagar-cat="' + c.id + '" title="' + (c.tickets ? 'Já usado em ' + c.tickets + ' ticket(s): desative em vez de remover' : 'Remover tipo') + '"' + (c.tickets ? ' disabled' : '') + '>' + IC.fechar + '</button>' +
+              '<details style="flex-basis:100%"' + '><summary class="sec" style="cursor:pointer;font-size:12.5px;font-weight:700">' + (c.modelo ? 'Modelo da descrição (preenchido)' : 'Modelo da descrição (opcional)') + '</summary>' +
+              '<textarea class="campo" data-campo="modelo" rows="8" maxlength="3000" style="margin-top:6px" placeholder="O que a demanda precisa trazer. Ex.:&#10;Unidade:&#10;Valor:&#10;Motivo:">' + esc(c.modelo || '') + '</textarea></details></div>';
           }).join('') || '<div class="sec" style="padding:12px">Nenhum tipo cadastrado. Sem tipo, o prazo segue a prioridade.</div>') + '</div></div>' +
           '<div class="linha"><input class="campo" id="nCat" placeholder="Novo tipo (ex.: 2ª via de boleto)" style="flex:2;min-width:180px"><input class="campo" id="nPrazo" type="number" min="1" placeholder="h úteis" style="width:110px">' +
           '<select class="campo" id="nPrio" style="width:120px">' + ['baixa', 'media', 'alta', 'urgente'].map(function (p) { return '<option value="' + p + '"' + (p === 'media' ? ' selected' : '') + '>' + PRIO[p][0] + '</option>'; }).join('') + '</select>' +
           '<button class="btn ghost" id="btAddCat">' + IC.mais + 'Adicionar</button></div>' +
-          '<div class="ajuda">Prazo em horas de expediente (' + esc(textoExpediente()) + '; 9 h = 1 dia útil), contado da abertura. Em branco: usa o padrão da prioridade (urgente 4 h, alta 1 dia útil, média 3 dias úteis, baixa 5 dias úteis).</div>' +
+          '<div class="ajuda">Prazo em horas de expediente (' + esc(textoExpediente()) + '; 9 h = 1 dia útil), contado da abertura. Em branco: usa o padrão da prioridade (urgente 4 h, alta 1 dia útil, média 3 dias úteis, baixa 5 dias úteis). O <b>modelo da descrição</b> já vem escrito quando alguém abre um ticket desse tipo: use para listar o que a demanda precisa trazer.</div>' +
           '<div class="linha"><button class="btn primary" id="btSalvarCats">Salvar tipos</button></div></div>',
         pe: '<button class="btn ghost" data-fechar>Fechar</button>',
         aoFechar: function () { metaTickets = null; },
@@ -3192,8 +3200,8 @@
           for (var i = 0; i < linhas.length; i++) {
             var l = linhas[i];
             var c = s.categorias.find(function (x) { return x.id === Number(l.getAttribute('data-cat')); });
-            var novo = { nome: $('[data-campo=nome]', l).value.trim(), prazo_horas: $('[data-campo=prazo_horas]', l).value ? Number($('[data-campo=prazo_horas]', l).value) : null, prioridade: $('[data-campo=prioridade]', l).value, ativo: $('[data-campo=ativo]', l).checked };
-            if (novo.nome !== c.nome || novo.prazo_horas !== c.prazo_horas || novo.prioridade !== c.prioridade || novo.ativo !== c.ativo) await api('PATCH', '/api/admin/categorias/' + c.id, novo);
+            var novo = { nome: $('[data-campo=nome]', l).value.trim(), prazo_horas: $('[data-campo=prazo_horas]', l).value ? Number($('[data-campo=prazo_horas]', l).value) : null, prioridade: $('[data-campo=prioridade]', l).value, ativo: $('[data-campo=ativo]', l).checked, modelo: $('[data-campo=modelo]', l).value.trim() };
+            if (novo.nome !== c.nome || novo.prazo_horas !== c.prazo_horas || novo.prioridade !== c.prioridade || novo.ativo !== c.ativo || novo.modelo !== (c.modelo || '')) await api('PATCH', '/api/admin/categorias/' + c.id, novo);
           }
           toast('Tipos de demanda salvos.', 'ok'); m.fechar(); paginaEquipes();
         } catch (e) { toast(e.message, 'erro'); }

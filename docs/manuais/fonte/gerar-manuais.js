@@ -249,7 +249,7 @@ ${fig('21b-coord-html', 'Ferramenta do setor: HTML, versões anteriores e quem a
 <h2>Equipe e tipos de demanda</h2>
 <ul>
   <li>Marque os <b>líderes</b>: eles recebem os avisos de tickets novos e distribuem. Quem faz parte do setor vem do cadastro (para incluir alguém, use <i>Usuários do setor</i>).</li>
-  <li>Cadastre os <b>tipos de demanda</b> do setor, com prazo em horas úteis (9 h = 1 dia útil) e prioridade sugerida.</li>
+  <li>Cadastre os <b>tipos de demanda</b> do setor, com prazo em horas úteis (9 h = 1 dia útil), prioridade sugerida e, se quiser, o <b>modelo da descrição</b>: o que a demanda precisa trazer, que já vem escrito quando alguém abre um ticket desse tipo.</li>
 </ul>
 ${fig('23-coord-equipe', 'Equipe do setor: líderes e tipos de demanda.')}
 <h2>Tickets do setor</h2>
@@ -476,7 +476,7 @@ function manualGeral() {
   ${fig('15-usuarios', 'Usuários e acessos: perfil e setor de cada pessoa.')}
   <p>Para <b>bloquear</b> alguém, desmarque <i>Usuário ativo</i>: as sessões abertas são encerradas na hora. <b>Redefinir senha</b> gera uma nova senha temporária.</p>
   <h2>Equipes e tipos de demanda</h2>
-  <p>Em <b>Administração → Equipes e tipos de demanda</b>, cada setor tem um cartão. A equipe vem do setor no cadastro de cada pessoa (dá para ajustar aqui também). Marque os <b>líderes</b> e cadastre os <b>tipos de demanda</b>, com prazo em horas úteis e prioridade sugerida. Tipos já usados não podem ser apagados, só desativados.</p>
+  <p>Em <b>Administração → Equipes e tipos de demanda</b>, cada setor tem um cartão. A equipe vem do setor no cadastro de cada pessoa (dá para ajustar aqui também). Marque os <b>líderes</b> e cadastre os <b>tipos de demanda</b>, com prazo em horas úteis, prioridade sugerida e, se quiser, o <b>modelo da descrição</b> (os itens que quem abre o ticket preenche). Tipos já usados não podem ser apagados, só desativados.</p>
   ${fig('14b-equipe-setor', 'Configurando o setor: equipe, líder e tipos de demanda com prazo.')}
   ${atencao('Setor <b>sem ninguém</b>: os tickets dele só aparecem para a administração e a supervisão. Setor <b>sem líder</b> marcado: toda a equipe recebe os avisos de tickets novos.')}
   <h2>Módulos e dados</h2>
