@@ -8045,7 +8045,7 @@
           'Só executivos de negócios cadastrados pedem.') +
         opcao('parceria', 'Contrato de parceria', 'Contrato com uma empresa parceira (comissão de recorrência e de venda). Minuta em até 72h úteis.', podeCp,
           'Pedem: executivos, o Comercial, o CS e a diretoria.') +
-        opcao('demanda', 'Outra atividade jurídica', 'Aditivo, rescisão, análise de contrato de fornecedor, parecer e o que mais precisar. Abre um ticket para o Jurídico: o prazo depende da atividade e você acompanha em Tickets.', true, '') + '</div>',
+        opcao('demanda', 'Outra atividade jurídica (abre um ticket)', 'Aditivo, rescisão, análise de contrato de fornecedor, parecer e o que mais precisar. Abre um ticket para o Jurídico: o prazo depende da atividade e você acompanha em Tickets.', true, '') + '</div>',
       pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="pedJOk">Continuar</button>' });
     var marcado = $('input[name=tipoPedJ]:not([disabled])', mo);
     if (!podeCt && !podeCp) $('input[value=demanda]', mo).checked = true; else if (marcado) marcado.checked = true;
