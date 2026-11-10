@@ -94,6 +94,27 @@ test('admin monta a equipe do setor e os tipos de demanda', async () => {
   assert.equal((await lider('GET', '/api/admin/equipes')).status, 403);
 });
 
+test('tipo de demanda com modelo da descrição: quem abre o ticket recebe o modelo', async () => {
+  const modelo = 'Unidade:\nValor do estorno (R$):\n\nDados bancários\nBanco:   \r\nAgência:';
+  let r = await admin('POST', `/api/admin/equipes/${setorCredito}/categorias`, { nome: 'Estorno a cliente', prazo_horas: 9, prioridade: 'alta', modelo });
+  assert.equal(r.status, 201);
+  const id = r.json.id;
+  const cat = async () => (await solicitante('GET', '/api/tickets/meta')).json.setores.find((s) => s.id === setorCredito).categorias.find((c) => c.id === id);
+  // as quebras de linha ficam (é um formulário); espaços no fim das linhas e \r saem
+  assert.equal((await cat()).modelo, 'Unidade:\nValor do estorno (R$):\n\nDados bancários\nBanco:\nAgência:');
+  // editar só o modelo; os outros campos continuam
+  r = await admin('PATCH', `/api/admin/categorias/${id}`, { modelo: 'Unidade:\nMotivo:' });
+  assert.equal(r.status, 200);
+  const c = await cat();
+  assert.equal(c.modelo, 'Unidade:\nMotivo:');
+  assert.equal(c.prazo_horas, 9);
+  assert.equal(c.prioridade, 'alta');
+  // sem modelo: volta vazio
+  await admin('PATCH', `/api/admin/categorias/${id}`, { modelo: '' });
+  assert.equal((await cat()).modelo, '');
+  await admin('DELETE', `/api/admin/categorias/${id}`);
+});
+
 let ticket;
 test('qualquer pessoa abre ticket para um setor; prazo vem do tipo de demanda', async () => {
   assert.equal((await solicitante('POST', '/api/tickets', { interno: true, titulo: '', setor_id: setorCobranca })).status, 400);
