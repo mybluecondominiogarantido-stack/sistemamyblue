@@ -69,6 +69,8 @@ const TUTORIAIS = [
     descricao: 'Como usar a Central de Patrocínio.' },
   { slug: 'ferramenta-viagens', grupo: 'Ferramentas', publico: { modulo: 'gestao-de-viagens' }, titulo: 'Gestão de Viagens',
     descricao: 'Cotar hospedagem, passagens e ajuda de custo, aprovar a viagem, lançar o que foi pago e ver os gastos.' },
+  { slug: 'ferramenta-rotinas', grupo: 'Ferramentas', publico: { modulo: 'rotinas-adm' }, titulo: 'Calendário de Rotinas',
+    descricao: 'Marcar o status das rotinas do Administrativo/Financeiro, responder o que aguarda a gestora e cadastrar rotinas e folgas.' },
   { slug: 'ferramenta-premiacoes', grupo: 'Ferramentas', publico: { modulo: 'premiacoes' }, titulo: 'Gestão de Premiações',
     descricao: 'Pedir e importar as planilhas do mês, lançar cada setor, conferir no dashboard e no resumo, fechar e enviar os demonstrativos para Minhas Premiações.' },
   { slug: 'ferramenta-credito', grupo: 'Ferramentas', publico: { modulo: 'credito' }, titulo: 'Central de Ferramentas: Crédito',
