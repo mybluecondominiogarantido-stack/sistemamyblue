@@ -72,7 +72,8 @@ function planilhaCr() {
 }
 const FORM_CR = {
   razao_social: 'Condomínio Residencial Jardim das Acácias', cnpj: '11.222.333/0001-81', uf: 'CE', cidade: 'Fortaleza', tipo_contratacao: 'nova', administradora: 'Administradora Exemplo',
-  sistema_gestao: 'Superlógica', uh_total: 24, taxa_ordinaria: 1840, dia_vencimento: 10, desconto_pontualidade: { tipo: 'nenhum' }, agua_gas: { compoe_boleto: false },
+  sistema_gestao: 'Superlógica', uh_total: 24, taxa_ordinaria: 1840, dia_vencimento: 10, desconto_pontualidade: { tipo: 'nenhum' }, agua_gas: { modo: 'unidade', por_unidade: 35, compoe_boleto: false },
+  custo_boleto_atual: 2.8,
   taxas_extras: [{ descricao: 'Reforma da fachada', valor_por_uh: 700, inicio: '2026-01', fim: '2026-12', ata: true }], sindico: { tipo: 'condomino', isencao: 'integral' }, uh_isentas_informadas: 1,
 };
 /* análise pedida pela executiva (Vera) e enviada; com "liberar", o analista (Tiago) faz tudo e libera o retorno */
@@ -965,6 +966,12 @@ module.exports = [
       await t.digitar('#fUh', '24', { atraso: 90 });
       await t.digitar('#fOrd', '1.840,00', { atraso: 60 });
       await t.digitar('#fVenc', '10', { atraso: 90 });
+      await t.legenda('Água + gás: escolha primeiro se vai informar <b>por unidade</b> ou o <b>valor total</b> (média mensal). O campo aparece depois.', { etapa: B, ms: 400 });
+      await t.escolher('#fAgM', { value: 'unidade' });
+      await t.digitar('#fAgV', '35,00', { atraso: 70 });
+      await t.legenda('O <b>custo atual do boleto</b> é obrigatório. Se o condomínio não souber, marque <b>Não sei</b>: a análise vai para a chancela da diretoria.', { etapa: B, ms: 500 });
+      await t.digitar('#fBol', '2,80', { atraso: 80 });
+      await t.mostrar('#fBolNs', 1800);
       await t.legenda('Taxa extra: informe o <b>valor por unidade</b>, não o total, com início e fim.', { etapa: B, ms: 400 });
       await t.clicar('#btExtra', { depois: 600 });
       await t.digitar('#tbExtras [data-x=descricao]', 'Reforma da fachada', { atraso: 35 });
@@ -1099,6 +1106,7 @@ module.exports = [
       await t.mostrar('#i_sindico_cpf', 2200);
       await t.legenda('Parceria: só diga se há e escolha o parceiro da base de comissão; o percentual é do setor Parceiros.', { etapa: B, ms: 500 });
       await t.clicar('input[name=i_parceria][value=nao]', { depois: 500 });
+      await t.legenda('Antecipação: se foi negociada, os dados vêm <b>conforme o contrato</b>. Se ainda faltarem, dá para enviar: ficam como pendência.', { etapa: B, ms: 500 });
       await t.clicar('input[name=i_antecipacao][value=nao]', { depois: 600 });
       await t.legenda('Administradora e contatos: o consultor do condomínio e, no <b>+</b>, quantos contatos precisar.', { etapa: B, ms: 400 });
       await t.digitar('#i_consultor_nome', 'Consultor Fictício', { atraso: 35 });
@@ -1339,10 +1347,17 @@ module.exports = [
       await t.digitar('#c_sindico_telefone', '(85) 90000-0000', { atraso: 45 });
       await t.legenda('Taxa e boleto negociados: embaixo fica o valor da análise, e a diferença aparece para o Jurídico.', { etapa: B, ms: 500 });
       await t.mostrar('#c_taxa_adm', 2400);
+      await t.legenda('Taxa administrativa abaixo de <b>2%</b> vai para a diretoria comercial, e boleto abaixo de <b>R$ 1,50</b> vai para a diretoria. O aviso aparece embaixo do campo.', { etapa: B, ms: 500 });
+      await t.mostrar('#c_boleto', 2400);
       await t.legenda('Marque o que vamos garantir. <b>Fundo de obras</b> não está no contrato-modelo: o portal avisa para confirmar com o Jurídico.', { etapa: B, ms: 400 });
       await t.clicar('[data-marca-ct=garantias][value="Taxa ordinária"]', { depois: 500 });
-      await t.legenda('A taxa extra aparece em % da ordinária. A cobertura padrão é 40%; acima de 60%, a diretoria decide antes da minuta.', { etapa: B, ms: 400 });
-      await t.mostrar('#c_taxa_extra', 2600);
+      await t.clicar('[data-marca-ct=garantias][value="Taxa extraordinária"]', { depois: 700 });
+      await t.legenda('A taxa extra vigente aparece em % da ordinária. Em <b>Taxa extra coberta até</b>, o padrão é 40%; você pode pedir 60%, 80% ou 100%.', { etapa: B, ms: 400 });
+      await t.mostrar('#c_taxa_extra', 2400);
+      await t.escolher('#c_limite_extra', { value: '80' });
+      await t.legenda('Até 60%, segue direto para o Jurídico. <b>Acima de 60%</b>, vai para a aprovação da diretoria e depois para o Jurídico.', { etapa: B, ms: 400 });
+      await t.mostrar('#c_limite_extra', 2600);
+      await t.escolher('#c_limite_extra', { value: '40' });
       await t.clicar('input[name=c_cashback][value=nao]', { depois: 500 });
       await t.preencherCampo('#c_inicio_contrato', dia1());
       await t.preencherCampo('#c_primeiro_vencimento', dia10());
@@ -1413,6 +1428,8 @@ module.exports = [
       await t.legenda('Com o contrato assinado anexado, você registra as <b>condições fechadas</b>. Elas vêm do pedido: corrija o que mudou na negociação.', { etapa: C, ms: 1200 });
       await t.mostrar('#fechadoCt', 2400);
       await t.digitar('#c_f_taxa_adm', '2,9', { atraso: 80 });
+      await t.legenda('Se o contrato trouxer, marque a <b>Isenção de Despesas Cartorárias</b> e a <b>Isenção de Custas Judiciais</b>: seguem para a Implantação.', { etapa: C, ms: 500 });
+      await t.mostrar('#c_f_isencao_cartorio', 2400);
       await t.legenda('Foro e prazo de contestação já vêm com o que o síndico pediu. Para cada cláusula pedida, diga como ficou e, se quiser, a redação.', { etapa: C, ms: 800 });
       for (const sel of await t.p.$$('[data-clausula] [data-k=resultado]')) { await sel.scrollIntoViewIfNeeded(); await sel.selectOption('aceito'); await t.pausa(900); }
       await t.legenda('<b>Salvar</b> guarda sem concluir e mostra o que ainda falta: aqui, os <b>honorários</b> de cobrança extrajudicial.', { etapa: C, ms: 300 });
