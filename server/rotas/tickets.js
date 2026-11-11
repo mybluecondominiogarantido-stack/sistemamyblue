@@ -12,6 +12,7 @@
  */
 const express = require('express');
 const carteira = require('../carteira');
+const { criarXlsx } = require('../xlsx');
 
 const PRIORIDADES = ['baixa', 'media', 'alta', 'urgente'];
 const STATUS = ['novo', 'em_andamento', 'aguardando', 'resolvido', 'cancelado'];
@@ -480,10 +481,11 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
   });
 
   /* ===================== painel de indicadores ===================== */
-  r.get('/api/tickets/painel/indicadores', async (req, res) => {
+  // indicadores do Painel de tickets (tela e Excel): null quando a pessoa não tem setor para ver
+  async function indicadores(req) {
     const u = req.usuario;
     const equipes = await equipesDe(u);
-    if (!ehGestor(u) && !equipes.size) return erro(res, 403, 'O painel mostra os setores de que você faz parte.');
+    if (!ehGestor(u) && !equipes.size) return null;
     const dias = Math.min(Math.max(Number(req.query.dias) || 30, 1), 365);
     const args = [dias];
     let escopo = 'TRUE';
@@ -509,7 +511,37 @@ function rotasTickets({ db, seg, cfg, avisos, expediente }) {
     const porCategoria = (await db.q(`SELECT COALESCE(c.nome, 'Sem tipo') AS nome, s.nome AS setor, COUNT(*)::int AS n FROM tickets t
       JOIN setores s ON s.id = t.setor_id LEFT JOIN ticket_categorias c ON c.id = t.categoria_id
       WHERE ${escopo} AND t.criado_em >= now() - ($1::int * interval '1 day') GROUP BY c.nome, s.nome ORDER BY n DESC LIMIT 15`, args)).rows;
-    res.json({ dias, geral, por_setor: porSetor, por_pessoa: porPessoa, por_status: porStatus, por_categoria: porCategoria });
+    // últimos 12 meses: abertos e resolvidos em cada mês (o gráfico do painel)
+    const porMes = (await db.q(`SELECT to_char(m, 'YYYY-MM') AS mes,
+        COUNT(t.id) FILTER (WHERE date_trunc('month', t.criado_em) = m)::int AS abertos,
+        COUNT(t.id) FILTER (WHERE t.status = 'resolvido' AND date_trunc('month', t.resolvido_em) = m)::int AS resolvidos
+      FROM generate_series(date_trunc('month', now()) - interval '11 months', date_trunc('month', now()), interval '1 month') AS m
+      LEFT JOIN tickets t ON $1::int > 0 AND ${escopo} AND (date_trunc('month', t.criado_em) = m OR date_trunc('month', t.resolvido_em) = m)
+      GROUP BY m ORDER BY m`, args)).rows;
+    return { dias, geral, por_setor: porSetor, por_pessoa: porPessoa, por_status: porStatus, por_categoria: porCategoria, por_mes: porMes };
+  }
+
+  r.get('/api/tickets/painel/indicadores', async (req, res) => {
+    const r = await indicadores(req);
+    if (!r) return erro(res, 403, 'O painel mostra os setores de que você faz parte.');
+    res.json(r);
+  });
+
+  r.get('/api/tickets/painel/indicadores.xlsx', async (req, res) => {
+    const r = await indicadores(req);
+    if (!r) return erro(res, 403, 'O painel mostra os setores de que você faz parte.');
+    const pct = (a, b) => (b ? Math.round(a / b * 100) : null);
+    const metricas = (x) => [x.abertos, x.atrasados, x.resolvidos, pct(x.no_prazo, x.resolvidos), x.horas_resolucao];
+    const cab = ['Em aberto', 'Atrasados', 'Resolvidos', '% no prazo', 'Tempo médio de resolução (h)'];
+    const buf = criarXlsx([
+      { titulo: 'Por setor', cab: ['Setor', ...cab], linhas: r.por_setor.map((x) => [x.nome, ...metricas(x)]) },
+      { titulo: 'Por responsável', cab: ['Pessoa', ...cab], linhas: r.por_pessoa.map((x) => [x.nome, ...metricas(x)]) },
+      { titulo: 'Por mês', cab: ['Mês', 'Abertos', 'Resolvidos'], linhas: r.por_mes.map((x) => [x.mes, x.abertos, x.resolvidos]) },
+      { titulo: 'Tipos de demanda', cab: ['Tipo', 'Setor', 'Tickets'], linhas: r.por_categoria.map((x) => [x.nome, x.setor, x.n]) },
+    ]);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="painel-de-tickets-${r.dias}-dias.xlsx"`);
+    res.send(buf);
   });
 
   /* ===================== avisos (sino) ===================== */
