@@ -27,6 +27,7 @@ const express = require('express');
 const I = require('../juridico/importacao');
 const { lerPlanilha } = require('../planilha');
 const { criarXlsx } = require('../xlsx');
+const JD = require('../juridico/demandas');
 
 const STATUS = { pendente: 'Pendente', em_andamento: 'Em andamento', aguardando_retorno: 'Aguardando retorno', pronto_assinatura: 'Pronto para assinatura', aguardando_assinaturas: 'Aguardando assinaturas',
   concluido: 'Concluído', contrato_perdido: 'Contrato perdido' };
@@ -37,7 +38,7 @@ const SETOR_JURIDICO = 'Jurídico';
 const PERMISSAO = 'contratos.elaborar';
 const HORAS_CONTRATO = 72; // Solicitação de Contrato (e de Contrato Parceria): minuta em 72h úteis
 const TIPO_PARCERIA = 'Contrato de Parceria';
-const CANAIS = { portal: 'Portal', email: 'E-mail', whatsapp: 'WhatsApp', telefone: 'Telefone', reuniao: 'Reunião', planilha: 'Planilha (importada)' };
+const CANAIS = { portal: 'Portal', ticket: 'Ticket', email: 'E-mail', whatsapp: 'WhatsApp', telefone: 'Telefone', reuniao: 'Reunião', planilha: 'Planilha (importada)' };
 const DIAS_PARADO = 15; // aviso semanal: o que espera por quem pediu há 15 dias ou mais
 const DIAS_ENTRE_AVISOS = 7;
 // etapas da Solicitação de Contrato (e da Parceria) em que o pedido espera por quem pediu
@@ -171,12 +172,14 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
     const hoje = diaBrasilia();
     const args = [];
     const v = (x) => { args.push(x); return '$' + args.length; };
-    const onde = vis === 'minhas' ? `WHERE (d.solicitante_id = ${v(u.id)} OR d.criado_por = $1)` : vis && vis.id ? `WHERE d.id = ${v(vis.id)}` : '';
+    // em Meus pedidos, o que foi pedido por ticket fica só na Central de Tickets (quem pediu acompanha pelo ticket)
+    const onde = vis === 'minhas' ? `WHERE (d.solicitante_id = ${v(u.id)} OR d.criado_por = $1) AND d.ticket_id IS NULL` : vis && vis.id ? `WHERE d.id = ${v(vis.id)}` : '';
     const manuais = (await db.q(`SELECT d.id, d.numero, d.status, d.tipo_id, t.nome AS tipo, d.solicitante_id, d.solicitante_nome, d.setor, d.uf, d.cliente, d.condominio_id,
         d.objeto, d.observacoes, d.responsavel_id, ur.nome AS responsavel_nome, d.solicitada_em::text AS solicitada_em, d.horas, d.prazo::text AS prazo,
-        d.entregue_em::text AS entregue_em, d.assinado_em::text AS assinado_em, d.status_em::text AS status_em, d.importacao_id, d.criado_por, d.criado_em, d.atualizado_em, d.canal
+        d.entregue_em::text AS entregue_em, d.assinado_em::text AS assinado_em, d.status_em::text AS status_em, d.importacao_id, d.criado_por, d.criado_em, d.atualizado_em, d.canal,
+        d.protocolo, d.ticket_id
       FROM juridico_demandas d JOIN juridico_tipos t ON t.id = d.tipo_id LEFT JOIN usuarios ur ON ur.id = d.responsavel_id ${onde}`, args)).rows
-      .map((d) => ({ ...d, origem: 'demanda', ref: String(d.numero), espera_voce: d.status === 'aguardando_retorno' }));
+      .map((d) => ({ ...d, origem: 'demanda', ref: d.protocolo || String(d.numero), espera_voce: d.status === 'aguardando_retorno' }));
     const tipoCt = (await db.um('SELECT id, nome FROM juridico_tipos WHERE contratos ORDER BY id LIMIT 1')) || { id: null, nome: 'Contrato (Solicitação de Contrato)' };
     // a parceria entra no tipo de parceria da Tabela de prazos (ex.: "Contrato (parcerias)"), se houver
     const tipoCp = (await db.um("SELECT id, nome FROM juridico_tipos WHERE nome ILIKE '%parceri%' ORDER BY ordem, id LIMIT 1")) || { id: null, nome: TIPO_PARCERIA };
@@ -475,21 +478,18 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
     const prazo = prazoDe(solicitada, tipo.horas);
     const condominio = await condominioDe(cliente);
     const novo = await db.tx(async (t) => {
-      await t.q('SELECT pg_advisory_xact_lock(7240514)');
-      const { n } = await t.um('SELECT COALESCE(MAX(numero), 0) + 1 AS n FROM juridico_demandas');
-      const d = await t.um(`INSERT INTO juridico_demandas (numero, tipo_id, status, solicitante_id, solicitante_nome, setor, uf, cliente, condominio_id, objeto, observacoes,
-          responsavel_id, solicitada_em, horas, prazo, entregue_em, criado_por, aviso_vence_em, aviso_atraso_em, canal, status_em)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $18, $19, $20) RETURNING id, numero`,
-      [n, tipo.id, status, solicitanteId, solicitanteNome, setor, uf, cliente, condominio, texto(b.objeto, 2000), texto(b.observacoes, 2000), responsavel, solicitada,
-        tipo.horas, prazo, entregue, u.id, prazo < hoje ? hoje : null, canal, status === 'pendente' ? solicitada : hoje]); // lançada com o prazo já vencido: não avisa o atraso (já se sabe)
-      await evento(t, d.id, u.id, 'criada', { status, tipo: tipo.nome, canal });
+      const d = await JD.inserir(t, { tipo_id: tipo.id, status, solicitante_id: solicitanteId, solicitante_nome: solicitanteNome, setor, uf, cliente, condominio_id: condominio,
+        objeto: texto(b.objeto, 2000), observacoes: texto(b.observacoes, 2000), responsavel_id: responsavel, solicitada_em: solicitada, horas: tipo.horas, prazo,
+        entregue_em: entregue, criado_por: u.id, aviso_vence_em: prazo < hoje ? hoje : null, // lançada com o prazo já vencido: não avisa o atraso (já se sabe)
+        canal, status_em: status === 'pendente' ? solicitada : hoje });
+      await evento(t, d.id, u.id, 'criada', { status, tipo: tipo.nome, canal, protocolo: d.protocolo });
       return d;
     });
-    const titulo = `Demanda #${novo.numero} · ${tipo.nome} · ${cliente}`;
+    const titulo = `Demanda ${novo.protocolo} · ${tipo.nome} · ${cliente}`;
     if (!p.juridico) {
       await avisos.notificar(await equipeJuridica(db, regras), { tipo: 'juridico', link: link(novo.id), email: true, autor_id: u.id,
         titulo: `Nova demanda para o Jurídico · ${tipo.nome}`, texto: `${u.nome} pediu: ${tipo.nome} · ${cliente}${b.objeto ? ' — ' + texto(b.objeto, 200) : ''}. Prazo: ${dataBr(prazo)}.`,
-        detalhes: { linhas: [['Demanda', `#${novo.numero}`], ['Atividade', tipo.nome], ['Cliente', cliente], ['Solicitante', u.nome], ['Prazo de entrega', dataBr(prazo)]],
+        detalhes: { linhas: [['Demanda', novo.protocolo], ['Atividade', tipo.nome], ['Cliente', cliente], ['Solicitante', u.nome], ['Prazo de entrega', dataBr(prazo)]],
           pre: texto(b.objeto, 1500) || null, botao: 'Abrir a demanda' } });
     } else {
       if (solicitanteId && solicitanteId !== u.id) {
@@ -502,7 +502,7 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
       }
     }
     await seg.auditar(req, 'juridico_demanda_criada', null, { id: novo.id, numero: novo.numero, tipo: tipo.nome });
-    res.status(201).json({ ok: true, id: novo.id, numero: novo.numero, prazo });
+    res.status(201).json({ ok: true, id: novo.id, numero: novo.numero, protocolo: novo.protocolo, prazo });
   });
 
   /* o Jurídico conduz: situação, entrega, responsável e os dados do pedido */
@@ -575,21 +575,52 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
       if (tipo) { de.tipo = d.tipo; para.tipo = tipo.nome; }
       await evento(t, d.id, u.id, novo.status !== d.status ? 'status' : 'editada', { de, para });
     });
-    const titulo = `#${d.numero} · ${tipo ? tipo.nome : d.tipo} · ${novo.cliente}`;
+    const titulo = `${d.protocolo || '#' + d.numero} · ${tipo ? tipo.nome : d.tipo} · ${novo.cliente}`;
     if (novo.status !== d.status && novo.solicitante_id) {
       await avisos.notificar([novo.solicitante_id], { tipo: 'juridico', link: link(d.id), email: AVISA_EMAIL.includes(novo.status), autor_id: u.id,
         titulo: `${STATUS[novo.status]} · demanda ${titulo}`,
         texto: novo.status === 'aguardando_retorno' ? `O Jurídico aguarda o seu retorno. ${novo.observacoes ? 'Observações: ' + texto(novo.observacoes, 300) : 'Responda pelo comentário da demanda.'}`
           : `${u.nome} mudou a situação de ${STATUS[d.status]} para ${STATUS[novo.status]}.`,
-        detalhes: { linhas: [['Demanda', `#${d.numero}`], ['Atividade', tipo ? tipo.nome : d.tipo], ['Cliente', novo.cliente], ['Situação', STATUS[novo.status]],
+        detalhes: { linhas: [['Demanda', d.protocolo || `#${d.numero}`], ['Atividade', tipo ? tipo.nome : d.tipo], ['Cliente', novo.cliente], ['Situação', STATUS[novo.status]],
           ['Entrega', novo.entregue_em ? dataBr(novo.entregue_em) : null]], botao: 'Abrir a demanda' } });
     }
+    if (d.ticket_id) await espelharNoTicket(d, novo, u);
     if (novo.responsavel_id && novo.responsavel_id !== d.responsavel_id && novo.responsavel_id !== u.id) {
       await avisos.notificar([novo.responsavel_id], { tipo: 'juridico', link: link(d.id), email: true, autor_id: u.id, titulo: `Demanda com você · ${titulo}`,
         texto: `${u.nome} deixou com você. Prazo de entrega: ${dataBr(novo.prazo)}.` });
     }
     res.json({ ok: true, mudou, prazo: novo.prazo, entregue_em: novo.entregue_em });
   });
+
+  /* pedido aberto por ticket: o ticket de quem pediu acompanha a situação, o responsável e o prazo da demanda */
+  async function espelharNoTicket(d, novo, u) {
+    const tk = await db.um('SELECT id, status, responsavel_id FROM tickets WHERE id = $1', [d.ticket_id]);
+    if (!tk) return;
+    const sets = [];
+    const args = [tk.id];
+    const set = (campo, valor) => { args.push(valor); sets.push(`${campo} = $${args.length}`); };
+    const eventos = [];
+    const st = JD.STATUS_TICKET[novo.status];
+    if (novo.status !== d.status && st && st !== tk.status) {
+      set('status', st);
+      if (st === 'resolvido') sets.push('resolvido_em = now()');
+      eventos.push(['status', `Pelo Jurídico (demanda ${d.protocolo || '#' + d.numero}): ${STATUS[novo.status]}.`, { de: tk.status, para: st }]);
+    }
+    if (novo.responsavel_id && novo.responsavel_id !== tk.responsavel_id) {
+      const r = await db.um('SELECT nome FROM usuarios WHERE id = $1', [novo.responsavel_id]);
+      set('responsavel_id', novo.responsavel_id);
+      sets.push('primeira_resposta_em = COALESCE(primeira_resposta_em, now())');
+      eventos.push(['atribuicao', null, { para: r ? r.nome : '', para_id: novo.responsavel_id }]);
+    }
+    if (novo.prazo !== d.prazo) set('prazo_conclusao', JD.fimDoDia(novo.prazo));
+    if (!sets.length) return;
+    await db.tx(async (t) => {
+      await t.q(`UPDATE tickets SET ${sets.join(', ')}, atualizado_em = now() WHERE id = $1`, args);
+      for (const [tipo, txt, det] of eventos) {
+        await t.q('INSERT INTO ticket_eventos (ticket_id, usuario_id, tipo, texto, interno, detalhe) VALUES ($1, $2, $3, $4, FALSE, $5::jsonb)', [tk.id, u.id, tipo, txt, JSON.stringify(det)]);
+      }
+    });
+  }
 
   /* comentário: quem pediu responde ao Jurídico (e o Jurídico a quem pediu) */
   r.post('/api/juridico/demandas/:id/comentario', json, async (req, res) => {
@@ -603,8 +634,8 @@ function rotasJuridico({ db, seg, avisos, regras, expediente }) {
     const para = p.juridico && d.solicitante_id !== req.usuario.id ? [d.solicitante_id, d.responsavel_id]
       : d.responsavel_id ? [d.responsavel_id] : await equipeJuridica(db, regras);
     await avisos.notificar(para.filter(Boolean), { tipo: 'juridico', link: link(d.id), email: true, autor_id: req.usuario.id,
-      titulo: `Comentário na demanda #${d.numero} · ${d.tipo} · ${d.cliente}`, texto: `${req.usuario.nome}: ${texto(t, 300)}`,
-      detalhes: { linhas: [['Demanda', `#${d.numero}`], ['Atividade', d.tipo], ['Cliente', d.cliente]], pre: t, botao: 'Abrir a demanda' } });
+      titulo: `Comentário na demanda ${d.protocolo || '#' + d.numero} · ${d.tipo} · ${d.cliente}`, texto: `${req.usuario.nome}: ${texto(t, 300)}`,
+      detalhes: { linhas: [['Demanda', d.protocolo || `#${d.numero}`], ['Atividade', d.tipo], ['Cliente', d.cliente]], pre: t, botao: 'Abrir a demanda' } });
     res.status(201).json({ ok: true });
   });
 

@@ -2097,7 +2097,8 @@
   }
 
   /* ---------- novo ticket ---------- */
-  async function novoTicket() {
+  async function novoTicket(opcoes) {
+    opcoes = opcoes || {};
     var meta;
     try { meta = await carregarMeta(); } catch (e) { toast(e.message, 'erro'); return; }
     // condomínios da carteira; nomes repetidos (mesmo nome em outra UF) levam a UF
@@ -2129,7 +2130,16 @@
       pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="btCriarT">Abrir ticket</button>',
     });
     function setor() { return meta.setores.find(function (s) { return String(s.id) === $('#tSetor', m).value; }); }
+    // Jurídico: o tipo é a atividade da Tabela de prazos (o prazo de entrega vem dela)
+    var jur = meta.juridico;
+    function ehJuridico() { var s = setor(); return !!(s && jur && s.id === jur.setor_id); }
+    function tipoJur() { var v = $('#tCat', m).value; return ehJuridico() && v ? jur.tipos.find(function (x) { return String(x.id) === v; }) : null; }
     function prazoAjuda() {
+      if (ehJuridico()) {
+        var tj = tipoJur();
+        $('#tPrazo', m).textContent = tj ? 'Prazo de entrega do Jurídico: ' + dataBr(tj.prazo) + ' (' + tj.nome + ', da Tabela de prazos). O pedido entra nas Demandas Jurídicas com protocolo.' : 'Escolha a atividade: o prazo de entrega vem da Tabela de prazos do Jurídico.';
+        return;
+      }
       var s = setor();
       var c = s && s.categorias.find(function (x) { return String(x.id) === $('#tCat', m).value; });
       var h = c && c.prazo_horas ? c.prazo_horas : meta.prazo_padrao_horas[$('#tPrio', m).value];
@@ -2158,6 +2168,13 @@
       destino();
       var s = setor();
       var sel = $('#tCat', m);
+      if (ehJuridico()) {
+        sel.disabled = !jur.tipos.length;
+        sel.innerHTML = !jur.tipos.length ? '<option value="">O Jurídico ainda não tem atividades na Tabela de prazos</option>' :
+          '<option value="">Escolha a atividade</option>' + jur.tipos.map(function (c) { return '<option value="' + c.id + '">' + esc(c.nome) + '</option>'; }).join('');
+        prazoAjuda();
+        return;
+      }
       sel.disabled = !s || !s.categorias.length;
       sel.innerHTML = !s ? '<option value="">Escolha o setor primeiro</option>' : !s.categorias.length ? '<option value="">Este setor não tem tipos cadastrados</option>' :
         '<option value="">Outro / não sei</option>' + s.categorias.map(function (c) { return '<option value="' + c.id + '">' + esc(c.nome) + '</option>'; }).join('');
@@ -2165,6 +2182,7 @@
     };
     var modeloUsado = '';
     $('#tCat', m).onchange = function () {
+      if (ehJuridico()) { prazoAjuda(); return; }
       var s = setor();
       var c = s && s.categorias.find(function (x) { return String(x.id) === $('#tCat', m).value; });
       if (c) $('#tPrio', m).value = c.prioridade;
@@ -2175,6 +2193,10 @@
       prazoAjuda();
     };
     $('#tPrio', m).onchange = prazoAjuda;
+    if (opcoes.setor) {
+      var pre = meta.setores.find(function (s) { return s.nome === opcoes.setor; });
+      if (pre) { $('#tSetor', m).value = String(pre.id); $('#tSetor', m).onchange(); }
+    }
     prazoAjuda();
     $('#btCriarT', m).onclick = async function () {
       var bt = this;
@@ -2184,17 +2206,19 @@
       var cond = origem() === 'condominio' ? condominio() : null;
       if (origem() === 'condominio' && !cond) { msg.textContent = 'Escolha o condomínio da lista.'; msg.hidden = false; return; }
       if (!$('#tTitulo', m).value.trim()) { msg.textContent = 'Informe o assunto.'; msg.hidden = false; return; }
+      if (ehJuridico() && !tipoJur()) { msg.textContent = 'Escolha a atividade jurídica.'; msg.hidden = false; return; }
       bt.disabled = true;
       try {
         var r = await api('POST', '/api/tickets', {
-          setor_id: Number($('#tSetor', m).value), categoria_id: $('#tCat', m).value ? Number($('#tCat', m).value) : null,
+          setor_id: Number($('#tSetor', m).value), categoria_id: !ehJuridico() && $('#tCat', m).value ? Number($('#tCat', m).value) : null,
+          juridico_tipo_id: ehJuridico() && tipoJur() ? tipoJur().id : null,
           prioridade: $('#tPrio', m).value, titulo: $('#tTitulo', m).value, descricao: $('#tDesc', m).value,
           interno: !cond, condominio_id: cond ? cond.id : null,
         });
         var arqs = Array.prototype.slice.call($('#tArq', m).files);
         if (arqs.length) await enviarAnexos(r.id, arqs, false);
         m.fechar();
-        toast('Ticket ' + numTicket(r.id) + ' aberto' + (r.responsavel ? ' e enviado para ' + r.responsavel.nome : '') + '.', 'ok');
+        toast('Ticket ' + numTicket(r.id) + ' aberto' + (r.demanda ? ' · pedido ' + r.demanda.protocolo + ', prazo de entrega ' + dataBr(r.demanda.prazo) : r.responsavel ? ' e enviado para ' + r.responsavel.nome : '') + '.', 'ok');
         location.hash = '#/tickets/' + r.id;
       } catch (e) { msg.textContent = e.message; msg.hidden = false; bt.disabled = false; }
     };
@@ -2278,6 +2302,7 @@
       case 'prioridade': return 'mudou a prioridade de ' + etqPrio(d.de) + ' para ' + etqPrio(d.para);
       case 'prazo': return 'mudou o prazo para resposta para <b>' + (d.para ? quando(d.para) : 'sem prazo') + '</b>';
       case 'anexo': return 'anexou <b>' + esc(d.nome || 'arquivo') + '</b>';
+      case 'juridico': return 'registrou o pedido nas <b>Demandas Jurídicas</b>' + (d.protocolo ? ' (' + esc(d.protocolo) + ')' : '');
       default: return esc(e.tipo);
     }
   }
@@ -2329,6 +2354,10 @@
     $('#conteudo').innerHTML = '<div class="pagina ticket">' +
       '<div class="cab-ticket"><div><span class="setor-cartao">' + numTicket(t.id) + ' · ' + esc(t.setor_nome) + (t.categoria_nome ? ' · ' + esc(t.categoria_nome) : '') + '</span>' +
       '<h1>' + esc(t.titulo) + '</h1><div class="linha">' + etqStatus(t.status) + etqPrio(t.prioridade) + (t.atrasado ? '<span class="etiqueta vermelha">⚠ atrasado</span>' : '') + '</div></div></div>' +
+      (d.demanda_juridica ? '<div class="msg info" style="margin-bottom:16px"><b>Pedido ao Jurídico <a href="#/juridico/demanda/' + d.demanda_juridica.id + '">' + esc(d.demanda_juridica.protocolo || '') + '</a></b> · ' +
+        esc(d.demanda_juridica.tipo) + ' · prazo de entrega <b>' + dataBr(d.demanda_juridica.prazo) + '</b> · ' + esc(STATUS_DJ[d.demanda_juridica.status] ? STATUS_DJ[d.demanda_juridica.status][0] : d.demanda_juridica.status) +
+        (d.demanda_juridica.responsavel_nome ? ' · com ' + esc(d.demanda_juridica.responsavel_nome) : '') +
+        '. O Jurídico conduz pelo Painel do Jurídico; a situação aparece aqui. Converse e anexe pelo ticket.</div>' : '') +
       '<div class="grade-ticket"><div class="pilha">' +
       '<div class="painel" style="padding:18px"><div class="cab-ev"><b>' + esc(t.solicitante_nome || '—') + '</b><span class="sec" style="display:inline"> abriu em ' + quando(t.criado_em) + '</span></div>' +
       '<div class="texto-livre" style="margin-top:8px">' + (t.descricao ? esc(t.descricao) : '<span class="sec">Sem descrição.</span>') + '</div>' +
@@ -7957,7 +7986,7 @@
     var lista = !painel || ['fazer', 'todos'].indexOf(aba) >= 0;
     $('#conteudo').innerHTML = '<div class="pagina"><div class="linha" style="align-items:flex-end;margin-bottom:6px"><div style="flex:1 1 420px"><h1>' + titulo + '</h1>' +
       '<p class="sub" style="margin:0">' + (painel ? 'Tudo o que chega ao Jurídico num lugar só: contratos de garantia, contratos de parceria e as demais atividades. Cada atividade tem o seu prazo em horas úteis (8h = 1 dia útil).'
-        : 'Contrato de garantia, contrato de parceria, aditivo, rescisão, análise de contrato, parecer: peça aqui e acompanhe o prazo e a situação de cada pedido.') + '</p></div>' +
+        : 'Contrato de garantia e contrato de parceria: peça aqui e acompanhe o prazo e a situação. As demais atividades (aditivo, rescisão, análise de contrato, parecer…) são pedidas por ticket ao Jurídico e acompanhadas em Tickets.') + '</p></div>' +
       (lista && (!painel || aba === 'todos') ? '<button class="btn ghost" id="btXlsJ">' + IC.baixar + 'Baixar planilha</button>' : '') +
       (painel ? '' : '<button class="btn primary" id="btNovoJ">' + IC.mais + 'Novo pedido</button>') + '</div>' +
       (painel && abas.length > 1 ? '<nav class="abas" style="margin-top:16px">' + abas.map(function (a) { return '<a href="#/juridico/painel/' + a[0] + '" class="' + (a[0] === aba ? 'on' : '') + '">' + esc(a[1]) + '</a>'; }).join('') + '</nav>' : '') +
@@ -8016,7 +8045,7 @@
           'Só executivos de negócios cadastrados pedem.') +
         opcao('parceria', 'Contrato de parceria', 'Contrato com uma empresa parceira (comissão de recorrência e de venda). Minuta em até 72h úteis.', podeCp,
           'Pedem: executivos, o Comercial, o CS e a diretoria.') +
-        opcao('demanda', 'Outra atividade jurídica', 'Aditivo, rescisão, análise de contrato de fornecedor, parecer e o que mais precisar. O prazo depende da atividade.', true, '') + '</div>',
+        opcao('demanda', 'Outra atividade jurídica (abre um ticket)', 'Aditivo, rescisão, análise de contrato de fornecedor, parecer e o que mais precisar. Abre um ticket para o Jurídico: o prazo depende da atividade e você acompanha em Tickets.', true, '') + '</div>',
       pe: '<button class="btn ghost" data-fechar>Cancelar</button><button class="btn primary" id="pedJOk">Continuar</button>' });
     var marcado = $('input[name=tipoPedJ]:not([disabled])', mo);
     if (!podeCt && !podeCp) $('input[value=demanda]', mo).checked = true; else if (marcado) marcado.checked = true;
@@ -8026,7 +8055,8 @@
       mo.fechar();
       if (v === 'contrato') return novoContrato();
       if (v === 'parceria') { try { var r = await api('POST', '/api/parcerias', {}); location.hash = '#/parcerias/' + r.id; } catch (e) { toast(e.message, 'erro'); } return; }
-      novaDemandaDj(M.dj, depois);
+      // as demais atividades são pedidas por ticket ao setor Jurídico (o portal cria a demanda com o protocolo e o prazo)
+      novoTicket({ setor: 'Jurídico' });
     };
   }
 
@@ -8133,7 +8163,7 @@
       var pegar = vis === 'fila' || vis === 'fazer';
       $('#tbDj').innerHTML = r.demandas.map(function (d) {
         var externo = d.origem === 'contrato' || d.origem === 'parceria';
-        return titulo(d) + '<tr class="clicavel" data-id="' + esc(d.id) + '"><td style="white-space:nowrap"><b>' + (externo ? esc(d.ref) : '#' + esc(d.ref)) + '</b>' +
+        return titulo(d) + '<tr class="clicavel" data-id="' + esc(d.id) + '"><td style="white-space:nowrap"><b>' + (externo || d.protocolo ? esc(d.ref) : '#' + esc(d.ref)) + '</b>' +
           (d.origem === 'contrato' ? '<span class="sec">Solicitação de Contrato</span>' : d.origem === 'parceria' ? '<span class="sec">Contrato Parceria</span>' : '') + '</td>' +
           '<td>' + esc(d.tipo) + '</td>' +
           '<td>' + (minhas ? comQuem(d) : esc(d.solicitante_nome || '—') + '<span class="sec">' + esc([d.setor, d.uf].filter(Boolean).join(' · ')) + '</span>') + '</td>' +
@@ -8262,7 +8292,8 @@
     var j;
     try { j = await api('GET', '/api/juridico/demandas/' + id); } catch (e) { toast(e.message, 'erro'); return; }
     var d = j.demanda, pd = j.pode;
-    var resumo = '<dl class="info-ticket" style="margin:0 0 16px"><dt>Situação</dt><dd>' + etqDj(d) + '</dd><dt>Atividade</dt><dd>' + esc(d.tipo) + ' <span class="sec" style="display:inline">· ' + d.horas + 'h úteis</span></dd>' +
+    var resumo = (d.ticket_id ? '<div class="msg info" style="margin-bottom:12px">Pedido aberto pelo <a href="#/tickets/' + d.ticket_id + '">ticket ' + numTicket(d.ticket_id) + '</a>: a conversa e os anexos de quem pediu ficam lá, e a situação que você marcar aqui aparece no ticket.</div>' : '') +
+      '<dl class="info-ticket" style="margin:0 0 16px"><dt>Situação</dt><dd>' + etqDj(d) + '</dd><dt>Atividade</dt><dd>' + esc(d.tipo) + ' <span class="sec" style="display:inline">· ' + d.horas + 'h úteis</span></dd>' +
       '<dt>Solicitada</dt><dd>' + dataBr(d.solicitada_em) + '</dd>' +
       '<dt>Prazo de entrega</dt><dd>' + dataBr(d.prazo) + '</dd>' +
       '<dt>Conclusão</dt><dd>' + (d.entregue_em ? dataBr(d.entregue_em) + ' ' + slaDj(d) : '—') + '</dd>' +
@@ -8281,13 +8312,13 @@
     };
     var historico = j.eventos.map(function (e) {
       var x = e.detalhe || {};
-      var txt = e.tipo === 'criada' ? 'registrou a demanda' : e.tipo === 'importada' ? 'importou da planilha (linha ' + esc(x.linha) + ')'
+      var txt = e.tipo === 'criada' ? 'registrou a demanda' + (x.ticket ? ' pelo ticket ' + numTicket(x.ticket) : '') : e.tipo === 'importada' ? 'importou da planilha (linha ' + esc(x.linha) + ')'
         : e.tipo === 'comentario' ? 'comentou: <span style="white-space:pre-wrap;font-weight:500">' + esc(x.texto) + '</span>'
           : (e.tipo === 'status' ? 'mudou ' : 'alterou ') + Object.keys(x.para || {}).filter(function (k) { return ROTULO_CAMPO_DJ[k] && k !== 'horas' && k !== 'solicitante_nome' || (k === 'solicitante_nome' && !('solicitante_id' in x.para)); })
             .map(function (k) { return esc(ROTULO_CAMPO_DJ[k]) + ': ' + esc(valorEv(k, x.de[k])) + ' → <b>' + esc(valorEv(k, x.para[k])) + '</b>'; }).join('; ');
       return '<div><b style="color:var(--ink)">' + dataHoraCr(e.criado_em) + '</b> · ' + esc(e.usuario_nome || 'Sistema') + ' ' + txt + '</div>';
     }).join('');
-    var mo = modal({ titulo: 'Demanda #' + d.numero + ' · ' + d.tipo + ' · ' + d.cliente, largo: true,
+    var mo = modal({ titulo: 'Demanda ' + (d.protocolo || '#' + d.numero) + ' · ' + d.tipo + ' · ' + d.cliente, largo: true,
       corpo: resumo + (pd.editar ? '<div id="djForm">' + formDj(m, d, false) + '</div>' : '') +
         '<section style="margin-top:18px"><h3 style="margin:0 0 8px;font-size:14px">Histórico e comentários</h3><div class="pilha" style="gap:8px;font-size:13px;font-weight:600;color:var(--ink-2)">' + historico + '</div>' +
         '<label class="rot" for="djComent" style="margin-top:12px">Comentário</label><textarea class="campo" id="djComent" rows="2" maxlength="3000" placeholder="' +
@@ -8311,7 +8342,7 @@
       } catch (e) { toast(e.message, 'erro'); }
     };
     if ($('#djExcluir', mo)) $('#djExcluir', mo).onclick = async function () {
-      if (!(await confirmar('Excluir a demanda', 'A demanda #' + d.numero + ' e o histórico dela saem do portal. Não dá para desfazer.', 'Excluir', true))) return;
+      if (!(await confirmar('Excluir a demanda', 'A demanda ' + (d.protocolo || '#' + d.numero) + ' e o histórico dela saem do portal. Não dá para desfazer.', 'Excluir', true))) return;
       try { await api('DELETE', '/api/juridico/demandas/' + id); mo.fechar(); toast('Demanda excluída.', 'ok'); depois(); } catch (e) { toast(e.message, 'erro'); }
     };
   }
