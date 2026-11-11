@@ -84,6 +84,24 @@
     return fundo;
   }
 
+  /* apagar de vez (administração, para limpar testes): pede para digitar APAGAR antes de liberar o botão */
+  function confirmarApagar(titulo, texto) {
+    return new Promise(function (resolve) {
+      var ok = false;
+      var m = modal({
+        titulo: titulo,
+        corpo: '<p style="margin:0 0 12px;font-weight:600;color:var(--ink-2)">' + texto + '</p>' +
+          '<p class="ajuda" style="margin:0 0 6px">Não dá para desfazer. Para confirmar, digite <b>APAGAR</b>:</p><input id="mApagar" autocomplete="off" style="width:100%">',
+        pe: '<button class="btn ghost" data-fechar>Voltar</button><button class="btn danger" id="mOk" disabled>Apagar de vez</button>',
+        aoFechar: function () { resolve(ok); },
+      });
+      var campo = $('#mApagar', m), bt = $('#mOk', m);
+      campo.addEventListener('input', function () { bt.disabled = campo.value.trim().toUpperCase() !== 'APAGAR'; });
+      campo.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !bt.disabled) bt.click(); });
+      bt.addEventListener('click', function () { ok = true; m.fechar(); });
+    });
+  }
+
   function confirmar(titulo, texto, rotuloOk, perigo) {
     return new Promise(function (resolve) {
       var ok = false;
@@ -4302,6 +4320,7 @@
     }
     if (pd.chancelar) acoes += '<button class="btn ghost sm" id="btNaoChCr">Não chancelar</button><button class="btn primary sm" id="btChCr">Chancelar</button>';
     if (pd.reanalise) acoes += '<button class="btn primary sm" id="btReCr">Solicitar reanálise</button>';
+    if (pd.apagar) acoes += '<button class="btn danger sm" id="btApagarCr" title="Apagar de vez (só a administração; para limpar testes)">Apagar</button>';
     definirBarra('<span class="setor">Análise de Crédito</span><span class="sep">/</span><span class="nome">' + esc(a.protocolo || 'Rascunho') + '</span>', acoes);
 
     var ultimaPend = d.eventos.filter(function (e) { return e.tipo === 'pendencia'; }).pop();
@@ -4415,6 +4434,14 @@
         try { await api('POST', '/api/credito/analises/' + a.id + '/cancelar', {}); location.hash = '#/credito'; } catch (e) { toast(e.message, 'erro'); }
       };
     }
+    if ($('#btApagarCr')) $('#btApagarCr').onclick = async function () {
+      var ligados = [d.implantacao ? 'a implantação ' + (d.implantacao.protocolo || 'em rascunho') : '', d.contrato ? 'o contrato ' + (d.contrato.protocolo || 'em rascunho') : '',
+        d.reanalises.length ? d.reanalises.length + (d.reanalises.length > 1 ? ' reanálises' : ' reanálise') : ''].filter(Boolean);
+      var texto = 'A análise ' + esc(a.protocolo || 'em rascunho') + (a.condominio ? ' (' + esc(a.condominio) + ')' : '') + ' some do portal, com os documentos, o cálculo e o histórico.' +
+        (ligados.length ? '<br><br>Feitos a partir dela: ' + esc(ligados.join(', ')) + '. Eles continuam no portal, só sem o vínculo; se também forem teste, apague-os à parte.' : '');
+      if (!(await confirmarApagar('Apagar análise de crédito', texto))) return;
+      try { await api('DELETE', '/api/credito/analises/' + a.id); toast('Análise apagada.', 'ok'); atualizarCredito(); location.hash = '#/credito'; } catch (e) { toast(e.message, 'erro'); }
+    };
     if ($('#btAssumirCr')) $('#btAssumirCr').onclick = async function () { try { await api('POST', '/api/credito/analises/' + a.id + '/assumir', {}); recarregar(); } catch (e) { toast(e.message, 'erro'); } };
     if (pd.analisar) {
       $$('[data-ler]').forEach(function (b) {
@@ -6838,6 +6865,7 @@
     if (pd.pendencia) acoes += '<button class="btn ghost sm" id="btPendImp">Devolver com pendência</button>';
     if (pd.concluir) acoes += '<button class="btn primary sm" id="btConclImp"' + (d.faltas_etapas.length ? ' disabled title="' + esc(d.faltas_etapas.join(' ')) + '"' : '') + '>Concluir implantação</button>';
     if (pd.carteira) acoes += '<button class="btn primary sm" id="btCartImp">Confirmar na Base de Clientes</button>';
+    if (pd.apagar) acoes += '<button class="btn danger sm" id="btApagarImp" title="Apagar de vez (só a administração; para limpar testes)">Apagar</button>';
     definirBarra('<span class="setor">Painel de implantação</span><span class="sep">/</span><span class="nome">' + esc(i.protocolo || (i.numero_planilha ? 'Nº ' + i.numero_planilha : 'Rascunho')) + '</span>', acoes);
     var difs = {};
     d.diferencas.forEach(function (x) { difs[x.campo] = x; });
@@ -6893,6 +6921,14 @@
     if ($('#btCancImp')) $('#btCancImp').onclick = async function () {
       if (!(await confirmar('Cancelar implantação', 'A implantação fica no histórico como cancelada' + (i.analise_id ? ' e a análise volta a ficar disponível' : '') + '.', 'Cancelar implantação', true))) return;
       try { await api('POST', '/api/implantacoes/' + i.id + '/cancelar', {}); location.hash = '#/implantacao'; } catch (e) { toast(e.message, 'erro'); }
+    };
+    if ($('#btApagarImp')) $('#btApagarImp').onclick = async function () {
+      var texto = 'A implantação ' + esc(i.protocolo || 'em rascunho') + (i.condominio ? ' (' + esc(i.condominio) + ')' : '') + ' some do portal, com os documentos, as etapas, a ficha e o histórico.' +
+        (i.etapa === 'na_carteira' ? '<br><br>O condomínio que já entrou na Base de Clientes continua lá; se também for teste, tire-o pela Base de Clientes.' : '') +
+        (i.etapa === 'juridico' ? '<br><br>O contrato que está com o Jurídico para registrar as condições é cancelado junto.' : '') +
+        (i.analise_id ? '<br><br>A análise ' + esc(i.analise_protocolo || '') + ' continua (e volta a ficar disponível para implantar).' : '');
+      if (!(await confirmarApagar('Apagar implantação', texto))) return;
+      try { await api('DELETE', '/api/implantacoes/' + i.id); toast('Implantação apagada.', 'ok'); atualizarImp(); location.hash = '#/implantacao'; } catch (e) { toast(e.message, 'erro'); }
     };
     if ($('#btDesigImp')) $('#btDesigImp').onclick = function () {
       if (!m.equipe.length) { toast('Ninguém no setor Implantação ainda: inclua a equipe no cadastro das pessoas.', 'erro'); return; }
