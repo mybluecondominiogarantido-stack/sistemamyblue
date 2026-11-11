@@ -102,6 +102,8 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
       chancelar: p.diretoria && a.etapa === 'diretoria',
       reanalise: (dono || p.analista) && a.etapa === 'enviada',
       cancelar: (editavel && dono) || (p.analista && !['enviada', 'cancelada'].includes(a.etapa)),
+      // apagar de vez (testes): só a administração, em qualquer etapa
+      apagar: p.admin,
     };
   }
 
@@ -678,6 +680,21 @@ function rotasCredito({ db, seg, cfg, avisos, expediente, regras }) {
       await t.q("UPDATE analises SET etapa = 'cancelada', atualizado_em = now() WHERE id = $1", [c.a.id]);
       await evento(t, c.a.id, req.usuario.id, 'cancelada', { motivo: texto(req.body && req.body.motivo, 1000) });
     });
+    res.json({ ok: true });
+  });
+
+  /* apagar de vez (para limpar testes): só a administração. Some com tudo da análise (documentos, unidades, lançamentos,
+     alertas, histórico, pedidos de liberação para implantar) e os avisos do sino que levavam a ela. Reanálises, contratos
+     e implantações feitos a partir dela continuam, só perdem o vínculo (o protocolo da análise fica anotado neles). */
+  r.delete('/api/credito/analises/:id', async (req, res) => {
+    const c = await carregar(req, res);
+    if (!c) return;
+    if (!c.pd.apagar) return erro(res, 403, 'Só a administração apaga uma análise.');
+    await db.tx(async (t) => {
+      await t.q('DELETE FROM notificacoes WHERE link = $1 OR link LIKE $2', [link(c.a.id), `${link(c.a.id)}/%`]);
+      await t.q('DELETE FROM analises WHERE id = $1', [c.a.id]);
+    });
+    console.log(`[credito] ${req.usuario.nome} (id ${req.usuario.id}) apagou a análise ${c.a.protocolo || 'rascunho'} (id ${c.a.id}) · ${c.a.condominio}`);
     res.json({ ok: true });
   });
 

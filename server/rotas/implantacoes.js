@@ -347,7 +347,7 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
       return { ...nada, ver: interno, interno, etapas: emAndamento, concluir: emAndamento, documentos: doSetor || autDocs, marcar_documentos: doSetor || autDocs,
         // concluída fora da Base de Clientes: a coordenação confirma a entrada (com a conferência de ID e CNPJ repetidos)
         carteira: p.coordenacao && i.etapa === 'concluida',
-        obs_controle: doSetor || autTudo, editar_setor: doSetor || autTudo, importada: true };
+        obs_controle: doSetor || autTudo, editar_setor: doSetor || autTudo, importada: true, apagar: p.admin };
     }
     return {
       designar: p.coordenacao && ['fila', 'em_implantacao', 'pendencia'].includes(i.etapa),
@@ -374,6 +374,8 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
       enviar: editavel && (dono || p.admin),
       // com o Jurídico, o executivo ainda desiste (a conferência do contrato é cancelada junto)
       cancelar: ((editavel || i.etapa === 'juridico') && dono) || (p.coordenacao && aberta),
+      // apagar de vez (testes): só a administração, em qualquer etapa
+      apagar: p.admin,
     };
   }
 
@@ -1063,6 +1065,27 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
       await avisos.notificar(elaboram.length ? elaboram : await administradores(db), { link: `#/contratos/${ct.id}`, autor_id: req.usuario.id, tipo: 'contrato', email: false,
         titulo: `Implantação cancelada · ${ct.protocolo} · ${ct.condominio}`, texto: `${req.usuario.nome} cancelou a implantação de ${ct.condominio}: o contrato não precisa mais das condições registradas.${motivo ? ` Motivo: ${motivo}` : ''}` });
     }
+    res.json({ ok: true });
+  });
+
+  /* apagar de vez (para limpar testes): só a administração. Some com tudo da implantação (documentos, histórico, ficha,
+     pausas, autorizações, antecipação) e os avisos do sino que levavam a ela. O condomínio que já entrou na Base de Clientes
+     continua lá; o contrato aberto pela própria implantação (assinado fora do portal, ainda na conferência) é cancelado. */
+  r.delete('/api/implantacoes/:id', async (req, res) => {
+    const c = await carregar(req, res);
+    if (!c) return;
+    if (!c.pd.apagar) return erro(res, 403, 'Só a administração apaga uma implantação.');
+    const ct = c.i.contrato_id ? await db.um("SELECT id FROM contratos WHERE id = $1 AND etapa = 'conferencia' AND formulario->>'implantacao_protocolo' IS NOT NULL", [c.i.contrato_id]) : null;
+    await db.tx(async (t) => {
+      if (ct) {
+        await t.q("UPDATE contratos SET etapa = 'cancelada', atualizado_em = now() WHERE id = $1", [ct.id]);
+        await t.q('INSERT INTO contrato_eventos (contrato_id, usuario_id, tipo, detalhe) VALUES ($1, $2, $3, $4::jsonb)',
+          [ct.id, req.usuario.id, 'cancelada', JSON.stringify({ motivo: 'Implantação apagada pela administração.', pela_implantacao: c.i.protocolo })]);
+      }
+      await t.q('DELETE FROM notificacoes WHERE link = $1 OR link LIKE $2', [link(c.i.id), `${link(c.i.id)}/%`]);
+      await t.q('DELETE FROM implantacoes WHERE id = $1', [c.i.id]);
+    });
+    console.log(`[implantacao] ${req.usuario.nome} (id ${req.usuario.id}) apagou a implantação ${c.i.protocolo || 'rascunho'} (id ${c.i.id}) · ${c.i.condominio}`);
     res.json({ ok: true });
   });
 

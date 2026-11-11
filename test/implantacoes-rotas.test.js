@@ -522,3 +522,27 @@ test('parâmetros das metas: só a coordenação altera; valem a partir da data 
   const l = j.linhas.find((x) => x.id === idI);
   assert.equal(l.documentacao.limite, M.somarDias(l.enviado, 45));
 });
+
+test('apagar de vez (limpar testes): só a administração; some com documentos, histórico e avisos; a análise continua', async () => {
+  const { aid, ct } = await contratoConcluido('Residencial Fictício Para Apagar');
+  const id = await abrir(ct);
+  assert.equal((await anexar(exec, id, 'ata_eleicao')).status, 201);
+  await ctx.db.q("INSERT INTO notificacoes (usuario_id, tipo, titulo, link) VALUES ($1, 'implantacao', 'Aviso fictício', $2), ($1, 'implantacao', 'Ficha fictícia', $3)",
+    [ids['coord@teste.com'], `#/implantacao/${id}`, `#/implantacao/${id}/ficha`]);
+  assert.equal((await exec('GET', `/api/implantacoes/${id}`)).json.pode.apagar, false);
+  assert.equal((await admin('GET', `/api/implantacoes/${id}`)).json.pode.apagar, true);
+  assert.equal((await exec('DELETE', `/api/implantacoes/${id}`)).status, 403);
+  assert.equal((await coord('DELETE', `/api/implantacoes/${id}`)).status, 403);
+  assert.equal((await outro('DELETE', `/api/implantacoes/${id}`)).status, 404);
+  const r = await admin('DELETE', `/api/implantacoes/${id}`);
+  assert.equal(r.status, 200, r.texto);
+  assert.equal((await admin('GET', `/api/implantacoes/${id}`)).status, 404);
+  for (const tabela of ['implantacao_documentos', 'implantacao_eventos']) {
+    assert.equal((await ctx.db.um(`SELECT count(*)::int AS n FROM ${tabela} WHERE implantacao_id = $1`, [id])).n, 0, tabela);
+  }
+  assert.equal((await ctx.db.um("SELECT count(*)::int AS n FROM notificacoes WHERE link LIKE $1", [`#/implantacao/${id}%`])).n, 0);
+  // a análise e o contrato continuam; o contrato volta a ficar disponível para implantar
+  assert.ok(await ctx.db.um('SELECT id FROM analises WHERE id = $1', [aid]));
+  assert.ok((await exec('GET', '/api/implantacoes/contratos')).json.contratos.some((x) => x.id === ct));
+  assert.equal((await admin('DELETE', `/api/implantacoes/${id}`)).status, 404);
+});

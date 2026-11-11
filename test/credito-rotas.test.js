@@ -455,3 +455,27 @@ test('CNPJ e custo atual do boleto são obrigatórios; "Não sei" no custo do bo
   assert.match(lib.json.erro, /custo atual do boleto/);
   assert.equal((await analista('POST', `/api/credito/analises/${id}/diretoria`, {})).status, 200);
 });
+
+test('apagar de vez (limpar testes): só a administração; some com documentos, histórico e avisos', async () => {
+  const r = await exec('POST', '/api/credito/analises', { formulario: { ...FORM, razao_social: 'Condomínio Fictício Para Apagar' } });
+  assert.equal(r.status, 201, r.texto);
+  const id = r.json.id;
+  assert.equal((await anexar(exec, id, 'relatorio')).status, 201);
+  await ctx.db.q("INSERT INTO notificacoes (usuario_id, tipo, titulo, link) VALUES ($1, 'credito', 'Aviso fictício', $2)", [ids['analista@teste.com'], `#/credito/${id}`]);
+  const imp = await ctx.db.um("INSERT INTO implantacoes (origem, analise_id, analise_protocolo, condominio) VALUES ('analise', $1, 'AC-FICTICIO', 'Condomínio Fictício Para Apagar') RETURNING id", [id]);
+  assert.equal((await exec('GET', `/api/credito/analises/${id}`)).json.pode.apagar, false);
+  assert.equal((await admin('GET', `/api/credito/analises/${id}`)).json.pode.apagar, true);
+  assert.equal((await exec('DELETE', `/api/credito/analises/${id}`)).status, 403);
+  assert.equal((await analista('DELETE', `/api/credito/analises/${id}`)).status, 403);
+  assert.equal((await outro('DELETE', `/api/credito/analises/${id}`)).status, 404);
+  const del = await admin('DELETE', `/api/credito/analises/${id}`);
+  assert.equal(del.status, 200, del.texto);
+  assert.equal((await admin('GET', `/api/credito/analises/${id}`)).status, 404);
+  for (const tabela of ['analise_documentos', 'analise_eventos']) {
+    assert.equal((await ctx.db.um(`SELECT count(*)::int AS n FROM ${tabela} WHERE analise_id = $1`, [id])).n, 0, tabela);
+  }
+  assert.equal((await ctx.db.um('SELECT count(*)::int AS n FROM notificacoes WHERE link = $1', [`#/credito/${id}`])).n, 0);
+  // a implantação feita a partir dela continua, só sem o vínculo (o protocolo fica anotado)
+  const i = await ctx.db.um('SELECT analise_id, analise_protocolo FROM implantacoes WHERE id = $1', [imp.id]);
+  assert.deepEqual([i.analise_id, i.analise_protocolo], [null, 'AC-FICTICIO']);
+});
