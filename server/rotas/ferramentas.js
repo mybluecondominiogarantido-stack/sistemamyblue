@@ -74,15 +74,27 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, bo
     return { m, escopo: m.armazenamento === 'compartilhado' ? '*' : `u:${req.usuario.id}` };
   }
 
+  /* ?desde=<data ISO> devolve só as chaves gravadas a partir dessa data (a ferramenta relê a cada poucos segundos sem baixar
+     tudo de novo). Sempre volta { agora, n }: "agora" é a hora do banco para o próximo ?desde= (a ferramenta usa com folga)
+     e "n" é quantas chaves existem; se a contagem da página não bater (chave apagada), ela relê tudo sem ?desde. */
   r.get('/api/armazenamento/:slug', seg.exigirLogin, async (req, res) => {
     const x = await moduloComArmazenamento(req, res);
     if (!x) return;
-    const { rows } = await db.q('SELECT chave, valor, versao FROM armazenamento WHERE modulo_slug = $1 AND escopo = $2', [x.m.slug, x.escopo]);
+    const desde = req.query.desde ? new Date(String(req.query.desde)) : null;
+    if (desde && isNaN(desde)) return res.status(400).json({ erro: 'Parâmetro desde inválido.' });
+    const info = await db.um('SELECT now() AS agora, count(*)::int AS n FROM armazenamento WHERE modulo_slug = $1 AND escopo = $2', [x.m.slug, x.escopo]);
+    const { rows } = desde
+      ? await db.q('SELECT chave, valor, versao FROM armazenamento WHERE modulo_slug = $1 AND escopo = $2 AND atualizado_em >= $3', [x.m.slug, x.escopo, desde.toISOString()])
+      : await db.q('SELECT chave, valor, versao FROM armazenamento WHERE modulo_slug = $1 AND escopo = $2', [x.m.slug, x.escopo]);
     const dados = Object.fromEntries(rows.map((l) => [l.chave, l.valor]));
     const sob = x.escopo === '*' && await acessos.sobreposicaoAdmin(req.usuario, x.m);
-    if (sob && sob.tipo === 'armazenamento') dados[sob.chave] = sob.valor; // administração: todos os papéis
+    let n = info.n;
+    if (sob && sob.tipo === 'armazenamento') { // administração: todos os papéis (chave a mais, conta no total se não estiver no banco)
+      dados[sob.chave] = sob.valor;
+      if (!(await db.um('SELECT 1 AS x FROM armazenamento WHERE modulo_slug = $1 AND escopo = $2 AND chave = $3', [x.m.slug, x.escopo, sob.chave]))) n++;
+    }
     res.set('Cache-Control', 'no-store');
-    res.json({ dados, versoes: Object.fromEntries(rows.map((l) => [l.chave, Number(l.versao)])) });
+    res.json({ dados, versoes: Object.fromEntries(rows.map((l) => [l.chave, Number(l.versao)])), agora: new Date(info.agora).toISOString(), n, delta: !!desde });
   });
 
   /* Grava o lote. Com `base` ({ chave: versão que a página conhece; 0 = não existia }), confere antes:

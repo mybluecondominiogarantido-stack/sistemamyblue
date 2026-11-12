@@ -392,6 +392,7 @@
       return;
     }
     if (partes[0] === 'premiacoes') return paginaComissoes(partes[1]);
+    if (partes[0] === 'comprovantes') return paginaComprovantes();
     if (partes[0] === 'links') {
       if (partes[1] === 'gestao' && editorLinks()) return paginaGestaoLinks(partes[2]);
       if (partes[1] === 'previa' && editorLinks()) return paginaLinks(Number(partes[2]) || null);
@@ -3883,6 +3884,38 @@
       catch (e) { toast(e.message, 'erro'); this.disabled = false; }
     };
     if (x.meu) setTimeout(atualizarComissao, 800);
+  }
+
+  /* ======================= Comprovantes de repasse ======================= */
+  /* o .zip do dia que o Controle de Repasses envia a cada assistente de crédito (o aviso no sino traz para cá);
+     o Gestor do Controle de Repasses e a administração veem os de todas as assistentes */
+  async function paginaComprovantes() {
+    definirBarra('<span class="nome">Comprovantes de repasse</span>');
+    $('#conteudo').innerHTML = carregandoHtml();
+    var j;
+    try { j = await api('GET', '/api/repasses/comprovantes'); } catch (e) { $('#conteudo').innerHTML = '<div class="pagina"><div class="vazio">' + esc(e.message) + '</div></div>'; return; }
+    if (location.hash.indexOf('#/comprovantes') !== 0) return;
+    var html = '<div class="pagina"><h1>Comprovantes de repasse</h1><p class="sub">' + (j.gestor
+      ? 'Os comprovantes enviados às assistentes de crédito nos últimos 60 dias, um arquivo .zip por assistente e por dia.'
+      : 'Os comprovantes de repasse dos seus condomínios nos últimos 60 dias, um arquivo .zip por dia. Baixe e confira.') + '</p>';
+    if (!j.itens.length) {
+      html += '<div class="vazio">' + (j.gestor ? 'Nenhum comprovante enviado nos últimos 60 dias.' : 'Nenhum comprovante enviado para você nos últimos 60 dias.') +
+        '<br><span class="ajuda">A coordenação envia os comprovantes depois da conciliação dos repasses do dia. Quando chegarem, você recebe um aviso aqui no portal e por e-mail.</span></div>';
+    } else {
+      html += '<div class="painel"><div class="tabela-wrap"><table><thead><tr><th>Dia</th>' + (j.gestor ? '<th>Assistente</th>' : '') +
+        '<th class="num">Comprovantes</th><th>Enviado</th><th>Situação</th><th></th></tr></thead><tbody>' +
+        j.itens.map(function (x) {
+          return '<tr><td><b>' + dataBr(x.dia) + '</b></td>' +
+            (j.gestor ? '<td>' + esc(x.assistente) + '<span class="sec">' + (x.destinatario ? 'no portal: ' + esc(x.destinatario) : 'não achada na equipe do Crédito') + '</span></td>' : '') +
+            '<td class="num">' + (x.qtd == null ? '—' : x.qtd) + '</td>' +
+            '<td>' + quando(x.enviado_em) + '<span class="sec">' + esc(x.enviado_por ? 'por ' + x.enviado_por : '') + '</span></td>' +
+            '<td>' + (x.baixado_em ? '<span class="etiqueta verde">baixado</span><span class="sec">' + quando(x.baixado_em) + '</span>' : '<span class="etiqueta ambar">não baixado</span>') + '</td>' +
+            '<td style="text-align:right"><a class="btn ghost sm" data-baixar href="/api/repasses/comprovantes/' + x.id + '/arquivo" title="' + esc(x.nome_arquivo) + ' · ' + tamanho(x.tamanho) + '">' + IC.baixar + 'Baixar</a></td></tr>';
+        }).join('') + '</tbody></table></div></div>';
+    }
+    $('#conteudo').innerHTML = html + '</div>';
+    // depois de baixar, a situação passa para "baixado"
+    $$('[data-baixar]').forEach(function (a) { a.addEventListener('click', function () { setTimeout(function () { if (location.hash.indexOf('#/comprovantes') === 0) paginaComprovantes(); }, 1500); }); });
   }
 
   /* ======================= Análise de Crédito ======================= */

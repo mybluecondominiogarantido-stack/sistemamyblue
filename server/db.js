@@ -949,6 +949,25 @@ CREATE TABLE IF NOT EXISTS renegociacao_relatorios (
   enviado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
   enviado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- comprovantes de repasse do dia, um .zip por assistente de crédito, enviado pelo Gestor do Controle de Repasses
+-- (server/rotas/repasses-comprovantes.js). assistente: o nome como está na Base de Clientes (ex.: "FULANA DE TAL - 4600")
+-- usuario_id: quem recebe no portal (achado na equipe do Crédito). Novo envio do mesmo dia e assistente troca o anterior.
+CREATE TABLE IF NOT EXISTS repasses_comprovantes (
+  id SERIAL PRIMARY KEY,
+  dia DATE NOT NULL,
+  assistente TEXT NOT NULL,
+  usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  nome_arquivo TEXT NOT NULL,
+  conteudo BYTEA NOT NULL,
+  tamanho INTEGER NOT NULL,
+  qtd INTEGER,
+  enviado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  enviado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  baixado_em TIMESTAMPTZ,
+  UNIQUE (dia, assistente)
+);
+CREATE INDEX IF NOT EXISTS idx_repasses_comprovantes_usuario ON repasses_comprovantes(usuario_id, dia);
 `;
 
 /* Supabase publica o schema "public" pela API dele (PostgREST). Com RLS ligado e sem
@@ -961,7 +980,7 @@ const TABELAS = ['usuarios', 'sessoes', 'setores', 'modulos', 'modulo_versoes', 
   'implantacao_protocolos', 'implantacoes', 'implantacao_documentos', 'implantacao_eventos', 'implantacao_liberacoes', 'implantacao_parametros',
   'implantacao_autorizacoes', 'implantacao_pausas', 'implantacao_fichas', 'implantacao_ficha_versoes', 'implantacao_antecipacoes', 'implantacao_importacoes',
   'contrato_protocolos', 'contratos', 'contrato_documentos', 'contrato_eventos', 'parceria_protocolos', 'parcerias', 'parceria_documentos', 'parceria_eventos', 'renegociacao_tickets', 'renegociacao_relatorios',
-  'juridico_tipos', 'juridico_importacoes', 'juridico_protocolos', 'juridico_demandas', 'juridico_eventos', 'juridico_lembretes'];
+  'juridico_tipos', 'juridico_importacoes', 'juridico_protocolos', 'juridico_demandas', 'juridico_eventos', 'juridico_lembretes', 'repasses_comprovantes'];
 const RLS = TABELAS.map((t) => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`).join(';\n');
 
 /* Ajustes em bancos já existentes (rodam a cada início e não fazem nada se já estiverem aplicados). */
@@ -1026,6 +1045,8 @@ ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS criado_por INTEGER REFERENCES usua
 ALTER TABLE notificacoes ADD COLUMN IF NOT EXISTS link TEXT;
 -- o vídeo já vem comprimido: guardado sem compressão, o banco lê só o pedaço pedido pelo player
 ALTER TABLE tutoriais ALTER COLUMN video SET STORAGE EXTERNAL;
+-- o .zip dos comprovantes também já vem comprimido
+ALTER TABLE repasses_comprovantes ALTER COLUMN conteudo SET STORAGE EXTERNAL;
 -- planilhas do mês: a gestão é avisada uma vez, quando quem envia termina todas as planilhas pedidas a ele
 ALTER TABLE comissao_planilhas ADD COLUMN IF NOT EXISTS avisado_em TIMESTAMPTZ;
 -- HTML novo da ferramenta que não mudou a tela nem o fluxo: a administração confirma que o vídeo continua valendo
