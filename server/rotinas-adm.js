@@ -15,7 +15,8 @@
  * a administração. Quem fez a gravação não recebe o próprio aviso (notificar() já tira o autor).
  */
 
-const MODULO = 'rotinas-adm';
+// endereço da ferramenta no portal (Configurações → Ferramentas): é o que liga o painel, os avisos e os papéis a ela
+const MODULO = 'controle-de-rotinas-administrativas';
 const LINK = `#/m/${MODULO}`;
 const NOME = 'Controle de Rotinas';
 const STATUS = { feito: 'Feito', execucao: 'Em execução', aguardando_sup: 'Aguardando supervisão', aguardando_coord: 'Aguardando coordenação', pausado: 'Pausado', pendente: 'Pendente' };

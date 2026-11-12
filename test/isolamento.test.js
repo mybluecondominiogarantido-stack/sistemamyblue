@@ -153,9 +153,32 @@ function isAppsScript(url){ return /script\\.google\\.com\\/macros\\/.*\\/exec/.
   assert.equal(r.json.ok, true, r.texto);
   r = await daFerramenta('GET', `/api/gas/renegociacoes/${chave}?callback=cb_1`, undefined, { 'sec-fetch-site': 'same-origin' });
   assert.match(r.texto, /^\/\*\*\/cb_1\(\[\["ID","Condomínio","Status"\],\["a1","Alfa","Fechado"\]\]\);$/);
+  // como o navegador manda de verdade: a página isolada tem origem própria, então o pedido chega como "cross-site".
+  // A chave é o que vale (antes isso voltava 403 e a ferramenta isolada não carregava os dados).
+  r = await daFerramenta('GET', `/api/gas/renegociacoes/${chave}?callback=cb_2`, undefined, { 'sec-fetch-site': 'cross-site' });
+  assert.equal(r.status, 200, r.texto);
+  assert.match(r.texto, /^\/\*\*\/cb_2\(\[\["ID"/);
+  r = await daFerramenta('GET', `/api/gas/renegociacoes/${chave}?action=delete&id=a1&callback=cb_3`, undefined, { 'sec-fetch-site': 'cross-site' });
+  assert.match(r.texto, /cb_3\(\{"ok":true\}\)/);
+  // sem a chave (só o cookie), leitura JSONP de outro site continua recusada
+  r = await admin('GET', '/api/gas/renegociacoes?callback=cb_4', undefined, { 'sec-fetch-site': 'cross-site' });
+  assert.equal(r.status, 403);
   // a chave de outra ferramenta não serve aqui
   const outra = chaveDa((await admin('GET', '/m/agenda/')).texto);
   assert.equal((await daFerramenta('GET', `/api/gas/renegociacoes/${outra}`)).status, 401);
+});
+
+test('Novos Condomínios isolada lê e grava a planilha da Prestação de Contas de Parceiros', async () => {
+  assert.equal((await admin('POST', '/api/admin/modulos', { slug: 'comissoes-de-novos-condominios', nome: 'Novos Condomínios', armazenamento: 'compartilhado' })).status, 201);
+  assert.equal((await admin('PUT', '/api/admin/modulos/comissoes-de-novos-condominios/arquivo', HTML)).status, 200);
+  const chave = chaveDa((await admin('GET', '/m/comissoes-de-novos-condominios/')).texto);
+  let r = await daFerramenta('GET', `/t/${chave}/api/gas/parceiros?sheet=partners`, undefined, { 'sec-fetch-site': 'cross-site' });
+  assert.equal(r.status, 200, r.texto);
+  r = await daFerramenta('POST', `/t/${chave}/api/gas/parceiros`, JSON.stringify({ sheet: 'partners', action: 'upsert', item: { id: 'p9', nome: 'Parceiro Teste' } }), { 'content-type': 'text/plain' });
+  assert.notEqual(r.status, 403, r.texto);
+  // outra ferramenta isolada continua sem acesso à planilha dos parceiros
+  const outra = chaveDa((await admin('GET', '/m/agenda/')).texto);
+  assert.equal((await daFerramenta('GET', `/t/${outra}/api/gas/parceiros?sheet=partners`)).status, 403);
 });
 
 test('a administração liga e desliga o isolamento; ferramenta não isolada continua como antes', async () => {

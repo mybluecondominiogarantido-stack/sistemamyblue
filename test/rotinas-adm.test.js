@@ -6,7 +6,7 @@ const assert = require('node:assert/strict');
 const http = require('http');
 const { criarApp, lerConfig } = require('../server/index');
 
-const SLUG = 'rotinas-adm';
+const SLUG = 'controle-de-rotinas-administrativas';
 let servidor, base, ctx, admin, assist, sup, coord, setorId;
 const emails = [];
 
@@ -163,6 +163,8 @@ test('painel: tickets de estorno sem a descrição; Análise de Crédito só par
   assert.equal(ps.credito.lista.length, 2);
   assert.ok(ps.credito.lista.find((x) => x.condominio === 'Condomínio Exemplo').atrasada);
   assert.ok((await coord.c('GET', `/api/db/${SLUG}/painel`)).json.credito);
+  // o HTML da ferramenta pede pelo endereço antigo (/api/db/rotinas-adm/painel): continua respondendo
+  assert.ok((await coord.c('GET', '/api/db/rotinas-adm/painel')).json.credito);
 
   // quem não abre a ferramenta não vê o painel
   const fora = await admin('POST', '/api/admin/usuarios', { data_nascimento: '1990-05-10', data_admissao: '2024-02-01', nome: 'Sem Acesso', email: 'sem@teste.com', papel: 'usuario', senha: 'Senha1234', modulos: [] });
