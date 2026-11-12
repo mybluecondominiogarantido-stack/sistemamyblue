@@ -136,9 +136,11 @@ function criarServicoModulos(db, cfg) {
     // bibliotecas das CDNs passam a vir do próprio portal (funciona mesmo com a CDN bloqueada na rede)
     html = trocarCdns(html, chave ? `/t/${chave}` : '');
 
+    // isolada não tem armazenamento do navegador: o que seria "só no navegador" fica no portal, por pessoa
+    const modo = m.armazenamento === 'navegador' && chave ? 'usuario' : m.armazenamento;
     const conf = {
       modulo: m.slug,
-      modo: m.armazenamento,
+      modo,
       locais: m.config.chaves_locais || [],
       livres: m.config.chaves_livres || [],
       usuario: { id: usuario.id, nome: usuario.nome, email: usuario.email, admin: usuario.papel === 'admin', foto_v: usuario.foto_v || null,
@@ -152,8 +154,8 @@ function criarServicoModulos(db, cfg) {
       // nomes trocados em Configurações → Nomes e abas (abas, botões, títulos da ferramenta)
       textos: m.config.textos || {},
     };
-    if (m.armazenamento !== 'navegador') {
-      const escopo = m.armazenamento === 'compartilhado' ? '*' : `u:${usuario.id}`;
+    if (modo !== 'navegador') {
+      const escopo = modo === 'compartilhado' ? '*' : `u:${usuario.id}`;
       const { rows } = await db.q('SELECT chave, valor, versao FROM armazenamento WHERE modulo_slug = $1 AND escopo = $2', [m.slug, escopo]);
       conf.dados = Object.fromEntries(rows.map((r) => [r.chave, r.valor]));
       const sob = acesso.sobreposicao;
