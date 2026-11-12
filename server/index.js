@@ -33,6 +33,7 @@ const { rotasImplantacoes, criarRotinasImplantacao } = require('./rotas/implanta
 const { rotasContratos, criarRotinasContratos } = require('./rotas/contratos');
 const { rotasParcerias, criarRotinasParcerias } = require('./rotas/parcerias');
 const { rotasJuridico, criarRotinasJuridico } = require('./rotas/juridico');
+const { rotasRepassesAvisos } = require('./rotas/repasses-avisos');
 
 function carregarEnv(arquivo) {
   if (!fs.existsSync(arquivo)) return;
@@ -155,6 +156,7 @@ async function criarApp(cfg) {
   app.use(rotasContratos(ctx));
   app.use(rotasParcerias(ctx));
   app.use(rotasJuridico(ctx));
+  app.use(rotasRepassesAvisos(ctx));
 
   const publico = path.join(__dirname, '..', 'public');
   // versão da tela (o ?v= do app.js no index.html): a página aberta compara e avisa que há versão nova para recarregar

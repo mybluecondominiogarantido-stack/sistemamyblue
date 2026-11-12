@@ -245,6 +245,8 @@ function criarSeguranca(db, cfg) {
     // ferramentas que leem (só leem) os dados de outra; a rota confere se quem abriu tem acesso à outra ferramenta
     if (ler && (LEITURA_DE_OUTRA[s] || []).some((o) => p === `/api/gas/${o}` || p === `/api/armazenamento/${o}`)) return true;
     // Controle de Repasses: as antecipações vindas da Implantação (a rota confere o papel Gestor)
+    // Controle de Repasses: avisos às assistentes no sino (a rota confere o papel Gestor)
+    if (s === 'repasses' && req.method === 'POST' && p === '/api/repasses/avisos') return true;
     if (s === 'repasses' && (p === '/api/repasses/antecipacoes' || /^\/api\/repasses\/antecipacoes\/\d+\/(cadastrar|devolver)$/.test(p))) return true;
     if (p.startsWith('/api/comissao/')) {
       const m = await db.um('SELECT config FROM modulos WHERE slug = $1', [s]);
