@@ -131,7 +131,8 @@ const FERRAMENTAS = {
         'Envie o PDF ao parceiro e marque <b>Enviado por e-mail</b>, com a data.',
         'Quando pagar, marque <b>Pagamento</b>, com a data e o valor pago.',
         'Precisa corrigir um valor? Use o <b>lápis</b> (Editar valores) na linha do parceiro.',
-      ], dica: 'Use a busca e os filtros (enviados, pagos) para ver o que falta enviar ou pagar.' },
+      ], dica: 'Use a busca e os filtros (enviados, pagos) para ver o que falta enviar ou pagar.',
+      atencao: 'Depois de marcado o <b>Pagamento</b>, o relatório daquele parceiro naquela competência fica travado: os valores, a venda e os condomínios do mês não mudam mais, e o pagamento não pode ser desmarcado nem ter o valor ou a data trocados. Só a administração, ou quem tem o papel <b>Gestor</b> na ferramenta, corrige o que já foi pago.' },
       { titulo: 'Limpar competências antigas', onde: 'aba Prestações do mês → Manutenção', passos: [
         'Em <b>Manter a partir de</b>, escolha o mês e o ano.',
         'Clique em <b>Apagar anteriores</b>. Somem os lançamentos e o controle de envio e pagamento das competências anteriores. Parceiros e condomínios não são afetados.',

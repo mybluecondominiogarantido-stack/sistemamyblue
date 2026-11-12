@@ -309,6 +309,10 @@ Quem abre a ferramenta passa a ver essas datas, então ligue só onde for precis
 - **PartnerChip: Resultados** (slug `partnerchip-resultados`) **lê** (só `GET`) os dados da **Prestação de Contas**
   (`/api/gas/parceiros` e `/api/armazenamento/parceiros`), para mostrar os números ao vivo. Vale só para quem também abre a
   Prestação de Contas; quem não abre vê a última cópia gravada no painel. A lista fica em `LEITURA_DE_OUTRA` (`server/seguranca.js`).
+- **Prestação de Contas** (slug `parceiros`): marcado o pagamento de um parceiro numa competência, o servidor recusa
+  mudar os lançamentos dele nessa competência (valores, venda, condomínio novo, exclusão) e desfazer o pagamento ou trocar
+  o valor e a data. Só a administração e o papel **Gestor** (identificador `gestor`, cadastrado pela administração em
+  Configurações → Acessos → Ferramentas) corrigem. Regras em `server/parceiros-pago.js`.
 - **Controle de Repasses** (slug `repasses`) alcança também as antecipações vindas da Implantação:
   `GET /api/repasses/antecipacoes`, `POST /api/repasses/antecipacoes/:id/cadastrar` e `.../devolver`. Ler pede só abrir
   a ferramenta; cadastrar e devolver, o papel **Gestor** (`gestor` ou `gestao`), sem *só consulta*.

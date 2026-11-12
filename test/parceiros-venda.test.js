@@ -171,7 +171,6 @@ test('parceiro só de venda lançado de novo no mês seguinte: avisa que já rec
   for (const [sheet, item] of [
     ['partners', { id: 'p-rosa', nome: 'Rosa Indica', uf: 'PB', rate: 10, venda: 'nenhuma', tags: '["somentevenda"]' }],
     ['condos', { id: 'c-iperoxo', nome: 'Ipê Roxo', vinculosJSON: JSON.stringify([{ partnerId: 'p-rosa', rate: 50 }]) }],
-    ['status', { key: '2026-09_p-rosa', ref: '2026-09', partnerId: 'p-rosa', enviado: true, dataEnvio: '2026-10-10', pago: true, dataPagamento: '2026-10-20', comp: 1 }],
   ]) assert.equal((await upsert(admin, sheet, item)).status, 200);
   await ctx.db.q('DELETE FROM notificacoes');
   // 1º mês: aviso leve (confira se já não foi pago)
@@ -179,6 +178,8 @@ test('parceiro só de venda lançado de novo no mês seguinte: avisa que já rec
   let [a] = await avisosDe('paula@teste.com');
   assert.equal(a.titulo, 'Indicação calculada como comissão mensal: Rosa Indica · Ipê Roxo');
   assert.match(a.texto, /calcula esse percentual todo mês/);
+  // setembro enviado e pago
+  assert.equal((await upsert(admin, 'status', { key: '2026-09_p-rosa', ref: '2026-09', partnerId: 'p-rosa', enviado: true, dataEnvio: '2026-10-10', pago: true, dataPagamento: '2026-10-20', comp: 1 })).status, 200);
   // mês seguinte: aviso de que já recebeu
   await ctx.db.q('DELETE FROM notificacoes');
   assert.equal((await upsert(gil, 'entries', lanc('r10', '2026-10', 'c-iperoxo', false))).status, 200);
