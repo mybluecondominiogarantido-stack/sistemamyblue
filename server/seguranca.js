@@ -218,6 +218,9 @@ function criarSeguranca(db, cfg) {
     next();
   };
 
+  /* PartnerChip (painel de parceiros) mostra, ao vivo, os números da Prestação de Contas (parceiros) */
+  const LEITURA_DE_OUTRA = { 'partnerchip-resultados': ['parceiros'] };
+
   /* O que uma ferramenta isolada pode pedir com a chave dela: os dados dela, a carteira (consulta), abrir ticket com
      anexo (Análise de Espólio), as rotas da Gestão de Premiações (só se a ferramenta for de premiação), fotos e bibliotecas.
      O resto (administração, tickets dos outros, dados de outras ferramentas) fica fechado mesmo para quem é admin. */
@@ -233,6 +236,8 @@ function criarSeguranca(db, cfg) {
     if (ler && s === 'rotinas-adm' && p === '/api/db/rotinas-adm/painel') return true;
     if (ler && (/^\/api\/carteira(\/\d+)?$/.test(p) || /^\/api\/usuarios\/\d+\/foto$/.test(p) || p.startsWith('/cdn/'))) return true;
     if (req.method === 'POST' && (p === '/api/tickets' || /^\/api\/tickets\/\d+\/anexos$/.test(p))) return true;
+    // ferramentas que leem (só leem) os dados de outra; a rota confere se quem abriu tem acesso à outra ferramenta
+    if (ler && (LEITURA_DE_OUTRA[s] || []).some((o) => p === `/api/gas/${o}` || p === `/api/armazenamento/${o}`)) return true;
     // Controle de Repasses: as antecipações vindas da Implantação (a rota confere o papel Gestor)
     if (s === 'repasses' && (p === '/api/repasses/antecipacoes' || /^\/api\/repasses\/antecipacoes\/\d+\/(cadastrar|devolver)$/.test(p))) return true;
     if (p.startsWith('/api/comissao/')) {

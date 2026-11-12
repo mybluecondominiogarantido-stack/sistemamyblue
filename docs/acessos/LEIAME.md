@@ -306,6 +306,9 @@ Quem abre a ferramenta passa a ver essas datas, então ligue só onde for precis
   antes de isolar) e **Prestação de Contas** lê PDF com o Web Worker do pdf.js (isolada, o pdf.js usa a alternativa sem
   Worker, mais lenta: teste a leitura de PDF). As demais devem funcionar isoladas, mas teste cada uma.
 - A lista de *Configurações → Ferramentas* marca **não isolada** as que ainda rodam com a sessão de quem abre.
+- **PartnerChip: Resultados** (slug `partnerchip-resultados`) **lê** (só `GET`) os dados da **Prestação de Contas**
+  (`/api/gas/parceiros` e `/api/armazenamento/parceiros`), para mostrar os números ao vivo. Vale só para quem também abre a
+  Prestação de Contas; quem não abre vê a última cópia gravada no painel. A lista fica em `LEITURA_DE_OUTRA` (`server/seguranca.js`).
 - **Controle de Repasses** (slug `repasses`) alcança também as antecipações vindas da Implantação:
   `GET /api/repasses/antecipacoes`, `POST /api/repasses/antecipacoes/:id/cadastrar` e `.../devolver`. Ler pede só abrir
   a ferramenta; cadastrar e devolver, o papel **Gestor** (`gestor` ou `gestao`), sem *só consulta*.
