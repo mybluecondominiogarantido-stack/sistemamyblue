@@ -69,7 +69,8 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, bo
   async function moduloComArmazenamento(req, res) {
     const m = await modulos.obter(req.params.slug);
     if (!m || !(await seg.podeAcessar(req.usuario, m.slug))) { res.status(403).json({ erro: 'Sem acesso a esta ferramenta.' }); return null; }
-    if (m.armazenamento === 'navegador') { res.status(409).json({ erro: 'Esta ferramenta guarda os dados só no navegador.' }); return null; }
+    // "só no navegador" aberta isolada (sem armazenamento do navegador): guarda no portal, por pessoa
+    if (m.armazenamento === 'navegador' && !req.viaChave) { res.status(409).json({ erro: 'Esta ferramenta guarda os dados só no navegador.' }); return null; }
     return { m, escopo: m.armazenamento === 'compartilhado' ? '*' : `u:${req.usuario.id}` };
   }
 
@@ -248,8 +249,17 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, bo
     res.json({ pessoas: rows.map((u) => ({ id: `mb-${u.id}`, nome: u.nome, setores: u.setores || [], data_nascimento: u.data_nascimento, data_admissao: u.data_admissao })) });
   });
 
+  /* colaboradores (nome de quem está ativo no portal) para as ferramentas escolherem uma pessoa da equipe (Gestão de Viagens) */
+  r.get('/api/db/:slug/colaboradores', seg.exigirLogin, async (req, res) => {
+    const m = await moduloComDocumentos(req, res);
+    if (!m) return;
+    const { rows } = await db.q('SELECT id, nome FROM usuarios WHERE ativo ORDER BY nome');
+    res.json({ colaboradores: rows.map((u) => ({ id: `mb-${u.id}`, nome: u.nome })) });
+  });
+
   /* Controle de Rotinas: o que vem do portal (Análise de Crédito para a Supervisão e a Coordenação; tickets de estorno) */
-  r.get(`/api/db/${MODULO_ROTINAS}/painel`, seg.exigirLogin, async (req, res) => {
+  // o HTML do Controle de Rotinas pede em /api/db/rotinas-adm/painel (nome antigo); vale também o endereço com o nome da ferramenta
+  r.get([`/api/db/${MODULO_ROTINAS}/painel`, '/api/db/rotinas-adm/painel'], seg.exigirLogin, async (req, res) => {
     req.params.slug = MODULO_ROTINAS;
     const m = await moduloComDocumentos(req, res);
     if (!m || !avisosRotinas) return m ? res.json({ credito: null, estornos: [] }) : undefined;
@@ -371,8 +381,10 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, bo
     const colecao = String(p.sheet || m.config.colecao_padrao || '');
     if (!COLECAO_RE.test(colecao)) return responder(res, cb, { ok: false, error: 'Aba inválida.' }, 400);
     const acao = p.action ? String(p.action) : null;
-    // gravação por GET e leitura por JSONP (<script> que outro site poderia incluir) só a partir do próprio portal
-    if ((acao || cb) && req.method === 'GET' && !getDoProprioSite(req)) return responder(res, cb, { ok: false, error: 'Origem não permitida.' }, 403);
+    // gravação por GET e leitura por JSONP (<script> que outro site poderia incluir) só a partir do próprio portal.
+    // Ferramenta isolada roda numa origem própria (o navegador diz "cross-site"): vale a chave dela, presa à sessão
+    // de quem abriu e a esta ferramenta, que outro site não tem como saber.
+    if ((acao || cb) && req.method === 'GET' && !req.viaChave && !getDoProprioSite(req)) return responder(res, cb, { ok: false, error: 'Origem não permitida.' }, 403);
 
     if (acao && await soConsulta(req, m)) return responder(res, cb, { ok: false, error: MSG_CONSULTA }, 403);
     const uid = req.usuario.id;

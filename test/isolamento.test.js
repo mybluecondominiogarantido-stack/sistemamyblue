@@ -153,9 +153,67 @@ function isAppsScript(url){ return /script\\.google\\.com\\/macros\\/.*\\/exec/.
   assert.equal(r.json.ok, true, r.texto);
   r = await daFerramenta('GET', `/api/gas/renegociacoes/${chave}?callback=cb_1`, undefined, { 'sec-fetch-site': 'same-origin' });
   assert.match(r.texto, /^\/\*\*\/cb_1\(\[\["ID","Condomínio","Status"\],\["a1","Alfa","Fechado"\]\]\);$/);
+  // como o navegador manda de verdade: a página isolada tem origem própria, então o pedido chega como "cross-site".
+  // A chave é o que vale (antes isso voltava 403 e a ferramenta isolada não carregava os dados).
+  r = await daFerramenta('GET', `/api/gas/renegociacoes/${chave}?callback=cb_2`, undefined, { 'sec-fetch-site': 'cross-site' });
+  assert.equal(r.status, 200, r.texto);
+  assert.match(r.texto, /^\/\*\*\/cb_2\(\[\["ID"/);
+  r = await daFerramenta('GET', `/api/gas/renegociacoes/${chave}?action=delete&id=a1&callback=cb_3`, undefined, { 'sec-fetch-site': 'cross-site' });
+  assert.match(r.texto, /cb_3\(\{"ok":true\}\)/);
+  // sem a chave (só o cookie), leitura JSONP de outro site continua recusada
+  r = await admin('GET', '/api/gas/renegociacoes?callback=cb_4', undefined, { 'sec-fetch-site': 'cross-site' });
+  assert.equal(r.status, 403);
   // a chave de outra ferramenta não serve aqui
   const outra = chaveDa((await admin('GET', '/m/agenda/')).texto);
   assert.equal((await daFerramenta('GET', `/api/gas/renegociacoes/${outra}`)).status, 401);
+});
+
+test('Novos Condomínios isolada lê e grava a planilha da Prestação de Contas de Parceiros', async () => {
+  assert.equal((await admin('POST', '/api/admin/modulos', { slug: 'comissoes-de-novos-condominios', nome: 'Novos Condomínios', armazenamento: 'compartilhado' })).status, 201);
+  assert.equal((await admin('PUT', '/api/admin/modulos/comissoes-de-novos-condominios/arquivo', HTML)).status, 200);
+  const chave = chaveDa((await admin('GET', '/m/comissoes-de-novos-condominios/')).texto);
+  let r = await daFerramenta('GET', `/t/${chave}/api/gas/parceiros?sheet=partners`, undefined, { 'sec-fetch-site': 'cross-site' });
+  assert.equal(r.status, 200, r.texto);
+  r = await daFerramenta('POST', `/t/${chave}/api/gas/parceiros`, JSON.stringify({ sheet: 'partners', action: 'upsert', item: { id: 'p9', nome: 'Parceiro Teste' } }), { 'content-type': 'text/plain' });
+  assert.notEqual(r.status, 403, r.texto);
+  // outra ferramenta isolada continua sem acesso à planilha dos parceiros
+  const outra = chaveDa((await admin('GET', '/m/agenda/')).texto);
+  assert.equal((await daFerramenta('GET', `/t/${outra}/api/gas/parceiros?sheet=partners`)).status, 403);
+});
+
+test('isolada "só no navegador" guarda no portal, por pessoa (o navegador não guarda nada na origem isolada)', async () => {
+  assert.equal((await admin('POST', '/api/admin/modulos', { slug: 'favoritos', nome: 'Favoritos', armazenamento: 'navegador' })).status, 201);
+  assert.equal((await admin('PUT', '/api/admin/modulos/favoritos/arquivo', HTML)).status, 200);
+  let pag = (await admin('GET', '/m/favoritos/')).texto;
+  const conf = JSON.parse(/window\.__MYBLUE__=(\{.*?\});\n/.exec(pag)[1]);
+  assert.equal(conf.modo, 'usuario');
+  let r = await daFerramenta('POST', `/t/${conf.chave}/api/armazenamento/favoritos`, { set: { 'central.fav': '["gerador"]' } });
+  assert.equal(r.status, 200, r.texto);
+  pag = (await admin('GET', '/m/favoritos/')).texto;
+  assert.equal(JSON.parse(/window\.__MYBLUE__=(\{.*?\});\n/.exec(pag)[1]).dados['central.fav'], '["gerador"]');
+  // sem isolamento continua só no navegador
+  await admin('PATCH', '/api/admin/modulos/favoritos', { isolada: false });
+  assert.equal(JSON.parse(/window\.__MYBLUE__=(\{.*?\});\n/.exec((await admin('GET', '/m/favoritos/')).texto)[1]).modo, 'navegador');
+  assert.equal((await admin('GET', '/api/armazenamento/favoritos')).status, 409);
+});
+
+test('colaboradores e a planilha dos parceiros para quem precisa (Gestão de Viagens, Partnership: Resultados)', async () => {
+  assert.equal((await admin('POST', '/api/admin/modulos', { slug: 'viagens-teste', nome: 'Viagens', armazenamento: 'compartilhado' })).status, 201);
+  // HTML que usa window.claude.use('db'): o portal liga o banco de documentos sozinho
+  assert.equal((await admin('PUT', '/api/admin/modulos/viagens-teste/arquivo', HTML.replace('ok</body>', "ok<script>window.claude.use('db')</script></body>"))).status, 200);
+  const cv = chaveDa((await admin('GET', '/m/viagens-teste/')).texto);
+  const r = await daFerramenta('GET', `/t/${cv}/api/db/viagens-teste/colaboradores`);
+  assert.equal(r.status, 200, r.texto);
+  assert.ok(r.json.colaboradores.some((c) => c.id === 'mb-1' && c.nome));
+  assert.equal(Object.keys(r.json.colaboradores[0]).join(), 'id,nome');
+  assert.equal((await admin('POST', '/api/admin/modulos', { slug: 'partnerchip-resultados', nome: 'Resultados', armazenamento: 'compartilhado' })).status, 201);
+  assert.equal((await admin('PUT', '/api/admin/modulos/partnerchip-resultados/arquivo', HTML)).status, 200);
+  const cp = chaveDa((await admin('GET', '/m/partnerchip-resultados/')).texto);
+  assert.equal((await daFerramenta('GET', `/t/${cp}/api/gas/parceiros?sheet=partners`, undefined, { 'sec-fetch-site': 'cross-site' })).status, 200);
+  // só lê
+  assert.equal((await daFerramenta('POST', `/t/${cp}/api/gas/parceiros`, JSON.stringify({ sheet: 'partners', action: 'upsert', item: { id: 'x' } }), { 'content-type': 'text/plain' })).status, 403);
+  // tira a ferramenta de teste, para os testes seguintes poderem criá-la de novo
+  assert.equal((await admin('DELETE', '/api/admin/modulos/partnerchip-resultados?confirmar=partnerchip-resultados')).status, 200);
 });
 
 test('a administração liga e desliga o isolamento; ferramenta não isolada continua como antes', async () => {
