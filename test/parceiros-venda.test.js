@@ -4,7 +4,7 @@ const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('http');
 const { criarApp, lerConfig } = require('../server/index');
-const { vendasAnteriores, duplicados, vendaMarcada } = require('../server/parceiros-venda');
+const { vendasAnteriores, duplicados, vendaMarcada, soVendaRepetida } = require('../server/parceiros-venda');
 
 let servidor, base, ctx, admin, paula, gil;
 const ids = {};
@@ -145,4 +145,43 @@ test('primeira venda do condomínio, venda desmarcada e outro condomínio: sem a
   assert.equal((await upsert(gil, 'condos', { id: 'c-lagoazul', nome: 'Lago Azul', vinculosJSON: '[]' })).status, 200);
   assert.deepEqual(await avisosDe('paula@teste.com'), []);
   assert.deepEqual(await avisosDe('gil@teste.com'), []);
+});
+
+test('regras: parceiro só de venda com percentual no condomínio', () => {
+  const partners = [{ id: 'p-sv', nome: 'Rosa Indica', tags: '["somentevenda"]' }, { id: 'p-rec', nome: 'Alfa', tags: '["recorrencia"]' }];
+  const condos = [
+    { id: 'c-1', nome: 'Ipê Roxo', vinculosJSON: JSON.stringify([{ partnerId: 'p-sv', rate: 50 }]) },
+    { id: 'c-2', nome: 'Ipê Amarelo', vinculosJSON: JSON.stringify([{ partnerId: 'p-rec', rate: 10 }]) },
+    { id: 'c-3', nome: 'Ipê Branco', vinculosJSON: JSON.stringify([{ partnerId: 'p-sv', rate: 0 }]) },
+  ];
+  const entries = [{ id: 'a', ref: '2026-09', condoId: 'c-1', tsr: '2.000,00' }, { id: 'b', ref: '2026-09', condoId: 'c-2', tsr: '900,00' }];
+  const r = soVendaRepetida({ entrada: { id: 'n', ref: '2026-10', condoId: 'c-1', tsr: '2.100,00' }, condos, entries, partners });
+  assert.deepEqual(r.map((x) => [x.partnerId, x.rate, x.antes.map((e) => e.ref)]), [['p-sv', 50, ['2026-09']]]);
+  assert.deepEqual(soVendaRepetida({ entrada: { id: 'n', ref: '2026-10', condoId: 'c-2', tsr: '950,00' }, condos, entries, partners }), [], 'recorrência normal: sem aviso');
+  assert.deepEqual(soVendaRepetida({ entrada: { id: 'n', ref: '2026-10', condoId: 'c-3', tsr: '950,00' }, condos, entries, partners }), [], 'percentual zerado: sem aviso');
+  assert.deepEqual(soVendaRepetida({ entrada: { id: 'n', ref: '2026-10', condoId: 'c-1', tsr: '' }, condos, entries, partners }), [], 'sem valores: sem aviso');
+});
+
+test('parceiro só de venda lançado de novo no mês seguinte: avisa que já recebeu', async () => {
+  await ctx.db.q('DELETE FROM notificacoes');
+  for (const [sheet, item] of [
+    ['partners', { id: 'p-rosa', nome: 'Rosa Indica', uf: 'PB', rate: 10, venda: 'nenhuma', tags: '["somentevenda"]' }],
+    ['condos', { id: 'c-iperoxo', nome: 'Ipê Roxo', vinculosJSON: JSON.stringify([{ partnerId: 'p-rosa', rate: 50 }]) }],
+    ['status', { key: '2026-09_p-rosa', ref: '2026-09', partnerId: 'p-rosa', enviado: true, dataEnvio: '2026-10-10', pago: true, dataPagamento: '2026-10-20', comp: 1 }],
+  ]) assert.equal((await upsert(admin, sheet, item)).status, 200);
+  await ctx.db.q('DELETE FROM notificacoes');
+  // 1º mês: aviso leve (confira se já não foi pago)
+  assert.equal((await upsert(gil, 'entries', lanc('r9', '2026-09', 'c-iperoxo', false))).status, 200);
+  let [a] = await avisosDe('paula@teste.com');
+  assert.equal(a.titulo, 'Parceiro só de venda com comissão mensal: Rosa Indica · Ipê Roxo');
+  assert.match(a.texto, /calcula esse percentual todo mês/);
+  // mês seguinte: aviso de que já recebeu
+  await ctx.db.q('DELETE FROM notificacoes');
+  assert.equal((await upsert(gil, 'entries', lanc('r10', '2026-10', 'c-iperoxo', false))).status, 200);
+  [a] = await avisosDe('paula@teste.com');
+  assert.equal(a.titulo, 'Parceiro só de venda recebendo de novo: Rosa Indica · Ipê Roxo');
+  assert.match(a.texto, /já gerou comissão para ele em 09\/2026 \(paga em 20\/10\/2026\)/);
+  // salvar de novo o mesmo lançamento não repete
+  assert.equal((await upsert(gil, 'entries', { ...lanc('r10', '2026-10', 'c-iperoxo', false), tsr: '100,00' })).status, 200);
+  assert.equal((await avisosDe('paula@teste.com')).length, 1);
 });
