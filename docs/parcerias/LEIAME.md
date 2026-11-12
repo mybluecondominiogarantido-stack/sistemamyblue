@@ -69,8 +69,10 @@ setor Parceiros confirmar.
 - **Cadastro do parceiro:** o setor Parceiros vê os dados prontos e clica em **Cadastrar parceiro**. O registro entra na
   coleção `partners` da ferramenta `parceiros` com `id`, `nome`, `uf` e os dados do contrato (`cnpj`, `representante`,
   `email`, `responsavelFinanceiro`, `telefoneFinanceiro`, `emailPrestacao`, `comissaoRecorrencia`, `comissaoVenda`,
-  `contrato`, `vigencia`). Se o CNPJ (ou, sem CNPJ lá, o nome) já está na base, o contrato é **ligado ao cadastro
-  existente**: o `id`, o nome e a UF dele ficam; os dados do contrato são atualizados. Sem confirmação, a rotina lembra o
+  `contrato`, `vigencia`) e as **categorias** do contrato (`tags`): só venda → `somentevenda`; só recorrência →
+  `recorrencia`; as duas → `recorrencia` e `venda` (as outras categorias do parceiro ficam). Parceiro novo já entra com as
+  condições de cálculo (`rate` = recorrência ou 0, `venda` = 1º mês, `vendaPct`). Se o CNPJ (ou, sem CNPJ lá, o nome) já está na base, o contrato é **ligado ao cadastro
+  existente**: o `id`, o nome, a UF e as condições de cálculo dele ficam; os dados do contrato e as categorias são atualizados. Sem confirmação, a rotina lembra o
   setor Parceiros a cada **2 dias úteis**. Cadastrado, quem pediu é avisado de que já pode indicar condomínios (o
   parceiro aparece na seção Parceria do formulário de implantação).
 - **Demandas Jurídicas:** os pedidos enviados aparecem na lista, nas planilhas e nos indicadores, no tipo de parceria

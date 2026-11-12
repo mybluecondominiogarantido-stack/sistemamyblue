@@ -185,6 +185,9 @@ test('cadastro do parceiro: lembrete a cada 2 dias úteis e ligação ao cadastr
   assert.equal(base.length, 1);
   assert.deepEqual([base[0].id, base[0].nome, base[0].uf, base[0].comissaoRecorrencia, base[0].comissaoVenda, base[0].emailPrestacao],
     ['antigo-1', 'Imobiliária Exemplo', 'RN', 12, 50, 'financeiro@exemplo.com']);
+  // contrato com recorrência e venda: categorias das duas; as condições de cálculo do cadastro antigo ficam
+  assert.equal(base[0].tags, '["recorrencia","venda"]');
+  assert.equal(base[0].rate, undefined);
   assert.ok((await avisosDe('exec@teste.com')).some((a) => a.titulo.startsWith('Parceria assinada: já pode indicar condomínios')));
   assert.equal((await parceiros('POST', `/api/parcerias/${idP}/cadastrar-parceiro`, {})).status, 409);
   assert.equal((await ctx.rotinasParcerias.executar()).parceiros, 0);
@@ -205,4 +208,17 @@ test('pendência e prazo da minuta vencido', async () => {
   assert.equal(d.parceria.etapa, 'em_elaboracao'); // volta para quem assumiu
   assert.equal((await cs('POST', `/api/parcerias/${id}/cancelar`, { motivo: 'teste' })).status, 403); // em elaboração, o comercial não cancela
   assert.equal((await adv('POST', `/api/parcerias/${id}/cancelar`, { motivo: 'Parceiro desistiu' })).status, 200);
+});
+
+test('categorias do contrato: só venda, só recorrência, as duas; cadastro novo já sai com as condições', () => {
+  const F = require('../server/parcerias/formulario');
+  assert.equal(F.categoriasDoContrato({ recorrencia: false, venda: true, venda_pct: 50 }, '["condicao","recorrencia"]'), '["somentevenda","condicao"]');
+  assert.equal(F.categoriasDoContrato({ recorrencia: true, recorrencia_pct: 10, venda: false }, []), '["recorrencia"]');
+  assert.equal(F.categoriasDoContrato({ recorrencia: true, recorrencia_pct: 5, venda: true, venda_pct: 50 }, null), '["recorrencia","venda"]');
+  const c = { protocolo: 'CP-2026-12-01-01', formulario: { empresa: 'Indica Fácil', cnpj: '11.444.777/0001-61' },
+    fechado: { recorrencia: false, recorrencia_pct: null, venda: true, venda_pct: 50, inicio: '2026-12-01' } };
+  const novo = F.registroParceiro(c, null);
+  assert.deepEqual([novo.tags, novo.rate, novo.venda, novo.vendaPct, novo.comissaoRecorrencia, novo.comissaoVenda], ['["somentevenda"]', 0, 'primeiro', 50, 0, 50]);
+  const ja = F.registroParceiro(c, { id: 'p-x', nome: 'Indica', uf: 'PB', rate: 10, venda: 'nenhuma', tags: '["recorrencia","condicao"]' });
+  assert.deepEqual([ja.tags, ja.rate, ja.venda], ['["somentevenda","condicao"]', 10, 'nenhuma'], 'cadastro antigo: só as categorias mudam');
 });

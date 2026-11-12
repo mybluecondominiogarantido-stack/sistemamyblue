@@ -12,6 +12,8 @@ const { criarBoletosCarteira } = require('./boletos-carteira');
 const { criarAvisosViagens } = require('./viagens');
 const { criarAvisosRotinas } = require('./rotinas-adm');
 const { criarRenegociacoes } = require('./renegociacoes');
+const { criarParceirosVenda } = require('./parceiros-venda');
+const { criarParceirosPago } = require('./parceiros-pago');
 const { criarAcessos } = require('./acessos');
 const { criarRegras } = require('./regras');
 const { criarNativas } = require('./nativas');
@@ -106,6 +108,10 @@ async function criarApp(cfg) {
   const avisosRotinas = criarAvisosRotinas({ db, documentos, avisos, acessos });
   // Controle de Renegociações: renegociação salva como Fechado vira ticket para a assistente de crédito
   const renegociacoes = criarRenegociacoes({ db, seg, modulos, registros, avisos, expediente, cfg });
+  // Prestação de Contas (parceiros): comissão de venda lançada de novo / condomínio cadastrado duas vezes → aviso
+  const parceirosVenda = criarParceirosVenda({ db, seg, registros, avisos });
+  // Prestação de Contas (parceiros): o relatório marcado como pago não muda (só a administração ou o papel Gestor corrigem)
+  const parceirosPago = criarParceirosPago({ registros, acessos });
   // Implantação: lembretes (fila sem designação, prazo para iniciar, documentos pendentes); o intervalo é ligado em iniciar()
   const rotinasImplantacao = criarRotinasImplantacao({ db, seg, avisos, expediente });
   // Solicitação de Contrato: prazo da minuta vencido
@@ -114,7 +120,7 @@ async function criarApp(cfg) {
   const rotinasParcerias = criarRotinasParcerias({ db, avisos, regras, expediente });
   // Demandas Jurídicas: vence hoje e passou do prazo
   const rotinasJuridico = criarRotinasJuridico({ db, avisos, regras, expediente });
-  const ctx = { db, seg, modulos, registros, documentos, avisos, expediente, acessos, regras, nativas, boletosCarteira, avisosViagens, avisosRotinas, renegociacoes, rotinasImplantacao, rotinasContratos, rotinasParcerias, rotinasJuridico, cfg };
+  const ctx = { db, seg, modulos, registros, documentos, avisos, expediente, acessos, regras, nativas, boletosCarteira, avisosViagens, avisosRotinas, renegociacoes, parceirosVenda, parceirosPago, rotinasImplantacao, rotinasContratos, rotinasParcerias, rotinasJuridico, cfg };
 
   const app = express();
   app.disable('x-powered-by');

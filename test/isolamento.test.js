@@ -180,3 +180,20 @@ test('prévia de versão e ferramenta aguardando aprovação saem sempre isolada
   await ctx.db.q("UPDATE modulos SET pendente = FALSE WHERE slug = 'agenda'");
   await admin('PATCH', '/api/admin/modulos/agenda', { isolada: true });
 });
+
+test('PartnerChip isolado lê (só lê) os dados da Prestação de Contas, se quem abriu tem acesso a ela', async () => {
+  assert.equal((await admin('POST', '/api/admin/modulos', { slug: 'partnerchip-resultados', nome: 'Painel', armazenamento: 'compartilhado' })).status, 201);
+  assert.equal((await admin('PUT', '/api/admin/modulos/partnerchip-resultados/arquivo', HTML)).status, 200);
+  if ((await admin('GET', '/api/modulos')).json.modulos.every((m) => m.slug !== 'parceiros')) {
+    assert.equal((await admin('POST', '/api/admin/modulos', { slug: 'parceiros', nome: 'Prestação', armazenamento: 'compartilhado' })).status, 201);
+  }
+  const chave = chaveDa((await admin('GET', '/m/partnerchip-resultados/')).texto);
+  assert.notEqual((await daFerramenta('GET', `/t/${chave}/api/armazenamento/parceiros`)).status, 403);
+  assert.notEqual((await daFerramenta('GET', `/t/${chave}/api/gas/parceiros?sheet=status`)).status, 403);
+  // gravar na Prestação, não
+  assert.equal((await daFerramenta('POST', `/t/${chave}/api/armazenamento/parceiros`, { set: { x: '1' } })).status, 403);
+  assert.equal((await daFerramenta('POST', `/t/${chave}/api/gas/parceiros`, { sheet: 'status', action: 'upsert', item: { key: 'x' } })).status, 403);
+  // e outra ferramenta isolada continua sem ler a Prestação
+  const daAgenda = chaveDa((await admin('GET', '/m/agenda/')).texto);
+  assert.equal((await daFerramenta('GET', `/t/${daAgenda}/api/gas/parceiros?sheet=status`)).status, 403);
+});

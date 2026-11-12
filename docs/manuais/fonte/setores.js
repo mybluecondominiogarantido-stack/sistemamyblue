@@ -124,14 +124,15 @@ const FERRAMENTAS = {
         'Confira, para cada condomínio, <b>Tx. Serviço Recebida</b>, <b>Tarifa Bancária</b>, <b>Multa</b>, <b>Juros</b>, <b>Encargos</b> e <b>Correção</b>. Marque a <b>venda</b> no mês em que ela deve ser paga.',
         'Se o parceiro tem regra de boleto, preencha, em cada condomínio, o <b>valor por boleto</b> e a <b>quantidade de boletos emitidos</b>.',
         'Confira a <b>comissão prevista</b> e clique em <b>Salvar</b> ou <b>Salvar e ver relatório</b>.',
-      ], atencao: 'A <b>correção</b> fica registrada para conferência, mas nunca entra na base da comissão. Nas regras de <b>excedente por boleto</b>, o repasse é (valor por boleto − piso) × quantidade de boletos emitidos: a tarifa bancária do balanço não entra nessa conta. Ao salvar, os valores gravam por cima do que já existia; se um condomínio ficar sem valores, a ferramenta pede confirmação antes de apagar o lançamento dele.' },
+      ], atencao: 'A <b>correção</b> fica registrada para conferência, mas nunca entra na base da comissão. Nas regras de <b>excedente por boleto</b>, o repasse é (valor por boleto − piso) × quantidade de boletos emitidos: a tarifa bancária do balanço não entra nessa conta. Ao salvar, os valores gravam por cima do que já existia; se um condomínio ficar sem valores, a ferramenta pede confirmação antes de apagar o lançamento dele. A <b>comissão de venda</b> é paga uma vez só por condomínio: se a venda for marcada num condomínio que já teve a venda lançada em outra competência (ou se um condomínio for cadastrado de novo com outro nome), o portal avisa você e o setor Parceiros no sino e por e-mail, dizendo em que competência ela foi lançada e se já foi paga. A <b>indicação</b> (50% no condomínio, ou parceiro da categoria Somente venda) não é recorrência: depois de pagar a indicação, zere o percentual dele no condomínio (ou tire o condomínio da carteira); se o condomínio for lançado de novo com esse percentual, o portal também avisa.' },
       { titulo: 'Gerar, enviar e pagar a prestação de contas', onde: 'aba Prestações do mês', passos: [
         'Escolha a <b>competência</b>. O topo mostra o total de comissão e o mês em que será paga.',
         'Na linha do parceiro, clique em <b>Relatório</b>, confira e use <b>Imprimir</b> ou <b>Baixar PDF</b> (depois, <b>← Voltar</b>). Para todos de uma vez: <b>Baixar todos os PDFs (ZIP)</b>, um PDF por parceiro.',
         'Envie o PDF ao parceiro e marque <b>Enviado por e-mail</b>, com a data.',
         'Quando pagar, marque <b>Pagamento</b>, com a data e o valor pago.',
         'Precisa corrigir um valor? Use o <b>lápis</b> (Editar valores) na linha do parceiro.',
-      ], dica: 'Use a busca e os filtros (enviados, pagos) para ver o que falta enviar ou pagar.' },
+      ], dica: 'Use a busca e os filtros (enviados, pagos) para ver o que falta enviar ou pagar.',
+      atencao: 'Depois de marcado o <b>Pagamento</b>, o relatório daquele parceiro naquela competência fica travado: os valores, a venda e os condomínios do mês não mudam mais, e o pagamento não pode ser desmarcado nem ter o valor ou a data trocados. Só a administração, ou quem tem o papel <b>Gestor</b> na ferramenta, corrige o que já foi pago.' },
       { titulo: 'Limpar competências antigas', onde: 'aba Prestações do mês → Manutenção', passos: [
         'Em <b>Manter a partir de</b>, escolha o mês e o ano.',
         'Clique em <b>Apagar anteriores</b>. Somem os lançamentos e o controle de envio e pagamento das competências anteriores. Parceiros e condomínios não são afetados.',

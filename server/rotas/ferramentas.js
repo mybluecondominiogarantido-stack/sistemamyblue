@@ -15,7 +15,7 @@ const paginaSimples = (titulo, msg) => `<!doctype html><html lang="pt-BR"><head>
 <title>${titulo}</title><link rel="stylesheet" href="/estilos.css"></head><body class="pagina-aviso"><div class="aviso-card"><img src="/img/logo.png" alt="MyBlue" height="40">
 <h1>${titulo}</h1><p>${msg}</p><a class="btn primary" href="/" target="_top">Voltar ao início</a></div></body></html>`;
 
-function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, boletosCarteira, avisosViagens, avisosRotinas, renegociacoes, cfg }) {
+function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, boletosCarteira, avisosViagens, avisosRotinas, renegociacoes, parceirosVenda, parceirosPago, cfg }) {
   const r = express.Router();
 
   /* ---------- lista de ferramentas do usuário ---------- */
@@ -450,18 +450,26 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, bo
         if (!item || typeof item !== 'object' || Array.isArray(item)) return responder(res, cb, { ok: false, error: 'item inválido' }, 400);
         const id = item.id != null && item.id !== '' ? item.id : item.key;
         if (id == null || id === '') return responder(res, cb, { ok: false, error: 'item sem id' }, 400);
-        if (temAntes(p)) {
-          const atual = await registros.obter(m.slug, colecao, id);
-          if (canon(atual) !== canon(antesDe(p)) && canon(atual) !== canon(item)) return conflitoGas(res, cb, atual);
-        }
+        // Prestação de Contas (parceiros): avisa a comissão de venda lançada de novo e o condomínio cadastrado duas vezes
+        const venda = parceirosVenda && parceirosVenda.acompanha(m, colecao);
+        const travaPago = parceirosPago && parceirosPago.acompanha(m, colecao);
+        const atual = temAntes(p) || venda || travaPago ? await registros.obter(m.slug, colecao, id) : null;
+        if (temAntes(p) && canon(atual) !== canon(antesDe(p)) && canon(atual) !== canon(item)) return conflitoGas(res, cb, atual);
+        // Prestação de Contas: o relatório já pago não muda (só a administração ou o papel Gestor corrigem)
+        const recusa = travaPago ? await parceirosPago.conferir(req, m, colecao, 'upsert', atual, item) : null;
+        if (recusa) { await log({ id, recusado: 'pago' }); return responder(res, cb, { ok: false, error: recusa }, 403); }
         const r2 = await registros.upsert(m.slug, colecao, id, item, uid); await log({ id, resultado: r2 });
+        if (venda) await parceirosVenda.aoGravar(req, m, colecao, atual, item);
         return responder(res, cb, { ok: true });
       }
       if (acao === 'delete') {
         if (p.id == null || p.id === '') return responder(res, cb, { ok: false, error: 'id ausente' }, 400);
-        if (temAntes(p)) {
+        const travaPago = parceirosPago && parceirosPago.acompanha(m, colecao);
+        if (temAntes(p) || travaPago) {
           const atual = await registros.obter(m.slug, colecao, p.id);
-          if (atual && canon(atual) !== canon(antesDe(p))) return conflitoGas(res, cb, atual);
+          if (temAntes(p) && atual && canon(atual) !== canon(antesDe(p))) return conflitoGas(res, cb, atual);
+          const recusa = travaPago ? await parceirosPago.conferir(req, m, colecao, 'delete', atual, null) : null;
+          if (recusa) { await log({ id: p.id, recusado: 'pago' }); return responder(res, cb, { ok: false, error: recusa }, 403); }
         }
         await registros.apagar(m.slug, colecao, p.id); await log({ id: p.id });
         return responder(res, cb, { ok: true });

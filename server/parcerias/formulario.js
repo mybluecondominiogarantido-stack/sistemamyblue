@@ -156,13 +156,36 @@ function mudancasFechado(antes, depois) {
     .map((k) => ({ rotulo: ROTULOS[k], antes: mostra(k, a[k]), depois: mostra(k, depois[k]) }));
 }
 
-/* o registro do parceiro na base de comissão (o que a ferramenta lê: id, nome, uf; o resto vai junto para consulta) */
+/* categorias de comissão da ferramenta, pelo contrato: só venda (a indicação é paga uma vez), só recorrência ou as duas.
+   As outras categorias que o parceiro já tinha (ex.: "condicao") ficam. */
+const CATEGORIAS_COMISSAO = ['recorrencia', 'venda', 'somentevenda'];
+function categoriasDoContrato(x, atuais) {
+  let t = atuais;
+  if (typeof t === 'string') { try { t = JSON.parse(t); } catch { t = []; } }
+  const outras = (Array.isArray(t) ? t : []).filter((c) => !CATEGORIAS_COMISSAO.includes(c));
+  const rec = !!(x.recorrencia && x.recorrencia_pct > 0);
+  const ven = !!(x.venda && x.venda_pct > 0);
+  const daComissao = rec && ven ? ['recorrencia', 'venda'] : rec ? ['recorrencia'] : ven ? ['somentevenda'] : [];
+  return JSON.stringify([...daComissao, ...outras]);
+}
+
+/* o registro do parceiro na base de comissão (o que a ferramenta lê: id, nome, uf, categorias e, no cadastro novo, as
+   condições de cálculo; o resto vai junto para consulta). Parceiro que já estava na base mantém as condições de cálculo
+   dele (tarifa, boletos, encargos…): só as categorias e os dados do contrato são atualizados. */
 function registroParceiro(c, existente) {
   const f = c.formulario || {};
   const x = c.fechado || {};
   const base = existente || {};
+  const rec = x.recorrencia ? x.recorrencia_pct : 0;
+  const ven = x.venda ? x.venda_pct : 0;
+  const condicoesNovo = existente ? {} : {
+    rate: rec || 0, venda: ven ? 'primeiro' : 'nenhuma', vendaPct: ven || 50, vendaBase: 'tsr',
+    tarifaNaBase: true, encNaBase: true, boletoModo: '', boletoPiso: 0, obs: '',
+  };
   return {
     ...base,
+    ...condicoesNovo,
+    tags: categoriasDoContrato(x, base.tags),
     id: base.id || `p-${digitos(f.cnpj) || normal(f.empresa)}`,
     nome: base.nome || f.empresa,
     uf: base.uf || '',
@@ -187,4 +210,4 @@ function acharNaBase(base, c) {
 }
 
 module.exports = { RECORRENCIA, VENDA, PADRAO, normalizar, pedido, faltasCampos, itensDiretoria, avisos, fechadoInicial, normalizarFechado, faltasFechado,
-  diferencasFechado, mudancasFechado, registroParceiro, acharNaBase, cnpjOk, emailOk, digitos, pct };
+  diferencasFechado, mudancasFechado, registroParceiro, categoriasDoContrato, acharNaBase, cnpjOk, emailOk, digitos, pct };
