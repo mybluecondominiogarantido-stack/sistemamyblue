@@ -212,6 +212,8 @@ test('colaboradores e a planilha dos parceiros para quem precisa (Gestão de Via
   assert.equal((await daFerramenta('GET', `/t/${cp}/api/gas/parceiros?sheet=partners`, undefined, { 'sec-fetch-site': 'cross-site' })).status, 200);
   // só lê
   assert.equal((await daFerramenta('POST', `/t/${cp}/api/gas/parceiros`, JSON.stringify({ sheet: 'partners', action: 'upsert', item: { id: 'x' } }), { 'content-type': 'text/plain' })).status, 403);
+  // tira a ferramenta de teste, para os testes seguintes poderem criá-la de novo
+  assert.equal((await admin('DELETE', '/api/admin/modulos/partnerchip-resultados?confirmar=partnerchip-resultados')).status, 200);
 });
 
 test('a administração liga e desliga o isolamento; ferramenta não isolada continua como antes', async () => {
