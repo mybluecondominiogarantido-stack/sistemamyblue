@@ -158,6 +158,10 @@ test('regras: parceiro só de venda com percentual no condomínio', () => {
   const r = soVendaRepetida({ entrada: { id: 'n', ref: '2026-10', condoId: 'c-1', tsr: '2.100,00' }, condos, entries, partners });
   assert.deepEqual(r.map((x) => [x.partnerId, x.rate, x.antes.map((e) => e.ref)]), [['p-sv', 50, ['2026-09']]]);
   assert.deepEqual(soVendaRepetida({ entrada: { id: 'n', ref: '2026-10', condoId: 'c-2', tsr: '950,00' }, condos, entries, partners }), [], 'recorrência normal: sem aviso');
+  // 50% no vínculo é indicação, mesmo para parceiro que também tem recorrência
+  const c50 = [...condos, { id: 'c-4', nome: 'Ipê Rosa', vinculosJSON: JSON.stringify([{ partnerId: 'p-rec', rate: 50 }]) }];
+  const r50 = soVendaRepetida({ entrada: { id: 'n', ref: '2026-10', condoId: 'c-4', tsr: '950,00' }, condos: c50, entries: [...entries, { id: 'd', ref: '2026-09', condoId: 'c-4', tsr: '900,00' }], partners });
+  assert.deepEqual(r50.map((x) => [x.partnerId, x.rate, x.antes.map((e) => e.ref)]), [['p-rec', 50, ['2026-09']]]);
   assert.deepEqual(soVendaRepetida({ entrada: { id: 'n', ref: '2026-10', condoId: 'c-3', tsr: '950,00' }, condos, entries, partners }), [], 'percentual zerado: sem aviso');
   assert.deepEqual(soVendaRepetida({ entrada: { id: 'n', ref: '2026-10', condoId: 'c-1', tsr: '' }, condos, entries, partners }), [], 'sem valores: sem aviso');
 });
@@ -173,14 +177,14 @@ test('parceiro só de venda lançado de novo no mês seguinte: avisa que já rec
   // 1º mês: aviso leve (confira se já não foi pago)
   assert.equal((await upsert(gil, 'entries', lanc('r9', '2026-09', 'c-iperoxo', false))).status, 200);
   let [a] = await avisosDe('paula@teste.com');
-  assert.equal(a.titulo, 'Parceiro só de venda com comissão mensal: Rosa Indica · Ipê Roxo');
+  assert.equal(a.titulo, 'Indicação calculada como comissão mensal: Rosa Indica · Ipê Roxo');
   assert.match(a.texto, /calcula esse percentual todo mês/);
   // mês seguinte: aviso de que já recebeu
   await ctx.db.q('DELETE FROM notificacoes');
   assert.equal((await upsert(gil, 'entries', lanc('r10', '2026-10', 'c-iperoxo', false))).status, 200);
   [a] = await avisosDe('paula@teste.com');
-  assert.equal(a.titulo, 'Parceiro só de venda recebendo de novo: Rosa Indica · Ipê Roxo');
-  assert.match(a.texto, /já gerou comissão para ele em 09\/2026 \(paga em 20\/10\/2026\)/);
+  assert.equal(a.titulo, 'Indicação paga de novo: Rosa Indica · Ipê Roxo');
+  assert.match(a.texto, /já gerou essa comissão em 09\/2026 \(paga em 20\/10\/2026\)/);
   // salvar de novo o mesmo lançamento não repete
   assert.equal((await upsert(gil, 'entries', { ...lanc('r10', '2026-10', 'c-iperoxo', false), tsr: '100,00' })).status, 200);
   assert.equal((await avisosDe('paula@teste.com')).length, 1);

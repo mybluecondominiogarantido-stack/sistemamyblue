@@ -11,7 +11,8 @@
  * ("Condomínio Residencial Torre Paris" = "Torre Paris"): é assim que a venda escapa, recadastrando o condomínio.
  * Por isso, cadastrar um condomínio com o nome de um que já existe também avisa (possível duplicado).
  *
- * Parceiro só de venda (categoria "somentevenda"): a indicação é paga uma vez. Se o condomínio dele tem percentual no
+ * Indicação: parceiro só de venda (categoria "somentevenda") com percentual no condomínio, ou vínculo de 50% ou mais
+ * (na MyBlue, 50% no vínculo é a indicação). A indicação é paga uma vez. Se o condomínio dele tem percentual no
  * vínculo, a ferramenta calcula esse percentual todo mês, como se fosse recorrência. O lançamento novo de um condomínio
  * assim avisa: com destaque se o condomínio já gerou comissão para ele numa competência anterior.
  *
@@ -35,6 +36,8 @@ function vinculos(c) {
 }
 
 const valorLancado = (e) => !!e && ['tsr', 'tarifa', 'multa', 'juros', 'encargos'].some((k) => { const n = Number(String(e[k] == null ? '' : e[k]).replace(/\./g, '').replace(',', '.')); return Number.isFinite(n) && n > 0; });
+// percentual no vínculo que, na MyBlue, é a indicação (paga uma vez), não recorrência (10% ou 5%)
+const INDICACAO_PCT = 50;
 /* parceiro "só venda" (categoria somentevenda): recebe a indicação uma vez só, nunca recorrência */
 function soVenda(p) {
   let t = p && p.tags;
@@ -65,7 +68,7 @@ function soVendaRepetida({ entrada, condos, entries, partners }) {
   if (!doCondo || !valorLancado(entrada)) return [];
   const chave = chaveNome(doCondo.nome);
   const mesmos = condos.filter((c) => c && (c.id === doCondo.id || (chave && chaveNome(c.nome) === chave)));
-  return vinculos(doCondo).filter((v) => Number(v.rate) > 0 && soVenda(partners.find((p) => p && p.id === v.partnerId))).map((v) => {
+  return vinculos(doCondo).filter((v) => Number(v.rate) >= INDICACAO_PCT || (Number(v.rate) > 0 && soVenda(partners.find((p) => p && p.id === v.partnerId)))).map((v) => {
     const ids = new Set(mesmos.filter((c) => vinculos(c).some((x) => x.partnerId === v.partnerId)).map((c) => c.id));
     const antes = entries.filter((e) => e && e.id !== entrada.id && ids.has(e.condoId) && String(e.ref) < String(entrada.ref) && valorLancado(e))
       .sort((a, b) => String(a.ref).localeCompare(String(b.ref)));
@@ -100,13 +103,13 @@ function criarParceirosVenda({ db, seg, registros, avisos }) {
     for (const a of achados) {
       const nome = (partners.find((p) => p && p.id === a.partnerId) || {}).nome || a.partnerId;
       const refs = [...new Set(a.antes.map((e) => e.ref))];
-      const titulo = refs.length ? `Parceiro só de venda recebendo de novo: ${nome} · ${condo.nome}` : `Parceiro só de venda com comissão mensal: ${nome} · ${condo.nome}`;
+      const titulo = refs.length ? `Indicação paga de novo: ${nome} · ${condo.nome}` : `Indicação calculada como comissão mensal: ${nome} · ${condo.nome}`;
       const fim = `Depois que a indicação for paga, zere o percentual de ${nome} neste condomínio (ou tire o condomínio da carteira dele) para a comissão não se repetir.`;
       const texto = refs.length
-        ? `${nome} é parceiro só de venda (a indicação é paga uma vez), mas ${condo.nome} foi lançado em ${refLabel(depois.ref)} com ${String(a.rate).replace('.', ',')}% para ele, `
-          + `e este condomínio já gerou comissão para ele em ${refs.map((r) => { const st = status.find((s) => s && s.ref === r && s.partnerId === a.partnerId); return `${refLabel(r)} (${situacao(st)})`; }).join(', ')}. `
+        ? `${condo.nome} é indicação de ${nome} (${String(a.rate).replace('.', ',')}%, paga uma vez só), mas foi lançado de novo em ${refLabel(depois.ref)} com esse percentual, `
+          + `e ele já gerou essa comissão em ${refs.map((r) => { const st = status.find((s) => s && s.ref === r && s.partnerId === a.partnerId); return `${refLabel(r)} (${situacao(st)})`; }).join(', ')}. `
           + `Não envie nem pague ${refLabel(depois.ref)} sem conferir. ${fim}`
-        : `${nome} é parceiro só de venda (a indicação é paga uma vez), mas ${condo.nome} está com ${String(a.rate).replace('.', ',')}% para ele, e a ferramenta calcula esse `
+        : `${condo.nome} é indicação de ${nome} (${String(a.rate).replace('.', ',')}%, paga uma vez só), mas a ferramenta calcula esse `
           + `percentual todo mês. Se a indicação já foi paga (mesmo fora da ferramenta), não envie nem pague ${refLabel(depois.ref)}. ${fim}`;
       await avisos.notificar(await destinatarios(req.usuario.id), { link: LINK, tipo: 'aviso', email: true, titulo, texto });
       await auditar(req, 'parceiros_so_venda_repetida', { entrada: depois.id, condo: depois.condoId, ref: depois.ref, parceiro: a.partnerId, anteriores: refs });
