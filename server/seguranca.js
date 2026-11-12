@@ -230,10 +230,13 @@ function criarSeguranca(db, cfg) {
     if (p === `/api/db/${s}` || p === `/api/db/${s}/trava` || p === `/api/db/${s}/pessoas`) return true;
     // datas da equipe: a rota confere se a administração liberou esta ferramenta
     if (ler && p === `/api/db/${s}/equipe`) return true;
+    if (ler && p === `/api/db/${s}/colaboradores`) return true;
     // Controle de Rotinas: Análise de Crédito e tickets de estorno (a rota confere o acesso e o papel)
     if (ler && s === MODULO_ROTINAS && (p === `/api/db/${MODULO_ROTINAS}/painel` || p === '/api/db/rotinas-adm/painel')) return true;
     // Novos Condomínios (Partnership): lê e grava a planilha da Prestação de Contas de Parceiros (a rota confere o acesso a ela)
     if (s === 'comissoes-de-novos-condominios' && p === '/api/gas/parceiros') return true;
+    // Partnership: Resultados lê (só lê) a mesma planilha
+    if (ler && s === 'partnerchip-resultados' && p === '/api/gas/parceiros') return true;
     if (ler && (/^\/api\/carteira(\/\d+)?$/.test(p) || /^\/api\/usuarios\/\d+\/foto$/.test(p) || p.startsWith('/cdn/'))) return true;
     if (req.method === 'POST' && (p === '/api/tickets' || /^\/api\/tickets\/\d+\/anexos$/.test(p))) return true;
     // Controle de Repasses: as antecipações vindas da Implantação (a rota confere o papel Gestor)

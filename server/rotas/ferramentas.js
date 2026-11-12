@@ -69,7 +69,8 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, bo
   async function moduloComArmazenamento(req, res) {
     const m = await modulos.obter(req.params.slug);
     if (!m || !(await seg.podeAcessar(req.usuario, m.slug))) { res.status(403).json({ erro: 'Sem acesso a esta ferramenta.' }); return null; }
-    if (m.armazenamento === 'navegador') { res.status(409).json({ erro: 'Esta ferramenta guarda os dados só no navegador.' }); return null; }
+    // "só no navegador" aberta isolada (sem armazenamento do navegador): guarda no portal, por pessoa
+    if (m.armazenamento === 'navegador' && !req.viaChave) { res.status(409).json({ erro: 'Esta ferramenta guarda os dados só no navegador.' }); return null; }
     return { m, escopo: m.armazenamento === 'compartilhado' ? '*' : `u:${req.usuario.id}` };
   }
 
@@ -246,6 +247,14 @@ function rotasFerramentas({ db, seg, modulos, registros, documentos, acessos, bo
       FROM usuarios u LEFT JOIN setor_membros sm ON sm.usuario_id = u.id LEFT JOIN setores s ON s.id = sm.setor_id
       WHERE u.ativo GROUP BY u.id, u.nome, u.data_nascimento, u.data_admissao ORDER BY u.nome`);
     res.json({ pessoas: rows.map((u) => ({ id: `mb-${u.id}`, nome: u.nome, setores: u.setores || [], data_nascimento: u.data_nascimento, data_admissao: u.data_admissao })) });
+  });
+
+  /* colaboradores (nome de quem está ativo no portal) para as ferramentas escolherem uma pessoa da equipe (Gestão de Viagens) */
+  r.get('/api/db/:slug/colaboradores', seg.exigirLogin, async (req, res) => {
+    const m = await moduloComDocumentos(req, res);
+    if (!m) return;
+    const { rows } = await db.q('SELECT id, nome FROM usuarios WHERE ativo ORDER BY nome');
+    res.json({ colaboradores: rows.map((u) => ({ id: `mb-${u.id}`, nome: u.nome })) });
   });
 
   /* Controle de Rotinas: o que vem do portal (Análise de Crédito para a Supervisão e a Coordenação; tickets de estorno) */
