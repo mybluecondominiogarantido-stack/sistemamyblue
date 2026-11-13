@@ -341,6 +341,22 @@ test('Carteira: a coordenação confere os dados (ID Vouch e envio vêm das etap
   assert.deepEqual([c.sindico_nome, c.sindico_telefone, c.sindico_email], [p.dados.sindico_nome, p.dados.sindico_telefone, p.dados.sindico_email]);
   assert.equal((await coord('GET', `/api/implantacoes/${idI}`)).json.implantacao.etapa, 'na_carteira');
   assert.equal((await coord('POST', `/api/implantacoes/${idI}/carteira`, { dados: p.dados })).status, 403);
+  // incluído direto na Base de Clientes: a coordenação liga a implantação ao cadastro, sem criar outro
+  await ctx.db.q("UPDATE implantacoes SET etapa = 'concluida', condominio_id = NULL WHERE id = $1", [idI]);
+  await ctx.db.q("UPDATE condominios SET sindico_nome = '', sindico_email = '' WHERE id = $1", [c.id]);
+  const total = async () => Number((await ctx.db.um('SELECT COUNT(*) AS n FROM condominios')).n);
+  const antes = await total();
+  assert.deepEqual((await coord('GET', `/api/implantacoes/${idI}/carteira`)).json.duplicados.map((x) => x.id), [c.id]);
+  assert.equal((await coord('POST', `/api/implantacoes/${idI}/carteira`, { dados: p.dados })).status, 409); // incluir de novo, não
+  const outro = await ctx.db.um("INSERT INTO condominios (codigo, nome) VALUES ('90999', 'Outro Fictício') RETURNING id");
+  assert.equal((await coord('POST', `/api/implantacoes/${idI}/carteira`, { vincular: outro.id })).status, 400); // sem o mesmo ID nem CNPJ
+  const lig = await coord('POST', `/api/implantacoes/${idI}/carteira`, { vincular: c.id });
+  assert.equal(lig.status, 200, lig.texto);
+  const il = (await coord('GET', `/api/implantacoes/${idI}`)).json.implantacao;
+  assert.deepEqual([il.etapa, il.condominio_id], ['na_carteira', c.id]);
+  const cl = await ctx.db.um('SELECT * FROM condominios WHERE id = $1', [c.id]);
+  assert.deepEqual([cl.nome, cl.sindico_nome, cl.sindico_telefone, cl.sindico_email], ['Residencial Fictício', p.dados.sindico_nome, p.dados.sindico_telefone, p.dados.sindico_email]);
+  assert.equal(await total(), antes + 1); // só o "Outro Fictício" do teste
   // o mesmo ID Vouch não entra em outra implantação
   await coord('POST', `/api/implantacoes/${idI2}/designar`, { usuario_id: ids['equipe@teste.com'] });
   await equipe('POST', `/api/implantacoes/${idI2}/iniciar`, {});

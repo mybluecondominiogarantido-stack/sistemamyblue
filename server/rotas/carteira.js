@@ -116,7 +116,7 @@ function rotasCarteira({ db, seg, regras, boletosCarteira, documentos }) {
     const c = await db.um(`${SELECT} WHERE c.id = $1`, [Number(req.params.id) || 0]);
     if (!c) return erro(res, 404, 'Condomínio não encontrado.');
     const historico = (await db.q(`SELECT a.quando, a.acao, a.detalhe, u.nome AS usuario_nome FROM auditoria a LEFT JOIN usuarios u ON u.id = a.usuario_id
-      WHERE a.acao IN ('condominio_criado','condominio_editado','condominio_importado','carteira_transferida') AND a.detalhe->>'id' = $1
+      WHERE a.acao IN ('condominio_criado','condominio_editado','condominio_importado','carteira_transferida','implantacao_ligada_carteira') AND a.detalhe->>'id' = $1
       ORDER BY a.id DESC LIMIT 50`, [String(c.id)])).rows;
     res.json({ condominio: c, historico });
   });

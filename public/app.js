@@ -3066,7 +3066,7 @@
       function lista(id, valores) { return '<datalist id="' + id + '">' + unicos(valores).map(function (v) { return '<option value="' + esc(v) + '"></option>'; }).join('') + '</datalist>'; }
       var hist = (historico || []).map(function (h) {
         var det = h.detalhe || {};
-        var o = h.acao === 'condominio_criado' ? 'cadastrou o condomínio' : Object.keys(det.mudancas || {}).map(function (k) {
+        var o = h.acao === 'condominio_criado' ? 'cadastrou o condomínio' : h.acao === 'implantacao_ligada_carteira' ? 'ligou o cadastro à ' + esc(det.origem || 'implantação') : Object.keys(det.mudancas || {}).map(function (k) {
           var v = det.mudancas[k];
           if (k === 'inicio_contrato') v = [mesAno(v[0]), mesAno(v[1])];
           return '<b>' + esc(ROTULO_CAMPO[k] || k) + '</b>: ' + esc(v[0] || '(vazio)') + ' → ' + esc(v[1] || '(vazio)');
@@ -5095,7 +5095,8 @@
     var prazo = function (i) {
       var c = i.l && i.l.concluir;
       if (i.etapa === 'fila') return etq(['designar', 'cinza']) + '<span class="sec">na fila desde ' + dataBr(String(i.enviado_em || '').slice(0, 10)).slice(0, 5) + '</span>';
-      if (!i.iniciado_em) return etq([i.prazo_inicio ? prazoCr(i.prazo_inicio, i.etapa).replace('Até ', 'iniciar até ').replace('Venceu ', 'prazo para iniciar venceu ') : 'a iniciar', 'azul']);
+      if (!i.iniciado_em) return etq(!i.prazo_inicio ? ['a iniciar', 'azul'] : new Date(i.prazo_inicio) < new Date()
+        ? ['prazo para iniciar venceu ' + dataHoraCr(i.prazo_inicio), 'vermelha'] : ['iniciar até ' + dataHoraCr(i.prazo_inicio), 'azul']);
       var s = c ? prazoConcluirImp(c) : null;
       return (s ? etq(s) : '') + '<span class="sec">iniciada ' + dataBr(String(i.iniciado_em).slice(0, 10)).slice(0, 5) + '</span>';
     };
@@ -5127,7 +5128,7 @@
           '<td>' + (l.concluido_em ? dataBr(String(l.concluido_em).slice(0, 10)) : '—') + '</td><td>' + selosImp(l.feitas) + '</td>' +
           '<td>' + (coord ? '<button class="btn primary sm" data-carteira-imp="' + l.id + '">Confirmar entrada</button>' : '') + '</td></tr>';
       }).join('') || '<tr><td colspan="5"><div class="vazio" style="border:0;padding:30px">Nenhuma implantação aguardando a Base de Clientes.</div></td></tr>') + '</tbody></table></div>' +
-      '<p class="ajuda" style="margin:0;padding:8px 16px 14px">Vão para a Base de Clientes os dados do formulário e das etapas, com o nome, o telefone e o e-mail do síndico. O portal recusa ID Vouch ou CNPJ que já estão na Base de Clientes.</p></section>';
+      '<p class="ajuda" style="margin:0;padding:8px 16px 14px">Vão para a Base de Clientes os dados do formulário e das etapas, com o nome, o telefone e o e-mail do síndico. Se o condomínio já foi incluído direto na Base de Clientes (mesmo ID Vouch ou CNPJ), a janela oferece ligar a implantação a esse cadastro, sem criar outro.</p></section>';
     $$('[data-carteira-imp]', raiz).forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); confirmarCarteiraImp({ id: Number(b.getAttribute('data-carteira-imp')) }, recarregar); }; });
     irImpAcomp(raiz);
   }
@@ -5927,7 +5928,8 @@
     var c = function (k, rot, extra) { return campoCr('k_' + k, rot, dd[k], extra); };
     var mo = modal({
       titulo: 'Confirmar a entrada na Base de Clientes', largo: true,
-      corpo: (j.duplicados.length ? '<div class="msg aviso" style="margin-bottom:12px">Já existe na Base de Clientes: ' + esc(j.duplicados.map(function (x) { return x.nome + ' (ID ' + x.codigo + ')'; }).join('; ')) + '. Confira antes de incluir.</div>'
+      corpo: (j.duplicados.length ? '<div class="msg aviso" style="margin-bottom:12px">Já está na Base de Clientes, com o mesmo ID Vouch ou CNPJ. Se foi incluído direto lá, ligue a implantação a esse cadastro: nada é criado de novo, e só o síndico e a assistente de crédito em branco são preenchidos.' +
+          j.duplicados.map(function (x) { return '<div style="display:flex;align-items:center;gap:10px;margin-top:8px"><b>' + esc(x.nome) + '</b><span class="sec" style="display:inline">ID ' + esc(x.codigo) + (x.cnpj ? ' · CNPJ ' + esc(x.cnpj) : '') + '</span><span style="flex:1"></span>' + (x.ligado_a ? '<span class="sec" style="display:inline">já ligado à implantação ' + esc(x.ligado_a) + '</span>' : '<button class="btn primary" data-ligar="' + x.id + '">Ligar a este cadastro</button>') + '</div>'; }).join('') + '</div>'
         : '<div class="msg ok" style="margin-bottom:12px">Nenhum condomínio com este ID ou CNPJ na Base de Clientes.</div>') +
         '<div class="grade-3">' + c('codigo', 'ID Vouch', { ajuda: 'Da etapa Cadastro no sistema.' }) + c('nome', 'Nome na Base de Clientes', { ajuda: 'Sugerido a partir da razão social.' }) + c('situacao', 'Situação') +
         c('razao_social', 'Razão social', { span: 2 }) + c('cnpj', 'CNPJ') + c('comarca', 'UF') + c('vencimento', 'Vencimento padrão', { ajuda: 'O dia do formulário (não o 1º vencimento).' }) + c('inicio_contrato', 'Início do contrato (vigência)', { tipo: 'date' }) +
@@ -5935,7 +5937,14 @@
         '<span class="rot" style="margin-top:12px">Síndico (do formulário)</span><div class="grade-3">' + c('sindico_nome', 'Nome do síndico') + c('sindico_telefone', 'Telefone do síndico') + c('sindico_email', 'E-mail do síndico', { tipo: 'email' }) + '</div>' +
         '<label class="rot" for="k_observacoes" style="margin-top:12px">Observações</label><textarea class="campo" id="k_observacoes" rows="2">' + esc(dd.observacoes) + '</textarea>' +
         '<div class="ajuda">Analista de cobrança, extrajudicial e assistente de crédito são escolhidos depois, na ficha do condomínio na Base de Clientes.</div>',
-      pe: '<button class="btn ghost" data-fechar>Ainda não</button><button class="btn primary" id="kOk">Confirmar e incluir na Base de Clientes</button>',
+      pe: '<button class="btn ghost" data-fechar>Ainda não</button><button class="btn ' + (j.duplicados.length ? 'ghost' : 'primary') + '" id="kOk">Confirmar e incluir na Base de Clientes</button>',
+    });
+    $$('[data-ligar]', mo).forEach(function (bt) {
+      bt.onclick = async function () {
+        bt.disabled = true;
+        try { await api('POST', '/api/implantacoes/' + i.id + '/carteira', { vincular: Number(bt.getAttribute('data-ligar')) }); mo.fechar(); toast('Implantação ligada ao cadastro da Base de Clientes.', 'ok'); recarregar(); }
+        catch (e) { bt.disabled = false; toast(e.message, 'erro'); }
+      };
     });
     $('#kOk', mo).onclick = async function () {
       var dados = {};
@@ -6966,7 +6975,7 @@
       d.eventos.map(function (e) {
         var x = e.detalhe || {};
         var extra = e.tipo === 'documento' || e.tipo === 'documento_removido' ? ': ' + esc(x.nome) : e.tipo === 'enviada' ? ' (' + esc(x.protocolo) + ')' : e.tipo === 'criada' && x.analise ? ' a partir da análise ' + esc(x.analise)
-          : e.tipo === 'designada' ? ' para ' + esc(x.para) : e.tipo === 'pendencia' ? ': ' + esc((x.itens || []).join('; ')) : e.tipo === 'carteira' ? ' (ID ' + esc(x.codigo) + ')'
+          : e.tipo === 'designada' ? ' para ' + esc(x.para) : e.tipo === 'pendencia' ? ': ' + esc((x.itens || []).join('; ')) : e.tipo === 'carteira' ? ' (ID ' + esc(x.codigo) + (x.vinculado ? ', cadastro que já estava lá' : '') + ')'
             : e.tipo === 'parceiros' ? (x.criado ? ': ' + esc(x.criado) : x.ja_existia ? ': já existia ' + esc(x.ja_existia) : ': parceiro sem cadastro')
               : e.tipo === 'autorizacao' ? ' ' + esc(x.para) + ' a editar (' + esc(ESCOPO_CURTO_IMP[x.escopo] || x.escopo) + (x.ate ? ' até ' + dataBr(x.ate) : '') + ')'
                 : e.tipo === 'autorizacao_pedida' ? ': "' + esc(x.motivo) + '"' : e.tipo === 'impedimento' ? ': ' + esc(x.motivo) + ' · "' + esc(x.detalhe) + '"' : e.tipo === 'retomada' ? ': "' + esc(x.resolucao) + '"'

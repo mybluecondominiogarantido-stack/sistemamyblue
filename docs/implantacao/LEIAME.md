@@ -102,7 +102,9 @@ padrões da Análise de Crédito.
 - **Carteira:** a coordenação confere os dados sugeridos (ID Vouch, nome sugerido, UF, vencimento padrão, vigência,
   administradora, forma de envio, executivo, razão social, CNPJ e o **nome, telefone e e-mail do síndico**, do
   formulário e obrigatórios) e confirma; o portal recusa ID ou CNPJ que já estão na
-  Carteira. Os responsáveis (cobrança, extrajudicial, crédito) são escolhidos depois, na ficha do condomínio. O Controle
+  Carteira. Se o condomínio já foi incluído direto na Carteira (mesmo ID Vouch ou CNPJ), a janela mostra o cadastro e o
+  botão **Ligar a este cadastro**: a implantação passa a **Na Carteira** ligada a ele, nada é criado e o cadastro não muda,
+  só recebe o síndico e a assistente de crédito que estiverem em branco (fica no histórico do condomínio). Os responsáveis (cobrança, extrajudicial, crédito) são escolhidos depois, na ficha do condomínio. O Controle
   de Emissão de Boletos acompanha, como em qualquer condomínio novo da Carteira.
 
 ## Ficha de transição

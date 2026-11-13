@@ -996,7 +996,10 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
   }
   async function duplicados(d) {
     const cnpj = String(d.cnpj || '').replace(/\D/g, '');
-    return (await db.q(`SELECT id, codigo, nome, cnpj FROM condominios WHERE codigo = $1 OR ($2 <> '' AND regexp_replace(cnpj, '\\D', '', 'g') = $2)`, [String(d.codigo || ''), cnpj])).rows;
+    // ligado_a: a implantação que já está ligada a este cadastro (não dá para ligar outra)
+    return (await db.q(`SELECT c.id, c.codigo, c.nome, c.cnpj, (SELECT COALESCE(NULLIF(i.protocolo, ''), 'Nº ' || i.numero_planilha) FROM implantacoes i
+      WHERE i.condominio_id = c.id AND i.etapa <> 'cancelada' LIMIT 1) AS ligado_a
+      FROM condominios c WHERE c.codigo = $1 OR ($2 <> '' AND regexp_replace(c.cnpj, '\\D', '', 'g') = $2) ORDER BY c.id`, [String(d.codigo || ''), cnpj])).rows;
   }
 
   r.get('/api/implantacoes/:id/carteira', async (req, res) => {
@@ -1007,11 +1010,38 @@ function rotasImplantacoes({ db, seg, cfg, avisos, regras, registros, expediente
     res.json({ dados, duplicados: await duplicados(dados) });
   });
 
+  /* O condomínio já foi incluído direto na Base de Clientes: liga a implantação a esse cadastro, sem criar outro.
+   * Só vale para um cadastro com o mesmo ID Vouch ou CNPJ da implantação. Não muda o que já está no cadastro:
+   * só preenche o síndico e a assistente de crédito (da ficha de transição) que estiverem em branco. */
+  async function vincularCarteira(req, res, i, id) {
+    const previa = await previaCarteira(i);
+    const cad = (await duplicados(previa)).find((x) => x.id === id);
+    if (!cad) return erro(res, 400, 'Este cadastro da Base de Clientes não tem o mesmo ID Vouch nem o mesmo CNPJ da implantação.');
+    if (await db.um("SELECT 1 FROM implantacoes WHERE condominio_id = $1 AND id <> $2 AND etapa <> 'cancelada'", [id, i.id])) {
+      return erro(res, 409, `O cadastro ${cad.nome} (ID ${cad.codigo}) já está ligado a outra implantação.`);
+    }
+    await db.tx(async (t) => {
+      await t.q("UPDATE implantacoes SET etapa = 'na_carteira', condominio_id = $2, atualizado_em = now() WHERE id = $1", [i.id, id]);
+      await t.q(`UPDATE condominios SET sindico_nome = CASE WHEN sindico_nome = '' THEN $2 ELSE sindico_nome END,
+        sindico_telefone = CASE WHEN sindico_telefone = '' THEN $3 ELSE sindico_telefone END,
+        sindico_email = CASE WHEN sindico_email = '' THEN $4 ELSE sindico_email END WHERE id = $1`,
+      [id, previa.sindico_nome, previa.sindico_telefone, previa.sindico_email]);
+      await t.q(`UPDATE condominios c SET assistente_credito = u.nome FROM implantacao_fichas f JOIN usuarios u ON u.id = f.destino_id
+        WHERE c.id = $2 AND f.implantacao_id = $1 AND c.assistente_credito = ''`, [i.id, id]);
+      await evento(t, i.id, req.usuario.id, 'carteira', { condominio_id: id, codigo: cad.codigo, nome: cad.nome, vinculado: true });
+    });
+    await seg.auditar(req, 'implantacao_ligada_carteira', null, { id, nome: cad.nome, codigo: cad.codigo, origem: i.protocolo ? `implantação ${i.protocolo}` : `implantação Nº ${i.numero_planilha} (planilha)` });
+    if (!i.importacao_id) await avisos.notificar([...(await donos(db, i)), i.responsavel_id], { link: link(i.id), autor_id: req.usuario.id, tipo: 'implantacao', email: false,
+      titulo: `Na Base de Clientes · ${cad.nome}`, texto: `${i.condominio} foi ligado ao cadastro que já estava na Base de Clientes (ID ${cad.codigo}).` });
+    res.json({ ok: true, condominio_id: id, vinculado: true });
+  }
+
   r.post('/api/implantacoes/:id/carteira', json, async (req, res) => {
     const c = await carregar(req, res);
     if (!c) return;
     const { i, pd } = c;
     if (!pd.carteira) return erro(res, 403, 'Só a coordenação do setor Implantação confirma a entrada na Base de Clientes.');
+    if (req.body && req.body.vincular != null) return vincularCarteira(req, res, i, Number(req.body.vincular));
     const b = req.body && req.body.dados && typeof req.body.dados === 'object' ? req.body.dados : {};
     const campos = ['codigo', 'nome', 'situacao', 'comarca', 'vencimento', 'administradora', 'forma_envio', 'executivo', 'inicio_contrato', 'razao_social', 'cnpj',
       'sindico_nome', 'sindico_telefone', 'sindico_email', 'observacoes'];
