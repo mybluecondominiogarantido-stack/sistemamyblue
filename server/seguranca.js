@@ -238,6 +238,9 @@ function criarSeguranca(db, cfg) {
     if (ler && s === MODULO_ROTINAS && (p === `/api/db/${MODULO_ROTINAS}/painel` || p === '/api/db/rotinas-adm/painel')) return true;
     // Novos Condomínios (Partnership): lê e grava a planilha da Prestação de Contas de Parceiros (a rota confere o acesso a ela)
     if (s === 'comissoes-de-novos-condominios' && p === '/api/gas/parceiros') return true;
+    // Controle de Rotinas: lê os pedidos do Controle de Pedidos (Pedidos do mês) e lança nele o pedido feito pelo
+    // Controle de Rotinas (a rota confere o acesso ao Controle de Pedidos e se a pessoa só consulta)
+    if (s === MODULO_ROTINAS && p === '/api/gas/suprimentos') return true;
     // Partnership: Resultados lê (só lê) a mesma planilha
     if (ler && s === 'partnerchip-resultados' && p === '/api/gas/parceiros') return true;
     if (ler && (/^\/api\/carteira(\/\d+)?$/.test(p) || /^\/api\/usuarios\/\d+\/foto$/.test(p) || p.startsWith('/cdn/'))) return true;
