@@ -182,6 +182,20 @@ test('Novos Condomínios isolada lê e grava a planilha da Prestação de Contas
   assert.equal((await daFerramenta('GET', `/t/${outra}/api/gas/parceiros?sheet=partners`)).status, 403);
 });
 
+test('Controle de Rotinas isolado lê e lança pedidos no Controle de Pedidos', async () => {
+  assert.equal((await admin('POST', '/api/admin/modulos', { slug: 'controle-de-rotinas-administrativas', nome: 'Controle de Rotinas', armazenamento: 'compartilhado' })).status, 201);
+  assert.equal((await admin('PUT', '/api/admin/modulos/controle-de-rotinas-administrativas/arquivo', HTML)).status, 200);
+  const chave = chaveDa((await admin('GET', '/m/controle-de-rotinas-administrativas/')).texto);
+  let r = await daFerramenta('POST', `/t/${chave}/api/gas/suprimentos`, JSON.stringify({ action: 'addMany', rows: [['009001', 'Fornecedor Teste', 100, 'À vista', '', '17/11/2026', 'Em aberto']] }), { 'content-type': 'text/plain' });
+  assert.equal(r.status, 200, r.texto);
+  r = await daFerramenta('GET', `/t/${chave}/api/gas/suprimentos`, undefined, { 'sec-fetch-site': 'cross-site' });
+  assert.equal(r.status, 200, r.texto);
+  assert.ok(r.json.some((linha) => linha[0] === '009001'));
+  // outra ferramenta isolada continua sem acesso ao Controle de Pedidos
+  const outra = chaveDa((await admin('GET', '/m/agenda/')).texto);
+  assert.equal((await daFerramenta('GET', `/t/${outra}/api/gas/suprimentos`)).status, 403);
+});
+
 test('isolada "só no navegador" guarda no portal, por pessoa (o navegador não guarda nada na origem isolada)', async () => {
   assert.equal((await admin('POST', '/api/admin/modulos', { slug: 'favoritos', nome: 'Favoritos', armazenamento: 'navegador' })).status, 201);
   assert.equal((await admin('PUT', '/api/admin/modulos/favoritos/arquivo', HTML)).status, 200);
